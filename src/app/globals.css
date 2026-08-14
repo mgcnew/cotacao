@@ -1,0 +1,348 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   DESIGN SYSTEM — Compras DS
+   Tokens portados do protótipo aprovado (design/Compras DS.dc.html).
+   Estes são a fonte de verdade visual. Os tokens do shadcn abaixo
+   apenas apontam para eles, de modo que os componentes da biblioteca
+   herdem a identidade sem duplicar paleta.
+   Regras: zero gradiente, zero neon, zero glow.
+   ============================================================ */
+
+:root {
+  /* superfícies e texto */
+  --bg: #f6f6f7;
+  --fg: #17171a;
+  --fg-muted: #5d5d66;
+  --fg-subtle: #8a8a93;
+  --surface: #ffffff;
+  --surface-muted: #f1f1f3;
+  --surface-elevated: #ffffff;
+  --surface-sunken: #fafafb;
+  --border-color: #e4e4e8;
+  --border-strong: #d2d2d8;
+  --input-bg: #ffffff;
+
+  /* marca (accent padrão: indigo) */
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-fg: #ffffff;
+
+  /* semânticas */
+  --success: #12784a;
+  --warning: #8f6100;
+  --destructive: #b42318;
+  --info: #1b62c4;
+  --neutral: #5d5d66;
+
+  --primary-soft: color-mix(in oklab, var(--primary) 10%, var(--surface));
+  --primary-line: color-mix(in oklab, var(--primary) 32%, var(--border-color));
+  --success-soft: color-mix(in oklab, var(--success) 10%, var(--surface));
+  --warning-soft: color-mix(in oklab, var(--warning) 12%, var(--surface));
+  --destructive-soft: color-mix(in oklab, var(--destructive) 9%, var(--surface));
+  --info-soft: color-mix(in oklab, var(--info) 9%, var(--surface));
+  --ring-color: color-mix(in oklab, var(--primary) 35%, transparent);
+
+  /* elevação */
+  --shadow-xs: 0 1px 1px rgba(16, 16, 20, 0.04);
+  --shadow-sm:
+    0 1px 2px rgba(16, 16, 20, 0.06), 0 1px 1px rgba(16, 16, 20, 0.04);
+  --shadow-md:
+    0 8px 24px -12px rgba(16, 16, 20, 0.18), 0 1px 2px rgba(16, 16, 20, 0.06);
+
+  /* raios */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+
+  /* movimento */
+  --dur: 140ms;
+  --ease: cubic-bezier(0.2, 0.6, 0.3, 1);
+
+  color-scheme: light;
+
+  /* ---- mapeamento shadcn → Design System ---- */
+  --background: var(--bg);
+  --foreground: var(--fg);
+  --card: var(--surface-elevated);
+  --card-foreground: var(--fg);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--fg);
+  --primary-foreground: var(--primary-fg);
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--fg);
+  --muted: var(--surface-muted);
+  --muted-foreground: var(--fg-muted);
+  --accent: var(--surface-muted);
+  --accent-foreground: var(--fg);
+  --destructive-foreground: #ffffff;
+  --border: var(--border-color);
+  /* no shadcn, --input é a COR DA BORDA do campo (o fundo é --input-bg) */
+  --input: var(--border-color);
+  --ring: var(--ring-color);
+  --radius: var(--r-lg);
+
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--fg);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-fg);
+  --sidebar-accent: var(--surface-muted);
+  --sidebar-accent-foreground: var(--fg);
+  --sidebar-border: var(--border-color);
+  --sidebar-ring: var(--ring-color);
+
+  /* gráficos: derivados da marca + semânticas, sem neon */
+  --chart-1: var(--primary);
+  --chart-2: var(--info);
+  --chart-3: var(--success);
+  --chart-4: var(--warning);
+  --chart-5: var(--neutral);
+}
+
+.dark {
+  --bg: #0d0d0f;
+  --fg: #ededef;
+  --fg-muted: #a2a2ab;
+  --fg-subtle: #74747e;
+  --surface: #15151a;
+  --surface-muted: #1c1c22;
+  --surface-elevated: #1f1f26;
+  --surface-sunken: #111114;
+  --border-color: #26262e;
+  --border-strong: #35353f;
+  --input-bg: #15151a;
+
+  --success: #43be83;
+  --warning: #dda43a;
+  --destructive: #f0736a;
+  --info: #77adf7;
+  --neutral: #a2a2ab;
+
+  --primary-soft: color-mix(in oklab, var(--primary) 16%, var(--surface));
+  --primary-line: color-mix(in oklab, var(--primary) 40%, var(--border-color));
+  --success-soft: color-mix(in oklab, var(--success) 14%, var(--surface));
+  --warning-soft: color-mix(in oklab, var(--warning) 14%, var(--surface));
+  --destructive-soft: color-mix(in oklab, var(--destructive) 14%, var(--surface));
+  --info-soft: color-mix(in oklab, var(--info) 14%, var(--surface));
+
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 12px 32px -12px rgba(0, 0, 0, 0.65), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+
+  --destructive-foreground: #0a0a0c;
+}
+
+/* ---- accent color por empresa/usuário ---- */
+[data-accent="blue"] {
+  --primary: #2563eb;
+  --primary-hover: #1d4fd7;
+  --primary-fg: #fff;
+}
+[data-accent="indigo"] {
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-fg: #fff;
+}
+[data-accent="purple"] {
+  --primary: #7c3aed;
+  --primary-hover: #6d28d9;
+  --primary-fg: #fff;
+}
+[data-accent="green"] {
+  --primary: #15803d;
+  --primary-hover: #116b33;
+  --primary-fg: #fff;
+}
+[data-accent="orange"] {
+  --primary: #c2410c;
+  --primary-hover: #a63709;
+  --primary-fg: #fff;
+}
+[data-accent="red"] {
+  --primary: #dc2626;
+  --primary-hover: #be1f1f;
+  --primary-fg: #fff;
+}
+
+.dark[data-accent="blue"] {
+  --primary: #4e8df5;
+  --primary-hover: #6ba1f8;
+  --primary-fg: #0a0a0c;
+}
+.dark[data-accent="indigo"] {
+  --primary: #7c79f0;
+  --primary-hover: #918ef5;
+  --primary-fg: #0a0a0c;
+}
+.dark[data-accent="purple"] {
+  --primary: #a78bfa;
+  --primary-hover: #b9a2fc;
+  --primary-fg: #0a0a0c;
+}
+.dark[data-accent="green"] {
+  --primary: #3fbf7a;
+  --primary-hover: #57cd8d;
+  --primary-fg: #0a0a0c;
+}
+.dark[data-accent="orange"] {
+  --primary: #f08a4b;
+  --primary-hover: #f79d64;
+  --primary-fg: #0a0a0c;
+}
+.dark[data-accent="red"] {
+  --primary: #f2685c;
+  --primary-hover: #f67f74;
+  --primary-fg: #0a0a0c;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+
+  /* superfícies e texto do DS, disponíveis como utilitários Tailwind */
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-input-bg: var(--input-bg);
+
+  /* semânticas + variantes soft (badges, alertas, chips) */
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-line: var(--primary-line);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-neutral: var(--neutral);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* raios exatos do DS (não derivados por multiplicação) */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-2xl: calc(var(--r-xl) * 1.4);
+  --radius-3xl: calc(var(--r-xl) * 1.8);
+  --radius-4xl: calc(var(--r-xl) * 2.2);
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+
+  --ease-ds: var(--ease);
+
+  --animate-ds-in: om-in var(--dur) var(--ease);
+  --animate-ds-fade: om-fade 120ms var(--ease);
+  --animate-ds-sheet: om-sheet 180ms var(--ease);
+}
+
+@keyframes om-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes om-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes om-sheet {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  html {
+    @apply font-sans;
+  }
+  *:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
