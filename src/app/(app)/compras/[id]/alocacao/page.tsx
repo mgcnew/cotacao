@@ -10,6 +10,7 @@ import {
 } from "@/components/allocations/allocation-forms";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cancelAllocation } from "@/features/allocations/actions";
 import {
   getAllocationBoard,
   listRoundOrders,
@@ -165,6 +166,25 @@ export default async function AlocacaoPage({
                         >
                           {d.status === "confirmed" ? "confirmada" : "rascunho"}
                         </Badge>
+                        {/* Só rascunho se desfaz: confirmada já virou pedido. */}
+                        {podeDecidir && d.status === "draft" ? (
+                          <form
+                            action={cancelAllocation.bind(
+                              null,
+                              d.allocationId,
+                              id,
+                            )}
+                          >
+                            <Button
+                              type="submit"
+                              size="sm"
+                              variant="ghost"
+                              className="text-fg-subtle hover:text-destructive h-6 px-1.5 text-xs"
+                            >
+                              Desfazer
+                            </Button>
+                          </form>
+                        ) : null}
                       </li>
                     ))}
                   </ul>

@@ -146,6 +146,36 @@ export async function allocateItem(
 }
 
 /**
+ * Desfaz uma decisão ainda em rascunho.
+ *
+ * Cancela em vez de apagar: a decisão errada fica no histórico, como tudo o
+ * mais no sistema. A migration 0022 abriu exatamente esta transição na policy
+ * — `draft -> cancelled` — mantendo `draft -> confirmed` fora do alcance do
+ * app, que continua sendo só da RPC.
+ */
+export async function cancelAllocation(allocationId: string, roundId: string) {
+  const company = await requireActiveCompany();
+  const supabase = await createServerSupabaseClient();
+
+  const { error } = await supabase
+    .from("purchase_allocations")
+    .update({ status: "cancelled" })
+    .eq("id", allocationId)
+    .eq("company_id", company.companyId)
+    .eq("status", "draft");
+
+  if (error) {
+    throw new Error(
+      error.code === "42501" || error.message.includes("row-level security")
+        ? "Seu papel não permite desfazer esta decisão."
+        : `Não foi possível desfazer: ${error.message}`,
+    );
+  }
+
+  revalidatePath(`/compras/${roundId}/alocacao`);
+}
+
+/**
  * Confirma as alocações em rascunho e gera os pedidos.
  *
  * Toda a transação é da RPC: um pedido por fornecedor, revisão 1 com os itens,

@@ -34,6 +34,9 @@ export async function listAllocations(
     )
     .eq("company_id", companyId)
     .eq("purchase_round_id", roundId)
+    // Cancelada saiu de cena: continua no banco para o histórico, mas não
+    // conta na cobertura do item nem vira pedido.
+    .neq("status", "cancelled")
     .order("created_at");
 
   if (error) throw new Error(`Falha ao listar alocações: ${error.message}`);
