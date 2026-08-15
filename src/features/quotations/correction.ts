@@ -13,17 +13,24 @@ const schema = z
     responseItemId: z.uuid({ error: "Item de resposta inválido" }),
     roundId: z.uuid({ error: "Rodada inválida" }),
     supplies: z.enum(["sim", "nao"]),
-    price: z.string().trim().optional(),
+    // `nullish`, e não `optional`: FormData.get devolve null quando o campo
+    // não existe no DOM — é o caso do preço, que só é renderizado quando o
+    // fornecedor fornece o item. `optional()` sozinho recusaria esse null.
+    price: z
+      .string()
+      .trim()
+      .nullish()
+      .transform((v) => v ?? undefined),
     notes: z
       .string()
       .trim()
       .max(300)
-      .optional()
+      .nullish()
       .transform((v) => (v ? v : undefined)),
     // Obrigatório pelo banco, e com razão: correção mexe no que o fornecedor
     // declarou, então precisa dizer por quê.
     reason: z
-      .string()
+      .string({ error: "Explique o motivo da correção" })
       .trim()
       .min(3, { error: "Explique o motivo da correção" })
       .max(300, { error: "Motivo muito longo" }),

@@ -8,13 +8,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type NegotiationState = { error: string | null; savedAt?: number };
 
-export const NEGOTIATION_CHANNELS = [
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "phone", label: "Telefone" },
-  { value: "in_person", label: "Pessoalmente" },
-  { value: "other", label: "Outro" },
-] as const;
-
 const schema = z.object({
   responseItemId: z.uuid({ error: "Item de resposta inválido" }),
   roundId: z.uuid({ error: "Rodada inválida" }),

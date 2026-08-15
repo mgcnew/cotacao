@@ -7,8 +7,8 @@ import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NEGOTIATION_CHANNELS } from "@/features/quotations/channels";
 import {
-  NEGOTIATION_CHANNELS,
   recordNegotiation,
   type NegotiationState,
 } from "@/features/quotations/negotiation";
