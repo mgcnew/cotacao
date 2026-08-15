@@ -88,6 +88,9 @@ export default async function RodadaPage({
             <Button asChild size="sm" variant="outline">
               <Link href={`/compras/${id}/comparacao`}>Comparar respostas</Link>
             </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/compras/${id}/alocacao`}>Decidir compra</Link>
+            </Button>
             <Badge variant={round.status === "active" ? "default" : "secondary"}>
               {STATUS_LABEL[round.status] ?? round.status}
             </Badge>
