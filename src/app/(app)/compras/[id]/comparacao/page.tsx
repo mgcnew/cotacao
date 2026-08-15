@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
+import { CorrectionForm } from "@/components/quotations/correction-form";
 import { NegotiationForm } from "@/components/quotations/negotiation-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ export default async function ComparacaoPage({
   if (!round) notFound();
 
   const podeNegociar = permissions.has("negotiation.create");
+  const podeCorrigir = permissions.has("quotation_response.correct");
   const { rows, suppliers } = comparison;
 
   return (
@@ -115,6 +117,30 @@ export default async function ComparacaoPage({
                             <span className="text-fg-subtle text-xs">
                               não fornece
                             </span>
+                            {cell.correctionCount > 0 ? (
+                              <Badge
+                                variant="outline"
+                                className="ml-1 text-[10px]"
+                              >
+                                corrigido
+                              </Badge>
+                            ) : null}
+                            {cell.notes ? (
+                              <span className="text-fg-muted block text-xs">
+                                {cell.notes}
+                              </span>
+                            ) : null}
+                            {podeCorrigir && cell.responseItemId ? (
+                              <CorrectionForm
+                                responseItemId={cell.responseItemId}
+                                roundId={id}
+                                currentPrice={cell.currentPrice}
+                                doesNotSupply
+                                supplierName={s.suppliers.name}
+                                productName={row.productName}
+                                pricingUnit={row.pricingUnit}
+                              />
+                            ) : null}
                           </td>
                         );
                       }
@@ -148,6 +174,11 @@ export default async function ComparacaoPage({
                             {melhor ? (
                               <Badge variant="secondary" className="text-[10px]">
                                 melhor
+                              </Badge>
+                            ) : null}
+                            {cell.correctionCount > 0 ? (
+                              <Badge variant="outline" className="text-[10px]">
+                                corrigido
                               </Badge>
                             ) : null}
                           </div>
@@ -186,15 +217,28 @@ export default async function ComparacaoPage({
                             </span>
                           ) : null}
 
-                          {podeNegociar && cell.responseItemId ? (
-                            <NegotiationForm
-                              responseItemId={cell.responseItemId}
-                              roundId={id}
-                              currentPrice={cell.currentPrice}
-                              supplierName={s.suppliers.name}
-                              productName={row.productName}
-                            />
-                          ) : null}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {podeNegociar && cell.responseItemId ? (
+                              <NegotiationForm
+                                responseItemId={cell.responseItemId}
+                                roundId={id}
+                                currentPrice={cell.currentPrice}
+                                supplierName={s.suppliers.name}
+                                productName={row.productName}
+                              />
+                            ) : null}
+                            {podeCorrigir && cell.responseItemId ? (
+                              <CorrectionForm
+                                responseItemId={cell.responseItemId}
+                                roundId={id}
+                                currentPrice={cell.currentPrice}
+                                doesNotSupply={false}
+                                supplierName={s.suppliers.name}
+                                productName={row.productName}
+                                pricingUnit={row.pricingUnit}
+                              />
+                            ) : null}
+                          </div>
                         </td>
                       );
                     })}

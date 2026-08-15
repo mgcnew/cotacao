@@ -30,6 +30,8 @@ export type ComparisonCell = {
    * É o preço vigente dividido pelo fator que o fornecedor informou.
    */
   normalizedPrice: number | null;
+  /** Quantas correções o comprador já fez neste item de resposta. */
+  correctionCount: number;
 };
 
 export type ComparisonRow = {
@@ -162,6 +164,22 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         .in("quotation_response_item_id", responseIds)
     : { data: [] };
 
+  const { data: corrections } = responseIds.length
+    ? await supabase
+        .from("response_item_corrections")
+        .select("quotation_response_item_id")
+        .eq("company_id", companyId)
+        .in("quotation_response_item_id", responseIds)
+    : { data: [] };
+
+  const correctionsByResponse = new Map<string, number>();
+  for (const row of corrections ?? []) {
+    correctionsByResponse.set(
+      row.quotation_response_item_id,
+      (correctionsByResponse.get(row.quotation_response_item_id) ?? 0) + 1,
+    );
+  }
+
   const attrsByResponse = new Map<string, { name: string; value: string }[]>();
   // Fator de conversão declarado pelo fornecedor, por item de resposta.
   const factorByResponse = new Map<string, number>();
@@ -230,6 +248,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
           notes: null,
           attributes: [],
           normalizedPrice: null,
+          correctionCount: 0,
         });
         continue;
       }
@@ -261,6 +280,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         notes: response.notes,
         attributes: attrsByResponse.get(response.id) ?? [],
         normalizedPrice: normalized,
+        correctionCount: correctionsByResponse.get(response.id) ?? 0,
       });
     }
 
