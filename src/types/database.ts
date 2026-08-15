@@ -2458,6 +2458,8 @@ export type Database = {
           product_id: string | null
           quoted_price: number | null
           realized_savings: number | null
+          receipt_id: string | null
+          received_at: string | null
           supplier_id: string | null
         }
         Relationships: []

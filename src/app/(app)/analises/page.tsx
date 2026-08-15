@@ -2,6 +2,7 @@ import { BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { FilterBar } from "@/components/analytics/filter-bar";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,6 +13,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  getFilterOptions,
+  hasAnyFilter,
+  parseFilters,
+} from "@/features/analytics/filters";
 import {
   getAnalyticsCoverage,
   getPriceHistory,
@@ -60,17 +66,23 @@ function Metric({
   );
 }
 
-export default async function AnalisesPage() {
+export default async function AnalisesPage({
+  searchParams,
+}: PageProps<"/analises">) {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
 
   if (!permissions.has("analytics.view")) redirect("/dashboard");
 
-  const [savings, performance, prices, coverage] = await Promise.all([
-    getSavingsSummary(company.companyId),
-    getSupplierPerformance(company.companyId),
-    getPriceHistory(company.companyId),
+  const filters = parseFilters(await searchParams);
+  const filtrando = hasAnyFilter(filters);
+
+  const [savings, performance, prices, coverage, options] = await Promise.all([
+    getSavingsSummary(company.companyId, filters),
+    getSupplierPerformance(company.companyId, filters),
+    getPriceHistory(company.companyId, filters),
     getAnalyticsCoverage(company.companyId),
+    getFilterOptions(company.companyId),
   ]);
 
   const semRecebimento = coverage.receipts === 0;
@@ -81,6 +93,8 @@ export default async function AnalisesPage() {
         title="Análises"
         description="O dashboard mostra situação; aqui é o comportamento. Todo número sai de view do banco, não de conta feita na tela."
       />
+
+      <FilterBar filters={filters} options={options} />
 
       {semRecebimento ? (
         <div className="border-border bg-surface-sunken mb-6 flex items-start gap-3 rounded-xl border p-4">
@@ -150,12 +164,20 @@ export default async function AnalisesPage() {
         <p className="text-fg-muted mb-3 text-sm">
           Taxa de resposta é quantas vezes o fornecedor respondeu, sobre quantas
           foi convidado a cotar.
+          {filters.de || filters.ate ? (
+            <span className="text-fg-subtle block">
+              O recorte de período não se aplica a esta tabela: a base de
+              participação não guarda data. Categoria, produto e fornecedor
+              valem normalmente.
+            </span>
+          ) : null}
         </p>
 
         {performance.length === 0 ? (
           <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-center text-sm">
-            Ainda não há histórico de participação. Ele começa quando um
-            fornecedor entra numa rodada.
+            {filtrando
+              ? "Nenhum fornecedor no recorte escolhido."
+              : "Ainda não há histórico de participação. Ele começa quando um fornecedor entra numa rodada."}
           </p>
         ) : (
           <Table>
@@ -214,7 +236,9 @@ export default async function AnalisesPage() {
 
         {prices.length === 0 ? (
           <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-center text-sm">
-            Cada recebimento registrado acrescenta uma linha aqui.
+            {filtrando
+              ? "Nenhum recebimento no recorte escolhido."
+              : "Cada recebimento registrado acrescenta uma linha aqui."}
           </p>
         ) : (
           <Table>
@@ -226,6 +250,7 @@ export default async function AnalisesPage() {
                 <TableHead className="text-right">Combinado</TableHead>
                 <TableHead className="text-right">Praticado</TableHead>
                 <TableHead className="text-right">Quantidade</TableHead>
+                <TableHead>Recebido em</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -254,6 +279,11 @@ export default async function AnalisesPage() {
                   </TableCell>
                   <TableCell className="text-fg-muted text-right tabular-nums">
                     {QTY.format(row.quantity)}
+                  </TableCell>
+                  <TableCell className="text-fg-subtle text-xs">
+                    {row.receivedAt
+                      ? new Date(row.receivedAt).toLocaleDateString("pt-BR")
+                      : "—"}
                   </TableCell>
                 </TableRow>
               ))}

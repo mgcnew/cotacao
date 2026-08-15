@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  resolveProductIds,
+  type AnalyticsFilters,
+} from "@/features/analytics/filters";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -17,6 +21,28 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  *  - impacto de divergência: o que a nota cobrou a mais (praticado − combinado).
  */
 
+/**
+ * Aplica o recorte comum às consultas de v_realized_savings.
+ *
+ * `ate` recebe um dia inteiro: o usuário escolhe 31/08 esperando incluir o
+ * dia 31, não parar à meia-noite do dia 30.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyFilters<T extends { gte: any; lte: any; eq: any; in: any }>(
+  query: T,
+  filters: AnalyticsFilters | undefined,
+  productIds: string[] | null,
+): T {
+  if (!filters) return query;
+
+  let q = query;
+  if (filters.de) q = q.gte("received_at", `${filters.de}T00:00:00`);
+  if (filters.ate) q = q.lte("received_at", `${filters.ate}T23:59:59`);
+  if (filters.fornecedorId) q = q.eq("supplier_id", filters.fornecedorId);
+  if (productIds !== null) q = q.in("product_id", productIds);
+  return q;
+}
+
 export type SavingsSummary = {
   negotiated: number;
   realized: number;
@@ -28,13 +54,31 @@ export type SavingsSummary = {
 
 export async function getSavingsSummary(
   companyId: string,
+  filters?: AnalyticsFilters,
 ): Promise<SavingsSummary> {
   const supabase = await createServerSupabaseClient();
 
-  const { data, error } = await supabase
+  const productIds = filters ? await resolveProductIds(companyId, filters) : null;
+  // Lista vazia significa "o recorte não casou com produto algum" — resultado
+  // zerado, e não filtro ignorado.
+  if (productIds !== null && productIds.length === 0) {
+    return {
+      negotiated: 0,
+      realized: 0,
+      divergenceImpact: 0,
+      captureRate: null,
+      itemCount: 0,
+    };
+  }
+
+  let query = supabase
     .from("v_realized_savings")
     .select("negotiated_savings, realized_savings, divergence_impact")
     .eq("company_id", companyId);
+
+  query = applyFilters(query, filters, productIds);
+
+  const { data, error } = await query;
 
   if (error) throw new Error(`Falha ao carregar economia: ${error.message}`);
 
@@ -70,18 +114,36 @@ export type SupplierPerformance = {
 };
 
 /** Desempenho por fornecedor, agregando o par fornecedor × produto. */
+/**
+ * Desempenho por fornecedor.
+ *
+ * `v_supplier_product_stats` não tem data, então o recorte de PERÍODO não se
+ * aplica aqui — a tela avisa isso em vez de fingir que aplicou. Categoria,
+ * produto e fornecedor valem normalmente.
+ */
 export async function getSupplierPerformance(
   companyId: string,
+  filters?: AnalyticsFilters,
 ): Promise<SupplierPerformance[]> {
   const supabase = await createServerSupabaseClient();
 
+  const productIds = filters ? await resolveProductIds(companyId, filters) : null;
+  if (productIds !== null && productIds.length === 0) return [];
+
+  let statsQuery = supabase
+    .from("v_supplier_product_stats")
+    .select("supplier_id, quotation_opportunities, responses, purchase_orders")
+    .eq("company_id", companyId);
+
+  if (filters?.fornecedorId) {
+    statsQuery = statsQuery.eq("supplier_id", filters.fornecedorId);
+  }
+  if (productIds !== null) {
+    statsQuery = statsQuery.in("product_id", productIds);
+  }
+
   const [statsRes, suppliersRes] = await Promise.all([
-    supabase
-      .from("v_supplier_product_stats")
-      .select(
-        "supplier_id, quotation_opportunities, responses, purchase_orders",
-      )
-      .eq("company_id", companyId),
+    statsQuery,
     supabase
       .from("suppliers")
       .select("id, name")
@@ -139,6 +201,7 @@ export type PriceRow = {
   agreed: number;
   practiced: number;
   quantity: number;
+  receivedAt: string | null;
 };
 
 /**
@@ -148,19 +211,30 @@ export type PriceRow = {
  * entre cotado e combinado é a negociação; entre combinado e praticado é a
  * divergência.
  */
-export async function getPriceHistory(companyId: string): Promise<PriceRow[]> {
+export async function getPriceHistory(
+  companyId: string,
+  filters?: AnalyticsFilters,
+): Promise<PriceRow[]> {
   const supabase = await createServerSupabaseClient();
+
+  const productIds = filters ? await resolveProductIds(companyId, filters) : null;
+  if (productIds !== null && productIds.length === 0) return [];
 
   // Sem embed aqui: view não tem chave estrangeira, e o PostgREST responde
   // PGRST200 ao tentar. Os nomes vêm em consulta própria e o cruzamento é
   // feito em memória — são poucas linhas.
-  const { data, error } = await supabase
+  let query = supabase
     .from("v_realized_savings")
     .select(
-      "product_id, supplier_id, quoted_price, agreed_price, practiced_price, pricing_quantity_received",
+      "product_id, supplier_id, quoted_price, agreed_price, practiced_price, pricing_quantity_received, received_at",
     )
     .eq("company_id", companyId)
+    .order("received_at", { ascending: false })
     .limit(200);
+
+  query = applyFilters(query, filters, productIds);
+
+  const { data, error } = await query;
 
   if (error) throw new Error(`Falha ao carregar preços: ${error.message}`);
 
@@ -186,6 +260,7 @@ export async function getPriceHistory(companyId: string): Promise<PriceRow[]> {
     agreed: Number(row.agreed_price),
     practiced: Number(row.practiced_price),
     quantity: Number(row.pricing_quantity_received),
+    receivedAt: row.received_at,
   }));
 }
 
