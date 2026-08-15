@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  ClipboardList,
   LayoutGrid,
   Package,
   Settings,
@@ -23,6 +24,12 @@ export const OPERATION_NAV: NavItem[] = [
     label: "Compras",
     icon: ShoppingCart,
     permission: "purchase_round.view",
+  },
+  {
+    href: "/pedidos",
+    label: "Pedidos",
+    icon: ClipboardList,
+    permission: "order.view",
   },
   {
     href: "/produtos",
