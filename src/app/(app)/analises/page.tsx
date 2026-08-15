@@ -1,62 +1,266 @@
 import { BarChart3 } from "lucide-react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { requireActiveCompany } from "@/lib/auth/dal";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  getAnalyticsCoverage,
+  getPriceHistory,
+  getSavingsSummary,
+  getSupplierPerformance,
+} from "@/features/analytics/queries";
+import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
-const PERSPECTIVAS = [
-  {
-    titulo: "Preços",
-    texto:
-      "Preço cotado, negociado e realizado por produto e fornecedor, com média, variação e tendência.",
-  },
-  {
-    titulo: "Economia",
-    texto:
-      "Economia negociada, economia realizada e taxa de captura — quanto do desconto negociado chegou de fato à nota.",
-  },
-  {
-    titulo: "Fornecedores",
-    texto:
-      "Competitividade, taxa de resposta, cumprimento de preço, entregas no prazo e divergências.",
-  },
-];
+const MONEY = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+const PERCENT = new Intl.NumberFormat("pt-BR", {
+  style: "percent",
+  maximumFractionDigits: 1,
+});
+const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
 
-export default async function AnalisesPage() {
-  await requireActiveCompany();
+/** Cartão de indicador. O rodapé explica de onde o número saiu. */
+function Metric({
+  label,
+  value,
+  hint,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "neutral" | "good" | "bad";
+}) {
+  const valueClass =
+    tone === "good"
+      ? "text-success"
+      : tone === "bad"
+        ? "text-destructive"
+        : "text-fg";
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="border-border bg-surface flex flex-col gap-1 rounded-xl border p-4">
+      <p className="text-fg-muted text-xs">{label}</p>
+      <p className={`text-xl font-semibold tabular-nums ${valueClass}`}>
+        {value}
+      </p>
+      <p className="text-fg-subtle text-xs">{hint}</p>
+    </div>
+  );
+}
+
+export default async function AnalisesPage() {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+
+  if (!permissions.has("analytics.view")) redirect("/dashboard");
+
+  const [savings, performance, prices, coverage] = await Promise.all([
+    getSavingsSummary(company.companyId),
+    getSupplierPerformance(company.companyId),
+    getPriceHistory(company.companyId),
+    getAnalyticsCoverage(company.companyId),
+  ]);
+
+  const semRecebimento = coverage.receipts === 0;
+
+  return (
+    <div className="mx-auto w-full max-w-5xl">
       <PageHeader
         title="Análises"
-        description="O Dashboard mostra a situação; aqui explicamos o comportamento."
+        description="O dashboard mostra situação; aqui é o comportamento. Todo número sai de view do banco, não de conta feita na tela."
       />
 
-      <EmptyState
-        icon={BarChart3}
-        title="Sem dados para analisar ainda"
-        description="As análises são derivadas de dados transacionais reais: respostas, negociações, pedidos e recebimentos. Elas ganham sentido depois que o primeiro ciclo de compra fechar."
-        phase="Fase 14 · Análises"
-      />
+      {semRecebimento ? (
+        <div className="border-border bg-surface-sunken mb-6 flex items-start gap-3 rounded-xl border p-4">
+          <BarChart3
+            className="text-fg-subtle mt-0.5 size-5 shrink-0"
+            aria-hidden
+          />
+          <div className="text-sm">
+            <p className="text-fg font-medium">
+              A economia só aparece depois do primeiro recebimento
+            </p>
+            <p className="text-fg-muted mt-1">
+              Economia realizada compara o preço cotado com o que veio na nota
+              fiscal — sem mercadoria recebida, não existe preço praticado para
+              comparar. Hoje: {coverage.rounds}{" "}
+              {coverage.rounds === 1 ? "rodada" : "rodadas"},{" "}
+              {coverage.responses}{" "}
+              {coverage.responses === 1 ? "resposta" : "respostas"},{" "}
+              {coverage.orders} {coverage.orders === 1 ? "pedido" : "pedidos"} e{" "}
+              <strong>nenhum recebimento</strong>.{" "}
+              <Link href="/pedidos" className="text-primary">
+                Ver pedidos
+              </Link>
+            </p>
+          </div>
+        </div>
+      ) : null}
 
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
-        {PERSPECTIVAS.map((p) => (
-          <Card key={p.titulo}>
-            <CardHeader>
-              <CardTitle className="text-sm">{p.titulo}</CardTitle>
-              <CardDescription>{p.texto}</CardDescription>
-            </CardHeader>
-            <CardContent />
-          </Card>
-        ))}
-      </div>
+      <section className="mb-8">
+        <h2 className="text-fg mb-3 text-sm font-semibold">Economia</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Metric
+            label="Economia negociada"
+            value={MONEY.format(savings.negotiated)}
+            hint="Cotado menos combinado, sobre o que foi recebido"
+          />
+          <Metric
+            label="Economia realizada"
+            value={MONEY.format(savings.realized)}
+            hint="Cotado menos o preço da nota fiscal"
+            tone={savings.realized > 0 ? "good" : "neutral"}
+          />
+          <Metric
+            label="Taxa de captura"
+            value={
+              savings.captureRate === null
+                ? "—"
+                : PERCENT.format(savings.captureRate)
+            }
+            hint={
+              savings.captureRate === null
+                ? "Sem economia negociada para comparar"
+                : "Quanto da negociação sobreviveu até a nota"
+            }
+          />
+          <Metric
+            label="Impacto de divergências"
+            value={MONEY.format(savings.divergenceImpact)}
+            hint="Cobrado a mais que o combinado"
+            tone={savings.divergenceImpact > 0 ? "bad" : "neutral"}
+          />
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-fg mb-1 text-sm font-semibold">Fornecedores</h2>
+        <p className="text-fg-muted mb-3 text-sm">
+          Taxa de resposta é quantas vezes o fornecedor respondeu, sobre quantas
+          foi convidado a cotar.
+        </p>
+
+        {performance.length === 0 ? (
+          <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-center text-sm">
+            Ainda não há histórico de participação. Ele começa quando um
+            fornecedor entra numa rodada.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fornecedor</TableHead>
+                <TableHead className="text-right">Convites</TableHead>
+                <TableHead className="text-right">Respostas</TableHead>
+                <TableHead className="text-right">Taxa</TableHead>
+                <TableHead className="text-right">Pedidos</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {performance.map((s) => (
+                <TableRow key={s.supplierId}>
+                  <TableCell className="font-medium">
+                    {s.supplierName}
+                  </TableCell>
+                  <TableCell className="text-fg-muted text-right tabular-nums">
+                    {s.opportunities}
+                  </TableCell>
+                  <TableCell className="text-fg-muted text-right tabular-nums">
+                    {s.responses}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {s.responseRate === null ? (
+                      <span className="text-fg-subtle">—</span>
+                    ) : (
+                      <Badge
+                        variant={
+                          s.responseRate >= 0.7 ? "default" : "secondary"
+                        }
+                      >
+                        {PERCENT.format(s.responseRate)}
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-fg-muted text-right tabular-nums">
+                    {s.purchaseOrders}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </section>
+
+      <section>
+        <h2 className="text-fg mb-1 text-sm font-semibold">
+          Preços por produto e fornecedor
+        </h2>
+        <p className="text-fg-muted mb-3 text-sm">
+          Os três momentos do preço: o que foi cotado, o que foi combinado
+          depois da negociação e o que a nota cobrou.
+        </p>
+
+        {prices.length === 0 ? (
+          <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-center text-sm">
+            Cada recebimento registrado acrescenta uma linha aqui.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Produto</TableHead>
+                <TableHead>Fornecedor</TableHead>
+                <TableHead className="text-right">Cotado</TableHead>
+                <TableHead className="text-right">Combinado</TableHead>
+                <TableHead className="text-right">Praticado</TableHead>
+                <TableHead className="text-right">Quantidade</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {prices.map((row, index) => (
+                <TableRow key={`${row.productName}-${row.supplierName}-${index}`}>
+                  <TableCell className="font-medium">
+                    {row.productName}
+                  </TableCell>
+                  <TableCell className="text-fg-muted">
+                    {row.supplierName}
+                  </TableCell>
+                  <TableCell className="text-fg-muted text-right tabular-nums">
+                    {row.quoted === null ? "—" : MONEY.format(row.quoted)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {MONEY.format(row.agreed)}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right tabular-nums ${
+                      row.practiced > row.agreed
+                        ? "text-destructive font-medium"
+                        : "text-fg"
+                    }`}
+                  >
+                    {MONEY.format(row.practiced)}
+                  </TableCell>
+                  <TableCell className="text-fg-muted text-right tabular-nums">
+                    {QTY.format(row.quantity)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </section>
     </div>
   );
 }
