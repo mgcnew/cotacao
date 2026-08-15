@@ -3,8 +3,13 @@ import { LogOut } from "lucide-react";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/auth/actions";
+import {
+  countUnread,
+  listNotifications,
+} from "@/features/notifications/queries";
 import {
   getMemberships,
   getPermissions,
@@ -16,10 +21,13 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   // requireUser redireciona para /login; requireActiveCompany para /onboarding.
   await requireUser();
   const activeCompany = await requireActiveCompany();
-  const [memberships, permissions] = await Promise.all([
-    getMemberships(),
-    getPermissions(activeCompany.companyId),
-  ]);
+  const [memberships, permissions, notifications, unreadCount] =
+    await Promise.all([
+      getMemberships(),
+      getPermissions(activeCompany.companyId),
+      listNotifications(activeCompany.companyId),
+      countUnread(activeCompany.companyId),
+    ]);
 
   return (
     <div className="flex min-h-screen">
@@ -35,6 +43,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             permissions={[...permissions]}
           />
           <div className="flex-1" />
+          <NotificationBell
+            notifications={notifications}
+            unreadCount={unreadCount}
+          />
           <CompanySwitcher
             companies={memberships}
             activeCompanyId={activeCompany.companyId}
