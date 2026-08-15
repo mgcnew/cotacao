@@ -3,6 +3,10 @@ import { notFound, redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
 import {
+  CloseBalanceForm,
+  ResolveDivergenceForm,
+} from "@/components/orders/divergence-forms";
+import {
   OrderLinkControls,
   ReceiptForm,
 } from "@/components/orders/order-forms";
@@ -10,10 +14,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { markOrderSent } from "@/features/orders/actions";
 import {
+  ORDER_DIVERGENCE_STATUS_LABEL,
+  ORDER_DIVERGENCE_TYPE_LABEL,
+  COMMERCIAL_DIVERGENCE_STATUS_LABEL,
+} from "@/features/orders/divergences";
+import {
   getCurrentRevision,
   getOrder,
   listOrderDivergences,
   listOrderReceipts,
+  listSupplierDivergences,
   ORDER_STATUS_LABEL,
 } from "@/features/orders/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
@@ -44,14 +54,19 @@ export default async function PedidoPage({
   if (!order) notFound();
   if (!permissions.has("order.view")) redirect("/dashboard");
 
-  const [revision, receipts, divergences] = await Promise.all([
-    getCurrentRevision(company.companyId, id, order.current_revision_id),
-    listOrderReceipts(company.companyId, id),
-    listOrderDivergences(company.companyId, id),
-  ]);
+  const [revision, receipts, divergences, supplierDivergences] =
+    await Promise.all([
+      getCurrentRevision(company.companyId, id, order.current_revision_id),
+      listOrderReceipts(company.companyId, id),
+      listOrderDivergences(company.companyId, id),
+      listSupplierDivergences(company.companyId, id),
+    ]);
 
   const podeEnviar = permissions.has("order.send");
   const podeReceber = permissions.has("receipt.create");
+  const podeRevisar = permissions.has("order.revise");
+  const podeTratarComercial = permissions.has("commercial_divergence.manage");
+  const podeEncerrarSaldo = permissions.has("receipt.post");
 
   const total = (revision?.items ?? []).reduce(
     (sum, i) => sum + i.requestedQuantity * i.agreedPrice,
@@ -175,11 +190,54 @@ export default async function PedidoPage({
         </section>
       ) : null}
 
+      {supplierDivergences.length > 0 ? (
+        <section className="mb-6">
+          <h2 className="text-fg mb-1 text-sm font-semibold">
+            Apontado pelo fornecedor
+          </h2>
+          <p className="text-fg-muted mb-3 text-sm">
+            Enquanto houver divergência pendente, o pedido não avança para
+            entrega.
+          </p>
+          <ul className="flex flex-col gap-2">
+            {supplierDivergences.map((d) => (
+              <li
+                key={d.id}
+                className="border-border bg-surface flex flex-col gap-2 rounded-xl border px-4 py-3 text-sm"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-fg font-medium">
+                    {ORDER_DIVERGENCE_TYPE_LABEL[d.type] ?? d.type}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <Badge
+                      variant={d.status === "pending" ? "outline" : "secondary"}
+                    >
+                      {ORDER_DIVERGENCE_STATUS_LABEL[d.status] ?? d.status}
+                    </Badge>
+                    {podeRevisar && d.status === "pending" ? (
+                      <ResolveDivergenceForm divergenceId={d.id} orderId={id} />
+                    ) : null}
+                  </span>
+                </div>
+                {d.notes ? (
+                  <p className="text-fg-muted">{d.notes}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {divergences.length > 0 ? (
         <section className="mb-6">
-          <h2 className="text-fg mb-3 text-sm font-semibold">
-            Divergências detectadas
+          <h2 className="text-fg mb-1 text-sm font-semibold">
+            Divergências de preço
           </h2>
+          <p className="text-fg-muted mb-3 text-sm">
+            Detectadas sozinhas no recebimento, comparando a nota com o
+            combinado.
+          </p>
           <ul className="flex flex-col gap-2">
             {divergences.map((d) => (
               <li
@@ -189,18 +247,35 @@ export default async function PedidoPage({
                 <span className="text-fg">
                   {d.type === "price" ? "Preço diferente do combinado" : d.type}
                 </span>
-                <span className="flex items-center gap-3">
+                <span className="flex flex-wrap items-center gap-3">
                   {d.financial_impact !== null ? (
                     <span className="text-destructive font-medium tabular-nums">
                       {MONEY.format(Number(d.financial_impact))}
                     </span>
                   ) : null}
-                  <Badge variant="outline">{d.status}</Badge>
+                  <Badge variant="outline">
+                    {COMMERCIAL_DIVERGENCE_STATUS_LABEL[d.status] ?? d.status}
+                  </Badge>
+                  {podeTratarComercial && d.status === "pending" ? (
+                    <ResolveDivergenceForm
+                      divergenceId={d.id}
+                      orderId={id}
+                      commercial
+                    />
+                  ) : null}
                 </span>
               </li>
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {podeEncerrarSaldo &&
+      (order.status === "awaiting_delivery" ||
+        order.status === "partially_received") ? (
+        <div className="mb-6">
+          <CloseBalanceForm orderId={id} />
+        </div>
       ) : null}
 
       {receipts.length > 0 ? (

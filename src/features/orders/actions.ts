@@ -216,3 +216,122 @@ export async function postReceipt(
   revalidatePath("/pedidos");
   return { error: null, savedAt: Date.now() };
 }
+
+/**
+ * Resolve uma divergência que o fornecedor relatou.
+ *
+ * Aceitar não altera o pedido sozinho: registra a decisão. Mudar quantidade
+ * ou preço de fato exige nova revisão, que é fluxo próprio — por isso a
+ * mensagem da tela não promete o que a RPC não faz.
+ */
+export async function resolveOrderDivergence(
+  _prev: OrderActionState,
+  formData: FormData,
+): Promise<OrderActionState> {
+  const company = await requireActiveCompany();
+
+  const divergenceId = String(formData.get("divergenceId") ?? "");
+  const orderId = String(formData.get("orderId") ?? "");
+  const status = String(formData.get("status") ?? "");
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!["accepted", "rejected", "resolved", "cancelled"].includes(status)) {
+    return { error: "Escolha o que fazer com a divergência." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_resolve_order_divergence", {
+    p_company_id: company.companyId,
+    p_order_divergence_id: divergenceId,
+    p_status: status,
+    p_notes: notes || undefined,
+  });
+
+  if (error) {
+    if (error.message.includes("Permissão")) {
+      return { error: "Seu papel não permite resolver divergências." };
+    }
+    return { error: `Não foi possível resolver: ${error.message}` };
+  }
+
+  revalidatePath(`/pedidos/${orderId}`);
+  return { error: null, savedAt: Date.now() };
+}
+
+/** Resolve a divergência de preço que o recebimento detectou sozinho. */
+export async function resolveCommercialDivergence(
+  _prev: OrderActionState,
+  formData: FormData,
+): Promise<OrderActionState> {
+  const company = await requireActiveCompany();
+
+  const divergenceId = String(formData.get("divergenceId") ?? "");
+  const orderId = String(formData.get("orderId") ?? "");
+  const status = String(formData.get("status") ?? "");
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!["accepted", "to_dispute", "resolved", "justified"].includes(status)) {
+    return { error: "Escolha o que fazer com a diferença de preço." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_resolve_commercial_divergence", {
+    p_company_id: company.companyId,
+    p_divergence_id: divergenceId,
+    p_status: status,
+    p_resolution_notes: notes || undefined,
+  });
+
+  if (error) {
+    if (error.message.includes("Permissão")) {
+      return { error: "Seu papel não permite tratar divergências comerciais." };
+    }
+    return { error: `Não foi possível resolver: ${error.message}` };
+  }
+
+  revalidatePath(`/pedidos/${orderId}`);
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Encerra o saldo não entregue.
+ *
+ * O fornecedor entregou 60 de 100 e avisou que o resto não vem. Em vez de
+ * deixar o pedido pendente para sempre, encerra-se explicitamente: o pedido
+ * vai para `received` e os números já recebidos ficam intocados. Por isso o
+ * motivo é obrigatório — encerrar saldo é decisão, não conserto.
+ */
+export async function closeOrderBalance(
+  _prev: OrderActionState,
+  formData: FormData,
+): Promise<OrderActionState> {
+  const company = await requireActiveCompany();
+
+  const orderId = String(formData.get("orderId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  if (reason.length < 3) {
+    return { error: "Explique por que o saldo está sendo encerrado." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_close_order_balance", {
+    p_company_id: company.companyId,
+    p_order_id: orderId,
+    p_reason: reason,
+  });
+
+  if (error) {
+    if (error.message.includes("Permissão")) {
+      return { error: "Seu papel não permite encerrar saldo." };
+    }
+    if (error.message.includes("não possui saldo")) {
+      return { error: "Este pedido não tem saldo a encerrar." };
+    }
+    return { error: `Não foi possível encerrar: ${error.message}` };
+  }
+
+  revalidatePath(`/pedidos/${orderId}`);
+  revalidatePath("/pedidos");
+  return { error: null, savedAt: Date.now() };
+}

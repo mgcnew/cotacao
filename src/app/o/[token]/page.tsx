@@ -1,6 +1,7 @@
 import { Link2Off } from "lucide-react";
 
 import { ConfirmOrderForm } from "@/components/orders/confirm-order-form";
+import { ReportDivergenceForm } from "@/components/orders/divergence-forms";
 import { getPublicOrder } from "@/features/orders/public";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
@@ -91,6 +92,26 @@ export default async function PedidoPublicoPage({
           token={token}
           alreadyConfirmed={data.revision.status === "confirmed"}
         />
+
+        {/* Só faz sentido contestar o que ainda está em aberto. */}
+        {data.revision.status === "sent" ? (
+          <div className="mt-4">
+            <ReportDivergenceForm
+              token={token}
+              items={data.revision.items.map((i) => ({
+                id: i.order_revision_item_id,
+                name: i.product_name,
+              }))}
+            />
+          </div>
+        ) : null}
+
+        {data.revision.status === "contested" ? (
+          <p className="border-border bg-surface text-fg-muted mt-4 rounded-xl border px-4 py-4 text-center text-sm">
+            Você apontou uma divergência neste pedido. O comprador está
+            analisando e vai retomar o contato.
+          </p>
+        ) : null}
 
         <p className="text-fg-subtle mt-8 text-center text-xs">
           Este link é pessoal e identifica sua empresa. Não repasse.

@@ -173,6 +173,28 @@ export async function listOrderReceipts(companyId: string, orderId: string) {
   }));
 }
 
+/** Divergências relatadas pelo fornecedor no link do pedido. */
+export async function listSupplierDivergences(
+  companyId: string,
+  orderId: string,
+) {
+  const supabase = await createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("order_divergences")
+    .select(
+      "id, type, status, notes, created_at, order_revision_item_id, resolved_at",
+    )
+    .eq("company_id", companyId)
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Falha ao listar divergências: ${error.message}`);
+  }
+  return data ?? [];
+}
+
 /** Divergências de preço detectadas automaticamente no recebimento. */
 export async function listOrderDivergences(companyId: string, orderId: string) {
   const supabase = await createServerSupabaseClient();
