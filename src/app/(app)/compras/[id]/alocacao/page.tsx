@@ -15,6 +15,7 @@ import {
   getAllocationBoard,
   listRoundOrders,
 } from "@/features/allocations/queries";
+import { ORDER_STATUS_LABEL } from "@/features/orders/queries";
 import { getRound } from "@/features/rounds/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
@@ -23,15 +24,6 @@ const MONEY = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
-
-const ORDER_STATUS: Record<string, string> = {
-  draft: "Rascunho",
-  sent: "Enviado",
-  confirmed: "Confirmado",
-  partially_received: "Recebido em parte",
-  received: "Recebido",
-  cancelled: "Cancelado",
-};
 
 export default async function AlocacaoPage({
   params,
@@ -55,7 +47,9 @@ export default async function AlocacaoPage({
     permissions.has("order.create");
 
   const { rows, suppliers, allocationsByItem } = board;
-  const supplierName = new Map(suppliers.map((s) => [s.supplier_id, s.suppliers.name]));
+  const supplierName = new Map(
+    suppliers.map((s) => [s.supplier_id, s.suppliers.name]),
+  );
 
   const rascunhos = board.allocations.filter((a) => a.status === "draft");
   const fornecedoresNoRascunho = new Set(rascunhos.map((a) => a.supplierId));
@@ -197,7 +191,9 @@ export default async function AlocacaoPage({
                     productName={row.productName}
                     purchaseUnit={row.purchaseUnit}
                     suppliers={candidatos}
-                    suggestedQuantity={falta > 0 ? falta : row.requestedQuantity}
+                    suggestedQuantity={
+                      falta > 0 ? falta : row.requestedQuantity
+                    }
                   />
                 ) : null}
               </section>
@@ -218,9 +214,13 @@ export default async function AlocacaoPage({
 
       {orders.length > 0 ? (
         <section>
-          <h2 className="text-fg mb-3 text-sm font-semibold">
+          <h2 className="text-fg mb-1 text-sm font-semibold">
             Pedidos gerados
           </h2>
+          <p className="text-fg-muted mb-3 text-sm">
+            Gerar o pedido não o envia. Cada um nasce em rascunho e fica parado
+            até alguém abrir e mandar ao fornecedor.
+          </p>
           <ul className="flex flex-col gap-2">
             {orders.map((order) => (
               <li
@@ -228,12 +228,14 @@ export default async function AlocacaoPage({
                 className="border-border bg-surface flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3"
               >
                 <div>
-                  <p className="text-fg font-medium">
+                  <Link
+                    href={`/pedidos/${order.id}`}
+                    className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline"
+                  >
                     #{order.orderNumber} · {order.supplierName}
-                  </p>
+                  </Link>
                   <p className="text-fg-subtle text-xs">
-                    {order.itemCount}{" "}
-                    {order.itemCount === 1 ? "item" : "itens"}
+                    {order.itemCount} {order.itemCount === 1 ? "item" : "itens"}
                     {order.deliveryDueDate
                       ? ` · entrega ${order.deliveryDueDate}`
                       : ""}
@@ -243,9 +245,16 @@ export default async function AlocacaoPage({
                   <span className="text-fg font-medium tabular-nums">
                     {MONEY.format(order.total)}
                   </span>
-                  <Badge variant="secondary">
-                    {ORDER_STATUS[order.status] ?? order.status}
+                  <Badge
+                    variant={order.status === "draft" ? "outline" : "secondary"}
+                  >
+                    {ORDER_STATUS_LABEL[order.status] ?? order.status}
                   </Badge>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/pedidos/${order.id}`}>
+                      {order.status === "draft" ? "Enviar" : "Abrir"}
+                    </Link>
+                  </Button>
                 </div>
               </li>
             ))}

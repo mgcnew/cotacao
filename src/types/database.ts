@@ -2503,6 +2503,10 @@ export type Database = {
       }
     }
     Functions: {
+      rpc_cancel_order: {
+        Args: { p_company_id: string; p_order_id: string; p_reason: string }
+        Returns: Json
+      }
       rpc_close_order_balance: {
         Args: { p_company_id: string; p_order_id: string; p_reason: string }
         Returns: Json
@@ -2531,7 +2535,7 @@ export type Database = {
       rpc_create_direct_order: {
         Args: {
           p_company_id: string
-          p_delivery_due_date: string
+          p_delivery_due_date?: string
           p_items: Json
           p_supplier_id: string
         }
@@ -2540,7 +2544,7 @@ export type Database = {
       rpc_create_order_revision: {
         Args: {
           p_company_id: string
-          p_delivery_due_date: string
+          p_delivery_due_date?: string
           p_items: Json
           p_order_id: string
         }
@@ -2603,6 +2607,21 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_service_log_communication: {
+        Args: {
+          p_channel: string
+          p_company_id: string
+          p_error_message?: string
+          p_external_message_id?: string
+          p_order_revision_id?: string
+          p_provider: string
+          p_round_supplier_id?: string
+          p_status: string
+          p_supplier_contact_id?: string
+          p_supplier_id: string
+        }
+        Returns: string
+      }
       rpc_service_provision_company: {
         Args: {
           p_currency_code?: string
@@ -2625,6 +2644,25 @@ export type Database = {
           p_token_hash?: string
         }
         Returns: string
+      }
+      rpc_service_update_communication_log: {
+        Args: {
+          p_communication_log_id: string
+          p_company_id: string
+          p_error_message?: string
+          p_external_message_id?: string
+          p_status: string
+        }
+        Returns: string
+      }
+      rpc_update_draft_order_revision: {
+        Args: {
+          p_company_id: string
+          p_delivery_due_date?: string
+          p_items: Json
+          p_order_revision_id: string
+        }
+        Returns: Json
       }
     }
     Enums: {

@@ -7,26 +7,39 @@ import {
   ResolveDivergenceForm,
 } from "@/components/orders/divergence-forms";
 import {
-  OrderLinkControls,
-  ReceiptForm,
-} from "@/components/orders/order-forms";
+  CancelOrderForm,
+  EditDraftForm,
+  NewRevisionForm,
+  type EditableItem,
+} from "@/components/orders/order-crud-forms";
+import { ReceiptForm } from "@/components/orders/order-forms";
+import { SendOrderControls } from "@/components/orders/send-order-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { markOrderSent } from "@/features/orders/actions";
 import {
   ORDER_DIVERGENCE_STATUS_LABEL,
   ORDER_DIVERGENCE_TYPE_LABEL,
   COMMERCIAL_DIVERGENCE_STATUS_LABEL,
 } from "@/features/orders/divergences";
+import { buildOrderMessage } from "@/features/orders/message";
 import {
   getCurrentRevision,
+  getDraftRevision,
   getOrder,
+  listDirectOrderOptions,
+  getOrderMessageContext,
   listOrderDivergences,
   listOrderReceipts,
+  listOrderRevisions,
+  listOrderSendContacts,
   listSupplierDivergences,
   ORDER_STATUS_LABEL,
+  RECEIPT_STATUS_LABEL,
+  REVISION_STATUS_LABEL,
+  type OrderRevision,
 } from "@/features/orders/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { isEvolutionConfigured } from "@/lib/evolution/client";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -39,6 +52,32 @@ const DATA_HORA = new Intl.DateTimeFormat("pt-BR", {
   hour: "2-digit",
   minute: "2-digit",
 });
+const DATA = new Intl.DateTimeFormat("pt-BR");
+
+/** Data ISO do banco vira dd/mm/aaaa sem passar por fuso — é dia, não instante. */
+function formatarDia(iso: string): string {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  return DATA.format(new Date(ano, mes - 1, dia));
+}
+
+/** Situações em que o pedido já saiu daqui, mas ainda pode ser revisado. */
+const REVISAVEL = [
+  "awaiting_confirmation",
+  "awaiting_delivery",
+  "partially_received",
+];
+
+function paraEdicao(revision: OrderRevision): EditableItem[] {
+  return revision.items.map((item) => ({
+    id: item.id,
+    productId: item.productId,
+    allocationId: item.allocationId,
+    productName: item.productName,
+    requestedQuantity: item.requestedQuantity,
+    agreedPrice: item.agreedPrice,
+    notes: item.notes,
+  }));
+}
 
 export default async function PedidoPage({
   params,
@@ -54,9 +93,11 @@ export default async function PedidoPage({
   if (!order) notFound();
   if (!permissions.has("order.view")) redirect("/dashboard");
 
-  const [revision, receipts, divergences, supplierDivergences] =
+  const [revision, draft, revisions, receipts, divergences, supplierDivergences] =
     await Promise.all([
       getCurrentRevision(company.companyId, id, order.current_revision_id),
+      getDraftRevision(company.companyId, id),
+      listOrderRevisions(company.companyId, id),
       listOrderReceipts(company.companyId, id),
       listOrderDivergences(company.companyId, id),
       listSupplierDivergences(company.companyId, id),
@@ -65,8 +106,41 @@ export default async function PedidoPage({
   const podeEnviar = permissions.has("order.send");
   const podeReceber = permissions.has("receipt.create");
   const podeRevisar = permissions.has("order.revise");
+  const podeEditarRascunho = permissions.has("order.update_draft");
+  const podeCancelar = permissions.has("order.cancel");
   const podeTratarComercial = permissions.has("commercial_divergence.manage");
   const podeEncerrarSaldo = permissions.has("receipt.post");
+
+  const encerrado = order.status === "received" || order.status === "cancelled";
+  const podeMexerNoRascunho = Boolean(draft) && podeEditarRascunho && !encerrado;
+  // Uma revisão nova só faz sentido quando não há outra em preparação — a RPC
+  // recusa a segunda, e oferecer o botão seria prometer o que ela nega.
+  const podeCriarRevisao =
+    podeRevisar && !draft && REVISAVEL.includes(order.status);
+
+  // O catálogo só é carregado quando há de fato um formulário para preencher.
+  const products =
+    podeMexerNoRascunho || podeCriarRevisao
+      ? (await listDirectOrderOptions(company.companyId)).products
+      : [];
+
+  // Contatos e mensagem só interessam quando existe rascunho para enviar. A
+  // prévia vai sem link de propósito: o link ainda não foi gerado, e inventar
+  // um endereço aqui seria mostrar um que não abre.
+  const envio =
+    podeEnviar && draft && !encerrado
+      ? await (async () => {
+          const [contacts, context] = await Promise.all([
+            listOrderSendContacts(company.companyId, order.suppliers.id),
+            getOrderMessageContext(company.companyId, id, draft.id),
+          ]);
+          return {
+            contacts,
+            previewMessage: context ? buildOrderMessage(context, null) : "",
+            evolutionReady: isEvolutionConfigured(),
+          };
+        })()
+      : null;
 
   const total = (revision?.items ?? []).reduce(
     (sum, i) => sum + i.requestedQuantity * i.agreedPrice,
@@ -80,7 +154,7 @@ export default async function PedidoPage({
     <div className="mx-auto w-full max-w-4xl">
       <PageHeader
         title={`Pedido #${order.order_number}`}
-        description={`${order.suppliers.name}${order.purchase_rounds?.title ? ` · ${order.purchase_rounds.title}` : ""}`}
+        description={`${order.suppliers.name}${order.purchase_rounds?.title ? ` · ${order.purchase_rounds.title}` : " · pedido direto"}`}
         action={
           <>
             <Button asChild size="sm" variant="ghost">
@@ -110,7 +184,7 @@ export default async function PedidoPage({
                   ? ` · confirmada ${DATA_HORA.format(new Date(revision.confirmedAt))}`
                   : ""}
                 {revision.deliveryDueDate
-                  ? ` · entrega ${revision.deliveryDueDate}`
+                  ? ` · entrega ${formatarDia(revision.deliveryDueDate)}`
                   : ""}
               </p>
             </div>
@@ -145,7 +219,59 @@ export default async function PedidoPage({
         </p>
       )}
 
-      {podeEnviar && revision && order.status === "draft" ? (
+      {/* Rascunho que ainda não é a revisão vigente: existe, mas não é o que o
+          fornecedor tem em mãos. Sem este aviso, a tela mostraria o combinado
+          antigo e esconderia o que está sendo preparado. */}
+      {draft && draft.id !== order.current_revision_id ? (
+        <section className="border-border bg-surface mb-6 flex flex-col gap-3 rounded-xl border p-4">
+          <div>
+            <h2 className="text-fg text-sm font-semibold">
+              Revisão {draft.revisionNumber} em preparação
+            </h2>
+            <p className="text-fg-muted mt-1 text-sm">
+              Ainda não foi enviada, então o que vale para o fornecedor continua
+              sendo a revisão {revision?.revisionNumber}.
+              {draft.deliveryDueDate
+                ? ` Entrega prevista para ${formatarDia(draft.deliveryDueDate)}.`
+                : ""}
+            </p>
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {draft.items.map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
+              >
+                <span className="text-fg">{item.productName}</span>
+                <span className="text-fg-muted tabular-nums">
+                  {QTY.format(item.requestedQuantity)} {item.purchaseUnit} ×{" "}
+                  {MONEY.format(item.agreedPrice)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {podeMexerNoRascunho ? (
+            <EditDraftForm
+              orderId={id}
+              revisionId={draft.id}
+              deliveryDueDate={draft.deliveryDueDate}
+              items={paraEdicao(draft)}
+              products={products}
+            />
+          ) : null}
+          {podeEnviar && envio ? (
+            <SendOrderControls
+              orderId={id}
+              revisionId={draft.id}
+              contacts={envio.contacts}
+              previewMessage={envio.previewMessage}
+              evolutionReady={envio.evolutionReady}
+            />
+          ) : null}
+        </section>
+      ) : null}
+
+      {draft && draft.id === order.current_revision_id ? (
         <section className="border-border bg-surface mb-6 flex flex-col gap-3 rounded-xl border p-4">
           <div>
             <h2 className="text-fg text-sm font-semibold">
@@ -156,12 +282,24 @@ export default async function PedidoPage({
               enviado só depois que a mensagem realmente sair.
             </p>
           </div>
-          <OrderLinkControls orderId={id} revisionId={revision.id} />
-          <form action={markOrderSent.bind(null, id, revision.id)}>
-            <Button type="submit" size="sm" variant="outline">
-              Marquei como enviado
-            </Button>
-          </form>
+          {podeMexerNoRascunho ? (
+            <EditDraftForm
+              orderId={id}
+              revisionId={draft.id}
+              deliveryDueDate={draft.deliveryDueDate}
+              items={paraEdicao(draft)}
+              products={products}
+            />
+          ) : null}
+          {podeEnviar && envio ? (
+            <SendOrderControls
+              orderId={id}
+              revisionId={draft.id}
+              contacts={envio.contacts}
+              previewMessage={envio.previewMessage}
+              evolutionReady={envio.evolutionReady}
+            />
+          ) : null}
         </section>
       ) : null}
 
@@ -170,6 +308,24 @@ export default async function PedidoPage({
           Aguardando o fornecedor confirmar pelo link. O recebimento libera
           depois disso.
         </p>
+      ) : null}
+
+      {podeCriarRevisao && revision ? (
+        <section className="mb-6">
+          <h2 className="text-fg mb-1 text-sm font-semibold">
+            Mudou o combinado?
+          </h2>
+          <p className="text-fg-muted mb-3 text-sm">
+            Pedido já enviado não se edita: cria-se uma revisão nova. A
+            confirmação do fornecedor fica amarrada à revisão que ele viu.
+          </p>
+          <NewRevisionForm
+            orderId={id}
+            deliveryDueDate={revision.deliveryDueDate}
+            items={paraEdicao(revision)}
+            products={products}
+          />
+        </section>
       ) : null}
 
       {podeReceber &&
@@ -279,7 +435,7 @@ export default async function PedidoPage({
       ) : null}
 
       {receipts.length > 0 ? (
-        <section>
+        <section className="mb-6">
           <h2 className="text-fg mb-3 text-sm font-semibold">
             Recebimentos registrados
           </h2>
@@ -300,11 +456,61 @@ export default async function PedidoPage({
                     </span>
                   ) : null}
                 </span>
-                <Badge variant="secondary">{r.status}</Badge>
+                <Badge variant="secondary">
+                  {RECEIPT_STATUS_LABEL[r.status] ?? r.status}
+                </Badge>
               </li>
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {/* Só vale mostrar quando há mais de uma: com uma revisão só, o histórico
+          repetiria o que está no topo da página. */}
+      {revisions.length > 1 ? (
+        <section className="mb-6">
+          <h2 className="text-fg mb-3 text-sm font-semibold">
+            Histórico de revisões
+          </h2>
+          <ul className="flex flex-col gap-2">
+            {revisions.map((r) => (
+              <li
+                key={r.id}
+                className="border-border bg-surface flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm"
+              >
+                <span className="text-fg-muted">
+                  <span className="text-fg font-medium">
+                    Revisão {r.revisionNumber}
+                  </span>{" "}
+                  · {r.itemCount} {r.itemCount === 1 ? "item" : "itens"} ·{" "}
+                  <span className="tabular-nums">{MONEY.format(r.total)}</span>
+                  <span className="text-fg-subtle block text-xs">
+                    {r.sentAt
+                      ? `enviada ${DATA_HORA.format(new Date(r.sentAt))}`
+                      : "nunca enviada"}
+                    {r.confirmedAt
+                      ? ` · confirmada ${DATA_HORA.format(new Date(r.confirmedAt))}`
+                      : ""}
+                    {r.deliveryDueDate
+                      ? ` · entrega ${formatarDia(r.deliveryDueDate)}`
+                      : ""}
+                  </span>
+                </span>
+                <Badge
+                  variant={
+                    r.id === order.current_revision_id ? "default" : "outline"
+                  }
+                >
+                  {REVISION_STATUS_LABEL[r.status] ?? r.status}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {podeCancelar && !encerrado ? (
+        <CancelOrderForm orderId={id} />
       ) : null}
     </div>
   );

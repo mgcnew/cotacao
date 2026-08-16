@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Check, CheckCircle2, Copy } from "lucide-react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
@@ -8,7 +8,6 @@ import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  generateOrderLink,
   postReceipt,
   type OrderActionState,
 } from "@/features/orders/actions";
@@ -34,70 +33,6 @@ function Submit({ label, busy }: { label: string; busy: string }) {
     <Button type="submit" size="sm" disabled={pending}>
       {pending ? busy : label}
     </Button>
-  );
-}
-
-/** Gera e mostra, uma única vez, o link de confirmação do pedido. */
-export function OrderLinkControls({
-  orderId,
-  revisionId,
-}: {
-  orderId: string;
-  revisionId: string;
-}) {
-  const [copied, setCopied] = React.useState(false);
-  const [state, formAction] = useActionState<OrderActionState, FormData>(
-    generateOrderLink,
-    { error: null },
-  );
-
-  return (
-    <div className="flex flex-col gap-2">
-      <form action={formAction}>
-        <input type="hidden" name="orderId" value={orderId} />
-        <input type="hidden" name="revisionId" value={revisionId} />
-        <Submit
-          label={state.url ? "Gerar outro link" : "Gerar link do pedido"}
-          busy="Gerando…"
-        />
-      </form>
-
-      <ErrorLine error={state.error} />
-
-      {state.url ? (
-        <div className="border-border bg-surface-sunken flex flex-col gap-2 rounded-lg border p-2">
-          <code className="text-fg-muted block overflow-x-auto text-xs whitespace-nowrap">
-            {state.url}
-          </code>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="gap-1.5"
-              onClick={async () => {
-                await navigator.clipboard.writeText(state.url!);
-                setCopied(true);
-                window.setTimeout(() => setCopied(false), 2000);
-              }}
-            >
-              {copied ? (
-                <>
-                  <Check className="size-3.5" aria-hidden /> Copiado
-                </>
-              ) : (
-                <>
-                  <Copy className="size-3.5" aria-hidden /> Copiar link
-                </>
-              )}
-            </Button>
-            <span className="text-fg-subtle text-xs">
-              Mostrado só desta vez.
-            </span>
-          </div>
-        </div>
-      ) : null}
-    </div>
   );
 }
 

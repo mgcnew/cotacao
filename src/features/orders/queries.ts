@@ -1,5 +1,8 @@
 import "server-only";
 
+import { formatCnpj } from "@/features/company/cnpj";
+import type { OrderFilters } from "@/features/orders/filters";
+import type { OrderMessageContext } from "@/features/orders/message";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -20,10 +23,156 @@ export const ORDER_STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelado",
 };
 
-export async function listOrders(companyId: string) {
+/** Ciclo da revisão — documento mestre, 16.8. */
+export const REVISION_STATUS_LABEL: Record<string, string> = {
+  draft: "Em preparação",
+  sent: "Enviada",
+  confirmed: "Confirmada",
+  contested: "Contestada",
+  superseded: "Substituída",
+  cancelled: "Cancelada",
+};
+
+/** Ciclo do recebimento — documento mestre, 16.9. */
+export const RECEIPT_STATUS_LABEL: Record<string, string> = {
+  draft: "Em registro",
+  posted: "Registrado",
+  voided: "Invalidado",
+};
+
+/**
+ * O próximo passo do pedido, do ponto de vista de quem compra.
+ *
+ * A lista mostrava só o estado — e estado não diz o que fazer. Aqui se decide
+ * o verbo e de quem é a vez, para que "Rascunho" apareça como "Enviar ao
+ * fornecedor" e não como um rótulo parado. A ação em si continua morando na
+ * página do pedido; isto só a anuncia.
+ */
+export type OrderNextStep = {
+  label: string;
+  /** Versão curta, para telas estreitas onde o rótulo inteiro não cabe. */
+  shortLabel: string;
+  /** Permissão exigida; `null` quando o passo não é do comprador. */
+  permission: string | null;
+  /** Verdadeiro quando o pedido está esperando alguém daqui agir. */
+  pending: boolean;
+};
+
+export function orderNextStep(status: string): OrderNextStep {
+  switch (status) {
+    case "draft":
+      return {
+        label: "Enviar ao fornecedor",
+        shortLabel: "Enviar",
+        permission: "order.send",
+        pending: true,
+      };
+    case "awaiting_delivery":
+    case "partially_received":
+      return {
+        label: "Dar entrada",
+        shortLabel: "Dar entrada",
+        permission: "receipt.create",
+        pending: true,
+      };
+    default:
+      // Aguardando confirmação, recebido, cancelado: a vez não é nossa.
+      return {
+        label: "Abrir",
+        shortLabel: "Abrir",
+        permission: null,
+        pending: false,
+      };
+  }
+}
+
+/**
+ * O que o pedido direto precisa escolher: fornecedor e produto.
+ *
+ * Só entra o que a RPC aceita — fornecedor ativo e produto ativo —, senão a
+ * tela ofereceria uma opção que o banco recusa no envio. As unidades vêm junto
+ * apenas para rotular os campos; quem as grava no item é o servidor, lendo do
+ * cadastro do produto.
+ */
+export async function listDirectOrderOptions(companyId: string) {
   const supabase = await createServerSupabaseClient();
 
-  const { data, error } = await supabase
+  const [suppliers, products] = await Promise.all([
+    supabase
+      .from("suppliers")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .eq("status", "active")
+      .order("name"),
+    supabase
+      .from("products")
+      .select(
+        `
+        id,
+        name,
+        purchase_unit:units!products_company_id_purchase_unit_id_fkey ( symbol ),
+        pricing_unit:units!products_company_id_pricing_unit_id_fkey ( symbol )
+      `,
+      )
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .order("name"),
+  ]);
+
+  if (suppliers.error) {
+    throw new Error(`Falha ao listar fornecedores: ${suppliers.error.message}`);
+  }
+  if (products.error) {
+    throw new Error(`Falha ao listar produtos: ${products.error.message}`);
+  }
+
+  return {
+    suppliers: suppliers.data ?? [],
+    products: (products.data ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      purchaseUnit: p.purchase_unit?.symbol ?? "",
+      pricingUnit: p.pricing_unit?.symbol ?? "",
+    })),
+  };
+}
+
+/** Situações em que ainda se espera mercadoria — as que podem atrasar. */
+const EM_ANDAMENTO = [
+  "awaiting_confirmation",
+  "awaiting_delivery",
+  "partially_received",
+];
+
+/** Teto de linhas. Acima disso a resposta é o filtro, não a rolagem. */
+export const ORDERS_PAGE_SIZE = 200;
+
+export type OrderListRow = {
+  id: string;
+  orderNumber: number;
+  status: string;
+  supplierName: string;
+  roundTitle: string | null;
+  deliveryDueDate: string | null;
+  itemCount: number;
+  total: number;
+  /** Prazo vencido com mercadoria ainda por vir (documento mestre, 16.10). */
+  isOverdue: boolean;
+};
+
+export async function listOrders(
+  companyId: string,
+  filters: OrderFilters = {
+    situacao: null,
+    fornecedorId: null,
+    de: null,
+    ate: null,
+    numero: null,
+  },
+): Promise<{ rows: OrderListRow[]; truncated: boolean }> {
+  const supabase = await createServerSupabaseClient();
+
+  let query = supabase
     .from("orders")
     .select(
       `
@@ -31,24 +180,55 @@ export async function listOrders(companyId: string) {
       order_number,
       status,
       created_at,
+      current_revision_id,
       suppliers!inner ( name ),
       purchase_rounds ( title ),
       order_revisions!order_revisions_company_id_order_id_fkey (
-        revision_number, status, delivery_due_date,
+        id, revision_number, status, delivery_due_date,
         order_revision_items ( requested_quantity, agreed_price )
       )
     `,
     )
-    .eq("company_id", companyId)
-    .order("order_number", { ascending: false });
+    .eq("company_id", companyId);
+
+  if (filters.situacao === "abertos" || filters.situacao === "atrasados") {
+    // "Atrasado" depende da data da revisão vigente, que só se conhece depois
+    // de montar a linha; aqui se estreita ao que pode atrasar, e o resto do
+    // filtro acontece abaixo.
+    query = query.in(
+      "status",
+      filters.situacao === "atrasados"
+        ? EM_ANDAMENTO
+        : [...EM_ANDAMENTO, "draft"],
+    );
+  } else if (filters.situacao) {
+    query = query.eq("status", filters.situacao);
+  }
+
+  if (filters.fornecedorId) query = query.eq("supplier_id", filters.fornecedorId);
+  if (filters.numero) query = query.eq("order_number", filters.numero);
+  if (filters.de) query = query.gte("created_at", `${filters.de}T00:00:00`);
+  if (filters.ate) query = query.lte("created_at", `${filters.ate}T23:59:59`);
+
+  const { data, error } = await query
+    .order("order_number", { ascending: false })
+    .limit(ORDERS_PAGE_SIZE + 1);
 
   if (error) throw new Error(`Falha ao listar pedidos: ${error.message}`);
 
-  return (data ?? []).map((order) => {
-    const revision = [...(order.order_revisions ?? [])].sort(
-      (a, b) => b.revision_number - a.revision_number,
-    )[0];
+  const truncated = (data ?? []).length > ORDERS_PAGE_SIZE;
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  const rows = (data ?? []).slice(0, ORDERS_PAGE_SIZE).map((order) => {
+    // A vigente é a que `current_revision_id` aponta, não a de número mais
+    // alto: uma revisão 2 ainda em rascunho não é o que o fornecedor recebeu,
+    // e somar os itens dela mostraria um total que ninguém combinou.
+    const revisions = order.order_revisions ?? [];
+    const revision =
+      revisions.find((r) => r.id === order.current_revision_id) ??
+      [...revisions].sort((a, b) => b.revision_number - a.revision_number)[0];
     const items = revision?.order_revision_items ?? [];
+    const deliveryDueDate = revision?.delivery_due_date ?? null;
 
     return {
       id: order.id,
@@ -56,14 +236,42 @@ export async function listOrders(companyId: string) {
       status: order.status,
       supplierName: order.suppliers.name,
       roundTitle: order.purchase_rounds?.title ?? null,
-      deliveryDueDate: revision?.delivery_due_date ?? null,
+      deliveryDueDate,
       itemCount: items.length,
       total: items.reduce(
         (sum, i) => sum + Number(i.requested_quantity) * Number(i.agreed_price),
         0,
       ),
+      isOverdue:
+        deliveryDueDate !== null &&
+        deliveryDueDate < hoje &&
+        EM_ANDAMENTO.includes(order.status),
     };
   });
+
+  return {
+    rows: filters.situacao === "atrasados" ? rows.filter((r) => r.isOverdue) : rows,
+    truncated,
+  };
+}
+
+/** Números do recorte, para o resumo no topo da lista. */
+export function summarizeOrders(rows: OrderListRow[]) {
+  return {
+    quantidade: rows.length,
+    valor: rows
+      .filter((r) => r.status !== "cancelled")
+      .reduce((sum, r) => sum + r.total, 0),
+    rascunhos: rows.filter((r) => r.status === "draft").length,
+    aguardandoConfirmacao: rows.filter(
+      (r) => r.status === "awaiting_confirmation",
+    ).length,
+    aReceber: rows.filter(
+      (r) =>
+        r.status === "awaiting_delivery" || r.status === "partially_received",
+    ).length,
+    atrasados: rows.filter((r) => r.isOverdue).length,
+  };
 }
 
 export async function getOrder(companyId: string, orderId: string) {
@@ -89,42 +297,44 @@ export async function getOrder(companyId: string, orderId: string) {
   return data;
 }
 
-/** Revisão vigente com seus itens e o quanto de cada um já foi recebido. */
-export async function getCurrentRevision(
-  companyId: string,
-  orderId: string,
-  revisionId: string | null,
-) {
-  if (!revisionId) return null;
+const REVISION_SELECT = `
+  id,
+  revision_number,
+  status,
+  delivery_due_date,
+  sent_at,
+  confirmed_at,
+  order_revision_items (
+    id, product_id, purchase_allocation_id, product_name_snapshot,
+    requested_quantity, agreed_price, notes,
+    purchase_unit:units!order_revision_items_company_id_purchase_unit_id_fkey ( symbol ),
+    pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( symbol ),
+    receipt_items ( logistic_quantity_received, pricing_quantity_received, practiced_price )
+  )
+`;
 
-  const supabase = await createServerSupabaseClient();
+type RevisionRow = {
+  id: string;
+  revision_number: number;
+  status: string;
+  delivery_due_date: string | null;
+  sent_at: string | null;
+  confirmed_at: string | null;
+  order_revision_items: {
+    id: string;
+    product_id: string;
+    purchase_allocation_id: string | null;
+    product_name_snapshot: string;
+    requested_quantity: number;
+    agreed_price: number;
+    notes: string | null;
+    purchase_unit: { symbol: string } | null;
+    pricing_unit: { symbol: string } | null;
+    receipt_items: { logistic_quantity_received: number }[] | null;
+  }[];
+};
 
-  const { data, error } = await supabase
-    .from("order_revisions")
-    .select(
-      `
-      id,
-      revision_number,
-      status,
-      delivery_due_date,
-      sent_at,
-      confirmed_at,
-      order_revision_items (
-        id, product_name_snapshot, requested_quantity, agreed_price,
-        purchase_unit:units!order_revision_items_company_id_purchase_unit_id_fkey ( symbol ),
-        pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( symbol ),
-        receipt_items ( logistic_quantity_received, pricing_quantity_received, practiced_price )
-      )
-    `,
-    )
-    .eq("company_id", companyId)
-    .eq("order_id", orderId)
-    .eq("id", revisionId)
-    .maybeSingle();
-
-  if (error) throw new Error(`Falha ao carregar a revisão: ${error.message}`);
-  if (!data) return null;
-
+function mapRevision(data: RevisionRow) {
   return {
     id: data.id,
     revisionNumber: data.revision_number,
@@ -140,9 +350,12 @@ export async function getCurrentRevision(
       );
       return {
         id: item.id,
+        productId: item.product_id,
+        allocationId: item.purchase_allocation_id,
         productName: item.product_name_snapshot,
         requestedQuantity: Number(item.requested_quantity),
         agreedPrice: Number(item.agreed_price),
+        notes: item.notes,
         purchaseUnit: item.purchase_unit?.symbol ?? "",
         pricingUnit: item.pricing_unit?.symbol ?? "",
         receivedQuantity: recebido,
@@ -150,6 +363,188 @@ export async function getCurrentRevision(
       };
     }),
   };
+}
+
+export type OrderRevision = ReturnType<typeof mapRevision>;
+
+/** Revisão vigente com seus itens e o quanto de cada um já foi recebido. */
+export async function getCurrentRevision(
+  companyId: string,
+  orderId: string,
+  revisionId: string | null,
+) {
+  if (!revisionId) return null;
+
+  const supabase = await createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("order_revisions")
+    .select(REVISION_SELECT)
+    .eq("company_id", companyId)
+    .eq("order_id", orderId)
+    .eq("id", revisionId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Falha ao carregar a revisão: ${error.message}`);
+  return data ? mapRevision(data) : null;
+}
+
+/**
+ * A revisão em rascunho, se houver.
+ *
+ * Nem sempre é a vigente: `current_revision_id` só avança no envio, então um
+ * pedido já enviado pode ter uma revisão 2 sendo preparada. É esta que a tela
+ * deixa editar — a vigente já saiu daqui.
+ */
+export async function getDraftRevision(companyId: string, orderId: string) {
+  const supabase = await createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("order_revisions")
+    .select(REVISION_SELECT)
+    .eq("company_id", companyId)
+    .eq("order_id", orderId)
+    .eq("status", "draft")
+    .order("revision_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Falha ao carregar o rascunho: ${error.message}`);
+  }
+  return data ? mapRevision(data) : null;
+}
+
+/** Histórico: toda revisão que o pedido já teve, da mais nova para a mais velha. */
+export async function listOrderRevisions(companyId: string, orderId: string) {
+  const supabase = await createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("order_revisions")
+    .select(
+      `
+      id, revision_number, status, delivery_due_date, sent_at, confirmed_at,
+      order_revision_items ( requested_quantity, agreed_price )
+    `,
+    )
+    .eq("company_id", companyId)
+    .eq("order_id", orderId)
+    .order("revision_number", { ascending: false });
+
+  if (error) throw new Error(`Falha ao listar revisões: ${error.message}`);
+
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    revisionNumber: r.revision_number,
+    status: r.status,
+    deliveryDueDate: r.delivery_due_date,
+    sentAt: r.sent_at,
+    confirmedAt: r.confirmed_at,
+    itemCount: r.order_revision_items?.length ?? 0,
+    total: (r.order_revision_items ?? []).reduce(
+      (sum, i) => sum + Number(i.requested_quantity) * Number(i.agreed_price),
+      0,
+    ),
+  }));
+}
+
+/**
+ * Tudo o que a mensagem do pedido precisa dizer, em uma leitura só.
+ *
+ * Empresa e CNPJ vêm junto porque o fornecedor recebe a mensagem em um número
+ * de WhatsApp qualquer: sem dizer quem está pedindo, o texto é anônimo.
+ */
+export async function getOrderMessageContext(
+  companyId: string,
+  orderId: string,
+  revisionId: string,
+): Promise<OrderMessageContext | null> {
+  const supabase = await createServerSupabaseClient();
+
+  const [order, revision, company] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("order_number, suppliers!inner ( name )")
+      .eq("company_id", companyId)
+      .eq("id", orderId)
+      .maybeSingle(),
+    supabase
+      .from("order_revisions")
+      .select(
+        `
+        revision_number,
+        delivery_due_date,
+        order_revision_items (
+          product_name_snapshot, requested_quantity, agreed_price,
+          purchase_unit:units!order_revision_items_company_id_purchase_unit_id_fkey ( symbol ),
+          pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( symbol )
+        )
+      `,
+      )
+      .eq("company_id", companyId)
+      .eq("order_id", orderId)
+      .eq("id", revisionId)
+      .maybeSingle(),
+    supabase
+      .from("companies")
+      .select("name, legal_name, document_number")
+      .eq("id", companyId)
+      .maybeSingle(),
+  ]);
+
+  if (!order.data || !revision.data) return null;
+
+  return {
+    orderNumber: order.data.order_number,
+    companyName:
+      company.data?.legal_name ?? company.data?.name ?? "Nossa empresa",
+    companyDocument: company.data?.document_number
+      ? formatCnpj(company.data.document_number)
+      : null,
+    supplierName: order.data.suppliers.name,
+    deliveryDueDate: revision.data.delivery_due_date,
+    revisionNumber: revision.data.revision_number,
+    items: (revision.data.order_revision_items ?? []).map((item) => ({
+      productName: item.product_name_snapshot,
+      requestedQuantity: Number(item.requested_quantity),
+      agreedPrice: Number(item.agreed_price),
+      purchaseUnit: item.purchase_unit?.symbol ?? "",
+      pricingUnit: item.pricing_unit?.symbol ?? "",
+    })),
+  };
+}
+
+/**
+ * Contatos do fornecedor com WhatsApp, para o envio.
+ *
+ * Só os ativos e só os que têm número: um contato sem WhatsApp não é destino
+ * possível, e oferecê-lo na lista seria oferecer um caminho sem saída.
+ */
+export async function listOrderSendContacts(
+  companyId: string,
+  supplierId: string,
+) {
+  const supabase = await createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("supplier_contacts")
+    .select("id, name, role, whatsapp, is_primary")
+    .eq("company_id", companyId)
+    .eq("supplier_id", supplierId)
+    .eq("is_active", true)
+    .not("whatsapp", "is", null)
+    .order("is_primary", { ascending: false })
+    .order("name");
+
+  if (error) throw new Error(`Falha ao listar contatos: ${error.message}`);
+
+  return (data ?? []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    role: c.role,
+    whatsapp: c.whatsapp as string,
+    isPrimary: c.is_primary,
+  }));
 }
 
 export async function listOrderReceipts(companyId: string, orderId: string) {

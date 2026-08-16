@@ -200,8 +200,9 @@ export function ConfirmOrdersForm({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-fg-subtle text-xs">
-          Depois de gerados, os pedidos nascem em rascunho e as decisões não
-          podem mais ser alteradas.
+          Gerar não envia. Os pedidos nascem em rascunho — o envio ao fornecedor
+          é um passo separado, em cada pedido. As decisões, essas sim, não podem
+          mais ser alteradas.
         </p>
         <Submit label="Confirmar e gerar" busy="Gerando…" />
       </div>
