@@ -1,6 +1,8 @@
-import { PageHeader } from "@/components/layout/page-header";
 import { AttentionList } from "@/components/dashboard/attention-list";
+import { Metric } from "@/components/layout/metric";
+import { PageHeader } from "@/components/layout/page-header";
 import { getAttentionItems } from "@/features/dashboard/attention";
+import { getSituationSummary } from "@/features/dashboard/situation";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
 /**
@@ -15,7 +17,13 @@ export default async function DashboardPage() {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
 
-  const atencao = await getAttentionItems(company.companyId, permissions);
+  const [atencao, situacao] = await Promise.all([
+    getAttentionItems(company.companyId, permissions),
+    getSituationSummary(company.companyId, permissions),
+  ]);
+
+  const podeVerRodadas = permissions.has("purchase_round.view");
+  const podeVerPedidos = permissions.has("order.view");
 
   return (
     <div className="mx-auto w-full max-w-5xl">
@@ -24,7 +32,7 @@ export default async function DashboardPage() {
         description={`${company.companyName} · ${company.roleName}`}
       />
 
-      <section>
+      <section className="mb-8">
         <h2 className="text-fg mb-1 text-sm font-semibold">
           Precisa da sua atenção
         </h2>
@@ -34,6 +42,56 @@ export default async function DashboardPage() {
         </p>
         <AttentionList items={atencao} />
       </section>
+
+      {podeVerRodadas || podeVerPedidos ? (
+        <section className="mb-8">
+          <h2 className="text-fg mb-3 text-sm font-semibold">Em andamento</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {podeVerRodadas ? (
+              <>
+                <Metric
+                  label="Rodadas de compra"
+                  value={String(situacao.rondasAtivas)}
+                  hint={
+                    situacao.rodadaUnica
+                      ? situacao.rodadaUnica.title
+                      : "cotações abertas agora"
+                  }
+                  href={
+                    situacao.rodadaUnica
+                      ? `/compras/${situacao.rodadaUnica.id}`
+                      : "/compras"
+                  }
+                />
+                <Metric
+                  label="Aguardando resposta"
+                  value={String(situacao.fornecedoresPendentes)}
+                  hint="fornecedores que ainda não responderam"
+                  href="/compras"
+                />
+              </>
+            ) : null}
+
+            {podeVerPedidos ? (
+              <>
+                <Metric
+                  label="Pedidos em aberto"
+                  value={String(situacao.pedidosEmAberto)}
+                  hint="enviados e ainda não recebidos por inteiro"
+                  href="/pedidos?situacao=abertos"
+                />
+                <Metric
+                  label="Atrasados"
+                  value={String(situacao.pedidosAtrasados)}
+                  hint="prazo vencido, mercadoria por vir"
+                  tone={situacao.pedidosAtrasados > 0 ? "bad" : "neutral"}
+                  href="/pedidos?situacao=atrasados"
+                />
+              </>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
