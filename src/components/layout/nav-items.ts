@@ -18,7 +18,9 @@ export type NavItem = {
 };
 
 export const OPERATION_NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
+  // O menu chama a página pelo nome que ela usa no título. "Dashboard" e
+  // "Central operacional" lado a lado pareciam dois lugares diferentes.
+  { href: "/dashboard", label: "Central operacional", icon: LayoutGrid },
   {
     href: "/compras",
     label: "Compras",

@@ -1,12 +1,18 @@
 import Link from "next/link";
 
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { AttentionList } from "@/components/dashboard/attention-list";
+import { FirstSteps } from "@/components/dashboard/first-steps";
 import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
 import { getCompany } from "@/features/company/queries";
+import { listRecentActivity } from "@/features/dashboard/activity";
 import { getAttentionItems } from "@/features/dashboard/attention";
 import { getMonthFinancials } from "@/features/dashboard/financial";
-import { getSituationSummary } from "@/features/dashboard/situation";
+import {
+  getFirstSteps,
+  getSituationSummary,
+} from "@/features/dashboard/situation";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
@@ -16,6 +22,10 @@ const MONEY = new Intl.NumberFormat("pt-BR", {
 const MES = new Intl.DateTimeFormat("pt-BR", {
   month: "long",
   year: "numeric",
+});
+const HORA = new Intl.DateTimeFormat("pt-BR", {
+  hour: "2-digit",
+  minute: "2-digit",
 });
 
 /**
@@ -34,14 +44,25 @@ export default async function DashboardPage() {
   const podeVerPedidos = permissions.has("order.view");
   const podeVerFinanceiro = permissions.has("analytics.view");
 
-  const [atencao, situacao, dados] = await Promise.all([
+  const [atencao, situacao, dados, atividade] = await Promise.all([
     getAttentionItems(company.companyId, permissions),
     getSituationSummary(company.companyId, permissions),
     podeVerFinanceiro ? getCompany(company.companyId) : null,
+    listRecentActivity(company.companyId),
   ]);
 
   const financeiro = dados
     ? await getMonthFinancials(company.companyId, dados.timezone)
+    : null;
+
+  // Empresa que ainda não cotou nem comprou não tem o que acompanhar. Em vez
+  // de uma tela de zeros, os passos até a primeira cotação.
+  const comecando =
+    situacao.rondasAtivas === 0 &&
+    situacao.pedidosEmAberto === 0 &&
+    atencao.length === 0;
+  const passos = comecando
+    ? await getFirstSteps(company.companyId, permissions)
     : null;
 
   return (
@@ -50,6 +71,12 @@ export default async function DashboardPage() {
         title="Central operacional"
         description={`${company.companyName} · ${company.roleName}`}
       />
+
+      {passos && passos.length > 0 ? (
+        <div className="mb-8">
+          <FirstSteps steps={passos} />
+        </div>
+      ) : null}
 
       <section className="mb-8">
         <h2 className="text-fg mb-1 text-sm font-semibold">
@@ -168,6 +195,25 @@ export default async function DashboardPage() {
           )}
         </section>
       ) : null}
+
+      {atividade.length > 0 ? (
+        <section>
+          <h2 className="text-fg mb-1 text-sm font-semibold">
+            Atividade recente
+          </h2>
+          <p className="text-fg-muted mb-2 text-sm">
+            O que andou acontecendo. Fica por último de propósito: o que exige
+            ação está lá em cima.
+          </p>
+          <ActivityFeed entries={atividade} />
+        </section>
+      ) : null}
+
+      {/* Página inteira renderizada no servidor a cada visita. O carimbo evita
+          a dúvida de sempre diante de um painel: "isto é de quando?" */}
+      <p className="text-fg-subtle mt-8 text-xs">
+        Números apurados em {HORA.format(new Date())}.
+      </p>
     </div>
   );
 }
