@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { EmptyState } from "@/components/layout/empty-state";
+import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
 import { OrderFilterBar } from "@/components/orders/order-filter-bar";
 import { Badge } from "@/components/ui/badge";
@@ -37,32 +38,6 @@ const DATA = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
 });
-
-function Metric({
-  label,
-  value,
-  hint,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  tone?: "neutral" | "bad";
-}) {
-  return (
-    <div className="border-border bg-surface flex flex-col gap-1 rounded-xl border p-4">
-      <p className="text-fg-muted text-xs">{label}</p>
-      <p
-        className={`text-xl font-semibold tabular-nums ${
-          tone === "bad" ? "text-destructive" : "text-fg"
-        }`}
-      >
-        {value}
-      </p>
-      <p className="text-fg-subtle text-xs">{hint}</p>
-    </div>
-  );
-}
 
 /** Data ISO do banco vira dd/mm sem passar por fuso — é dia, não instante. */
 function formatarDia(iso: string): string {
@@ -247,7 +222,9 @@ export default async function PedidosPage({
                           {ORDER_STATUS_LABEL[order.status] ?? order.status}
                         </Badge>
                         {order.isOverdue ? (
-                          <Badge variant="destructive">Atrasado</Badge>
+                          <Badge variant="destructive">
+                            Atrasado · {order.overdueDays}d
+                          </Badge>
                         ) : null}
                       </span>
                     </TableCell>

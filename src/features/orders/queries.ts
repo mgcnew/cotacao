@@ -137,7 +137,7 @@ export async function listDirectOrderOptions(companyId: string) {
   };
 }
 
-/** Situações em que ainda se espera mercadoria — as que podem atrasar. */
+/** Situações em que ainda se espera mercadoria — as que a view chama de aberto. */
 const EM_ANDAMENTO = [
   "awaiting_confirmation",
   "awaiting_delivery",
@@ -158,7 +158,42 @@ export type OrderListRow = {
   total: number;
   /** Prazo vencido com mercadoria ainda por vir (documento mestre, 16.10). */
   isOverdue: boolean;
+  overdueDays: number;
 };
+
+/**
+ * Quem decide o que é atraso é `v_order_delivery_status`, não esta função.
+ *
+ * A regra já mora no banco, e repeti-la aqui criaria uma segunda verdade: foi
+ * exatamente o que aconteceu antes da 0028, quando a tela contava três
+ * situações e a view contava duas. Custa uma consulta a mais e vale a pena.
+ */
+async function readOverdue(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+  orderIds: string[],
+): Promise<Map<string, number>> {
+  if (orderIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("v_order_delivery_status")
+    .select("order_id, overdue_days")
+    .eq("company_id", companyId)
+    .eq("is_overdue", true)
+    .in("order_id", orderIds);
+
+  if (error) throw new Error(`Falha ao apurar atrasos: ${error.message}`);
+
+  // Coluna de view chega tipada como anulável, mesmo vindo de `orders.id`, que
+  // é chave primária. O filtro é para o compilador, não para os dados.
+  return new Map(
+    (data ?? [])
+      .filter((r): r is { order_id: string; overdue_days: number } =>
+        Boolean(r.order_id),
+      )
+      .map((r) => [r.order_id, Number(r.overdue_days)]),
+  );
+}
 
 export async function listOrders(
   companyId: string,
@@ -171,6 +206,25 @@ export async function listOrders(
   },
 ): Promise<{ rows: OrderListRow[]; truncated: boolean }> {
   const supabase = await createServerSupabaseClient();
+
+  // Filtrar por atraso é perguntar à view quais pedidos estão atrasados e
+  // restringir a lista a eles — em vez de trazer tudo e peneirar depois, que
+  // deixaria o teto de linhas cortar antes do filtro.
+  let atrasados: string[] | null = null;
+  if (filters.situacao === "atrasados") {
+    const { data, error } = await supabase
+      .from("v_order_delivery_status")
+      .select("order_id")
+      .eq("company_id", companyId)
+      .eq("is_overdue", true);
+
+    if (error) throw new Error(`Falha ao apurar atrasos: ${error.message}`);
+
+    atrasados = (data ?? [])
+      .map((r) => r.order_id)
+      .filter((id): id is string => Boolean(id));
+    if (atrasados.length === 0) return { rows: [], truncated: false };
+  }
 
   let query = supabase
     .from("orders")
@@ -191,16 +245,10 @@ export async function listOrders(
     )
     .eq("company_id", companyId);
 
-  if (filters.situacao === "abertos" || filters.situacao === "atrasados") {
-    // "Atrasado" depende da data da revisão vigente, que só se conhece depois
-    // de montar a linha; aqui se estreita ao que pode atrasar, e o resto do
-    // filtro acontece abaixo.
-    query = query.in(
-      "status",
-      filters.situacao === "atrasados"
-        ? EM_ANDAMENTO
-        : [...EM_ANDAMENTO, "draft"],
-    );
+  if (atrasados) {
+    query = query.in("id", atrasados);
+  } else if (filters.situacao === "abertos") {
+    query = query.in("status", [...EM_ANDAMENTO, "draft"]);
   } else if (filters.situacao) {
     query = query.eq("status", filters.situacao);
   }
@@ -217,9 +265,14 @@ export async function listOrders(
   if (error) throw new Error(`Falha ao listar pedidos: ${error.message}`);
 
   const truncated = (data ?? []).length > ORDERS_PAGE_SIZE;
-  const hoje = new Date().toISOString().slice(0, 10);
+  const pagina = (data ?? []).slice(0, ORDERS_PAGE_SIZE);
+  const atraso = await readOverdue(
+    supabase,
+    companyId,
+    pagina.map((o) => o.id),
+  );
 
-  const rows = (data ?? []).slice(0, ORDERS_PAGE_SIZE).map((order) => {
+  const rows = pagina.map((order) => {
     // A vigente é a que `current_revision_id` aponta, não a de número mais
     // alto: uma revisão 2 ainda em rascunho não é o que o fornecedor recebeu,
     // e somar os itens dela mostraria um total que ninguém combinou.
@@ -228,7 +281,6 @@ export async function listOrders(
       revisions.find((r) => r.id === order.current_revision_id) ??
       [...revisions].sort((a, b) => b.revision_number - a.revision_number)[0];
     const items = revision?.order_revision_items ?? [];
-    const deliveryDueDate = revision?.delivery_due_date ?? null;
 
     return {
       id: order.id,
@@ -236,23 +288,18 @@ export async function listOrders(
       status: order.status,
       supplierName: order.suppliers.name,
       roundTitle: order.purchase_rounds?.title ?? null,
-      deliveryDueDate,
+      deliveryDueDate: revision?.delivery_due_date ?? null,
       itemCount: items.length,
       total: items.reduce(
         (sum, i) => sum + Number(i.requested_quantity) * Number(i.agreed_price),
         0,
       ),
-      isOverdue:
-        deliveryDueDate !== null &&
-        deliveryDueDate < hoje &&
-        EM_ANDAMENTO.includes(order.status),
+      isOverdue: atraso.has(order.id),
+      overdueDays: atraso.get(order.id) ?? 0,
     };
   });
 
-  return {
-    rows: filters.situacao === "atrasados" ? rows.filter((r) => r.isOverdue) : rows,
-    truncated,
-  };
+  return { rows, truncated };
 }
 
 /** Números do recorte, para o resumo no topo da lista. */

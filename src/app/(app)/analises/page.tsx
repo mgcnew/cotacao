@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { FilterBar } from "@/components/analytics/filter-bar";
+import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,35 +38,6 @@ const PERCENT = new Intl.NumberFormat("pt-BR", {
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
 
 /** Cartão de indicador. O rodapé explica de onde o número saiu. */
-function Metric({
-  label,
-  value,
-  hint,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  tone?: "neutral" | "good" | "bad";
-}) {
-  const valueClass =
-    tone === "good"
-      ? "text-success"
-      : tone === "bad"
-        ? "text-destructive"
-        : "text-fg";
-
-  return (
-    <div className="border-border bg-surface flex flex-col gap-1 rounded-xl border p-4">
-      <p className="text-fg-muted text-xs">{label}</p>
-      <p className={`text-xl font-semibold tabular-nums ${valueClass}`}>
-        {value}
-      </p>
-      <p className="text-fg-subtle text-xs">{hint}</p>
-    </div>
-  );
-}
-
 export default async function AnalisesPage({
   searchParams,
 }: PageProps<"/analises">) {
