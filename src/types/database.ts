@@ -2398,6 +2398,7 @@ export type Database = {
           company_id: string | null
           current_revision_id: string | null
           delivery_due_date: string | null
+          is_due_today: boolean | null
           is_overdue: boolean | null
           order_id: string | null
           order_number: number | null

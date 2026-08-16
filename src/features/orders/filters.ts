@@ -11,10 +11,16 @@ import { ORDER_STATUS_LABEL } from "@/features/orders/queries";
  * do frigorífico" como um link, e o botão de voltar faz o que promete.
  */
 
-/** Situações que não são um status do banco, e sim um jeito de olhar. */
+/**
+ * Situações que não são um status do banco, e sim um jeito de olhar.
+ *
+ * "Entrega hoje" é recorte de prazo, não de estado — quem chega por aqui vem
+ * da Central de Atenção querendo saber o que chega no dia.
+ */
 export const SITUACOES_COMPOSTAS = {
   abertos: "Em aberto",
   atrasados: "Atrasados",
+  entrega_hoje: "Entrega hoje",
 } as const;
 
 export type OrderFilters = {

@@ -207,23 +207,31 @@ export async function listOrders(
 ): Promise<{ rows: OrderListRow[]; truncated: boolean }> {
   const supabase = await createServerSupabaseClient();
 
-  // Filtrar por atraso é perguntar à view quais pedidos estão atrasados e
-  // restringir a lista a eles — em vez de trazer tudo e peneirar depois, que
-  // deixaria o teto de linhas cortar antes do filtro.
-  let atrasados: string[] | null = null;
-  if (filters.situacao === "atrasados") {
-    const { data, error } = await supabase
+  // Atraso e prazo do dia são condições da view, não colunas de `orders`.
+  // Perguntar a ela quais pedidos se encaixam e restringir a lista a eles é
+  // melhor do que trazer tudo e peneirar depois — assim o teto de linhas não
+  // corta antes do filtro.
+  let daView: string[] | null = null;
+  if (filters.situacao === "atrasados" || filters.situacao === "entrega_hoje") {
+    let consulta = supabase
       .from("v_order_delivery_status")
       .select("order_id")
-      .eq("company_id", companyId)
-      .eq("is_overdue", true);
+      .eq("company_id", companyId);
 
-    if (error) throw new Error(`Falha ao apurar atrasos: ${error.message}`);
+    // Quem decide o que é "hoje" é a view, usando o fuso da empresa (0029).
+    // Calcular a data aqui criaria uma terceira noção de hoje: a do servidor.
+    consulta =
+      filters.situacao === "atrasados"
+        ? consulta.eq("is_overdue", true)
+        : consulta.eq("is_due_today", true);
 
-    atrasados = (data ?? [])
+    const { data, error } = await consulta;
+    if (error) throw new Error(`Falha ao apurar prazos: ${error.message}`);
+
+    daView = (data ?? [])
       .map((r) => r.order_id)
       .filter((id): id is string => Boolean(id));
-    if (atrasados.length === 0) return { rows: [], truncated: false };
+    if (daView.length === 0) return { rows: [], truncated: false };
   }
 
   let query = supabase
@@ -245,8 +253,8 @@ export async function listOrders(
     )
     .eq("company_id", companyId);
 
-  if (atrasados) {
-    query = query.in("id", atrasados);
+  if (daView) {
+    query = query.in("id", daView);
   } else if (filters.situacao === "abertos") {
     query = query.in("status", [...EM_ANDAMENTO, "draft"]);
   } else if (filters.situacao) {
