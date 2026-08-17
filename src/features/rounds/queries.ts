@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { RoundFilters } from "@/features/rounds/filters";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -11,10 +12,18 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * para isto, e o desempate por id garante ordem total quando duas rodadas
  * nascem no mesmo instante.
  */
-export async function listRoundsWithProgress(companyId: string) {
+export async function listRoundsWithProgress(
+  companyId: string,
+  filters: RoundFilters = {
+    situacao: null,
+    de: null,
+    ate: null,
+    busca: null,
+  },
+) {
   const supabase = await createServerSupabaseClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("v_purchase_round_progress")
     .select(
       `
@@ -30,12 +39,49 @@ export async function listRoundsWithProgress(companyId: string) {
       created_at
     `,
     )
-    .eq("company_id", companyId)
+    .eq("company_id", companyId);
+
+  if (filters.situacao === "abertas") {
+    query = query.in("status", ["draft", "active"]);
+  } else if (filters.situacao === "aguardando") {
+    // Rodada em andamento com alguém devendo resposta. Só faz sentido entre as
+    // ativas: em rascunho ninguém foi convidado ainda.
+    query = query.eq("status", "active").gt("suppliers_pending", 0);
+  } else if (filters.situacao) {
+    query = query.eq("status", filters.situacao);
+  }
+
+  if (filters.de) query = query.gte("created_at", `${filters.de}T00:00:00`);
+  if (filters.ate) query = query.lte("created_at", `${filters.ate}T23:59:59`);
+  if (filters.busca) query = query.ilike("title", `%${filters.busca}%`);
+
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .order("purchase_round_id", { ascending: false });
 
   if (error) throw new Error(`Falha ao listar rodadas: ${error.message}`);
   return data ?? [];
+}
+
+/** Números do recorte, para o resumo no topo da lista. */
+export function summarizeRounds(
+  rows: Awaited<ReturnType<typeof listRoundsWithProgress>>,
+) {
+  const ativas = rows.filter((r) => r.status === "active");
+
+  return {
+    quantidade: rows.length,
+    emPreparacao: rows.filter((r) => r.status === "draft").length,
+    emAndamento: ativas.length,
+    aguardandoResposta: ativas.reduce(
+      (sum, r) => sum + Number(r.suppliers_pending ?? 0),
+      0,
+    ),
+    pedidosGerados: rows.reduce(
+      (sum, r) => sum + Number(r.orders_created ?? 0),
+      0,
+    ),
+  };
 }
 
 export async function getRound(companyId: string, roundId: string) {

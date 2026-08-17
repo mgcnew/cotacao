@@ -1,8 +1,12 @@
-import { ShoppingCart } from "lucide-react";
+import { Plus, ShoppingCart } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { EmptyState } from "@/components/layout/empty-state";
+import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
+import { ResponseProgress } from "@/components/rounds/response-progress";
+import { RoundFilterBar } from "@/components/rounds/round-filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,85 +17,203 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { listRoundsWithProgress } from "@/features/rounds/queries";
+import {
+  hasAnyRoundFilter,
+  parseRoundFilters,
+} from "@/features/rounds/filters";
+import {
+  listRoundsWithProgress,
+  summarizeRounds,
+} from "@/features/rounds/queries";
 import {
   ROUND_STATUS_LABEL,
+  roundNextStep,
   roundStatusTone,
 } from "@/features/rounds/status";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
-export default async function ComprasPage() {
-  const company = await requireActiveCompany();
-  const [rounds, permissions] = await Promise.all([
-    listRoundsWithProgress(company.companyId),
-    getPermissions(company.companyId),
-  ]);
+const DATA = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "2-digit",
+});
 
+export default async function ComprasPage({
+  searchParams,
+}: PageProps<"/compras">) {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+
+  if (!permissions.has("purchase_round.view")) redirect("/dashboard");
+
+  const filters = parseRoundFilters(await searchParams);
+  const filtrando = hasAnyRoundFilter(filters);
+  const rounds = await listRoundsWithProgress(company.companyId, filters);
+
+  const resumo = summarizeRounds(rounds);
   const podeCriar = permissions.has("purchase_round.create");
 
   return (
     <div className="mx-auto w-full max-w-6xl">
       <PageHeader
         title="Compras"
-        description="Rodadas de compra, cotações e pedidos."
+        description="Cada rodada reúne produtos, convida fornecedores, recebe preços e vira pedido."
         action={
           podeCriar ? (
-            <Button asChild size="sm">
-              <Link href="/compras/nova">Nova rodada</Link>
+            <Button asChild size="sm" className="gap-1.5">
+              <Link href="/compras/nova">
+                <Plus className="size-3.5" aria-hidden /> Nova rodada
+              </Link>
             </Button>
           ) : null
         }
       />
 
+      <RoundFilterBar filters={filters} />
+
+      {rounds.length > 0 ? (
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Metric
+            label={filtrando ? "Rodadas nesta seleção" : "Rodadas"}
+            value={String(resumo.quantidade)}
+            hint={`${resumo.emPreparacao} ainda em preparação`}
+          />
+          <Metric
+            label="Em andamento"
+            value={String(resumo.emAndamento)}
+            hint="cotações abertas agora"
+            href="/compras?situacao=active"
+          />
+          <Metric
+            label="Aguardando resposta"
+            value={String(resumo.aguardandoResposta)}
+            hint="fornecedores que ainda não responderam"
+            href="/compras?situacao=aguardando"
+          />
+          <Metric
+            label="Pedidos gerados"
+            value={String(resumo.pedidosGerados)}
+            hint="decisões de compra que viraram pedido"
+            href="/pedidos"
+          />
+        </div>
+      ) : null}
+
       {rounds.length === 0 ? (
         <EmptyState
           icon={ShoppingCart}
-          title="Nenhuma rodada de compra ainda"
-          description="A Rodada é o contêiner de um ciclo: agrupa produtos, convida fornecedores, recebe respostas e vira pedido. O fluxo de criação entra na fase de Rodadas."
-          phase="Fase 6 · Rodada — preparação"
+          title={
+            filtrando ? "Nenhuma rodada neste recorte" : "Nenhuma rodada ainda"
+          }
+          description={
+            filtrando
+              ? "Nenhuma rodada casa com o filtro aplicado. Limpe o recorte para ver todas."
+              : "A rodada é o contêiner de um ciclo: agrupa produtos, convida fornecedores, recebe respostas e vira pedido. Ela nasce em preparação — nada é enviado até você iniciá-la."
+          }
+          action={
+            filtrando ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href="/compras">Limpar filtros</Link>
+              </Button>
+            ) : podeCriar ? (
+              <Button asChild size="sm">
+                <Link href="/compras/nova">Criar a primeira rodada</Link>
+              </Button>
+            ) : null
+          }
         />
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
+              {/* No celular sobram Rodada, Situação e a ação. O que some da
+                  linha reaparece embaixo do título, para a tabela não rolar de
+                  lado e levar o botão para fora da tela. */}
               <TableHead>Rodada</TableHead>
+              <TableHead className="hidden lg:table-cell">Criada</TableHead>
+              <TableHead className="hidden text-right sm:table-cell">
+                Produtos
+              </TableHead>
+              <TableHead className="hidden md:table-cell">
+                Responderam
+              </TableHead>
+              <TableHead className="hidden text-right lg:table-cell">
+                Pedidos
+              </TableHead>
               <TableHead>Situação</TableHead>
-              <TableHead className="text-right">Produtos</TableHead>
-              <TableHead className="text-right">Fornecedores</TableHead>
-              <TableHead className="text-right">Responderam</TableHead>
-              <TableHead className="text-right">Pedidos</TableHead>
+              <TableHead className="text-right">Próximo passo</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rounds.map((round) => (
-              <TableRow key={round.purchase_round_id}>
-                <TableCell>
-                  <Link
-                    href={`/compras/${round.purchase_round_id}`}
-                    className="text-fg hover:text-primary font-medium"
-                  >
-                    {round.title}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={roundStatusTone(round.status ?? "")}>
-                    {ROUND_STATUS_LABEL[round.status ?? ""] ?? round.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {round.total_items}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {round.total_suppliers}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {round.suppliers_completed}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {round.orders_created}
-                </TableCell>
-              </TableRow>
-            ))}
+            {rounds.map((round) => {
+              const id = round.purchase_round_id ?? "";
+              const status = round.status ?? "";
+              const passo = roundNextStep(status, {
+                suppliersPending: Number(round.suppliers_pending ?? 0),
+                ordersCreated: Number(round.orders_created ?? 0),
+              });
+              // Sem a permissão o passo existe, mas não é desta pessoa: o botão
+              // vira apenas a porta de entrada da rodada.
+              const podeAgir =
+                passo.permission === null || permissions.has(passo.permission);
+
+              return (
+                <TableRow key={id}>
+                  <TableCell>
+                    <Link
+                      href={`/compras/${id}`}
+                      className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline"
+                    >
+                      {round.title}
+                    </Link>
+                    <span className="text-fg-muted block max-w-36 text-xs whitespace-normal tabular-nums sm:hidden">
+                      {round.total_items}{" "}
+                      {Number(round.total_items) === 1 ? "produto" : "produtos"}{" "}
+                      · {round.suppliers_completed} de {round.total_suppliers}{" "}
+                      responderam
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-fg-muted hidden text-xs tabular-nums lg:table-cell">
+                    {round.created_at
+                      ? DATA.format(new Date(round.created_at))
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-fg-muted hidden text-right tabular-nums sm:table-cell">
+                    {round.total_items}
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    <ResponseProgress
+                      completed={Number(round.suppliers_completed ?? 0)}
+                      total={Number(round.total_suppliers ?? 0)}
+                    />
+                  </TableCell>
+                  <TableCell className="text-fg-muted hidden text-right tabular-nums lg:table-cell">
+                    {round.orders_created}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={roundStatusTone(status)}>
+                      {ROUND_STATUS_LABEL[status] ?? status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      asChild
+                      size="sm"
+                      variant={passo.pending && podeAgir ? "default" : "outline"}
+                    >
+                      <Link href={`/compras/${id}${passo.path}`}>
+                        <span className="hidden sm:inline">
+                          {podeAgir ? passo.label : "Abrir"}
+                        </span>
+                        <span className="sm:hidden">
+                          {podeAgir ? passo.shortLabel : "Abrir"}
+                        </span>
+                      </Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       )}
