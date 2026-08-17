@@ -1,10 +1,15 @@
 import { Plus, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
+import {
+  MetricsSkeleton,
+  TableSkeleton,
+} from "@/components/layout/page-skeleton";
 import { ResponseProgress } from "@/components/rounds/response-progress";
 import { RoundFilterBar } from "@/components/rounds/round-filter-bar";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +25,7 @@ import {
 import {
   hasAnyRoundFilter,
   parseRoundFilters,
+  type RoundFilters,
 } from "@/features/rounds/filters";
 import {
   listRoundsWithProgress,
@@ -38,6 +44,14 @@ const DATA = new Intl.DateTimeFormat("pt-BR", {
   year: "2-digit",
 });
 
+/**
+ * A tela em si só decide o que pode ser mostrado — decisão barata, uma ida ao
+ * banco — e entrega o cabeçalho e os filtros na hora. A lista, que é a parte
+ * cara, chega depois pelo `Suspense` abaixo.
+ *
+ * A ordem em que a tela aparece passa a ser a ordem em que ela é útil: o botão
+ * "Nova rodada" e o campo de busca já respondem enquanto as rodadas ainda vêm.
+ */
 export default async function ComprasPage({
   searchParams,
 }: PageProps<"/compras">) {
@@ -47,10 +61,6 @@ export default async function ComprasPage({
   if (!permissions.has("purchase_round.view")) redirect("/dashboard");
 
   const filters = parseRoundFilters(await searchParams);
-  const filtrando = hasAnyRoundFilter(filters);
-  const rounds = await listRoundsWithProgress(company.companyId, filters);
-
-  const resumo = summarizeRounds(rounds);
   const podeCriar = permissions.has("purchase_round.create");
 
   return (
@@ -71,6 +81,46 @@ export default async function ComprasPage({
 
       <RoundFilterBar filters={filters} />
 
+      {/* A `key` amarra a fronteira ao recorte: mudar o filtro traz o esqueleto
+          de volta, em vez de deixar na tela a lista do filtro anterior como se
+          ainda valesse. */}
+      <Suspense
+        key={JSON.stringify(filters)}
+        fallback={
+          <>
+            <MetricsSkeleton />
+            <TableSkeleton rows={6} columns={5} />
+          </>
+        }
+      >
+        <ListaDeRodadas
+          companyId={company.companyId}
+          filters={filters}
+          permissions={permissions}
+          podeCriar={podeCriar}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+async function ListaDeRodadas({
+  companyId,
+  filters,
+  permissions,
+  podeCriar,
+}: {
+  companyId: string;
+  filters: RoundFilters;
+  permissions: Set<string>;
+  podeCriar: boolean;
+}) {
+  const filtrando = hasAnyRoundFilter(filters);
+  const rounds = await listRoundsWithProgress(companyId, filters);
+  const resumo = summarizeRounds(rounds);
+
+  return (
+    <>
       {rounds.length > 0 ? (
         <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric
@@ -217,6 +267,6 @@ export default async function ComprasPage({
           </TableBody>
         </Table>
       )}
-    </div>
+    </>
   );
 }

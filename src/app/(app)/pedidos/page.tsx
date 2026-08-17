@@ -1,10 +1,16 @@
 import { ClipboardList, Plus } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
+import {
+  FilterBarSkeleton,
+  MetricsSkeleton,
+  TableSkeleton,
+} from "@/components/layout/page-skeleton";
 import { OrderFilterBar } from "@/components/orders/order-filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +26,7 @@ import {
   hasAnyOrderFilter,
   listOrderFilterSuppliers,
   parseOrderFilters,
+  type OrderFilters,
 } from "@/features/orders/filters";
 import {
   listOrders,
@@ -45,6 +52,13 @@ function formatarDia(iso: string): string {
   return DATA.format(new Date(ano, mes - 1, dia));
 }
 
+/**
+ * Cabeçalho na hora; filtros e lista em fronteiras separadas.
+ *
+ * São duas porque têm donos diferentes: a barra de filtros depende da lista de
+ * fornecedores, a tabela depende dos pedidos do recorte. Numa fronteira só, a
+ * mais lenta das duas seguraria a outra na tela de espera sem precisar.
+ */
 export default async function PedidosPage({
   searchParams,
 }: PageProps<"/pedidos">) {
@@ -54,14 +68,6 @@ export default async function PedidosPage({
   if (!permissions.has("order.view")) redirect("/dashboard");
 
   const filters = parseOrderFilters(await searchParams);
-  const filtrando = hasAnyOrderFilter(filters);
-
-  const [{ rows: orders, truncated }, suppliers] = await Promise.all([
-    listOrders(company.companyId, filters),
-    listOrderFilterSuppliers(company.companyId),
-  ]);
-
-  const resumo = summarizeOrders(orders);
   const podeCriar = permissions.has("order.create");
 
   return (
@@ -80,8 +86,60 @@ export default async function PedidosPage({
         }
       />
 
-      <OrderFilterBar filters={filters} suppliers={suppliers} />
+      <Suspense fallback={<FilterBarSkeleton fields={5} />}>
+        <BarraDeFiltros companyId={company.companyId} filters={filters} />
+      </Suspense>
 
+      {/* A `key` amarra a fronteira ao recorte: mudar o filtro traz o esqueleto
+          de volta, em vez de deixar na tela a lista do filtro anterior. */}
+      <Suspense
+        key={JSON.stringify(filters)}
+        fallback={
+          <>
+            <MetricsSkeleton />
+            <TableSkeleton rows={6} columns={5} />
+          </>
+        }
+      >
+        <ListaDePedidos
+          companyId={company.companyId}
+          filters={filters}
+          permissions={permissions}
+          podeCriar={podeCriar}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+async function BarraDeFiltros({
+  companyId,
+  filters,
+}: {
+  companyId: string;
+  filters: OrderFilters;
+}) {
+  const suppliers = await listOrderFilterSuppliers(companyId);
+  return <OrderFilterBar filters={filters} suppliers={suppliers} />;
+}
+
+async function ListaDePedidos({
+  companyId,
+  filters,
+  permissions,
+  podeCriar,
+}: {
+  companyId: string;
+  filters: OrderFilters;
+  permissions: Set<string>;
+  podeCriar: boolean;
+}) {
+  const filtrando = hasAnyOrderFilter(filters);
+  const { rows: orders, truncated } = await listOrders(companyId, filters);
+  const resumo = summarizeOrders(orders);
+
+  return (
+    <>
       {orders.length > 0 ? (
         <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric
@@ -260,6 +318,6 @@ export default async function PedidosPage({
           ) : null}
         </>
       )}
-    </div>
+    </>
   );
 }

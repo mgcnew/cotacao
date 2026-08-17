@@ -1,15 +1,15 @@
 import { LogOut } from "lucide-react";
+import { Suspense } from "react";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { NotificationBell } from "@/components/layout/notification-bell";
+import {
+  NotificationSlot,
+  NotificationSlotFallback,
+} from "@/components/layout/notification-slot";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/auth/actions";
-import {
-  countUnread,
-  listNotifications,
-} from "@/features/notifications/queries";
 import {
   getMemberships,
   getPermissions,
@@ -17,17 +17,25 @@ import {
   requireUser,
 } from "@/lib/auth/dal";
 
+/**
+ * A moldura do app: menu, cabeçalho e o lugar onde a página entra.
+ *
+ * O layout é o gargalo de tudo — nenhuma casca de página aparece antes dele
+ * resolver, e ele é re-renderizado em cada prefetch que o Next dispara. Por
+ * isso só espera aqui o que decide o QUE MOSTRAR: quem é a pessoa, em que
+ * empresa está e o que pode ver. É uma ida ao banco (`rpc_session_context`), e
+ * as três chamadas abaixo compartilham o resultado pelo `cache()` do React.
+ *
+ * O sino ficou de fora, atrás de um `Suspense`: ele é informação, não estrutura.
+ */
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   // requireUser redireciona para /login; requireActiveCompany para /onboarding.
   await requireUser();
   const activeCompany = await requireActiveCompany();
-  const [memberships, permissions, notifications, unreadCount] =
-    await Promise.all([
-      getMemberships(),
-      getPermissions(activeCompany.companyId),
-      listNotifications(activeCompany.companyId),
-      countUnread(activeCompany.companyId),
-    ]);
+  const [memberships, permissions] = await Promise.all([
+    getMemberships(),
+    getPermissions(activeCompany.companyId),
+  ]);
 
   return (
     <div className="flex min-h-screen">
@@ -43,10 +51,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             permissions={[...permissions]}
           />
           <div className="flex-1" />
-          <NotificationBell
-            notifications={notifications}
-            unreadCount={unreadCount}
-          />
+          <Suspense fallback={<NotificationSlotFallback />}>
+            <NotificationSlot companyId={activeCompany.companyId} />
+          </Suspense>
           <CompanySwitcher
             companies={memberships}
             activeCompanyId={activeCompany.companyId}
