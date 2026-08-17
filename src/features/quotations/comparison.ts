@@ -70,6 +70,10 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       )
       .eq("company_id", companyId)
       .eq("purchase_round_id", roundId)
+      // Item removido da rodada sai da comparação e, por consequência, da
+      // alocação — que reaproveita esta função. Ele continua visível na
+      // Central da Rodada, marcado, porque a decisão de tirá-lo é história.
+      .neq("commercial_status", "cancelled")
       .order("created_at"),
     supabase
       .from("round_suppliers")

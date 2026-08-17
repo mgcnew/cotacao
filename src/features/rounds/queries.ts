@@ -144,6 +144,7 @@ export async function listRoundSuppliers(companyId: string, roundId: string) {
       `
       id,
       supplier_id,
+      supplier_contact_id,
       first_sent_at,
       first_accessed_at,
       completed_at,
@@ -168,6 +169,42 @@ export async function listRoundSuppliers(companyId: string, roundId: string) {
  * Sem contato não há para onde mandar o link, então oferecer o fornecedor na
  * lista só produziria um erro mais adiante.
  */
+/**
+ * Contatos ativos dos fornecedores desta rodada, agrupados por fornecedor.
+ *
+ * Uma consulta só para a tabela inteira: um pedido por linha seria uma consulta
+ * por fornecedor, e a Central da Rodada lista todos de uma vez.
+ */
+export async function listRoundSupplierContacts(
+  companyId: string,
+  supplierIds: string[],
+): Promise<Map<string, { id: string; name: string; role: string | null }[]>> {
+  if (supplierIds.length === 0) return new Map();
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("supplier_contacts")
+    .select("id, name, role, supplier_id, is_primary")
+    .eq("company_id", companyId)
+    .eq("is_active", true)
+    .in("supplier_id", supplierIds)
+    .order("is_primary", { ascending: false })
+    .order("name");
+
+  if (error) throw new Error(`Falha ao listar contatos: ${error.message}`);
+
+  const porFornecedor = new Map<
+    string,
+    { id: string; name: string; role: string | null }[]
+  >();
+  for (const c of data ?? []) {
+    const lista = porFornecedor.get(c.supplier_id) ?? [];
+    lista.push({ id: c.id, name: c.name, role: c.role });
+    porFornecedor.set(c.supplier_id, lista);
+  }
+  return porFornecedor;
+}
+
 export async function listSelectableSuppliers(companyId: string) {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase

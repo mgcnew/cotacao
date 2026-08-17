@@ -394,3 +394,308 @@ export async function activateRound(
   revalidatePath("/compras");
   return { error: null, savedAt: Date.now() };
 }
+
+/**
+ * Corrige título e observações da rodada.
+ *
+ * Não exige rascunho: título e observação são como a rodada é chamada aqui
+ * dentro, e não fazem parte do que o fornecedor recebeu. Rodada encerrada,
+ * sim, fica intocada — histórico não se reescreve.
+ */
+export async function updateRound(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const parsed = z
+    .object({
+      roundId: z.uuid({ error: "Rodada inválida" }),
+      title: z
+        .string()
+        .trim()
+        .min(3, { error: "Dê um título à rodada" })
+        .max(120, { error: "Título muito longo" }),
+      notes: z
+        .string()
+        .trim()
+        .max(500)
+        .optional()
+        .transform((v) => (v ? v : null)),
+    })
+    .safeParse({
+      roundId: formData.get("roundId"),
+      title: formData.get("title"),
+      notes: formData.get("notes"),
+    });
+
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("purchase_rounds")
+    .update({ title: parsed.data.title, notes: parsed.data.notes })
+    .eq("company_id", company.companyId)
+    .eq("id", parsed.data.roundId)
+    .in("status", ["draft", "active"])
+    .select("id");
+
+  if (error) return { error: describeWriteError(error) };
+  if (!data || data.length === 0) {
+    return { error: "Rodada encerrada não pode ser editada." };
+  }
+
+  revalidatePath(`/compras/${parsed.data.roundId}`);
+  revalidatePath("/compras");
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Confere se a rodada ainda está em preparação.
+ *
+ * A regra é a da seção 6.4 do documento mestre: antes do envio, edição livre;
+ * depois, alteração controlada. Enquanto o fluxo controlado não existe, mexer
+ * em item e grupo para no rascunho — e a checagem é feita com o client do
+ * usuário, ou seja, passando pela RLS.
+ */
+async function assertRoundIsDraft(
+  companyId: string,
+  roundId: string,
+): Promise<string | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("purchase_rounds")
+    .select("status")
+    .eq("company_id", companyId)
+    .eq("id", roundId)
+    .maybeSingle();
+
+  if (error) return `Falha ao carregar a rodada: ${error.message}`;
+  if (!data) return "Rodada não encontrada.";
+  if (data.status !== "draft") {
+    return "A rodada já foi iniciada. Itens e grupos não mudam mais por aqui.";
+  }
+  return null;
+}
+
+/** Corrige quantidade e grupo de um item, enquanto a rodada é rascunho. */
+export async function updateQuotationItem(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const parsed = z
+    .object({
+      roundId: z.uuid({ error: "Rodada inválida" }),
+      itemId: z.uuid({ error: "Item inválido" }),
+      groupId: z.uuid({ error: "Escolha o grupo" }),
+      quantity: z
+        .string()
+        .trim()
+        .min(1, { error: "Informe a quantidade" })
+        .transform((v) => Number(v.replace(/\./g, "").replace(",", ".")))
+        .refine((v) => Number.isFinite(v) && v > 0, {
+          error: "Quantidade deve ser maior que zero",
+        }),
+    })
+    .safeParse({
+      roundId: formData.get("roundId"),
+      itemId: formData.get("itemId"),
+      groupId: formData.get("groupId"),
+      quantity: formData.get("quantity"),
+    });
+
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const impedimento = await assertRoundIsDraft(
+    company.companyId,
+    parsed.data.roundId,
+  );
+  if (impedimento) return { error: impedimento };
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("quotation_items")
+    .update({
+      requested_quantity: parsed.data.quantity,
+      group_id: parsed.data.groupId,
+    })
+    .eq("company_id", company.companyId)
+    .eq("id", parsed.data.itemId)
+    .eq("purchase_round_id", parsed.data.roundId)
+    .eq("commercial_status", "open")
+    .select("id");
+
+  if (error) return { error: describeWriteError(error) };
+  if (!data || data.length === 0) {
+    return { error: "Este item não está mais aberto para edição." };
+  }
+
+  revalidatePath(`/compras/${parsed.data.roundId}`);
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Tira um item da rodada.
+ *
+ * Duas escritas, e as duas importam: `commercial_status = 'cancelled'` põe o
+ * item fora do fluxo comercial, e `removed_at` nos vínculos o esconde do link
+ * de cada fornecedor — a RPC pública filtra por `removed_at is null`. Marcar
+ * só o status deixaria o item visível para quem fosse cotar.
+ *
+ * Cancelar em vez de apagar é a regra da casa: a decisão de tirar o item fica
+ * no histórico, e nenhuma tabela tem grant de DELETE.
+ */
+export async function removeQuotationItem(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const roundId = String(formData.get("roundId") ?? "");
+  const itemId = String(formData.get("itemId") ?? "");
+  if (!roundId || !itemId) return { error: "Item inválido." };
+
+  const impedimento = await assertRoundIsDraft(company.companyId, roundId);
+  if (impedimento) return { error: impedimento };
+
+  const supabase = await createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("quotation_items")
+    .update({ commercial_status: "cancelled" })
+    .eq("company_id", company.companyId)
+    .eq("id", itemId)
+    .eq("purchase_round_id", roundId)
+    .eq("commercial_status", "open")
+    .select("id");
+
+  if (error) return { error: describeWriteError(error) };
+  if (!data || data.length === 0) {
+    return { error: "Este item já saiu da rodada." };
+  }
+
+  const { error: linkError } = await supabase
+    .from("supplier_quotation_items")
+    .update({ removed_at: new Date().toISOString() })
+    .eq("company_id", company.companyId)
+    .eq("quotation_item_id", itemId)
+    .is("removed_at", null);
+
+  if (linkError) {
+    return {
+      error: `Item saiu da rodada, mas continua no link dos fornecedores: ${linkError.message}`,
+    };
+  }
+
+  revalidatePath(`/compras/${roundId}`);
+  revalidatePath("/compras");
+  return { error: null, savedAt: Date.now() };
+}
+
+/** Renomeia um grupo, enquanto a rodada é rascunho. */
+export async function renameRoundGroup(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const parsed = z
+    .object({
+      roundId: z.uuid({ error: "Rodada inválida" }),
+      groupId: z.uuid({ error: "Grupo inválido" }),
+      name: z
+        .string()
+        .trim()
+        .min(2, { error: "Informe o nome do grupo" })
+        .max(80, { error: "Nome muito longo" }),
+    })
+    .safeParse({
+      roundId: formData.get("roundId"),
+      groupId: formData.get("groupId"),
+      name: formData.get("name"),
+    });
+
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const impedimento = await assertRoundIsDraft(
+    company.companyId,
+    parsed.data.roundId,
+  );
+  if (impedimento) return { error: impedimento };
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("purchase_round_groups")
+    .update({ name: parsed.data.name })
+    .eq("company_id", company.companyId)
+    .eq("id", parsed.data.groupId)
+    .eq("purchase_round_id", parsed.data.roundId);
+
+  if (error) {
+    return {
+      error:
+        error.code === "23505"
+          ? "Esta rodada já tem um grupo com esse nome."
+          : describeWriteError(error),
+    };
+  }
+
+  revalidatePath(`/compras/${parsed.data.roundId}`);
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Troca o contato que recebe a cotação daquele fornecedor.
+ *
+ * `addRoundSupplier` escolhe o contato principal sozinho, e até agora não havia
+ * como corrigir — apesar de a seção 5.2 existir justamente porque fornecedor
+ * tem vários contatos. Vale também depois de iniciada: mudar o destinatário não
+ * muda o que está sendo cotado.
+ *
+ * O contato precisa ser DAQUELE fornecedor, e é o trigger de integridade do
+ * schema que garante isso; a mensagem dele é traduzida aqui.
+ */
+export async function updateRoundSupplierContact(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const parsed = z
+    .object({
+      roundId: z.uuid({ error: "Rodada inválida" }),
+      roundSupplierId: z.uuid({ error: "Fornecedor inválido" }),
+      contactId: z.uuid({ error: "Escolha o contato" }),
+    })
+    .safeParse({
+      roundId: formData.get("roundId"),
+      roundSupplierId: formData.get("roundSupplierId"),
+      contactId: formData.get("contactId"),
+    });
+
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("round_suppliers")
+    .update({ supplier_contact_id: parsed.data.contactId })
+    .eq("company_id", company.companyId)
+    .eq("id", parsed.data.roundSupplierId)
+    .eq("purchase_round_id", parsed.data.roundId)
+    .select("id");
+
+  if (error) {
+    if (error.message.includes("contato")) {
+      return { error: "Este contato não é deste fornecedor." };
+    }
+    return { error: describeWriteError(error) };
+  }
+  if (!data || data.length === 0) {
+    return { error: "Fornecedor não encontrado nesta rodada." };
+  }
+
+  revalidatePath(`/compras/${parsed.data.roundId}`);
+  return { error: null, savedAt: Date.now() };
+}

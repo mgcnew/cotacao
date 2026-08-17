@@ -3,6 +3,12 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
 import {
+  ContactPicker,
+  EditRoundForm,
+  GroupChip,
+  QuotationItemRow,
+} from "@/components/rounds/round-crud-forms";
+import {
   ActivateRoundForm,
   GroupForm,
   ItemForm,
@@ -24,6 +30,7 @@ import {
   getRound,
   listRoundGroups,
   listRoundItems,
+  listRoundSupplierContacts,
   listRoundSuppliers,
   listSelectableSuppliers,
 } from "@/features/rounds/queries";
@@ -33,7 +40,6 @@ import {
 } from "@/features/rounds/status";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
-const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
@@ -60,13 +66,23 @@ export default async function RodadaPage({
   const podeEditar = permissions.has("purchase_round.update");
   const podeEnviar = permissions.has("purchase_round.send");
   const emPreparacao = round.status === "draft";
+  const encerrada =
+    round.status === "completed" || round.status === "cancelled";
   // Depois de iniciada, a rodada só muda por atualização controlada — isso é
   // etapa seguinte, com token e reenvio. Aqui a montagem se encerra.
   const podeMontar = podeEditar && emPreparacao;
 
-  const [products, selectableSuppliers] = await Promise.all([
+  const [products, selectableSuppliers, contatos] = await Promise.all([
     podeMontar ? listProducts(company.companyId) : Promise.resolve([]),
     podeMontar ? listSelectableSuppliers(company.companyId) : Promise.resolve([]),
+    // Só há o que trocar quando o fornecedor tem mais de um contato ativo; a
+    // consulta é uma para a tabela toda, não uma por linha.
+    podeEditar && !encerrada
+      ? listRoundSupplierContacts(
+          company.companyId,
+          roundSuppliers.map((rs) => rs.supplier_id),
+        )
+      : Promise.resolve(new Map()),
   ]);
 
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
@@ -81,6 +97,13 @@ export default async function RodadaPage({
             <Button asChild size="sm" variant="ghost">
               <Link href="/compras">Voltar</Link>
             </Button>
+            {podeEditar && !encerrada ? (
+              <EditRoundForm
+                roundId={round.id}
+                title={round.title}
+                notes={round.notes}
+              />
+            ) : null}
             <Button asChild size="sm" variant="outline">
               <Link href={`/compras/${id}/comparacao`}>Comparar respostas</Link>
             </Button>
@@ -126,11 +149,18 @@ export default async function RodadaPage({
             rodada.
           </p>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {groups.map((group) => (
-              <Badge key={group.id} variant="secondary">
-                {group.name}
-              </Badge>
+              <GroupChip
+                key={group.id}
+                roundId={id}
+                groupId={group.id}
+                name={group.name}
+                itemCount={
+                  items.filter((i) => i.group_id === group.id).length
+                }
+                editable={podeMontar}
+              />
             ))}
           </div>
         )}
@@ -169,32 +199,29 @@ export default async function RodadaPage({
                 <TableHead className="text-right">Quantidade</TableHead>
                 <TableHead>Cotado por</TableHead>
                 <TableHead>Situação</TableHead>
+                {podeMontar ? (
+                  <TableHead className="w-0 text-right">
+                    <span className="sr-only">Ações do item</span>
+                  </TableHead>
+                ) : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">
-                    {item.products?.name}
-                  </TableCell>
-                  <TableCell className="text-fg-muted">
-                    {groupName.get(item.group_id) ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {QTY.format(Number(item.requested_quantity))}{" "}
-                    <span className="text-fg-subtle text-xs">
-                      {item.purchase_unit?.symbol}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-fg-muted font-mono text-xs">
-                    {item.pricing_unit?.symbol}
-                  </TableCell>
-                  <TableCell className="text-fg-muted text-xs">
-                    {item.commercial_status === "open"
-                      ? "Aberto"
-                      : item.commercial_status}
-                  </TableCell>
-                </TableRow>
+                <QuotationItemRow
+                  key={item.id}
+                  roundId={id}
+                  itemId={item.id}
+                  productName={item.products?.name ?? "Produto"}
+                  groupId={item.group_id}
+                  groupName={groupName.get(item.group_id) ?? "—"}
+                  quantity={Number(item.requested_quantity)}
+                  purchaseUnit={item.purchase_unit?.symbol ?? ""}
+                  pricingUnit={item.pricing_unit?.symbol ?? ""}
+                  removed={item.commercial_status === "cancelled"}
+                  editable={podeMontar}
+                  groups={groups.map((g) => ({ id: g.id, name: g.name }))}
+                />
               ))}
             </TableBody>
           </Table>
@@ -263,6 +290,14 @@ export default async function RodadaPage({
                     <span className="text-fg-subtle block font-mono text-xs">
                       {rs.supplier_contacts?.whatsapp ?? ""}
                     </span>
+                    {podeEditar && !encerrada ? (
+                      <ContactPicker
+                        roundId={id}
+                        roundSupplierId={rs.id}
+                        contactId={rs.supplier_contact_id}
+                        contacts={contatos.get(rs.supplier_id) ?? []}
+                      />
+                    ) : null}
                   </TableCell>
                   <TableCell className="text-fg-muted text-xs">
                     {rs.first_sent_at
