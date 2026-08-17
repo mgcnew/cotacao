@@ -11,6 +11,10 @@ import {
   QuotationItemRow,
 } from "@/components/rounds/round-crud-forms";
 import {
+  CancelRoundForm,
+  CompleteRoundForm,
+} from "@/components/rounds/round-closing";
+import {
   GroupForm,
   ItemForm,
   StartRoundPanel,
@@ -104,6 +108,21 @@ export default async function RodadaPage({
 
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
   const itensAtivos = items.filter((i) => i.commercial_status !== "cancelled");
+  const itensEmAberto = items.filter((i) => i.commercial_status === "open");
+  const gruposAbertos = groups.filter((g) => g.status === "open");
+
+  const podeFechar = permissions.has("purchase_round.close");
+  const podeCancelar = permissions.has("purchase_round.cancel");
+  const emAndamento = round.status === "active";
+
+  // "Parcialmente fechada" é condição, não estado — o CHECK de
+  // `purchase_rounds` só conhece quatro, e a seção 16.1 do documento mestre
+  // lista a quinta entre os estados. Ela é calculada: rodada andando com pelo
+  // menos um grupo já encerrado e pelo menos um ainda de pé.
+  const parcialmenteFechada =
+    emAndamento &&
+    gruposAbertos.length > 0 &&
+    groups.some((g) => g.status === "closed" || g.status === "cancelled");
 
   return (
     <div className="w-full">
@@ -143,6 +162,9 @@ export default async function RodadaPage({
             <Badge variant={roundStatusTone(round.status)}>
               {ROUND_STATUS_LABEL[round.status] ?? round.status}
             </Badge>
+            {parcialmenteFechada ? (
+              <Badge variant="secondary">Parcialmente fechada</Badge>
+            ) : null}
           </>
         }
       />
@@ -157,7 +179,7 @@ export default async function RodadaPage({
         <Montagem
           roundId={id}
           podeMontar={podeMontar}
-          groups={groups.map((g) => ({ id: g.id, name: g.name }))}
+          groups={groups.map((g) => ({ id: g.id, name: g.name, status: g.status }))}
           groupName={groupName}
           items={items}
           itensAtivos={itensAtivos.length}
@@ -171,16 +193,44 @@ export default async function RodadaPage({
         <Acompanhamento
           roundId={id}
           items={items}
-          groups={groups.map((g) => ({ id: g.id, name: g.name }))}
+          groups={groups.map((g) => ({ id: g.id, name: g.name, status: g.status }))}
           groupName={groupName}
           roundSuppliers={roundSuppliers}
           contatos={contatos}
           podeEditar={podeEditar}
           podeEnviar={podeEnviar}
+          podeFechar={podeFechar && emAndamento}
+          podeCancelarGrupo={podeCancelar && emAndamento}
           encerrada={encerrada}
           totalItens={itensAtivos.length}
         />
       )}
+
+      {/* O encerramento fica no fim, e não no cabeçalho: é a última decisão da
+          tela, tomada depois de olhar o que está nela. No cabeçalho, o painel
+          de confirmação — que é largo — espremia o título em três linhas. */}
+      {!encerrada && (podeFechar || podeCancelar) ? (
+        <section className="border-border mt-10 border-t pt-6">
+          <h2 className="text-fg mb-1 text-sm font-semibold">
+            Encerrar a rodada
+          </h2>
+          <p className="text-fg-muted mb-3 text-sm">
+            {emAndamento
+              ? "Concluída, ela sai da lista do dia a dia e os links dos fornecedores param de valer. Cancelada, é como se não tivesse acontecido — e por isso o banco recusa cancelar uma que já virou pedido."
+              : "Rodada em preparação pode ser cancelada a qualquer momento; nada foi enviado."}
+          </p>
+          <div className="flex flex-wrap items-start gap-2">
+            {emAndamento && podeFechar ? (
+              <CompleteRoundForm
+                roundId={round.id}
+                openItemCount={itensEmAberto.length}
+                openGroupCount={gruposAbertos.length}
+              />
+            ) : null}
+            {podeCancelar ? <CancelRoundForm roundId={round.id} /> : null}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -192,7 +242,7 @@ export default async function RodadaPage({
  * para um segundo lugar — e um `select` que ganha uma coluna deixa a cópia
  * mentindo sem que nada quebre.
  */
-type Grupo = { id: string; name: string };
+type Grupo = { id: string; name: string; status: string };
 type Item = Awaited<ReturnType<typeof listRoundItems>>[number];
 type RoundSupplier = Awaited<ReturnType<typeof listRoundSuppliers>>[number];
 type Contatos = Awaited<ReturnType<typeof listRoundSupplierContacts>>;
@@ -336,7 +386,7 @@ function Montagem({
                   quantity={Number(item.requested_quantity)}
                   purchaseUnit={item.purchase_unit?.symbol ?? ""}
                   pricingUnit={item.pricing_unit?.symbol ?? ""}
-                  removed={item.commercial_status === "cancelled"}
+                  commercialStatus={item.commercial_status}
                   editable={podeMontar}
                   groups={groups}
                   hideGroup={grupoIntocado}
@@ -480,6 +530,8 @@ function Acompanhamento({
   contatos,
   podeEditar,
   podeEnviar,
+  podeFechar,
+  podeCancelarGrupo,
   encerrada,
   totalItens,
 }: {
@@ -491,11 +543,46 @@ function Acompanhamento({
   contatos: Contatos;
   podeEditar: boolean;
   podeEnviar: boolean;
+  podeFechar: boolean;
+  podeCancelarGrupo: boolean;
   encerrada: boolean;
   totalItens: number;
 }) {
   return (
     <>
+      {/* Os grupos só ganham uma seção própria depois que a rodada anda: é aí
+          que eles passam a poder discordar entre si — um fechado, outro ainda
+          esperando preço. Em preparação são todos iguais e ficam recolhidos
+          dentro do passo de produtos. */}
+      <section className="mb-8">
+        <h2 className="text-fg mb-1 text-sm font-semibold">Grupos</h2>
+        <p className="text-fg-muted mb-3 text-sm">
+          Cada grupo anda por conta própria. Fechar um encerra os itens dele sem
+          compra e o tira do link dos fornecedores; os outros continuam.
+        </p>
+        <div className="flex flex-wrap items-start gap-2">
+          {groups.map((group) => {
+            const doGrupo = items.filter((i) => i.group_id === group.id);
+            return (
+              <GroupChip
+                key={group.id}
+                roundId={roundId}
+                groupId={group.id}
+                name={group.name}
+                itemCount={doGrupo.length}
+                openItemCount={
+                  doGrupo.filter((i) => i.commercial_status === "open").length
+                }
+                status={group.status}
+                editable={false}
+                closable={podeFechar && group.status === "open"}
+                cancellable={podeCancelarGrupo && group.status === "open"}
+              />
+            );
+          })}
+        </div>
+      </section>
+
       <section className="mb-8">
         <h2 className="text-fg mb-1 text-sm font-semibold">Itens</h2>
         <p className="text-fg-muted mb-3 text-sm">
@@ -524,7 +611,7 @@ function Acompanhamento({
                 quantity={Number(item.requested_quantity)}
                 purchaseUnit={item.purchase_unit?.symbol ?? ""}
                 pricingUnit={item.pricing_unit?.symbol ?? ""}
-                removed={item.commercial_status === "cancelled"}
+                commercialStatus={item.commercial_status}
                 editable={false}
                 groups={groups}
               />

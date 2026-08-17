@@ -6,10 +6,13 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import {
+  cancelRoundGroup,
+  closeRoundGroup,
   removeQuotationItem,
   renameRoundGroup,
   updateQuotationItem,
@@ -17,6 +20,11 @@ import {
   updateRoundSupplierContact,
   type RoundFormState,
 } from "@/features/rounds/actions";
+import {
+  GROUP_STATUS_LABEL,
+  ITEM_STATUS_LABEL,
+} from "@/features/rounds/status";
+import { cn } from "@/lib/utils";
 
 const selectClass =
   "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
@@ -162,7 +170,7 @@ export function QuotationItemRow({
   quantity,
   purchaseUnit,
   pricingUnit,
-  removed,
+  commercialStatus,
   editable,
   groups,
   hideGroup = false,
@@ -175,7 +183,8 @@ export function QuotationItemRow({
   quantity: number;
   purchaseUnit: string;
   pricingUnit: string;
-  removed: boolean;
+  /** Situação comercial vinda do banco — a coluna "Situação" é ela. */
+  commercialStatus: string;
   editable: boolean;
   groups: Option[];
   /**
@@ -197,11 +206,18 @@ export function QuotationItemRow({
 
   const erro = updateState.error ?? removeState.error;
   const formId = `item-${itemId}`;
+  // Item que não está mais aberto não volta a ser editável: ou saiu da rodada,
+  // ou a compra dele já foi decidida.
+  const encerrado = commercialStatus !== "open";
+  // Riscado é só o que saiu: compra confirmada não é item riscado.
+  const riscado =
+    commercialStatus === "cancelled" ||
+    commercialStatus === "closed_without_purchase";
 
   if (!editando) {
     return (
-      <TableRow className={removed ? "opacity-60" : undefined}>
-        <TableCell className={`font-medium ${removed ? "line-through" : ""}`}>
+      <TableRow className={encerrado ? "opacity-60" : undefined}>
+        <TableCell className={`font-medium ${riscado ? "line-through" : ""}`}>
           {productName}
         </TableCell>
         {hideGroup ? null : (
@@ -215,11 +231,11 @@ export function QuotationItemRow({
           {pricingUnit}
         </TableCell>
         <TableCell className="text-fg-muted text-xs">
-          {removed ? "Removido da rodada" : "Aberto"}
+          {ITEM_STATUS_LABEL[commercialStatus] ?? commercialStatus}
         </TableCell>
         {editable ? (
           <TableCell>
-            {removed ? null : (
+            {encerrado ? null : (
               <div className="flex items-center justify-end gap-1">
                 <Button
                   type="button"
@@ -332,25 +348,94 @@ export function QuotationItemRow({
   );
 }
 
-/** Um grupo da rodada, renomeável no lugar. */
+/**
+ * Um grupo da rodada: renomeável no lugar, fechável quando a rodada anda.
+ *
+ * A seção 6 do documento mestre diz que "cada grupo poderá avançar
+ * independentemente. Um grupo pode estar fechado enquanto outro aguarda
+ * respostas" — e é aqui que isso deixa de ser texto. Fechar um grupo não
+ * encerra a rodada: os outros continuam recebendo preço.
+ *
+ * Fechar e cancelar pedem confirmação porque nenhum dos dois tem volta pela
+ * interface, e o painel diz o que vai acontecer em vez de perguntar "tem
+ * certeza?", que é a pergunta que ninguém lê.
+ */
 export function GroupChip({
   roundId,
   groupId,
   name,
   itemCount,
+  openItemCount = 0,
   editable,
+  status = "draft",
+  closable = false,
+  cancellable = false,
 }: {
   roundId: string;
   groupId: string;
   name: string;
   itemCount: number;
+  /** Itens ainda em aberto — é o que fechar o grupo vai encerrar. */
+  openItemCount?: number;
   editable: boolean;
+  status?: string;
+  closable?: boolean;
+  cancellable?: boolean;
 }) {
   const [state, formAction] = useActionState<RoundFormState, FormData>(
     renameRoundGroup,
     { error: null },
   );
+  const [fecharState, fecharAction] = useActionState<RoundFormState, FormData>(
+    closeRoundGroup,
+    { error: null },
+  );
+  const [cancelarState, cancelarAction] = useActionState<
+    RoundFormState,
+    FormData
+  >(cancelRoundGroup, { error: null });
   const [editando, setEditando] = useFechaAoSalvar(state.savedAt);
+  const [confirmando, setConfirmando] = React.useState<
+    null | "fechar" | "cancelar"
+  >(null);
+
+  const erroDeCiclo = fecharState.error ?? cancelarState.error;
+
+  if (confirmando) {
+    const fechando = confirmando === "fechar";
+    return (
+      <form
+        action={fechando ? fecharAction : cancelarAction}
+        className="border-border bg-surface flex w-full max-w-sm flex-col gap-2 rounded-lg border p-3"
+      >
+        <input type="hidden" name="roundId" value={roundId} />
+        <input type="hidden" name="groupId" value={groupId} />
+        <p className="text-fg text-sm font-medium">
+          {fechando ? `Fechar "${name}"` : `Cancelar "${name}"`}
+        </p>
+        <p className="text-fg-muted text-sm">
+          {fechando
+            ? openItemCount > 0
+              ? `${openItemCount} ${openItemCount === 1 ? "item ainda aberto vai encerrar" : "itens ainda abertos vão encerrar"} sem compra, e o grupo sai do link dos fornecedores.`
+              : "Nada mais em aberto aqui. O grupo sai do link dos fornecedores."
+            : "O grupo e os itens dele saem da rodada. Os outros grupos continuam."}
+        </p>
+        <ErrorLine error={erroDeCiclo} />
+        <div className="flex items-center gap-2">
+          <Salvar label={fechando ? "Fechar grupo" : "Cancelar grupo"} />
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-fg-subtle"
+            onClick={() => setConfirmando(null)}
+          >
+            Voltar
+          </Button>
+        </div>
+      </form>
+    );
+  }
 
   if (editando) {
     return (
@@ -392,24 +477,77 @@ export function GroupChip({
     );
   }
 
+  const encerrado = status === "closed" || status === "cancelled";
+
   return (
-    <span className="border-border bg-surface-sunken flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-sm">
-      <span className="text-fg">{name}</span>
-      <span className="text-fg-subtle text-xs tabular-nums">
-        {itemCount} {itemCount === 1 ? "item" : "itens"}
+    <span className="flex flex-col gap-1">
+      <span
+        className={cn(
+          "border-border bg-surface-sunken flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-sm",
+          encerrado && "opacity-60",
+        )}
+      >
+        <span className={cn("text-fg", encerrado && "line-through")}>
+          {name}
+        </span>
+        <span className="text-fg-subtle text-xs tabular-nums">
+          {itemCount} {itemCount === 1 ? "item" : "itens"}
+        </span>
+        {/* "Preparação" não é notícia enquanto a rodada inteira é rascunho:
+            só vira informação quando os grupos podem discordar entre si. */}
+        {status !== "draft" ? (
+          <Badge
+            variant={
+              status === "cancelled"
+                ? "destructive"
+                : status === "closed"
+                  ? "secondary"
+                  : "outline"
+            }
+          >
+            {GROUP_STATUS_LABEL[status] ?? status}
+          </Badge>
+        ) : null}
+
+        {editable ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-fg-subtle -mr-1.5 h-6 px-1"
+            aria-label={`Renomear grupo ${name}`}
+            onClick={() => setEditando(true)}
+          >
+            <Pencil className="size-3" aria-hidden />
+          </Button>
+        ) : null}
+
+        {closable ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-fg-muted h-6 px-1.5 text-xs"
+            onClick={() => setConfirmando("fechar")}
+          >
+            Fechar
+          </Button>
+        ) : null}
+
+        {cancellable ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-destructive -mr-1.5 h-6 px-1"
+            aria-label={`Cancelar grupo ${name}`}
+            onClick={() => setConfirmando("cancelar")}
+          >
+            <Trash2 className="size-3" aria-hidden />
+          </Button>
+        ) : null}
       </span>
-      {editable ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="text-fg-subtle -mr-1.5 h-6 px-1"
-          aria-label={`Renomear grupo ${name}`}
-          onClick={() => setEditando(true)}
-        >
-          <Pencil className="size-3" aria-hidden />
-        </Button>
-      ) : null}
+      <ErrorLine error={erroDeCiclo} />
     </span>
   );
 }

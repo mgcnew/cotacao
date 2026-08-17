@@ -2505,12 +2505,36 @@ export type Database = {
       }
     }
     Functions: {
+      rpc_activate_round: {
+        Args: { p_company_id: string; p_purchase_round_id: string }
+        Returns: Json
+      }
       rpc_cancel_order: {
         Args: { p_company_id: string; p_order_id: string; p_reason: string }
         Returns: Json
       }
+      rpc_cancel_round: {
+        Args: {
+          p_company_id: string
+          p_purchase_round_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      rpc_cancel_round_group: {
+        Args: { p_company_id: string; p_group_id: string }
+        Returns: Json
+      }
       rpc_close_order_balance: {
         Args: { p_company_id: string; p_order_id: string; p_reason: string }
+        Returns: Json
+      }
+      rpc_close_round_group: {
+        Args: { p_company_id: string; p_group_id: string }
+        Returns: Json
+      }
+      rpc_complete_round: {
+        Args: { p_company_id: string; p_purchase_round_id: string }
         Returns: Json
       }
       rpc_confirm_allocations_generate_orders: {

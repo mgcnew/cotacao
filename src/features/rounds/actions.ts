@@ -5,11 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { GRUPO_PADRAO } from "@/features/rounds/groups";
-import {
-  getPermissions,
-  requireActiveCompany,
-  requireUser,
-} from "@/lib/auth/dal";
+import { requireActiveCompany, requireUser } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -390,16 +386,29 @@ export async function addRoundSupplier(
 }
 
 /**
- * Passa a rodada de rascunho para em andamento.
+ * O ciclo de vida da rodada mora no banco.
  *
- * Sem item ou sem fornecedor a rodada não teria o que cotar, então a checagem
- * vem antes — o banco aceitaria a mudança de status, mas o resultado seria uma
- * rodada ativa e vazia.
+ * Iniciar, fechar um grupo, concluir e cancelar são transições que tocam várias
+ * tabelas de uma vez — status da rodada, status dos grupos, situação comercial
+ * dos itens, vínculos com o fornecedor e tokens públicos. Feitas daqui seriam
+ * cinco escritas sem transação: se a terceira falhasse, a rodada ficaria num
+ * estado que nenhuma tela sabe desenhar.
  *
- * Devolve estado em vez de lançar. Lançando, a frase "a rodada precisa de ao
- * menos um item e um fornecedor" — escrita para uma pessoa ler — chegava como
- * página de erro, e o usuário perdia a tela em que estava.
+ * A 0034 tem as cinco RPCs, cada uma checando a própria permissão por dentro.
+ * O que sobra aqui é traduzir a exceção do Postgres em uma frase que uma pessoa
+ * lê — e devolvê-la como estado, para o erro aparecer ao lado do botão em vez
+ * de virar página de erro.
  */
+function descreverErroDeRpc(mensagem: string): string {
+  // `require_permission` levanta "Permissão negada: chave", que é preciso mas
+  // não ajuda quem lê. As demais mensagens já foram escritas para a tela.
+  if (mensagem.startsWith("Permissão negada")) {
+    return "Seu papel não permite esta ação.";
+  }
+  return mensagem;
+}
+
+/** Passa a rodada de rascunho para em andamento, abrindo os grupos junto. */
 export async function activateRound(
   _prev: RoundFormState,
   formData: FormData,
@@ -409,53 +418,126 @@ export async function activateRound(
   const roundId = String(formData.get("roundId") ?? "");
   if (!roundId) return { error: "Rodada inválida." };
 
-  const permissions = await getPermissions(company.companyId);
-  if (!permissions.has("purchase_round.update")) {
-    return { error: "Seu papel não permite iniciar rodadas." };
-  }
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_activate_round", {
+    p_company_id: company.companyId,
+    p_purchase_round_id: roundId,
+  });
+
+  if (error) return { error: descreverErroDeRpc(error.message) };
+
+  revalidatePath(`/compras/${roundId}`);
+  revalidatePath("/compras");
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Fecha um grupo: decidi o que fazer aqui, o resto não vai ser comprado.
+ *
+ * O grupo anda sozinho — é o que a seção 6 do documento mestre pede. Fechar um
+ * não encerra a rodada; os outros continuam recebendo preço.
+ */
+export async function closeRoundGroup(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const roundId = String(formData.get("roundId") ?? "");
+  const groupId = String(formData.get("groupId") ?? "");
+  if (!roundId || !groupId) return { error: "Grupo inválido." };
 
   const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_close_round_group", {
+    p_company_id: company.companyId,
+    p_group_id: groupId,
+  });
 
-  const [items, suppliers] = await Promise.all([
-    supabase
-      .from("quotation_items")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", company.companyId)
-      .eq("purchase_round_id", roundId)
-      // Item retirado da rodada continua na tabela, cancelado — contá-lo
-      // deixaria iniciar uma rodada em que sobrou apenas o que foi tirado.
-      .eq("commercial_status", "open"),
-    supabase
-      .from("round_suppliers")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", company.companyId)
-      .eq("purchase_round_id", roundId),
-  ]);
+  if (error) return { error: descreverErroDeRpc(error.message) };
 
-  if ((items.count ?? 0) === 0) {
-    return { error: "Adicione ao menos um produto antes de iniciar a rodada." };
-  }
-  if ((suppliers.count ?? 0) === 0) {
-    return {
-      error: "Convide ao menos um fornecedor antes de iniciar a rodada.",
-    };
-  }
+  revalidatePath(`/compras/${roundId}`);
+  revalidatePath("/compras");
+  return { error: null, savedAt: Date.now() };
+}
 
-  const { data, error } = await supabase
-    .from("purchase_rounds")
-    .update({ status: "active", started_at: new Date().toISOString() })
-    .eq("id", roundId)
-    .eq("company_id", company.companyId)
-    .eq("status", "draft")
-    .select("id");
+/** Cancela um grupo: isto não vale. Recusado se já houver compra decidida. */
+export async function cancelRoundGroup(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
 
-  if (error) return { error: describeWriteError(error) };
+  const roundId = String(formData.get("roundId") ?? "");
+  const groupId = String(formData.get("groupId") ?? "");
+  if (!roundId || !groupId) return { error: "Grupo inválido." };
 
-  // Nenhuma linha atualizada com UPDATE sem erro significa que o filtro de
-  // status não casou: alguém já iniciou esta rodada em outra aba.
-  if (!data || data.length === 0) {
-    return { error: "Esta rodada já foi iniciada." };
-  }
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_cancel_round_group", {
+    p_company_id: company.companyId,
+    p_group_id: groupId,
+  });
+
+  if (error) return { error: descreverErroDeRpc(error.message) };
+
+  revalidatePath(`/compras/${roundId}`);
+  revalidatePath("/compras");
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Conclui a rodada.
+ *
+ * Encerra o que ficou em aberto e revoga os links: rodada concluída não recebe
+ * mais resposta. A tela diz quantos itens vão fechar sem compra antes de
+ * perguntar — a confirmação não pode ser uma surpresa.
+ */
+export async function completeRound(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const roundId = String(formData.get("roundId") ?? "");
+  if (!roundId) return { error: "Rodada inválida." };
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_complete_round", {
+    p_company_id: company.companyId,
+    p_purchase_round_id: roundId,
+  });
+
+  if (error) return { error: descreverErroDeRpc(error.message) };
+
+  revalidatePath(`/compras/${roundId}`);
+  revalidatePath("/compras");
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Cancela a rodada.
+ *
+ * Exige motivo, e o banco recusa se ela já gerou pedido: cancelar diz "isto
+ * nunca aconteceu", e um fornecedor esperando mercadoria diz o contrário.
+ */
+export async function cancelRound(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const roundId = String(formData.get("roundId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!roundId) return { error: "Rodada inválida." };
+  if (reason.length < 3) return { error: "Informe o motivo do cancelamento." };
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_cancel_round", {
+    p_company_id: company.companyId,
+    p_purchase_round_id: roundId,
+    p_reason: reason,
+  });
+
+  if (error) return { error: descreverErroDeRpc(error.message) };
 
   revalidatePath(`/compras/${roundId}`);
   revalidatePath("/compras");

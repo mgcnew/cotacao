@@ -24,6 +24,21 @@ export const GROUP_STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelado",
 };
 
+/**
+ * Situação comercial do item — documento mestre, 16.5.
+ *
+ * A tabela da rodada mostrava só "Aberto" ou "Removido da rodada", olhando um
+ * booleano. Item já alocado, já confirmado para compra ou encerrado sem compra
+ * aparecia como "Aberto" — a coluna existia e informava errado.
+ */
+export const ITEM_STATUS_LABEL: Record<string, string> = {
+  open: "Aberto",
+  allocated: "Alocado",
+  confirmed: "Compra confirmada",
+  closed_without_purchase: "Encerrado sem compra",
+  cancelled: "Removido da rodada",
+};
+
 export type BadgeTone = "default" | "secondary" | "outline" | "destructive";
 
 /**
@@ -92,12 +107,15 @@ export function roundNextStep(
         path: "/alocacao",
       };
     }
+    // Todos responderam e o pedido saiu: o que falta é dizer que acabou. Sem
+    // este passo a rodada ficava em "Em andamento" para sempre, e a lista de
+    // compras juntava o trabalho de três meses atrás com o de hoje.
     return {
-      label: "Comparar respostas",
-      shortLabel: "Comparar",
-      permission: "purchase_round.view",
-      pending: false,
-      path: "/comparacao",
+      label: "Concluir rodada",
+      shortLabel: "Concluir",
+      permission: "purchase_round.close",
+      pending: true,
+      path: "",
     };
   }
 
