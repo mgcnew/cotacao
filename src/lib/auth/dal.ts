@@ -15,6 +15,19 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * Isto NÃO substitui a segurança do banco: RLS e as RPCs continuam sendo a
  * última palavra. O que está aqui serve para decidir navegação e o que
  * renderizar — nunca para liberar dado que o banco negaria.
+ *
+ * COMO A SESSÃO É VERIFICADA
+ *
+ * Com `getClaims()`, e não com `getUser()`. A diferença é medida: `getUser()`
+ * vai até o servidor de auth do Supabase e custava 223 ms por render, mais
+ * outros 297 ms no proxy, que faz a mesma pergunta. `getClaims()` verifica a
+ * assinatura do token no próprio processo — este projeto usa chaves
+ * assimétricas (ES256), e o JWKS é buscado uma vez e fica em cache.
+ *
+ * A garantia é criptográfica, não menor: assinatura conferida com a chave
+ * pública do projeto e `exp` validado. O que se perde é detectar, no meio da
+ * validade do token, uma sessão revogada do outro lado — quem precisar dessa
+ * garantia usa `getAuthUser()`, que pergunta ao servidor.
  */
 
 export type CompanyMembership = {
@@ -26,22 +39,45 @@ export type CompanyMembership = {
   roleName: string;
 };
 
-/** Usuário autenticado, validado no servidor de auth. Redireciona se não houver. */
-export const requireUser = cache(async () => {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+/**
+ * O que se sabe do usuário pelo próprio token.
+ *
+ * `id` e `email` são tudo o que o app usa. Quem precisar do registro completo
+ * (metadados, confirmações, banimento) chama `getAuthUser()`.
+ */
+export type SessionUser = { id: string; email: string | null };
 
+/** Sessão verificada localmente, ou `null` quando não há token válido. */
+export const getUser = cache(async (): Promise<SessionUser | null> => {
+  const supabase = await createServerSupabaseClient();
+
+  // Sem argumento, getClaims usa a sessão dos cookies — e renova o token
+  // quando ele já expirou, que é o que mantém a sessão viva.
+  const { data, error } = await supabase.auth.getClaims();
+  const sub = data?.claims?.sub;
+
+  if (error || !sub) return null;
+
+  const email = data.claims.email;
+  return { id: sub, email: typeof email === "string" ? email : null };
+});
+
+/** Igual ao acima, exigindo sessão: sem ela, manda para o login. */
+export const requireUser = cache(async (): Promise<SessionUser> => {
+  const user = await getUser();
   if (!user) {
     redirect("/login");
   }
-
   return user;
 });
 
-/** Igual ao acima, mas devolve null em vez de redirecionar. */
-export const getUser = cache(async () => {
+/**
+ * O registro completo do usuário, perguntado ao servidor de auth.
+ *
+ * Custa uma ida à rede. Use só quando a resposta do servidor for necessária —
+ * para saber "quem é", o token já basta e é local.
+ */
+export const getAuthUser = cache(async () => {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },

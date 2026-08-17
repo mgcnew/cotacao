@@ -12,6 +12,17 @@ import { NextResponse, type NextRequest } from "next/server";
  * no DAL (`src/lib/auth/dal.ts`) e, em última instância, nas policies e RPCs
  * do banco. O guia do Next é explícito: proxy roda em toda rota, inclusive
  * em prefetch, então não deve consultar banco.
+ *
+ * E era exatamente isso que ele fazia. `getUser()` pergunta ao servidor de auth
+ * do Supabase, e medindo em produção deu 297 ms de MÉDIA, em toda requisição --
+ * inclusive nos prefetch, que o Next dispara para cada link visível. Numa tela
+ * com dez links, dez idas à rede antes de a pessoa clicar em nada.
+ *
+ * `getClaims()` confere a assinatura do token no próprio processo, com a chave
+ * pública do projeto (ES256) e o JWKS em cache. Continua renovando o token
+ * quando expirado — é `getSession()` por dentro —, então os cookies renovados
+ * seguem sendo capturados pelo `setAll` abaixo, que é a razão de ser deste
+ * arquivo.
  */
 
 /** Rotas que não exigem sessão. Os portais do fornecedor entram aqui: ele
@@ -48,15 +59,14 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  // Precisa ser getUser(): valida o token no servidor de auth e, de quebra,
-  // dispara a renovação cujos cookies o setAll acima captura.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verificação local da assinatura; renova o token se estiver expirado, e é
+  // essa renovação que o setAll acima captura.
+  const { data } = await supabase.auth.getClaims();
+  const temSessao = Boolean(data?.claims?.sub);
 
   const { pathname } = request.nextUrl;
 
-  if (!user && !isPublicPath(pathname)) {
+  if (!temSessao && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     // Preserva o destino para voltar depois do login.
@@ -66,7 +76,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && (pathname === "/login" || pathname === "/signup")) {
+  if (temSessao && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";
