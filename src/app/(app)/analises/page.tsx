@@ -60,7 +60,7 @@ export default async function AnalisesPage({
   const semRecebimento = coverage.receipts === 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full">
       <PageHeader
         title="Análises"
         description="O dashboard mostra situação; aqui é o comportamento. Todo número sai de view do banco, não de conta feita na tela."

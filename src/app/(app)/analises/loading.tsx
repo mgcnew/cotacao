@@ -9,7 +9,7 @@ import {
 /** Casca de /analises: filtros, os números do recorte e a tabela por fornecedor. */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-5xl">
+    <PageSkeleton>
       <PageHeaderSkeleton action={false} />
       <FilterBarSkeleton />
       <MetricsSkeleton />

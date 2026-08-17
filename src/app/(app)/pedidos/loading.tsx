@@ -9,7 +9,7 @@ import {
 /** Casca de /pedidos. `max-w-5xl` para bater com a largura da tela real. */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-5xl">
+    <PageSkeleton>
       <PageHeaderSkeleton />
       <FilterBarSkeleton />
       <MetricsSkeleton />

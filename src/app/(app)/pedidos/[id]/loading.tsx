@@ -8,7 +8,7 @@ import {
 /** Casca do pedido: cabeçalho, a revisão vigente e o histórico. */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-4xl">
+    <PageSkeleton>
       <PageHeaderSkeleton />
 
       <div className="mb-6">

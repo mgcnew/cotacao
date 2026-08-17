@@ -71,6 +71,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </form>
         </header>
 
+        {/* 24px dos lados no desktop, 16px no celular — e é AQUI que a margem
+            mora, não em cada página. As telas usam a largura que sobra; quem
+            precisa de limite (formulário de campo único, que esticado vira uma
+            linha de um metro) põe o seu `max-w-*` sem `mx-auto`, para começar
+            nos mesmos 24px em vez de flutuar no meio. */}
         <main className="min-w-0 flex-1 px-4 py-6 sm:px-6">{children}</main>
       </div>
     </div>

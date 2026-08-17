@@ -15,7 +15,7 @@ import {
  */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-5xl">
+    <PageSkeleton>
       <PageHeaderSkeleton action={false} />
 
       <section className="mb-8">

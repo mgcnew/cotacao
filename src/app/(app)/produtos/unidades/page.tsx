@@ -30,7 +30,7 @@ export default async function UnidadesPage() {
   const podeEditar = permissions.has("product.update");
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <PageHeader
         title="Unidades"
         description="Cada produto usa três: em que se compra, em que o fornecedor cota o preço e em que os preços são comparados entre fornecedores."

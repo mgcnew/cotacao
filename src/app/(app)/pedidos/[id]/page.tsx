@@ -151,7 +151,7 @@ export default async function PedidoPage({
   );
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <PageHeader
         title={`Pedido #${order.order_number}`}
         description={`${order.suppliers.name}${order.purchase_rounds?.title ? ` · ${order.purchase_rounds.title}` : " · pedido direto"}`}

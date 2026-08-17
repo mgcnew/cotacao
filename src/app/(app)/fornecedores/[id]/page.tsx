@@ -59,7 +59,7 @@ export default async function FornecedorPage({
   const categoriasAtivas = categories.filter((c) => c.isActive);
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <PageHeader
         title={supplier.name}
         description={

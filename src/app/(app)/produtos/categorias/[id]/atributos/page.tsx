@@ -46,7 +46,7 @@ export default async function AtributosPage({
     .map((u) => ({ id: u.id, label: `${u.name} (${u.symbol})` }));
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <PageHeader
         title={`Atributos de ${category.name}`}
         description="Campos que só fazem sentido nesta categoria. São eles que permitem comparar propostas com apresentações diferentes."

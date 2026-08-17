@@ -42,7 +42,7 @@ export default async function ComparacaoPage({
   const { rows, suppliers } = comparison;
 
   return (
-    <div className="mx-auto w-full max-w-full">
+    <div className="w-full">
       <PageHeader
         title="Comparação de respostas"
         description={`${round.title} · ${suppliers.length} fornecedores · ${rows.length} itens`}

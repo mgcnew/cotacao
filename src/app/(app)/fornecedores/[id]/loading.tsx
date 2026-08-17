@@ -8,7 +8,7 @@ import {
 /** Casca do fornecedor: dados cadastrais e os contatos. */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-4xl">
+    <PageSkeleton>
       <PageHeaderSkeleton />
       <div className="mb-6">
         <CardSkeleton lines={4} />

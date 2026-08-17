@@ -7,7 +7,7 @@ import {
 /** Casca de /configuracoes: cabeçalho, a fila de abas e o painel aberto. */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-4xl">
+    <PageSkeleton>
       <PageHeaderSkeleton action={false} />
 
       <div

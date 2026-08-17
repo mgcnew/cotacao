@@ -7,7 +7,7 @@ import {
 /** Casca dos atributos de uma categoria. */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-4xl">
+    <PageSkeleton>
       <PageHeaderSkeleton />
       <TableSkeleton rows={4} columns={4} />
     </PageSkeleton>

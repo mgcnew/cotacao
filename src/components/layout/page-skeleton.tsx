@@ -47,11 +47,7 @@ export function PageSkeleton({
   className?: string;
 }) {
   return (
-    <div
-      role="status"
-      aria-busy="true"
-      className={cn("mx-auto w-full max-w-6xl", className)}
-    >
+    <div role="status" aria-busy="true" className={cn("w-full", className)}>
       <span className="sr-only">Carregando…</span>
       {children}
     </div>

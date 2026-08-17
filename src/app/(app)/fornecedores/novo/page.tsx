@@ -15,7 +15,7 @@ export default async function NovoFornecedorPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="w-full max-w-3xl">
       <PageHeader
         title="Novo fornecedor"
         description="Dados da empresa. Contatos, categorias atendidas e agenda de compras vêm na ficha, logo depois."

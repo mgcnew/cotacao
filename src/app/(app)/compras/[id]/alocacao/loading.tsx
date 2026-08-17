@@ -7,7 +7,7 @@ import {
 /** Casca da decisão de compra: item a item, com o preço de cada fornecedor. */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-4xl">
+    <PageSkeleton>
       <PageHeaderSkeleton />
       <TableSkeleton rows={6} columns={5} />
     </PageSkeleton>

@@ -88,7 +88,7 @@ export default async function RodadaPage({
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full">
       <PageHeader
         title={round.title}
         description={`${items.length} itens · ${groups.length} grupos · ${roundSuppliers.length} fornecedores`}

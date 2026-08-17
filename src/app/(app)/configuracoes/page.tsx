@@ -62,7 +62,7 @@ export default async function ConfiguracoesPage() {
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <PageHeader
         title="Configurações"
         description="Aparência, dados da empresa, papéis e suas permissões."

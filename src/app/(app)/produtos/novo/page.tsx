@@ -38,7 +38,7 @@ export default async function NovoProdutoPage() {
     .map((u) => ({ id: u.id, label: `${u.name} (${u.symbol})` }));
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="w-full max-w-3xl">
       <PageHeader
         title="Novo produto"
         description="Catálogo único: revenda e uso interno no mesmo lugar, separados pela finalidade."

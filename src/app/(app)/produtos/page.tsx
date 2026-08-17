@@ -57,7 +57,7 @@ export default async function ProdutosPage({
   const podeEditar = permissions.has("product.update");
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       <PageHeader
         title="Produtos"
         description={`Catálogo único: revenda e uso interno. ${counts.categories} categorias, ${counts.units} unidades cadastradas.`}

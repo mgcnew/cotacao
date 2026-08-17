@@ -64,7 +64,7 @@ export default async function ComprasPage({
   const podeCriar = permissions.has("purchase_round.create");
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       <PageHeader
         title="Compras"
         description="Cada rodada reúne produtos, convida fornecedores, recebe preços e vira pedido."

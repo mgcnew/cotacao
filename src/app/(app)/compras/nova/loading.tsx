@@ -13,7 +13,7 @@ import {
  */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-2xl">
+    <PageSkeleton className="max-w-3xl">
       <PageHeaderSkeleton action={false} />
       <FormSkeleton fields={3} />
     </PageSkeleton>

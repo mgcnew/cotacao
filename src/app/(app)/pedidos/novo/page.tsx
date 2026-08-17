@@ -22,7 +22,7 @@ export default async function NovoPedidoPage() {
   const faltaCadastro = suppliers.length === 0 || products.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="w-full max-w-3xl">
       <PageHeader
         title="Novo pedido"
         description="Compra fechada por fora da cotação — por telefone, no balcão, ou reposição de sempre. O pedido segue o mesmo caminho: enviar, confirmar, receber."

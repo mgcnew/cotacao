@@ -60,7 +60,7 @@ export default async function DashboardPage() {
   const permissions = await getPermissions(company.companyId);
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full">
       <PageHeader
         title="Central operacional"
         description={`${company.companyName} · ${company.roleName}`}

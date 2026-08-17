@@ -34,7 +34,7 @@ export default async function FornecedoresPage() {
   const podeCriar = permissions.has("supplier.create");
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       <PageHeader
         title="Fornecedores"
         description={`${counts.ativos} de ${counts.total} ativos · ${counts.contatos} contatos.`}

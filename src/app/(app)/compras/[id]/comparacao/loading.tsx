@@ -7,7 +7,7 @@ import {
 /** Casca da comparação: a matriz de produtos por fornecedor. */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-full">
+    <PageSkeleton>
       <PageHeaderSkeleton />
       <TableSkeleton rows={8} columns={6} />
     </PageSkeleton>

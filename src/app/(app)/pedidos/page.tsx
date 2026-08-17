@@ -71,7 +71,7 @@ export default async function PedidosPage({
   const podeCriar = permissions.has("order.create");
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full">
       <PageHeader
         title="Pedidos"
         description="Da geração ao recebimento. O pedido é enviado ao fornecedor, confirmado por ele, e só então a mercadoria pode dar entrada."

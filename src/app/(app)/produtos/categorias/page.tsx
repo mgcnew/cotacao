@@ -29,7 +29,7 @@ export default async function CategoriasPage() {
   const podeEditar = permissions.has("product.update");
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <PageHeader
         title="Categorias"
         description="Classificação estrutural do produto. Não confundir com os grupos da rodada, que são organização da cotação."

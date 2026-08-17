@@ -7,7 +7,7 @@ import {
 /** Casca das unidades de medida. */
 export default function Loading() {
   return (
-    <PageSkeleton className="max-w-4xl">
+    <PageSkeleton>
       <PageHeaderSkeleton />
       <TableSkeleton rows={5} columns={3} />
     </PageSkeleton>

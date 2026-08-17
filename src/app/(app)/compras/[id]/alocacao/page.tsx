@@ -55,7 +55,7 @@ export default async function AlocacaoPage({
   const fornecedoresNoRascunho = new Set(rascunhos.map((a) => a.supplierId));
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <PageHeader
         title="Decisão de compra"
         description={`${round.title} · escolha de quem comprar cada item, com divisão entre fornecedores quando fizer sentido`}
