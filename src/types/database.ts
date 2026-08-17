@@ -2675,6 +2675,18 @@ export type Database = {
         }
         Returns: string
       }
+      rpc_session_context: {
+        Args: never
+        Returns: {
+          company_id: string
+          company_name: string
+          company_status: string
+          member_id: string
+          permissions: string[]
+          role_id: string
+          role_name: string
+        }[]
+      }
       rpc_update_draft_order_revision: {
         Args: {
           p_company_id: string

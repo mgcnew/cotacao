@@ -37,6 +37,8 @@ export type CompanyMembership = {
   memberId: string;
   roleId: string;
   roleName: string;
+  /** Permissões efetivas nesta empresa, já com os overrides aplicados. */
+  permissions: string[];
 };
 
 /**
@@ -86,26 +88,23 @@ export const getAuthUser = cache(async () => {
 });
 
 /**
- * Empresas em que o usuário tem vínculo ativo.
- * A RLS de company_members já limita o resultado ao próprio usuário.
+ * Empresas em que o usuário tem vínculo ativo, com as permissões de cada uma.
+ *
+ * Uma ida ao banco, não três. Antes eram `company_members` e, EM CADEIA,
+ * `role_permissions` + `member_permission_overrides` — em cadeia porque as
+ * permissões precisam do papel e do membro que vêm do vínculo. Medido em
+ * produção: 261 ms + 366 ms por render. A conta é do Postgres em microssegundos;
+ * o custo era a rede, três vezes.
+ *
+ * `requireUser` vem antes de propósito: sem sessão, a RPC devolveria zero
+ * linhas e a pessoa acabaria no onboarding em vez do login. E agora é local,
+ * então não custa ida nenhuma.
  */
 export const getMemberships = cache(async (): Promise<CompanyMembership[]> => {
-  const user = await requireUser();
+  await requireUser();
   const supabase = await createServerSupabaseClient();
 
-  const { data, error } = await supabase
-    .from("company_members")
-    .select(
-      `
-      id,
-      company_id,
-      role_id,
-      companies!inner ( name, status ),
-      roles!inner ( name )
-    `,
-    )
-    .eq("user_id", user.id)
-    .eq("status", "active");
+  const { data, error } = await supabase.rpc("rpc_session_context");
 
   if (error) {
     throw new Error(`Falha ao carregar empresas do usuário: ${error.message}`);
@@ -113,11 +112,12 @@ export const getMemberships = cache(async (): Promise<CompanyMembership[]> => {
 
   return (data ?? []).map((row) => ({
     companyId: row.company_id,
-    companyName: row.companies.name,
-    companyStatus: row.companies.status,
-    memberId: row.id,
+    companyName: row.company_name,
+    companyStatus: row.company_status,
+    memberId: row.member_id,
     roleId: row.role_id,
-    roleName: row.roles.name,
+    roleName: row.role_name,
+    permissions: row.permissions ?? [],
   }));
 });
 
@@ -161,49 +161,19 @@ export const ACTIVE_COMPANY_COOKIE = "cotacao.company";
 /**
  * Permissões efetivas do usuário na empresa ativa.
  *
- * Reproduz a mesma regra de `private.has_permission`: papel + overrides, com
- * `deny` vencendo `allow`. Serve para a UI decidir o que mostrar. A decisão
- * final continua no banco — o botão escondido é cortesia, não segurança.
+ * Não consulta nada: vem do mesmo contexto de sessão já carregado. A regra —
+ * papel mais overrides, com `deny` vencendo `allow` — mora agora em
+ * `rpc_session_context`, junto de `private.has_permission`, que é quem de fato
+ * autoriza. Antes estava reescrita aqui em TypeScript, e duas implementações da
+ * mesma regra envelhecem em ritmos diferentes.
+ *
+ * Serve para a UI decidir o que mostrar. A decisão final continua no banco — o
+ * botão escondido é cortesia, não segurança.
  */
 export const getPermissions = cache(
   async (companyId: string): Promise<Set<string>> => {
-    const supabase = await createServerSupabaseClient();
     const memberships = await getMemberships();
     const membership = memberships.find((m) => m.companyId === companyId);
-
-    if (!membership) return new Set();
-
-    const [rolePerms, overrides] = await Promise.all([
-      supabase
-        .from("role_permissions")
-        .select("permissions!inner ( key )")
-        .eq("role_id", membership.roleId),
-      supabase
-        .from("member_permission_overrides")
-        .select("effect, permissions!inner ( key )")
-        .eq("company_member_id", membership.memberId),
-    ]);
-
-    if (rolePerms.error) {
-      throw new Error(
-        `Falha ao carregar permissões do papel: ${rolePerms.error.message}`,
-      );
-    }
-    if (overrides.error) {
-      throw new Error(
-        `Falha ao carregar exceções de permissão: ${overrides.error.message}`,
-      );
-    }
-
-    const keys = new Set(
-      (rolePerms.data ?? []).map((row) => row.permissions.key),
-    );
-
-    for (const row of overrides.data ?? []) {
-      if (row.effect === "allow") keys.add(row.permissions.key);
-      else keys.delete(row.permissions.key);
-    }
-
-    return keys;
+    return new Set(membership?.permissions ?? []);
   },
 );
