@@ -2552,6 +2552,35 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_dashboard_snapshot: {
+        Args: {
+          p_company_id: string
+          p_dias_falha?: number
+          p_status_em_andamento?: string[]
+        }
+        Returns: {
+          atraso_order_id: string
+          atraso_pior_dias: number
+          divergencia_comercial_order_id: string
+          divergencia_fornecedor_order_id: string
+          divergencias_comerciais: number
+          divergencias_fornecedor: number
+          entrega_hoje_order_id: string
+          entregas_hoje: number
+          falhas_envio: number
+          fornecedores_ativos: number
+          itens_sem_alocacao: number
+          pedidos_atrasados: number
+          pedidos_em_aberto: number
+          pedidos_rascunho: number
+          produtos_ativos: number
+          rascunho_order_id: string
+          revisao_order_id: string
+          revisoes_pendentes: number
+          rodadas: Json
+          rodadas_total: number
+        }[]
+      }
       rpc_mark_order_revision_sent: {
         Args: { p_company_id: string; p_order_revision_id: string }
         Returns: Json

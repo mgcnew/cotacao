@@ -210,8 +210,12 @@ async function ListaDeRodadas({
               return (
                 <TableRow key={id}>
                   <TableCell>
+                    {/* Sem prefetch nos links de linha: com casca de
+                        carregamento no destino, cada rota visível viraria uma
+                        renderização no servidor por rodada listada. O menu
+                        lateral segue prefazendo — seis links, sempre os mesmos. */}
                     <Link
-                      href={`/compras/${id}`}
+                      href={`/compras/${id}`} prefetch={false}
                       className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline"
                     >
                       {round.title}
@@ -251,7 +255,7 @@ async function ListaDeRodadas({
                       size="sm"
                       variant={passo.pending && podeAgir ? "default" : "outline"}
                     >
-                      <Link href={`/compras/${id}${passo.path}`}>
+                      <Link href={`/compras/${id}${passo.path}`} prefetch={false}>
                         <span className="hidden sm:inline">
                           {podeAgir ? passo.label : "Abrir"}
                         </span>

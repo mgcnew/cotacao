@@ -78,8 +78,10 @@ export default async function FornecedoresPage() {
               return (
                 <TableRow key={supplier.id}>
                   <TableCell>
+                    {/* Sem prefetch: um link de linha por fornecedor viraria
+                        uma renderização no servidor por linha visível. */}
                     <Link
-                      href={`/fornecedores/${supplier.id}`}
+                      href={`/fornecedores/${supplier.id}`} prefetch={false}
                       className="text-fg hover:text-primary font-medium"
                     >
                       {supplier.name}

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "start:medir": "MEDIR_SUPABASE=1 next start -p 3100"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

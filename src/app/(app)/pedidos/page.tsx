@@ -220,8 +220,14 @@ async function ListaDePedidos({
                 return (
                   <TableRow key={order.id}>
                     <TableCell>
+                      {/* `prefetch={false}` nos links de linha. Com uma casca
+                          de carregamento no destino, o Next passa a prefazer
+                          cada rota visível — e numa lista de duzentos pedidos
+                          isso são duzentas renderizações no servidor para
+                          telas que ninguém abriu. O menu lateral continua
+                          prefazendo: lá são seis links, e sempre os mesmos. */}
                       <Link
-                        href={`/pedidos/${order.id}`}
+                        href={`/pedidos/${order.id}`} prefetch={false}
                         className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline"
                       >
                         #{order.orderNumber}
@@ -294,7 +300,7 @@ async function ListaDePedidos({
                           passo.pending && podeAgir ? "default" : "outline"
                         }
                       >
-                        <Link href={`/pedidos/${order.id}`}>
+                        <Link href={`/pedidos/${order.id}`} prefetch={false}>
                           <span className="hidden sm:inline">
                             {podeAgir ? passo.label : "Abrir"}
                           </span>

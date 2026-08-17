@@ -3,6 +3,7 @@ import "server-only";
 import { formatCnpj } from "@/features/company/cnpj";
 import type { OrderFilters } from "@/features/orders/filters";
 import type { OrderMessageContext } from "@/features/orders/message";
+import { PEDIDO_EM_ANDAMENTO } from "@/features/orders/lifecycle";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -137,13 +138,6 @@ export async function listDirectOrderOptions(companyId: string) {
   };
 }
 
-/** Situações em que ainda se espera mercadoria — as que a view chama de aberto. */
-const EM_ANDAMENTO = [
-  "awaiting_confirmation",
-  "awaiting_delivery",
-  "partially_received",
-];
-
 /** Teto de linhas. Acima disso a resposta é o filtro, não a rolagem. */
 export const ORDERS_PAGE_SIZE = 200;
 
@@ -167,20 +161,23 @@ export type OrderListRow = {
  * A regra já mora no banco, e repeti-la aqui criaria uma segunda verdade: foi
  * exatamente o que aconteceu antes da 0028, quando a tela contava três
  * situações e a view contava duas. Custa uma consulta a mais e vale a pena.
+ *
+ * O que não vale a pena é ela ser SEQUENCIAL. Antes esta consulta recebia os
+ * ids da página e só podia sair depois que a lista voltasse — duas viagens em
+ * fila, ~250 ms cada. Agora pergunta pelos atrasados da empresa inteira e sai
+ * em paralelo com a lista; o cruzamento é feito aqui. São pedidos vencidos e
+ * ainda não recebidos: uma lista curta por definição, porque atraso é coisa
+ * que se resolve.
  */
 async function readOverdue(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   companyId: string,
-  orderIds: string[],
 ): Promise<Map<string, number>> {
-  if (orderIds.length === 0) return new Map();
-
   const { data, error } = await supabase
     .from("v_order_delivery_status")
     .select("order_id, overdue_days")
     .eq("company_id", companyId)
-    .eq("is_overdue", true)
-    .in("order_id", orderIds);
+    .eq("is_overdue", true);
 
   if (error) throw new Error(`Falha ao apurar atrasos: ${error.message}`);
 
@@ -256,7 +253,7 @@ export async function listOrders(
   if (daView) {
     query = query.in("id", daView);
   } else if (filters.situacao === "abertos") {
-    query = query.in("status", [...EM_ANDAMENTO, "draft"]);
+    query = query.in("status", [...PEDIDO_EM_ANDAMENTO, "draft"]);
   } else if (filters.situacao) {
     query = query.eq("status", filters.situacao);
   }
@@ -266,19 +263,16 @@ export async function listOrders(
   if (filters.de) query = query.gte("created_at", `${filters.de}T00:00:00`);
   if (filters.ate) query = query.lte("created_at", `${filters.ate}T23:59:59`);
 
-  const { data, error } = await query
-    .order("order_number", { ascending: false })
-    .limit(ORDERS_PAGE_SIZE + 1);
+  // As duas saem juntas: a de atrasos não depende mais do resultado da lista.
+  const [{ data, error }, atraso] = await Promise.all([
+    query.order("order_number", { ascending: false }).limit(ORDERS_PAGE_SIZE + 1),
+    readOverdue(supabase, companyId),
+  ]);
 
   if (error) throw new Error(`Falha ao listar pedidos: ${error.message}`);
 
   const truncated = (data ?? []).length > ORDERS_PAGE_SIZE;
   const pagina = (data ?? []).slice(0, ORDERS_PAGE_SIZE);
-  const atraso = await readOverdue(
-    supabase,
-    companyId,
-    pagina.map((o) => o.id),
-  );
 
   const rows = pagina.map((order) => {
     // A vigente é a que `current_revision_id` aponta, não a de número mais

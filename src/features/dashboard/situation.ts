@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { FirstStep } from "@/components/dashboard/first-steps";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getDashboardSnapshot } from "@/features/dashboard/snapshot";
 
 /**
  * Como estão as compras em andamento — documento mestre, 13.1.
@@ -11,8 +11,9 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * é pendência, mas saber que há doze pedidos em aberto é situação, e não vira
  * tarefa de ninguém.
  *
- * Cada número é contado no banco (`count: "exact", head: true`), sem trazer as
- * linhas: a página precisa do total, não dos registros.
+ * Os números vêm do mesmo retrato que alimenta a Central de Atenção, lido uma
+ * vez por render — o `cache()` do React garante isso. Eram seis consultas a
+ * mais, e o dado é o mesmo.
  */
 
 export type SituationSummary = {
@@ -24,69 +25,26 @@ export type SituationSummary = {
   pedidosAtrasados: number;
 };
 
-const EM_ANDAMENTO = [
-  "awaiting_confirmation",
-  "awaiting_delivery",
-  "partially_received",
-];
-
 export async function getSituationSummary(
   companyId: string,
   permissions: Set<string>,
 ): Promise<SituationSummary> {
-  const supabase = await createServerSupabaseClient();
+  const s = await getDashboardSnapshot(companyId);
   const podeVerRodadas = permissions.has("purchase_round.view");
   const podeVerPedidos = permissions.has("order.view");
 
-  const [rodadas, emAberto, atrasados] = await Promise.all([
-    podeVerRodadas
-      ? supabase
-          .from("v_purchase_round_progress")
-          .select("purchase_round_id, title, suppliers_pending")
-          .eq("company_id", companyId)
-          .eq("status", "active")
-      : null,
-    podeVerPedidos
-      ? supabase
-          .from("orders")
-          .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .in("status", EM_ANDAMENTO)
-      : null,
-    podeVerPedidos
-      ? supabase
-          .from("v_order_delivery_status")
-          .select("order_id", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .eq("is_overdue", true)
-      : null,
-  ]);
-
-  if (rodadas?.error) {
-    throw new Error(`Falha ao ler rodadas: ${rodadas.error.message}`);
-  }
-  if (emAberto?.error) {
-    throw new Error(`Falha ao contar pedidos: ${emAberto.error.message}`);
-  }
-  if (atrasados?.error) {
-    throw new Error(`Falha ao contar atrasos: ${atrasados.error.message}`);
-  }
-
-  const ativas = rodadas?.data ?? [];
+  const ativas = podeVerRodadas ? s.rodadas : [];
   const unica = ativas.length === 1 ? ativas[0] : null;
 
   return {
     rondasAtivas: ativas.length,
-    rodadaUnica:
-      unica && unica.purchase_round_id
-        ? { id: unica.purchase_round_id, title: unica.title ?? "Rodada" }
-        : null,
+    rodadaUnica: unica ? { id: unica.roundId, title: unica.title } : null,
     fornecedoresPendentes: ativas.reduce(
-      (sum, r) => sum + Number(r.suppliers_pending ?? 0),
+      (soma, r) => soma + r.suppliersPending,
       0,
     ),
-    pedidosEmAberto: emAberto?.count ?? 0,
-    pedidosAtrasados: atrasados?.count ?? 0,
+    pedidosEmAberto: podeVerPedidos ? s.pedidosEmAberto : 0,
+    pedidosAtrasados: podeVerPedidos ? s.pedidosAtrasados : 0,
   };
 }
 
@@ -105,25 +63,7 @@ export async function getFirstSteps(
   companyId: string,
   permissions: Set<string>,
 ): Promise<FirstStep[]> {
-  const supabase = await createServerSupabaseClient();
-
-  const [produtos, fornecedores, rodadas] = await Promise.all([
-    supabase
-      .from("products")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("is_active", true),
-    supabase
-      .from("suppliers")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("status", "active"),
-    supabase
-      .from("purchase_rounds")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId),
-  ]);
-
+  const s = await getDashboardSnapshot(companyId);
   const passos: FirstStep[] = [];
 
   if (permissions.has("product.view")) {
@@ -131,7 +71,7 @@ export async function getFirstSteps(
       label: "Cadastrar produtos",
       hint: "O item da cotação grava as unidades do cadastro do produto.",
       href: "/produtos",
-      done: (produtos.count ?? 0) > 0,
+      done: s.produtosAtivos > 0,
     });
   }
 
@@ -140,7 +80,7 @@ export async function getFirstSteps(
       label: "Cadastrar fornecedores",
       hint: "Com contato de WhatsApp, é para lá que a cotação vai.",
       href: "/fornecedores",
-      done: (fornecedores.count ?? 0) > 0,
+      done: s.fornecedoresAtivos > 0,
     });
   }
 
@@ -149,7 +89,7 @@ export async function getFirstSteps(
       label: "Abrir a primeira rodada de compras",
       hint: "Reúne os produtos, convida os fornecedores e compara os preços.",
       href: "/compras/nova",
-      done: (rodadas.count ?? 0) > 0,
+      done: s.rodadasTotal > 0,
     });
   }
 
