@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { requireActiveCompany, requireUser } from "@/lib/auth/dal";
+import {
+  getPermissions,
+  requireActiveCompany,
+  requireUser,
+} from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -327,9 +331,25 @@ export async function addRoundSupplier(
  * Sem item ou sem fornecedor a rodada não teria o que cotar, então a checagem
  * vem antes — o banco aceitaria a mudança de status, mas o resultado seria uma
  * rodada ativa e vazia.
+ *
+ * Devolve estado em vez de lançar. Lançando, a frase "a rodada precisa de ao
+ * menos um item e um fornecedor" — escrita para uma pessoa ler — chegava como
+ * página de erro, e o usuário perdia a tela em que estava.
  */
-export async function activateRound(roundId: string) {
+export async function activateRound(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
   const company = await requireActiveCompany();
+
+  const roundId = String(formData.get("roundId") ?? "");
+  if (!roundId) return { error: "Rodada inválida." };
+
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("purchase_round.update")) {
+    return { error: "Seu papel não permite iniciar rodadas." };
+  }
+
   const supabase = await createServerSupabaseClient();
 
   const [items, suppliers] = await Promise.all([
@@ -345,21 +365,32 @@ export async function activateRound(roundId: string) {
       .eq("purchase_round_id", roundId),
   ]);
 
-  if ((items.count ?? 0) === 0 || (suppliers.count ?? 0) === 0) {
-    throw new Error(
-      "A rodada precisa de ao menos um item e um fornecedor para começar.",
-    );
+  if ((items.count ?? 0) === 0) {
+    return { error: "Adicione ao menos um produto antes de iniciar a rodada." };
+  }
+  if ((suppliers.count ?? 0) === 0) {
+    return {
+      error: "Convide ao menos um fornecedor antes de iniciar a rodada.",
+    };
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("purchase_rounds")
     .update({ status: "active", started_at: new Date().toISOString() })
     .eq("id", roundId)
     .eq("company_id", company.companyId)
-    .eq("status", "draft");
+    .eq("status", "draft")
+    .select("id");
 
-  if (error) throw new Error(describeWriteError(error));
+  if (error) return { error: describeWriteError(error) };
+
+  // Nenhuma linha atualizada com UPDATE sem erro significa que o filtro de
+  // status não casou: alguém já iniciou esta rodada em outra aba.
+  if (!data || data.length === 0) {
+    return { error: "Esta rodada já foi iniciada." };
+  }
 
   revalidatePath(`/compras/${roundId}`);
   revalidatePath("/compras");
+  return { error: null, savedAt: Date.now() };
 }

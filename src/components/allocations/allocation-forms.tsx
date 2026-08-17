@@ -1,10 +1,11 @@
 "use client";
 
-import { AlertCircle, ShoppingBag } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { ErrorLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,19 +16,6 @@ import {
 
 const selectClass =
   "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
-
-function ErrorLine({ error }: { error: string | null }) {
-  if (!error) return null;
-  return (
-    <p
-      role="alert"
-      className="bg-destructive-soft text-destructive flex items-start gap-2 rounded-md px-3 py-2 text-sm"
-    >
-      <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-      {error}
-    </p>
-  );
-}
 
 function Submit({ label, busy }: { label: string; busy: string }) {
   const { pending } = useFormStatus();

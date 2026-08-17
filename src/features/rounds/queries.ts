@@ -2,7 +2,15 @@ import "server-only";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-/** Rodadas com o progresso já calculado pela view v_purchase_round_progress. */
+/**
+ * Rodadas com o progresso já calculado pela view v_purchase_round_progress.
+ *
+ * A ordenação não é enfeite: a view agrupa, e sem `order by` o Postgres não
+ * promete ordem alguma — a lista podia aparecer numa sequência diferente a cada
+ * visita, sem nada ter mudado. `created_at` entrou na view na 0030 justamente
+ * para isto, e o desempate por id garante ordem total quando duas rodadas
+ * nascem no mesmo instante.
+ */
 export async function listRoundsWithProgress(companyId: string) {
   const supabase = await createServerSupabaseClient();
 
@@ -18,10 +26,13 @@ export async function listRoundsWithProgress(companyId: string) {
       suppliers_completed,
       suppliers_pending,
       items_confirmed,
-      orders_created
+      orders_created,
+      created_at
     `,
     )
-    .eq("company_id", companyId);
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false })
+    .order("purchase_round_id", { ascending: false });
 
   if (error) throw new Error(`Falha ao listar rodadas: ${error.message}`);
   return data ?? [];

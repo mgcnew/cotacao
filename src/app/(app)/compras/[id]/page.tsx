@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
 import {
+  ActivateRoundForm,
   GroupForm,
   ItemForm,
   SupplierPickerForm,
@@ -19,8 +20,6 @@ import {
 } from "@/components/ui/table";
 import { SendControls } from "@/components/rounds/send-controls";
 import { listProducts } from "@/features/products/queries";
-import { activateRound } from "@/features/rounds/actions";
-import { markSupplierSent } from "@/features/rounds/send";
 import {
   getRound,
   listRoundGroups,
@@ -28,14 +27,11 @@ import {
   listRoundSuppliers,
   listSelectableSuppliers,
 } from "@/features/rounds/queries";
+import {
+  ROUND_STATUS_LABEL,
+  roundStatusTone,
+} from "@/features/rounds/status";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: "Preparação",
-  active: "Em andamento",
-  completed: "Concluída",
-  cancelled: "Cancelada",
-};
 
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", {
@@ -91,15 +87,15 @@ export default async function RodadaPage({
             <Button asChild size="sm" variant="outline">
               <Link href={`/compras/${id}/alocacao`}>Decidir compra</Link>
             </Button>
-            <Badge variant={round.status === "active" ? "default" : "secondary"}>
-              {STATUS_LABEL[round.status] ?? round.status}
+            <Badge variant={roundStatusTone(round.status)}>
+              {ROUND_STATUS_LABEL[round.status] ?? round.status}
             </Badge>
             {podeMontar ? (
-              <form action={activateRound.bind(null, round.id)}>
-                <Button type="submit" size="sm">
-                  Iniciar rodada
-                </Button>
-              </form>
+              <ActivateRoundForm
+                roundId={round.id}
+                itemCount={items.length}
+                supplierCount={roundSuppliers.length}
+              />
             ) : null}
           </>
         }
@@ -247,7 +243,13 @@ export default async function RodadaPage({
                 <TableHead>Enviado</TableHead>
                 <TableHead>Abriu o link</TableHead>
                 <TableHead>Respondeu</TableHead>
-                {podeEnviar ? <TableHead className="w-0" /> : null}
+                {podeEnviar ? (
+                  // Cabeçalho vazio deixa a coluna sem nome para quem usa
+                  // leitor de tela. O rótulo existe, apenas não é desenhado.
+                  <TableHead className="w-0">
+                    <span className="sr-only">Envio</span>
+                  </TableHead>
+                ) : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -302,21 +304,12 @@ export default async function RodadaPage({
                   </TableCell>
                   {podeEnviar ? (
                     <TableCell>
-                      <div className="flex flex-col items-end gap-2">
-                        <SendControls
-                          roundSupplierId={rs.id}
-                          roundId={id}
-                        />
-                        {rs.first_sent_at ? null : (
-                          <form
-                            action={markSupplierSent.bind(null, rs.id, id)}
-                          >
-                            <Button type="submit" size="sm" variant="outline">
-                              Marquei como enviado
-                            </Button>
-                          </form>
-                        )}
-                      </div>
+                      <SendControls
+                        roundSupplierId={rs.id}
+                        roundId={id}
+                        supplierName={rs.suppliers?.name ?? "fornecedor"}
+                        alreadySent={rs.first_sent_at !== null}
+                      />
                     </TableCell>
                   ) : null}
                 </TableRow>

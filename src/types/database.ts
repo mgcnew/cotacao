@@ -2426,6 +2426,7 @@ export type Database = {
       v_purchase_round_progress: {
         Row: {
           company_id: string | null
+          created_at: string | null
           items_confirmed: number | null
           orders_created: number | null
           purchase_round_id: string | null

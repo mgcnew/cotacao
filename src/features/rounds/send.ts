@@ -122,23 +122,34 @@ export async function generateQuotationLink(
  * Aqui usamos a RPC, que é onde o schema centralizou o efeito: além de gravar
  * `first_sent_at`, ela ativa a rodada, abre os grupos e emite o evento de
  * domínio `quotation.sent`. Fazer UPDATE direto pularia tudo isso.
+ *
+ * Devolve estado em vez de lançar: falha de envio é recado para quem enviou,
+ * não motivo para perder a tela.
  */
 export async function markSupplierSent(
-  roundSupplierId: string,
-  roundId: string,
-) {
+  _prev: SendState,
+  formData: FormData,
+): Promise<SendState> {
   const company = await requireActiveCompany();
-  const supabase = await createServerSupabaseClient();
 
+  const roundSupplierId = String(formData.get("roundSupplierId") ?? "");
+  const roundId = String(formData.get("roundId") ?? "");
+  if (!roundSupplierId) return { error: "Fornecedor inválido." };
+
+  const supabase = await createServerSupabaseClient();
   const { error } = await supabase.rpc("rpc_mark_round_supplier_sent", {
     p_company_id: company.companyId,
     p_round_supplier_id: roundSupplierId,
   });
 
   if (error) {
-    throw new Error(`Não foi possível marcar como enviado: ${error.message}`);
+    if (error.message.includes("Permissão")) {
+      return { error: "Seu papel não permite enviar cotações." };
+    }
+    return { error: `Não foi possível marcar como enviado: ${error.message}` };
   }
 
   revalidatePath(`/compras/${roundId}`);
   revalidatePath("/compras");
+  return { error: null, savedAt: Date.now() };
 }

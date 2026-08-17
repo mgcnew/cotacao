@@ -14,14 +14,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { listRoundsWithProgress } from "@/features/rounds/queries";
+import {
+  ROUND_STATUS_LABEL,
+  roundStatusTone,
+} from "@/features/rounds/status";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: "Preparação",
-  active: "Em andamento",
-  completed: "Concluída",
-  cancelled: "Cancelada",
-};
 
 export default async function ComprasPage() {
   const company = await requireActiveCompany();
@@ -77,8 +74,8 @@ export default async function ComprasPage() {
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary">
-                    {STATUS_LABEL[round.status ?? ""] ?? round.status}
+                  <Badge variant={roundStatusTone(round.status ?? "")}>
+                    {ROUND_STATUS_LABEL[round.status ?? ""] ?? round.status}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">

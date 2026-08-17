@@ -65,10 +65,16 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   )
 }
 
+/**
+ * `scope="col"` por padrão: sem ele, o leitor de tela lê as células soltas, sem
+ * dizer de que coluna são. Vem antes de `...props` para que uma tabela com
+ * cabeçalho de linha possa passar `scope="row"` e vencer o padrão.
+ */
 function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <th
       data-slot="table-head"
+      scope="col"
       className={cn(
         "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
         className
