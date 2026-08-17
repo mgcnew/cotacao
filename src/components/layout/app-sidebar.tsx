@@ -3,6 +3,7 @@
 import { ChevronLeft } from "lucide-react";
 import * as React from "react";
 
+import { GlobalSearch } from "@/components/layout/global-search";
 import { NavLink, useVisibleNav } from "@/components/layout/nav-list";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +46,11 @@ export function AppSidebar({ companyName, permissions }: Props) {
           </span>
         )}
       </div>
+
+      <GlobalSearch
+        collapsed={collapsed}
+        onExpand={() => setCollapsed(false)}
+      />
 
       <nav className="flex flex-1 flex-col gap-0.5 px-2 py-2">
         {!collapsed && (

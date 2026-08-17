@@ -2609,6 +2609,24 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_search_company: {
+        Args: {
+          p_company_id: string
+          p_limit?: number
+          p_orders?: boolean
+          p_products?: boolean
+          p_rounds?: boolean
+          p_suppliers?: boolean
+          p_term: string
+        }
+        Returns: {
+          id: string
+          kind: string
+          rank: number
+          subtitle: string
+          title: string
+        }[]
+      }
       rpc_service_log_communication: {
         Args: {
           p_channel: string

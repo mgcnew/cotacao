@@ -1,6 +1,7 @@
 import { Package } from "lucide-react";
 import Link from "next/link";
 
+
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -18,13 +19,39 @@ import { getCatalogCounts, listProducts } from "@/features/products/queries";
 import { PRODUCT_PURPOSE_LABEL } from "@/features/products/purposes";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
-export default async function ProdutosPage() {
+/**
+ * Compara nomes ignorando acento e caixa.
+ *
+ * A busca global chega aqui por `?busca=`, e ela é acento-insensível no banco
+ * (0031). Filtrar com `includes` cru desfaria isso: quem clicasse em "Linguiça"
+ * na sugestão cairia numa lista vazia.
+ */
+function normaliza(valor: string): string {
+  return valor
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+export default async function ProdutosPage({
+  searchParams,
+}: PageProps<"/produtos">) {
   const company = await requireActiveCompany();
   const [products, counts, permissions] = await Promise.all([
     listProducts(company.companyId),
     getCatalogCounts(company.companyId),
     getPermissions(company.companyId),
   ]);
+
+  const parametros = await searchParams;
+  const bruto = Array.isArray(parametros.busca)
+    ? parametros.busca[0]
+    : parametros.busca;
+  const busca = (bruto ?? "").trim();
+
+  const visiveis = busca
+    ? products.filter((p) => normaliza(p.name).includes(normaliza(busca)))
+    : products;
 
   const podeCriar = permissions.has("product.create");
   const podeEditar = permissions.has("product.update");
@@ -51,7 +78,30 @@ export default async function ProdutosPage() {
         }
       />
 
-      {products.length === 0 ? (
+      {busca ? (
+        <p className="border-border bg-surface-sunken text-fg-muted mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm">
+          <span>
+            Mostrando {visiveis.length}{" "}
+            {visiveis.length === 1 ? "produto" : "produtos"} para “{busca}”.
+          </span>
+          <Link href="/produtos" className="text-primary text-xs">
+            Ver o catálogo inteiro
+          </Link>
+        </p>
+      ) : null}
+
+      {visiveis.length === 0 && busca ? (
+        <EmptyState
+          icon={Package}
+          title="Nenhum produto com esse nome"
+          description={`Nada no catálogo casa com “${busca}”.`}
+          action={
+            <Button asChild size="sm" variant="outline">
+              <Link href="/produtos">Ver o catálogo inteiro</Link>
+            </Button>
+          }
+        />
+      ) : products.length === 0 ? (
         <EmptyState
           icon={Package}
           title="Catálogo vazio"
@@ -93,7 +143,7 @@ export default async function ProdutosPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {products.map((product) => (
+            {visiveis.map((product) => (
               <TableRow key={product.id}>
                 <TableCell className="font-medium">{product.name}</TableCell>
                 <TableCell className="text-fg-muted">
