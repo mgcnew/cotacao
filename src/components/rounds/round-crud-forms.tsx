@@ -165,6 +165,7 @@ export function QuotationItemRow({
   removed,
   editable,
   groups,
+  hideGroup = false,
 }: {
   roundId: string;
   itemId: string;
@@ -177,6 +178,12 @@ export function QuotationItemRow({
   removed: boolean;
   editable: boolean;
   groups: Option[];
+  /**
+   * Esconde a coluna de grupo — usado quando a rodada tem só o grupo padrão e
+   * a coluna repetiria "Geral" em toda linha. O valor continua sendo enviado,
+   * por campo oculto: escondê-lo da tela não pode significar perdê-lo.
+   */
+  hideGroup?: boolean;
 }) {
   const [updateState, updateAction] = useActionState<RoundFormState, FormData>(
     updateQuotationItem,
@@ -197,7 +204,9 @@ export function QuotationItemRow({
         <TableCell className={`font-medium ${removed ? "line-through" : ""}`}>
           {productName}
         </TableCell>
-        <TableCell className="text-fg-muted">{groupName}</TableCell>
+        {hideGroup ? null : (
+          <TableCell className="text-fg-muted">{groupName}</TableCell>
+        )}
         <TableCell className="text-right tabular-nums">
           {QTY.format(quantity)}{" "}
           <span className="text-fg-subtle text-xs">{purchaseUnit}</span>
@@ -251,24 +260,26 @@ export function QuotationItemRow({
   return (
     <TableRow>
       <TableCell className="font-medium">{productName}</TableCell>
-      <TableCell>
-        <label className="sr-only" htmlFor={`grupo-${itemId}`}>
-          Grupo de {productName}
-        </label>
-        <select
-          id={`grupo-${itemId}`}
-          name="groupId"
-          form={formId}
-          defaultValue={groupId}
-          className={selectClass}
-        >
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-      </TableCell>
+      {hideGroup ? null : (
+        <TableCell>
+          <label className="sr-only" htmlFor={`grupo-${itemId}`}>
+            Grupo de {productName}
+          </label>
+          <select
+            id={`grupo-${itemId}`}
+            name="groupId"
+            form={formId}
+            defaultValue={groupId}
+            className={selectClass}
+          >
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </TableCell>
+      )}
       <TableCell className="text-right">
         <label className="sr-only" htmlFor={`qtd-${itemId}`}>
           Quantidade de {productName}
@@ -291,6 +302,12 @@ export function QuotationItemRow({
         <form action={updateAction} id={formId}>
           <input type="hidden" name="roundId" value={roundId} />
           <input type="hidden" name="itemId" value={itemId} />
+          {/* Sem a coluna de grupo, o valor vem daqui — e mora DENTRO do
+              formulário, não solto entre as células: `<input>` filho direto de
+              `<tr>` é HTML inválido, e o navegador o joga para fora da tabela. */}
+          {hideGroup ? (
+            <input type="hidden" name="groupId" value={groupId} />
+          ) : null}
           <div className="flex items-center justify-end gap-1">
             <Salvar label="Salvar" />
             <Button

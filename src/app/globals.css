@@ -221,6 +221,13 @@
   --color-input-bg: var(--input-bg);
 
   /* semânticas + variantes soft (badges, alertas, chips) */
+  /* O texto que vai EM CIMA do primary. A variável existia desde o início, mas
+     não estava exposta ao Tailwind: `text-primary-fg` aparecia em seis lugares
+     (sigla da empresa no menu, contador do sino, passo atual da rodada) e não
+     gerava classe nenhuma — o texto herdava a cor de fora e ficava cinza sobre
+     roxo. Como o resto do tema usa `-fg`, o conserto é expor o token, não
+     reescrever os seis. */
+  --color-primary-fg: var(--primary-fg);
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
   --color-primary-line: var(--primary-line);

@@ -1,13 +1,13 @@
 "use client";
 
 import { Play } from "lucide-react";
-import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
   activateRound,
   addQuotationItem,
@@ -92,7 +92,7 @@ export function GroupForm({ roundId }: { roundId: string }) {
       className="border-border bg-surface flex flex-col gap-3 rounded-xl border p-4"
     >
       <input type="hidden" name="roundId" value={roundId} />
-      <div className="flex flex-col gap-1.5">
+      <div className="flex max-w-md flex-col gap-1.5">
         <label htmlFor="group-name" className="text-fg text-sm font-medium">
           Novo grupo
         </label>
@@ -115,6 +115,14 @@ export function GroupForm({ roundId }: { roundId: string }) {
   );
 }
 
+/**
+ * Adicionar produto à rodada.
+ *
+ * A pergunta "em que grupo?" só aparece quando ela tem resposta possível — ou
+ * seja, quando a rodada tem mais de um grupo. Com um só, o campo seria uma
+ * escolha entre uma coisa: três palavras de jargão a mais para quem só quer
+ * cotar frango. Sem o campo, a action põe o item no grupo padrão.
+ */
 export function ItemForm({
   roundId,
   groups,
@@ -129,6 +137,8 @@ export function ItemForm({
     { error: null },
   );
 
+  const perguntarGrupo = groups.length > 1;
+
   return (
     <form
       key={state.savedAt}
@@ -137,7 +147,17 @@ export function ItemForm({
     >
       <input type="hidden" name="roundId" value={roundId} />
 
-      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_8rem]">
+      <div
+        // `minmax(0,…)` e não `1fr`: numa tela larga o seletor de produto
+        // esticava até a borda e a quantidade ficava sozinha no outro extremo,
+        // longe do campo com que ela se lê junto.
+        className={cn(
+          "grid gap-3",
+          perguntarGrupo
+            ? "sm:grid-cols-[minmax(0,22rem)_minmax(0,16rem)_8rem]"
+            : "sm:grid-cols-[minmax(0,28rem)_8rem]",
+        )}
+      >
         <div className="flex flex-col gap-1.5">
           <label htmlFor="productId" className="text-fg text-sm font-medium">
             Produto
@@ -152,19 +172,26 @@ export function ItemForm({
           </select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="groupId" className="text-fg text-sm font-medium">
-            Grupo
-          </label>
-          <select id="groupId" name="groupId" required className={selectClass}>
-            <option value="">Selecione…</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {perguntarGrupo ? (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="groupId" className="text-fg text-sm font-medium">
+              Grupo
+            </label>
+            <select
+              id="groupId"
+              name="groupId"
+              required
+              defaultValue={groups[0].id}
+              className={selectClass}
+            >
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="quantity" className="text-fg text-sm font-medium">
@@ -186,7 +213,7 @@ export function ItemForm({
         <p className="text-fg-subtle text-xs">
           As unidades vêm do cadastro do produto e ficam gravadas no item.
         </p>
-        <Submit label="Adicionar item" />
+        <Submit label="Adicionar produto" />
       </div>
     </form>
   );
@@ -212,7 +239,7 @@ export function SupplierPickerForm({
     >
       <input type="hidden" name="roundId" value={roundId} />
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex max-w-md flex-col gap-1.5">
         <label htmlFor="supplierId" className="text-fg text-sm font-medium">
           Convidar fornecedor
         </label>
@@ -240,17 +267,18 @@ export function SupplierPickerForm({
 }
 
 /**
- * Iniciar a rodada.
+ * O terceiro passo: conferir e iniciar.
  *
- * Confirma antes porque a interface não tem caminho de volta: iniciada, a
- * montagem se encerra e a edição passa a ser controlada (documento mestre,
- * 6.4). O painel diz o que vai acontecer em vez de perguntar "tem certeza?",
- * que é a pergunta que ninguém lê.
+ * Antes isto era um botão no cabeçalho que abria uma confirmação. Virou o
+ * fim da trilha, onde já se está olhando o que foi montado — a confirmação
+ * deixou de ser um passo extra porque o resumo ESTÁ na tela, e não escondido
+ * atrás de um "tem certeza?" que ninguém lê.
  *
- * O erro aparece aqui, ao lado do botão. Antes a action lançava, e a mensagem
- * "adicione ao menos um produto" chegava como página de erro.
+ * Quando falta alguma coisa, o painel diz o que falta em vez de deixar a pessoa
+ * apertar e descobrir pelo erro. O botão continua existindo e continua sendo
+ * validado no servidor: o que some é a surpresa.
  */
-export function ActivateRoundForm({
+export function StartRoundPanel({
   roundId,
   itemCount,
   supplierCount,
@@ -259,64 +287,74 @@ export function ActivateRoundForm({
   itemCount: number;
   supplierCount: number;
 }) {
-  const [confirmando, setConfirmando] = React.useState(false);
   const [state, formAction] = useActionState<RoundFormState, FormData>(
     activateRound,
     { error: null },
   );
 
-  if (!confirmando) {
-    return (
-      <div className="flex flex-col items-end gap-1.5">
-        <Button
-          type="button"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => setConfirmando(true)}
-        >
-          <Play className="size-3.5" aria-hidden /> Iniciar rodada
-        </Button>
-        <ErrorLine error={state.error} />
-      </div>
-    );
-  }
+  const faltando: string[] = [];
+  if (itemCount === 0) faltando.push("adicionar ao menos um produto");
+  if (supplierCount === 0) faltando.push("convidar ao menos um fornecedor");
+  const pronto = faltando.length === 0;
 
   return (
     <form
       action={formAction}
-      className="border-border bg-surface flex w-full max-w-sm flex-col gap-3 rounded-xl border p-4"
+      className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-4"
     >
       <input type="hidden" name="roundId" value={roundId} />
 
-      <div>
-        <h2 className="text-fg text-sm font-semibold">Iniciar a rodada</h2>
-        <p className="text-fg-muted mt-1 text-sm">
-          {itemCount} {itemCount === 1 ? "produto" : "produtos"} e{" "}
-          {supplierCount}{" "}
-          {supplierCount === 1 ? "fornecedor" : "fornecedores"} entram na
-          cotação. Depois disso a montagem se encerra: acrescentar item ou
-          fornecedor passa a ser alteração controlada.
-        </p>
-        <p className="text-fg-subtle mt-1 text-xs">
-          Iniciar não envia nada. O link de cada fornecedor continua sendo um
-          passo separado.
-        </p>
-      </div>
+      {pronto ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-fg text-sm">
+            <strong className="font-semibold tabular-nums">
+              {itemCount} {itemCount === 1 ? "produto" : "produtos"}
+            </strong>{" "}
+            {itemCount === 1 ? "vai" : "vão"} para{" "}
+            <strong className="font-semibold tabular-nums">
+              {supplierCount}{" "}
+              {supplierCount === 1 ? "fornecedor" : "fornecedores"}
+            </strong>
+            .
+          </p>
+          <p className="text-fg-muted text-sm">
+            Iniciar não envia nada ainda. Ela sai da preparação e cada
+            fornecedor ganha o seu link, que você manda quando quiser — pelo
+            WhatsApp aqui mesmo ou copiando o texto.
+          </p>
+          <p className="text-fg-subtle text-xs">
+            A partir daí a montagem se encerra: acrescentar produto ou
+            fornecedor passa a ser alteração controlada.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <p className="text-fg text-sm font-medium">
+            Falta {faltando.join(" e ")}.
+          </p>
+          <p className="text-fg-muted text-sm">
+            É o mínimo para haver cotação: alguém precisa receber a pergunta, e
+            precisa haver o que perguntar.
+          </p>
+        </div>
+      )}
 
       <ErrorLine error={state.error} />
 
-      <div className="flex items-center gap-2">
-        <Submit label="Iniciar rodada" />
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="text-fg-subtle"
-          onClick={() => setConfirmando(false)}
-        >
-          Voltar
-        </Button>
+      <div>
+        <SubmitIniciar habilitado={pronto} />
       </div>
     </form>
+  );
+}
+
+/** O botão de iniciar, ciente de estar enviando. */
+function SubmitIniciar({ habilitado }: { habilitado: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" size="sm" className="gap-1.5" disabled={!habilitado || pending}>
+      <Play className="size-3.5" aria-hidden />
+      {pending ? "Iniciando…" : "Iniciar rodada"}
+    </Button>
   );
 }

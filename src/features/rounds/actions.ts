@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { GRUPO_PADRAO } from "@/features/rounds/groups";
 import {
   getPermissions,
   requireActiveCompany,
@@ -83,8 +84,60 @@ export async function createRound(
 
   if (error) return { error: describeWriteError(error) };
 
+  // A rodada nasce com um grupo, e o produto precisa de um para entrar. Quem
+  // está começando não tem por que aprender o que é "grupo" para cotar cinco
+  // itens — abre a rodada e já adiciona produto. Quem organiza por grupo
+  // renomeia este e cria os outros.
+  await supabase.from("purchase_round_groups").insert({
+    company_id: company.companyId,
+    purchase_round_id: data.id,
+    name: GRUPO_PADRAO,
+  });
+
   revalidatePath("/compras");
   redirect(`/compras/${data.id}`);
+}
+
+/**
+ * O grupo onde o produto cai quando ninguém escolheu um.
+ *
+ * Existe como rede: rodadas criadas antes deste comportamento não têm o grupo
+ * padrão, e o insert de `createRound` pode falhar sem derrubar a criação. Em
+ * qualquer um dos casos, adicionar um produto continua funcionando.
+ */
+async function grupoPadrao(
+  companyId: string,
+  roundId: string,
+): Promise<{ id: string } | { erro: string }> {
+  const supabase = await createServerSupabaseClient();
+
+  const { data: existentes, error: leituraErro } = await supabase
+    .from("purchase_round_groups")
+    .select("id, name")
+    .eq("company_id", companyId)
+    .eq("purchase_round_id", roundId)
+    .order("created_at", { ascending: true });
+
+  if (leituraErro) {
+    return { erro: `Falha ao carregar os grupos: ${leituraErro.message}` };
+  }
+
+  const jaTem =
+    existentes?.find((g) => g.name === GRUPO_PADRAO) ?? existentes?.[0];
+  if (jaTem) return { id: jaTem.id };
+
+  const { data: criado, error } = await supabase
+    .from("purchase_round_groups")
+    .insert({
+      company_id: companyId,
+      purchase_round_id: roundId,
+      name: GRUPO_PADRAO,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { erro: describeWriteError(error) };
+  return { id: criado.id };
 }
 
 export async function createRoundGroup(
@@ -145,7 +198,11 @@ export async function addQuotationItem(
   const parsed = z
     .object({
       roundId: z.uuid({ error: "Rodada inválida" }),
-      groupId: z.uuid({ error: "Escolha o grupo" }),
+      // Sem grupo é o caso comum: a tela só pergunta isso quando a rodada tem
+      // mais de um, e aí cai no padrão logo abaixo. Vazio, e não ausente —
+      // `formData.get` de um campo que não existe devolve `null`, que
+      // `.optional()` recusaria; a normalização é no `safeParse`.
+      groupId: z.union([z.uuid({ error: "Grupo inválido" }), z.literal("")]),
       productId: z.uuid({ error: "Escolha o produto" }),
       quantity: z
         .string()
@@ -158,12 +215,19 @@ export async function addQuotationItem(
     })
     .safeParse({
       roundId: formData.get("roundId"),
-      groupId: formData.get("groupId"),
+      groupId: formData.get("groupId") ?? "",
       productId: formData.get("productId"),
       quantity: formData.get("quantity"),
     });
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  let groupId: string = parsed.data.groupId;
+  if (!groupId) {
+    const grupo = await grupoPadrao(company.companyId, parsed.data.roundId);
+    if ("erro" in grupo) return { error: grupo.erro };
+    groupId = grupo.id;
+  }
 
   const supabase = await createServerSupabaseClient();
 
@@ -186,7 +250,7 @@ export async function addQuotationItem(
     .insert({
       company_id: company.companyId,
       purchase_round_id: parsed.data.roundId,
-      group_id: parsed.data.groupId,
+      group_id: groupId,
       product_id: parsed.data.productId,
       requested_quantity: parsed.data.quantity,
       purchase_unit_id: product.purchase_unit_id,
@@ -357,7 +421,10 @@ export async function activateRound(
       .from("quotation_items")
       .select("id", { count: "exact", head: true })
       .eq("company_id", company.companyId)
-      .eq("purchase_round_id", roundId),
+      .eq("purchase_round_id", roundId)
+      // Item retirado da rodada continua na tabela, cancelado — contá-lo
+      // deixaria iniciar uma rodada em que sobrou apenas o que foi tirado.
+      .eq("commercial_status", "open"),
     supabase
       .from("round_suppliers")
       .select("id", { count: "exact", head: true })
