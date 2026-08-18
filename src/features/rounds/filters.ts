@@ -75,5 +75,10 @@ export function parseRoundFilters(
 }
 
 export function hasAnyRoundFilter(f: RoundFilters): boolean {
-  return Object.values(f).some((v) => v !== null);
+  return contarRoundFilters(f) > 0;
+}
+
+/** Quantos filtros estão valendo — é o número que aparece no botão. */
+export function contarRoundFilters(f: RoundFilters): number {
+  return Object.values(f).filter((v) => v !== null).length;
 }

@@ -90,7 +90,12 @@ export function parseOrderFilters(
 }
 
 export function hasAnyOrderFilter(f: OrderFilters): boolean {
-  return Object.values(f).some((v) => v !== null);
+  return contarOrderFilters(f) > 0;
+}
+
+/** Quantos filtros estão valendo — é o número que aparece no botão. */
+export function contarOrderFilters(f: OrderFilters): number {
+  return Object.values(f).filter((v) => v !== null).length;
 }
 
 /**

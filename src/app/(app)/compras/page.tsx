@@ -10,8 +10,9 @@ import {
   MetricsSkeleton,
   TableSkeleton,
 } from "@/components/layout/page-skeleton";
+import { FilterDialog } from "@/components/layout/filter-dialog";
 import { NewRoundDialog } from "@/components/rounds/round-dialogs";
-import { RoundFilterBar } from "@/components/rounds/round-filter-bar";
+import { RoundFilterFields } from "@/components/rounds/round-filter-bar";
 import { RoundRow } from "@/components/rounds/round-row";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  contarRoundFilters,
   hasAnyRoundFilter,
   parseRoundFilters,
   type RoundFilters,
@@ -41,11 +43,11 @@ const DATA = new Intl.DateTimeFormat("pt-BR", {
 
 /**
  * A tela em si só decide o que pode ser mostrado — decisão barata, uma ida ao
- * banco — e entrega o cabeçalho e os filtros na hora. A lista, que é a parte
+ * banco — e entrega o cabeçalho na hora. A lista, que é a parte
  * cara, chega depois pelo `Suspense` abaixo.
  *
- * A ordem em que a tela aparece passa a ser a ordem em que ela é útil: o botão
- * "Nova rodada" e o campo de busca já respondem enquanto as rodadas ainda vêm.
+ * A ordem em que a tela aparece passa a ser a ordem em que ela é útil: os
+ * botões de "Filtros" e "Nova rodada" já respondem enquanto as rodadas vêm.
  */
 export default async function ComprasPage({
   searchParams,
@@ -63,10 +65,25 @@ export default async function ComprasPage({
       <PageHeader
         title="Compras"
         description="Cada rodada reúne produtos, convida fornecedores, recebe preços e vira pedido."
-        action={podeCriar ? <NewRoundDialog /> : null}
+        action={
+          <>
+            <FilterDialog
+              basePath="/compras"
+              ativos={contarRoundFilters(filters)}
+              ajuda={
+                <>
+                  &quot;Em aberto&quot; é preparação e andamento juntos.
+                  &quot;Aguardando resposta&quot; é rodada ativa com fornecedor
+                  devendo preço.
+                </>
+              }
+            >
+              <RoundFilterFields filters={filters} />
+            </FilterDialog>
+            {podeCriar ? <NewRoundDialog /> : null}
+          </>
+        }
       />
-
-      <RoundFilterBar filters={filters} />
 
       {/* A `key` amarra a fronteira ao recorte: mudar o filtro traz o esqueleto
           de volta, em vez de deixar na tela a lista do filtro anterior como se

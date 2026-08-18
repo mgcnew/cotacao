@@ -4,10 +4,11 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
+import { FilterDialog } from "@/components/layout/filter-dialog";
 import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
 import {
-  FilterBarSkeleton,
+  FormSkeleton,
   MetricsSkeleton,
   TableSkeleton,
 } from "@/components/layout/page-skeleton";
@@ -15,7 +16,7 @@ import {
   NewOrderDialog,
   SendOrderDialog,
 } from "@/components/orders/order-dialogs";
-import { OrderFilterBar } from "@/components/orders/order-filter-bar";
+import { OrderFilterFields } from "@/components/orders/order-filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  contarOrderFilters,
   hasAnyOrderFilter,
   listOrderFilterSuppliers,
   parseOrderFilters,
@@ -58,11 +60,15 @@ function formatarDia(iso: string): string {
 }
 
 /**
- * Cabeçalho na hora; filtros e lista em fronteiras separadas.
+ * Cabeçalho na hora; o resto em fronteiras separadas.
  *
- * São duas porque têm donos diferentes: a barra de filtros depende da lista de
- * fornecedores, a tabela depende dos pedidos do recorte. Numa fronteira só, a
- * mais lenta das duas seguraria a outra na tela de espera sem precisar.
+ * São duas porque têm donos diferentes: os campos de filtro dependem da lista
+ * de fornecedores, a tabela depende dos pedidos do recorte. Numa fronteira só,
+ * a mais lenta das duas seguraria a outra na tela de espera sem precisar.
+ *
+ * Os filtros deixaram de ocupar um bloco no alto da tela e passaram a morar
+ * atrás de um botão, ao lado de "Novo pedido" — mas a consulta continua saindo
+ * durante a renderização da página, e não no clique.
  */
 export default async function PedidosPage({
   searchParams,
@@ -81,19 +87,40 @@ export default async function PedidosPage({
         title="Pedidos"
         description="Da geração ao recebimento. O pedido é enviado ao fornecedor, confirmado por ele, e só então a mercadoria pode dar entrada."
         action={
-          podeCriar ? (
-            // A promessa vai SEM `await`: as opções do pedido saem agora, em
-            // paralelo com a lista, e o modal as desembrulha lá dentro. Esperar
-            // por elas aqui seguraria o cabeçalho inteiro por uma consulta que
-            // só importa depois do clique.
-            <NewOrderDialog opcoes={listDirectOrderOptions(company.companyId)} />
-          ) : null
+          <>
+            <FilterDialog
+              basePath="/pedidos"
+              ativos={contarOrderFilters(filters)}
+              ajuda={
+                <>
+                  &quot;Em aberto&quot; é tudo que ainda não foi recebido nem
+                  cancelado. &quot;Atrasados&quot; é prazo vencido com
+                  mercadoria por vir.
+                </>
+              }
+            >
+              {/* A fronteira fica DENTRO do modal: o botão aparece na hora, e a
+                  lista de fornecedores — que é a única consulta destes campos —
+                  chega junto com o resto da página, muito antes do clique. */}
+              <Suspense fallback={<FormSkeleton fields={5} />}>
+                <CamposDeFiltro
+                  companyId={company.companyId}
+                  filters={filters}
+                />
+              </Suspense>
+            </FilterDialog>
+            {podeCriar ? (
+              // A promessa vai SEM `await`: as opções do pedido saem agora, em
+              // paralelo com a lista, e o modal as desembrulha lá dentro.
+              // Esperar por elas aqui seguraria o cabeçalho inteiro por uma
+              // consulta que só importa depois do clique.
+              <NewOrderDialog
+                opcoes={listDirectOrderOptions(company.companyId)}
+              />
+            ) : null}
+          </>
         }
       />
-
-      <Suspense fallback={<FilterBarSkeleton fields={5} />}>
-        <BarraDeFiltros companyId={company.companyId} filters={filters} />
-      </Suspense>
 
       {/* A `key` amarra a fronteira ao recorte: mudar o filtro traz o esqueleto
           de volta, em vez de deixar na tela a lista do filtro anterior. */}
@@ -117,7 +144,7 @@ export default async function PedidosPage({
   );
 }
 
-async function BarraDeFiltros({
+async function CamposDeFiltro({
   companyId,
   filters,
 }: {
@@ -125,7 +152,7 @@ async function BarraDeFiltros({
   filters: OrderFilters;
 }) {
   const suppliers = await listOrderFilterSuppliers(companyId);
-  return <OrderFilterBar filters={filters} suppliers={suppliers} />;
+  return <OrderFilterFields filters={filters} suppliers={suppliers} />;
 }
 
 async function ListaDePedidos({

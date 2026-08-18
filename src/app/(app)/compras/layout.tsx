@@ -7,11 +7,20 @@
  * cima da lista, que continua montada atrás — a rolagem, os filtros e o
  * recorte ficam onde estavam.
  *
- * Fora desse caso a vaga fica vazia: `@modal/default.tsx` e o `[...tudo]`
- * devolvem `null`. O `[...tudo]` é o que faz o modal FECHAR ao navegar para
- * dentro da rodada — sem ele, uma rota paralela que deixa de casar continua
- * desenhada na tela, e "Decidir compra" abriria a alocação com o modal
- * pendurado por cima.
+ * Fora desse caso a vaga fica vazia: `@modal/default.tsx` e as rotas de
+ * `sem-modal.tsx` devolvem `null`. São elas que fazem o modal FECHAR ao
+ * navegar para dentro da rodada — sem elas, uma rota paralela que deixa de
+ * casar continua desenhada na tela, e "Decidir compra" abre a alocação com o
+ * modal pendurado por cima.
+ *
+ * SE O MODAL PARAR DE ABRIR EM DESENVOLVIMENTO
+ *
+ * O `next dev` do 16.3.0 vai acumulando o marcador de interceptação no caminho
+ * que o cliente pede — `/compras/(.)(.)(.)<id>` — depois de muitas
+ * recompilações na mesma sessão. Quando isso acontece o pedido devolve 500 e o
+ * navegador cai na página inteira, que é o mesmo conteúdo; nada se perde.
+ * Reiniciar o `next dev` limpa. Não acontece no `next build` + `next start`:
+ * lá o manifesto de rotas é calculado uma vez.
  */
 export default function ComprasLayout({
   children,
