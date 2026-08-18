@@ -78,6 +78,7 @@ export function SendOrderControls({
   contacts,
   previewMessage,
   evolutionReady,
+  aoEnviar,
 }: {
   orderId: string;
   revisionId: string;
@@ -86,17 +87,39 @@ export function SendOrderControls({
   previewMessage: string;
   /** A Evolution está configurada no servidor? Sem ela, só o caminho manual. */
   evolutionReady: boolean;
+  /**
+   * Avisa quem está por fora que o pedido saiu de verdade — é o que fecha o
+   * modal quando estes controles moram dentro de um.
+   *
+   * Só os dois caminhos que movem o pedido avisam. Gerar link também devolve
+   * `savedAt`, e quem olhasse só para isso fecharia o modal no meio do
+   * caminho, antes de a mensagem sair.
+   */
+  aoEnviar?: () => void;
 }) {
+  // Envolver a action é o jeito honesto de saber que ela deu certo: o aviso sai
+  // depois da resposta, dentro da transição, e não numa releitura de estado
+  // durante a renderização de outro componente.
+  const avisar = React.useCallback(
+    (acao: (prev: OrderActionState, fd: FormData) => Promise<OrderActionState>) =>
+      async (prev: OrderActionState, fd: FormData) => {
+        const resultado = await acao(prev, fd);
+        if (!resultado.error) aoEnviar?.();
+        return resultado;
+      },
+    [aoEnviar],
+  );
+
   const [linkState, generateAction] = useActionState<
     OrderActionState,
     FormData
   >(generateOrderLink, { error: null });
   const [sentState, sendAction] = useActionState<OrderActionState, FormData>(
-    markOrderSent,
+    avisar(markOrderSent),
     { error: null },
   );
   const [autoState, autoAction] = useActionState<OrderActionState, FormData>(
-    sendOrderWhatsApp,
+    avisar(sendOrderWhatsApp),
     { error: null },
   );
 

@@ -11,7 +11,10 @@ import {
   MetricsSkeleton,
   TableSkeleton,
 } from "@/components/layout/page-skeleton";
-import { NewOrderDialog } from "@/components/orders/order-dialogs";
+import {
+  NewOrderDialog,
+  SendOrderDialog,
+} from "@/components/orders/order-dialogs";
 import { OrderFilterBar } from "@/components/orders/order-filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -218,6 +221,9 @@ async function ListaDePedidos({
                 // botão vira apenas a porta de entrada do pedido.
                 const podeAgir =
                   passo.permission === null || permissions.has(passo.permission);
+                // Rascunho com permissão de envio: o passo acontece no modal,
+                // sobre a própria lista.
+                const enviarAqui = order.status === "draft" && podeAgir;
 
                 return (
                   <TableRow key={order.id}>
@@ -295,22 +301,37 @@ async function ListaDePedidos({
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        asChild
-                        size="sm"
-                        variant={
-                          passo.pending && podeAgir ? "default" : "outline"
-                        }
-                      >
-                        <Link href={`/pedidos/${order.id}`} prefetch={false}>
-                          <span className="hidden sm:inline">
-                            {podeAgir ? passo.label : "Abrir"}
-                          </span>
-                          <span className="sm:hidden">
-                            {podeAgir ? passo.shortLabel : "Abrir"}
-                          </span>
-                        </Link>
-                      </Button>
+                      {/* Enviar é o único passo que cabe inteiro aqui: são
+                          alguns botões e uma mensagem para conferir, sem
+                          formulário longo. Dar entrada mexe em quantidade por
+                          item e depende do que já foi recebido — esse continua
+                          sendo assunto da tela do pedido. */}
+                      {enviarAqui ? (
+                        <SendOrderDialog
+                          orderId={order.id}
+                          orderNumber={order.orderNumber}
+                          supplierName={order.supplierName}
+                          rotulo={passo.label}
+                          rotuloCurto={passo.shortLabel}
+                        />
+                      ) : (
+                        <Button
+                          asChild
+                          size="sm"
+                          variant={
+                            passo.pending && podeAgir ? "default" : "outline"
+                          }
+                        >
+                          <Link href={`/pedidos/${order.id}`} prefetch={false}>
+                            <span className="hidden sm:inline">
+                              {podeAgir ? passo.label : "Abrir"}
+                            </span>
+                            <span className="sm:hidden">
+                              {podeAgir ? passo.shortLabel : "Abrir"}
+                            </span>
+                          </Link>
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

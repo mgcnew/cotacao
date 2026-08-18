@@ -5,7 +5,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { buildOrderMessage, normalizePhone } from "@/features/orders/message";
-import { getOrderMessageContext } from "@/features/orders/queries";
+import {
+  getDraftRevision,
+  getOrder,
+  getOrderMessageContext,
+  listOrderSendContacts,
+} from "@/features/orders/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { publicEnv } from "@/lib/env";
 import {
@@ -492,6 +497,95 @@ async function issueOrderLink(
     // o link recém-criado.
     message: context ? buildOrderMessage(context, url) : null,
   };
+}
+
+/**
+ * O painel de envio inteiro, buscado no instante em que o modal abre.
+ *
+ * POR QUE ESTE NÃO VEM PRONTO DA PÁGINA
+ *
+ * O pedido direto consegue chegar com as opções já resolvidas porque
+ * fornecedores e produtos são os mesmos para a lista toda. Aqui não: contatos,
+ * rascunho e mensagem são de UM pedido. Numa lista de duzentos, adiantar isso
+ * seria duzentas leituras para abrir, no máximo, uma.
+ *
+ * Então busca-se ao abrir — em duas idas, não em quatro. Pedido e rascunho são
+ * independentes e vão juntos; contatos e mensagem dependem do que a primeira
+ * ida trouxe (o fornecedor e o id do rascunho) e vão juntos em seguida.
+ *
+ * Erro não é lançado: vira `{ erro }` e aparece dentro do modal. Uma exceção
+ * aqui chegaria ao cliente como promessa rejeitada, e derrubaria a tela inteira
+ * por causa de uma caixa que nem chegou a abrir.
+ */
+export type OrderSendPanel =
+  | { ok: false; erro: string }
+  | {
+      ok: true;
+      orderNumber: number;
+      supplierName: string;
+      revisionId: string;
+      contacts: {
+        id: string;
+        name: string;
+        role: string | null;
+        whatsapp: string;
+        isPrimary: boolean;
+      }[];
+      /** A mensagem sem link — ele ainda não existe neste momento. */
+      previewMessage: string;
+      evolutionReady: boolean;
+    };
+
+export async function loadOrderSendPanel(
+  orderId: string,
+): Promise<OrderSendPanel> {
+  try {
+    const company = await requireActiveCompany();
+    const permissions = await getPermissions(company.companyId);
+
+    if (!permissions.has("order.send")) {
+      return { ok: false, erro: "Seu papel não permite enviar pedidos." };
+    }
+
+    const [order, draft] = await Promise.all([
+      getOrder(company.companyId, orderId),
+      getDraftRevision(company.companyId, orderId),
+    ]);
+
+    if (!order) return { ok: false, erro: "Pedido não encontrado." };
+    if (order.status === "cancelled" || order.status === "received") {
+      return { ok: false, erro: "Este pedido já está encerrado." };
+    }
+    if (!draft) {
+      return {
+        ok: false,
+        erro: "Não há revisão em rascunho para enviar. Abra o pedido para ver em que pé ele está.",
+      };
+    }
+
+    const [contacts, context] = await Promise.all([
+      listOrderSendContacts(company.companyId, order.suppliers.id),
+      getOrderMessageContext(company.companyId, orderId, draft.id),
+    ]);
+
+    return {
+      ok: true,
+      orderNumber: order.order_number,
+      supplierName: order.suppliers.name,
+      revisionId: draft.id,
+      contacts,
+      previewMessage: context ? buildOrderMessage(context, null) : "",
+      evolutionReady: isEvolutionConfigured(),
+    };
+  } catch (cause) {
+    return {
+      ok: false,
+      erro:
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível carregar o envio deste pedido.",
+    };
+  }
 }
 
 /** Gera o link e a mensagem para quem vai enviar o pedido na mão. */
