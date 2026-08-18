@@ -21,6 +21,8 @@ export type OrderActionState = {
   /** Mensagem pronta do pedido, já com o link, para copiar ou mandar. */
   message?: string;
   savedAt?: number;
+  /** Id do pedido recém-criado, para quem quiser abri-lo em seguida. */
+  orderId?: string;
 };
 
 /**
@@ -232,7 +234,15 @@ export async function createDirectOrder(
   }
 
   revalidatePath("/pedidos");
-  redirect(`/pedidos/${orderId}`);
+
+  // Para onde ir depois é de quem chamou, não da action — mesma razão do
+  // `createRound`: pela página `/pedidos/novo` o certo é abrir o pedido, porque
+  // a pessoa foi até lá para isso; pelo modal da lista, ficar onde está com a
+  // linha nova já na tabela. Um `redirect()` fixo aqui arrastaria o modal junto.
+  if (formData.get("apos") === "abrir") {
+    redirect(`/pedidos/${orderId}`);
+  }
+  return { error: null, savedAt: Date.now(), orderId };
 }
 
 /**

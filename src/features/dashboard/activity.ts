@@ -49,6 +49,13 @@ const EVENT_LABEL: Record<string, string> = {
   "commercial_divergence.detected": "Preço da nota diferente do combinado",
   "commercial_divergence.status_changed": "Divergência de preço tratada",
   "receipt.posted": "Mercadoria recebida",
+  // Ciclo de vida da rodada (0034). Sem estes, o feed mostrava a chave crua —
+  // "purchase_round.cancelled" — que é o nome interno do evento, não notícia.
+  "purchase_round.activated": "Rodada de compras iniciada",
+  "purchase_round.completed": "Rodada de compras concluída",
+  "purchase_round.cancelled": "Rodada de compras cancelada",
+  "purchase_round_group.closed": "Grupo da rodada fechado",
+  "purchase_round_group.cancelled": "Grupo da rodada cancelado",
 };
 
 /**

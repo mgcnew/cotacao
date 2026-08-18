@@ -1,4 +1,4 @@
-import { ClipboardList, Plus } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -11,6 +11,7 @@ import {
   MetricsSkeleton,
   TableSkeleton,
 } from "@/components/layout/page-skeleton";
+import { NewOrderDialog } from "@/components/orders/order-dialogs";
 import { OrderFilterBar } from "@/components/orders/order-filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ import {
   type OrderFilters,
 } from "@/features/orders/filters";
 import {
+  listDirectOrderOptions,
   listOrders,
   orderNextStep,
   ORDERS_PAGE_SIZE,
@@ -77,11 +79,11 @@ export default async function PedidosPage({
         description="Da geração ao recebimento. O pedido é enviado ao fornecedor, confirmado por ele, e só então a mercadoria pode dar entrada."
         action={
           podeCriar ? (
-            <Button asChild size="sm" className="gap-1.5">
-              <Link href="/pedidos/novo">
-                <Plus className="size-3.5" aria-hidden /> Novo pedido
-              </Link>
-            </Button>
+            // A promessa vai SEM `await`: as opções do pedido saem agora, em
+            // paralelo com a lista, e o modal as desembrulha lá dentro. Esperar
+            // por elas aqui seguraria o cabeçalho inteiro por uma consulta que
+            // só importa depois do clique.
+            <NewOrderDialog opcoes={listDirectOrderOptions(company.companyId)} />
           ) : null
         }
       />
