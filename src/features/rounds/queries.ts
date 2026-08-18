@@ -29,6 +29,7 @@ export async function listRoundsWithProgress(
       `
       purchase_round_id,
       title,
+      notes,
       status,
       total_items,
       total_suppliers,

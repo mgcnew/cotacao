@@ -2428,6 +2428,7 @@ export type Database = {
           company_id: string | null
           created_at: string | null
           items_confirmed: number | null
+          notes: string | null
           orders_created: number | null
           purchase_round_id: string | null
           status: string | null

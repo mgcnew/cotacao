@@ -11,14 +11,12 @@ import {
   TableSkeleton,
 } from "@/components/layout/page-skeleton";
 import { NewRoundDialog } from "@/components/rounds/round-dialogs";
-import { ResponseProgress } from "@/components/rounds/response-progress";
 import { RoundFilterBar } from "@/components/rounds/round-filter-bar";
-import { Badge } from "@/components/ui/badge";
+import { RoundRow } from "@/components/rounds/round-row";
 import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -32,11 +30,7 @@ import {
   listRoundsWithProgress,
   summarizeRounds,
 } from "@/features/rounds/queries";
-import {
-  ROUND_STATUS_LABEL,
-  roundNextStep,
-  roundStatusTone,
-} from "@/features/rounds/status";
+import { roundNextStep } from "@/features/rounds/status";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", {
@@ -109,6 +103,7 @@ async function ListaDeRodadas({
   podeCriar: boolean;
 }) {
   const filtrando = hasAnyRoundFilter(filters);
+  const podeEditarRodada = permissions.has("purchase_round.update");
   const rounds = await listRoundsWithProgress(companyId, filters);
   const resumo = summarizeRounds(rounds);
 
@@ -199,64 +194,31 @@ async function ListaDeRodadas({
                 passo.permission === null || permissions.has(passo.permission);
 
               return (
-                <TableRow key={id}>
-                  <TableCell>
-                    {/* Sem prefetch nos links de linha: com casca de
-                        carregamento no destino, cada rota visível viraria uma
-                        renderização no servidor por rodada listada. O menu
-                        lateral segue prefazendo — seis links, sempre os mesmos. */}
-                    <Link
-                      href={`/compras/${id}`} prefetch={false}
-                      className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline"
-                    >
-                      {round.title}
-                    </Link>
-                    <span className="text-fg-muted block max-w-36 text-xs whitespace-normal tabular-nums sm:hidden">
-                      {round.total_items}{" "}
-                      {Number(round.total_items) === 1 ? "produto" : "produtos"}{" "}
-                      · {round.suppliers_completed} de {round.total_suppliers}{" "}
-                      responderam
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-fg-muted hidden text-xs tabular-nums lg:table-cell">
-                    {round.created_at
+                <RoundRow
+                  key={id}
+                  round={{
+                    id,
+                    title: round.title ?? "",
+                    notes: round.notes,
+                    criadaEm: round.created_at
                       ? DATA.format(new Date(round.created_at))
-                      : "—"}
-                  </TableCell>
-                  <TableCell className="text-fg-muted hidden text-right tabular-nums sm:table-cell">
-                    {round.total_items}
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <ResponseProgress
-                      completed={Number(round.suppliers_completed ?? 0)}
-                      total={Number(round.total_suppliers ?? 0)}
-                    />
-                  </TableCell>
-                  <TableCell className="text-fg-muted hidden text-right tabular-nums lg:table-cell">
-                    {round.orders_created}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={roundStatusTone(status)}>
-                      {ROUND_STATUS_LABEL[status] ?? status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      asChild
-                      size="sm"
-                      variant={passo.pending && podeAgir ? "default" : "outline"}
-                    >
-                      <Link href={`/compras/${id}${passo.path}`} prefetch={false}>
-                        <span className="hidden sm:inline">
-                          {podeAgir ? passo.label : "Abrir"}
-                        </span>
-                        <span className="sm:hidden">
-                          {podeAgir ? passo.shortLabel : "Abrir"}
-                        </span>
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                      : "—",
+                    totalItems: Number(round.total_items ?? 0),
+                    suppliersCompleted: Number(round.suppliers_completed ?? 0),
+                    totalSuppliers: Number(round.total_suppliers ?? 0),
+                    ordersCreated: Number(round.orders_created ?? 0),
+                    status,
+                  }}
+                  passo={passo}
+                  podeAgir={podeAgir}
+                  // Rodada encerrada não se renomeia: concluída ou cancelada,
+                  // ela é registro do que aconteceu.
+                  podeEditar={
+                    podeEditarRodada &&
+                    status !== "completed" &&
+                    status !== "cancelled"
+                  }
+                />
               );
             })}
           </TableBody>
