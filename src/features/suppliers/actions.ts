@@ -19,7 +19,26 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * antigos continuam apontando para ele.
  */
 
-export type SupplierFormState = { error: string | null };
+/**
+ * O estado devolve os valores junto com o erro — e isso não é capricho.
+ *
+ * `<form action={fn}>` com Server Action reseta os campos não controlados
+ * depois de submeter, inclusive quando a action recusa. Num formulário de dez
+ * campos isso significa perder tudo por causa de um CNPJ com um dígito errado.
+ * Devolvendo o que foi digitado, a tela os repõe como `defaultValue`.
+ */
+export type SupplierFormState = {
+  error: string | null;
+  valores?: Record<string, string>;
+  /**
+   * Muda a cada resposta, mesmo quando o erro é o mesmo de antes.
+   *
+   * É o que a tela usa como `key` para remontar o formulário: `defaultValue`
+   * não mexe em campo já montado, então repor o digitado exige remontagem — e
+   * errar duas vezes o mesmo CNPJ tem que repor nas duas.
+   */
+  respondidoEm?: number;
+};
 export type ContactFormState = { error: string | null; savedAt?: number };
 
 function describeWriteError(
@@ -74,6 +93,37 @@ const supplierSchema = z.object({
     .transform((v) => (v ? v : null)),
 });
 
+/**
+ * Cadastra o fornecedor e, na mesma transação, o primeiro contato.
+ *
+ * Eram dois momentos: gravava a empresa, redirecionava para a ficha e só lá
+ * pedia o contato. Nada obrigava a concluir — e fornecedor sem contato ativo
+ * não aparece em `listSelectableSuppliers`, ou seja, não pode ser convidado
+ * para rodada nenhuma. O fluxo partido convidava a esse estado, em silêncio.
+ *
+ * A RPC da 0036 grava os dois de uma vez: ou existem os dois, ou nenhum. O
+ * contato continua opcional, porque comprar no balcão é legítimo; o que mudou
+ * é que agora dá para preencher tudo sem trocar de tela.
+ */
+/** O que a pessoa digitou, para repor na tela quando a gravação é recusada. */
+function digitados(formData: FormData): Record<string, string> {
+  const campos = [
+    "name",
+    "legalName",
+    "documentNumber",
+    "purchaseLimit",
+    "notes",
+    "contactName",
+    "contactRole",
+    "contactWhatsapp",
+    "contactPhone",
+    "contactEmail",
+  ];
+  return Object.fromEntries(
+    campos.map((c) => [c, String(formData.get(c) ?? "")]),
+  );
+}
+
 export async function createSupplier(
   _prev: SupplierFormState,
   formData: FormData,
@@ -89,33 +139,73 @@ export async function createSupplier(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0].message };
+    return {
+      error: parsed.error.issues[0].message,
+      valores: digitados(formData),
+      respondidoEm: Date.now(),
+    };
+  }
+
+  const contatoNome = String(formData.get("contactName") ?? "").trim();
+  const contatoWhats = String(formData.get("contactWhatsapp") ?? "").trim();
+  const contatoFone = String(formData.get("contactPhone") ?? "").trim();
+  const contatoEmail = String(formData.get("contactEmail") ?? "").trim();
+
+  // A RPC também recusa, mas dizer aqui evita a ida ao banco e devolve a frase
+  // no idioma da tela em vez do erro do Postgres.
+  if (contatoNome && !contatoWhats && !contatoFone && !contatoEmail) {
+    return {
+      error: "Informe ao menos um meio de contato.",
+      valores: digitados(formData),
+      respondidoEm: Date.now(),
+    };
+  }
+  if (!contatoNome && (contatoWhats || contatoFone || contatoEmail)) {
+    return {
+      error: "Informe o nome do contato.",
+      valores: digitados(formData),
+      respondidoEm: Date.now(),
+    };
   }
 
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("suppliers")
-    .insert({
-      company_id: company.companyId,
-      name: parsed.data.name,
-      legal_name: parsed.data.legalName,
-      document_number: parsed.data.documentNumber,
-      purchase_limit: parsed.data.purchaseLimit,
-      notes: parsed.data.notes,
-    })
-    .select("id")
-    .single();
+  const { data, error } = await supabase.rpc(
+    "rpc_create_supplier_with_contact",
+    {
+      p_company_id: company.companyId,
+      p_name: parsed.data.name,
+      // O schema normaliza campo vazio para `null`; a RPC tem default, então
+      // `undefined` é o jeito de dizer "não passe este argumento".
+      p_legal_name: parsed.data.legalName ?? undefined,
+      p_document_number: parsed.data.documentNumber ?? undefined,
+      p_purchase_limit: parsed.data.purchaseLimit ?? undefined,
+      p_notes: parsed.data.notes ?? undefined,
+      p_contact_name: contatoNome || undefined,
+      p_contact_role:
+        String(formData.get("contactRole") ?? "").trim() || undefined,
+      p_contact_whatsapp: contatoWhats || undefined,
+      p_contact_phone: contatoFone || undefined,
+      p_contact_email: contatoEmail || undefined,
+    },
+  );
 
   if (error) {
     if (error.code === "23505") {
-      return { error: "Já existe um fornecedor com este CNPJ nesta empresa." };
+      return {
+        error: "Já existe um fornecedor com este CNPJ nesta empresa.",
+        valores: digitados(formData),
+        respondidoEm: Date.now(),
+      };
     }
-    return { error: describeWriteError(error, "um fornecedor") };
+    return {
+      error: describeWriteError(error, "um fornecedor"),
+      valores: digitados(formData),
+      respondidoEm: Date.now(),
+    };
   }
 
   revalidatePath("/fornecedores");
-  // Vai direto para a ficha: sem contato, o fornecedor não recebe cotação.
-  redirect(`/fornecedores/${data.id}`);
+  redirect(`/fornecedores/${data}`);
 }
 
 export async function setSupplierStatus(supplierId: string, status: string) {
@@ -252,7 +342,9 @@ export async function setContactActive(
     .from("supplier_contacts")
     // Contato desativado não pode continuar sendo o principal: o índice único
     // só considera principal ativo, e um inativo marcado confundiria a leitura.
-    .update(isActive ? { is_active: true } : { is_active: false, is_primary: false })
+    .update(
+      isActive ? { is_active: true } : { is_active: false, is_primary: false },
+    )
     .eq("id", contactId)
     .eq("company_id", company.companyId);
 

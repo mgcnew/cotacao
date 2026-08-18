@@ -18,7 +18,7 @@ export default async function NovoFornecedorPage() {
     <div className="w-full max-w-3xl">
       <PageHeader
         title="Novo fornecedor"
-        description="Dados da empresa. Contatos, categorias atendidas e agenda de compras vêm na ficha, logo depois."
+        description="Dados da empresa e o contato por onde a cotação chega, no mesmo formulário. Categorias atendidas e agenda de compras vêm na ficha, depois."
         action={
           <Button asChild size="sm" variant="ghost">
             <Link href="/fornecedores">Cancelar</Link>

@@ -64,9 +64,14 @@ export default async function FornecedoresPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              {/* No celular sobram Fornecedor e Situação. CNPJ e contato
+                  reaparecem embaixo do nome — e o contato é o que mais importa
+                  ver ali: sem ele o fornecedor não entra em rodada. */}
               <TableHead>Fornecedor</TableHead>
-              <TableHead>CNPJ</TableHead>
-              <TableHead>Contato principal</TableHead>
+              <TableHead className="hidden lg:table-cell">CNPJ</TableHead>
+              <TableHead className="hidden sm:table-cell">
+                Contato principal
+              </TableHead>
               <TableHead>Situação</TableHead>
             </TableRow>
           </TableHeader>
@@ -91,11 +96,20 @@ export default async function FornecedoresPage() {
                         {supplier.legal_name}
                       </span>
                     ) : null}
+                    <span className="text-fg-muted block max-w-40 text-xs whitespace-normal sm:hidden">
+                      {principal
+                        ? `${principal.name}${
+                            principal.whatsapp ?? principal.phone
+                              ? ` · ${principal.whatsapp ?? principal.phone}`
+                              : ""
+                          }`
+                        : "sem contato — não entra em rodada"}
+                    </span>
                   </TableCell>
-                  <TableCell className="text-fg-muted font-mono text-xs">
+                  <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
                     {formatCnpj(supplier.document_number) || "—"}
                   </TableCell>
-                  <TableCell className="text-fg-muted">
+                  <TableCell className="text-fg-muted hidden sm:table-cell">
                     {principal ? (
                       <>
                         {principal.name}
@@ -104,7 +118,9 @@ export default async function FornecedoresPage() {
                         </span>
                       </>
                     ) : (
-                      "—"
+                      <span className="text-fg-subtle">
+                        sem contato — não entra em rodada
+                      </span>
                     )}
                   </TableCell>
                   <TableCell>

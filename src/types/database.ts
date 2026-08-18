@@ -2568,6 +2568,22 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_create_supplier_with_contact: {
+        Args: {
+          p_company_id: string
+          p_contact_email?: string
+          p_contact_name?: string
+          p_contact_phone?: string
+          p_contact_role?: string
+          p_contact_whatsapp?: string
+          p_document_number?: string
+          p_legal_name?: string
+          p_name: string
+          p_notes?: string
+          p_purchase_limit?: number
+        }
+        Returns: string
+      }
       rpc_create_order_revision: {
         Args: {
           p_company_id: string
