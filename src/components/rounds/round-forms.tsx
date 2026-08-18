@@ -31,24 +31,30 @@ function Submit({ label }: { label: string }) {
   );
 }
 
-/** Criação da rodada, na página própria. */
-export function RoundForm() {
-  const [state, formAction] = useActionState<RoundFormState, FormData>(
-    createRound,
-    { error: null },
-  );
+/**
+ * Os campos da rodada.
+ *
+ * Separados do formulário porque existem em dois lugares agora — a página
+ * `/compras/nova` e o modal da lista — e são exatamente os mesmos campos com o
+ * mesmo texto de ajuda. O que muda entre os dois é o que acontece depois de
+ * salvar, não o que se digita.
+ *
+ * `idPrefixo` existe porque `id` tem que ser único na página: com o modal
+ * aberto por cima de uma lista, dois campos "title" quebrariam a associação do
+ * `<label>` — e um rótulo que aponta para o campo errado é pior do que nenhum.
+ */
+export function CamposDaRodada({ idPrefixo = "" }: { idPrefixo?: string }) {
+  const idTitulo = `${idPrefixo}title`;
+  const idNotas = `${idPrefixo}notes`;
 
   return (
-    <form
-      action={formAction}
-      className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5"
-    >
+    <>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="title" className="text-fg text-sm font-medium">
+        <label htmlFor={idTitulo} className="text-fg text-sm font-medium">
           Título
         </label>
         <Input
-          id="title"
+          id={idTitulo}
           name="title"
           required
           autoFocus
@@ -61,11 +67,35 @@ export function RoundForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="notes" className="text-fg text-sm font-medium">
+        <label htmlFor={idNotas} className="text-fg text-sm font-medium">
           Observações <span className="text-fg-subtle">(opcional)</span>
         </label>
-        <Input id="notes" name="notes" maxLength={500} />
+        <Input id={idNotas} name="notes" maxLength={500} />
       </div>
+    </>
+  );
+}
+
+/**
+ * Criação da rodada na página própria.
+ *
+ * Aqui, salvar abre a rodada: quem digitou o endereço `/compras/nova` veio
+ * montar a cotação, e parar numa lista seria um clique a mais para voltar ao
+ * que já estava fazendo. É o `apos=abrir` que diz isso à action.
+ */
+export function RoundForm() {
+  const [state, formAction] = useActionState<RoundFormState, FormData>(
+    createRound,
+    { error: null },
+  );
+
+  return (
+    <form
+      action={formAction}
+      className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5"
+    >
+      <input type="hidden" name="apos" value="abrir" />
+      <CamposDaRodada />
 
       <ErrorLine error={state.error} />
 

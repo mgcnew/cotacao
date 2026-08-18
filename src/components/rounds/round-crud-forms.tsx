@@ -5,6 +5,7 @@ import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { useFechaAoSalvar } from "@/components/layout/fecha-ao-salvar";
 import { ErrorLine } from "@/components/layout/form-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,26 +47,6 @@ function Salvar({ label = "Salvar" }: { label?: string }) {
 }
 
 type Option = { id: string; name: string };
-
-/**
- * Fecha o painel quando a action confirma o salvamento.
- *
- * Ajuste de estado durante a renderização, e não `useEffect`: é o padrão que o
- * React recomenda para reagir a um valor novo, e evita o render em cascata que
- * um efeito com setState provoca. O `savedAt` visto fica guardado para que
- * reabrir o painel depois de salvar continue funcionando.
- */
-function useFechaAoSalvar(savedAt: number | undefined) {
-  const [aberto, setAberto] = React.useState(false);
-  const [savedVisto, setSavedVisto] = React.useState(savedAt);
-
-  if (savedAt !== savedVisto) {
-    setSavedVisto(savedAt);
-    if (savedAt) setAberto(false);
-  }
-
-  return [aberto, setAberto] as const;
-}
 
 /**
  * Corrige título e observações da rodada.

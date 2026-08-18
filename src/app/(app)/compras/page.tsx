@@ -1,4 +1,4 @@
-import { Plus, ShoppingCart } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -10,6 +10,7 @@ import {
   MetricsSkeleton,
   TableSkeleton,
 } from "@/components/layout/page-skeleton";
+import { NewRoundDialog } from "@/components/rounds/round-dialogs";
 import { ResponseProgress } from "@/components/rounds/response-progress";
 import { RoundFilterBar } from "@/components/rounds/round-filter-bar";
 import { Badge } from "@/components/ui/badge";
@@ -68,15 +69,7 @@ export default async function ComprasPage({
       <PageHeader
         title="Compras"
         description="Cada rodada reúne produtos, convida fornecedores, recebe preços e vira pedido."
-        action={
-          podeCriar ? (
-            <Button asChild size="sm" className="gap-1.5">
-              <Link href="/compras/nova">
-                <Plus className="size-3.5" aria-hidden /> Nova rodada
-              </Link>
-            </Button>
-          ) : null
-        }
+        action={podeCriar ? <NewRoundDialog /> : null}
       />
 
       <RoundFilterBar filters={filters} />
@@ -166,9 +159,7 @@ async function ListaDeRodadas({
                 <Link href="/compras">Limpar filtros</Link>
               </Button>
             ) : podeCriar ? (
-              <Button asChild size="sm">
-                <Link href="/compras/nova">Criar a primeira rodada</Link>
-              </Button>
+              <NewRoundDialog rotulo="Criar a primeira rodada" />
             ) : null
           }
         />

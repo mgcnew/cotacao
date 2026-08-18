@@ -24,7 +24,12 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  *  - fornecedor e item precisam ser da MESMA rodada.
  */
 
-export type RoundFormState = { error: string | null; savedAt?: number };
+export type RoundFormState = {
+  error: string | null;
+  savedAt?: number;
+  /** Id da rodada recém-criada, para quem quiser abri-la em seguida. */
+  roundId?: string;
+};
 
 function describeWriteError(error: { code?: string; message: string }): string {
   if (error.code === "23505") {
@@ -50,6 +55,18 @@ const roundSchema = z.object({
     .transform((v) => (v ? v : null)),
 });
 
+/**
+ * Cria a rodada.
+ *
+ * Para onde ir depois é decisão de quem chamou, não da action: pela página
+ * `/compras/nova` o certo é abrir a rodada recém-criada, porque a pessoa foi
+ * até lá para montá-la; pelo modal da lista o certo é ficar onde está, com a
+ * linha nova já na tabela. Um `redirect()` fixo aqui dentro tornaria o modal
+ * impossível — ele arrastaria a tela junto.
+ *
+ * O campo `apos` carrega essa escolha, e o id volta no estado para quem quiser
+ * navegar por conta própria.
+ */
 export async function createRound(
   _prev: RoundFormState,
   formData: FormData,
@@ -91,7 +108,11 @@ export async function createRound(
   });
 
   revalidatePath("/compras");
-  redirect(`/compras/${data.id}`);
+
+  if (formData.get("apos") === "abrir") {
+    redirect(`/compras/${data.id}`);
+  }
+  return { error: null, savedAt: Date.now(), roundId: data.id };
 }
 
 /**
