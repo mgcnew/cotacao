@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
+import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -18,11 +19,22 @@ function SubmitButton() {
   );
 }
 
-export function UnitForm() {
-  const [state, formAction] = useActionState<UnitFormState, FormData>(
-    createUnit,
-    { error: null },
+export function UnitForm({ aoSalvar }: { aoSalvar?: () => void } = {}) {
+  // Envolver a action é como o formulário avisa quem está por fora que gravou —
+  // é o que fecha o modal quando ele é aberto de dentro do cadastro de produto.
+  // Fora do modal, `aoSalvar` não existe e nada muda.
+  const acao = React.useCallback(
+    async (anterior: UnitFormState, dados: FormData) => {
+      const resultado = await createUnit(anterior, dados);
+      if (!resultado.error) aoSalvar?.();
+      return resultado;
+    },
+    [aoSalvar],
   );
+
+  const [state, formAction] = useActionState<UnitFormState, FormData>(acao, {
+    error: null,
+  });
 
   return (
     <form

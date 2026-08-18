@@ -5,6 +5,10 @@ import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import {
+  NovaCategoriaDialog,
+  NovaUnidadeDialog,
+} from "@/components/products/catalog-dialogs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createProduct, type ProductFormState } from "@/features/products/actions";
@@ -35,18 +39,24 @@ function Field({
   label,
   htmlFor,
   hint,
+  acao,
   children,
 }: {
   label: string;
   htmlFor: string;
   hint?: string;
+  /** Atalho ao lado do rótulo — "criar o que falta", sem sair daqui. */
+  acao?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-fg text-sm font-medium">
-        {label}
-      </label>
+      <div className="flex min-h-8 items-center justify-between gap-2">
+        <label htmlFor={htmlFor} className="text-fg text-sm font-medium">
+          {label}
+        </label>
+        {acao}
+      </div>
       {children}
       {hint ? <p className="text-fg-subtle text-xs">{hint}</p> : null}
     </div>
@@ -88,7 +98,11 @@ export function ProductForm({ categories, units, attributes }: Props) {
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Categoria" htmlFor="categoryId">
+          <Field
+            label="Categoria"
+            htmlFor="categoryId"
+            acao={<NovaCategoriaDialog />}
+          >
             <select
               id="categoryId"
               name="categoryId"
@@ -125,13 +139,16 @@ export function ProductForm({ categories, units, attributes }: Props) {
       </section>
 
       <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5">
-        <div>
-          <h2 className="text-fg text-sm font-semibold">Unidades</h2>
-          <p className="text-fg-muted mt-1 text-sm">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-fg text-sm font-semibold">Unidades</h2>
+            <p className="text-fg-muted mt-1 text-sm">
             É o que permite comparar propostas diferentes. Se um fornecedor cota
             o pacote com 400 e outro o pacote com 500, a comparação só faz
-            sentido numa base comum.
-          </p>
+              sentido numa base comum.
+            </p>
+          </div>
+          <NovaUnidadeDialog />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">

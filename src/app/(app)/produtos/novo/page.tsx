@@ -1,8 +1,6 @@
-import { FolderTree } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { ProductForm } from "@/components/products/product-form";
 import { Button } from "@/components/ui/button";
@@ -13,6 +11,14 @@ import {
 } from "@/features/products/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
+/**
+ * Cadastro de produto — a única porta do catálogo.
+ *
+ * Antes, chegar aqui sem nenhuma categoria ativa dava numa parede: a tela
+ * mandava para `/produtos/categorias`, e o que já tinha sido digitado se perdia
+ * no caminho de volta. Agora categoria e unidade se criam de dentro do próprio
+ * formulário, e não existe mais estado em que o cadastro não possa começar.
+ */
 export default async function NovoProdutoPage() {
   const company = await requireActiveCompany();
   const [categories, units, attributes, permissions] = await Promise.all([
@@ -49,33 +55,20 @@ export default async function NovoProdutoPage() {
         }
       />
 
-      {categoriasAtivas.length === 0 ? (
-        <EmptyState
-          icon={FolderTree}
-          title="Cadastre uma categoria primeiro"
-          description="Todo produto pertence a uma categoria, e nenhuma está ativa nesta empresa."
-          action={
-            <Button asChild size="sm">
-              <Link href="/produtos/categorias">Ir para categorias</Link>
-            </Button>
-          }
-        />
-      ) : (
-        <ProductForm
-          categories={categoriasAtivas}
-          units={unidadesAtivas}
-          attributes={attributes
-            .filter((a) => a.isActive)
-            .map((a) => ({
-              id: a.id,
-              categoryId: a.categoryId,
-              name: a.name,
-              dataType: a.dataType,
-              unitSymbol: a.unitSymbol,
-              isRequired: a.isRequired,
-            }))}
-        />
-      )}
+      <ProductForm
+        categories={categoriasAtivas}
+        units={unidadesAtivas}
+        attributes={attributes
+          .filter((a) => a.isActive)
+          .map((a) => ({
+            id: a.id,
+            categoryId: a.categoryId,
+            name: a.name,
+            dataType: a.dataType,
+            unitSymbol: a.unitSymbol,
+            isRequired: a.isRequired,
+          }))}
+      />
     </div>
   );
 }

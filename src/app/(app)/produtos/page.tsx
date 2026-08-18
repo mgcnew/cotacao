@@ -60,21 +60,13 @@ export default async function ProdutosPage({
     <div className="w-full">
       <PageHeader
         title="Produtos"
-        description={`Catálogo único: revenda e uso interno. ${counts.categories} categorias, ${counts.units} unidades cadastradas.`}
+        description="Catálogo único: revenda e uso interno, separados pela finalidade."
         action={
-          <div className="flex items-center gap-2">
-            <Button asChild size="sm" variant="ghost">
-              <Link href="/produtos/categorias">Categorias</Link>
+          podeCriar ? (
+            <Button asChild size="sm">
+              <Link href="/produtos/novo">Novo produto</Link>
             </Button>
-            <Button asChild size="sm" variant="ghost">
-              <Link href="/produtos/unidades">Unidades</Link>
-            </Button>
-            {podeCriar ? (
-              <Button asChild size="sm">
-                <Link href="/produtos/novo">Novo produto</Link>
-              </Button>
-            ) : null}
-          </div>
+          ) : null
         }
       />
 
@@ -105,25 +97,11 @@ export default async function ProdutosPage({
         <EmptyState
           icon={Package}
           title="Catálogo vazio"
-          description={
-            counts.categories === 0
-              ? "Comece pelas categorias: todo produto pertence a uma, então elas vêm antes."
-              : "Cadastre o primeiro produto com a unidade de compra, a de precificação e a de comparação."
-          }
+          description="Cadastre o primeiro produto com a unidade de compra, a de precificação e a de comparação. Se a categoria ou a unidade que você precisa ainda não existir, dá para criá-la ali mesmo."
           action={
             podeCriar ? (
               <Button asChild size="sm">
-                <Link
-                  href={
-                    counts.categories === 0
-                      ? "/produtos/categorias"
-                      : "/produtos/novo"
-                  }
-                >
-                  {counts.categories === 0
-                    ? "Criar categoria"
-                    : "Cadastrar produto"}
-                </Link>
+                <Link href="/produtos/novo">Cadastrar produto</Link>
               </Button>
             ) : null
           }
@@ -132,12 +110,17 @@ export default async function ProdutosPage({
         <Table>
           <TableHeader>
             <TableRow>
+              {/* Sete colunas não cabem num celular: a tabela rolaria de lado
+                  e levaria o botão de ação para fora da tela. O que some da
+                  linha reaparece embaixo do nome do produto. */}
               <TableHead>Produto</TableHead>
-              <TableHead>Categoria</TableHead>
-              <TableHead>Finalidade</TableHead>
-              <TableHead>Compra</TableHead>
-              <TableHead>Precificação</TableHead>
-              <TableHead>Comparação</TableHead>
+              <TableHead className="hidden md:table-cell">Categoria</TableHead>
+              <TableHead className="hidden lg:table-cell">Finalidade</TableHead>
+              <TableHead className="hidden sm:table-cell">Compra</TableHead>
+              <TableHead className="hidden lg:table-cell">
+                Precificação
+              </TableHead>
+              <TableHead className="hidden lg:table-cell">Comparação</TableHead>
               <TableHead>Situação</TableHead>
               {podeEditar ? <TableHead className="w-0" /> : null}
             </TableRow>
@@ -145,20 +128,28 @@ export default async function ProdutosPage({
           <TableBody>
             {visiveis.map((product) => (
               <TableRow key={product.id}>
-                <TableCell className="font-medium">{product.name}</TableCell>
-                <TableCell className="text-fg-muted">
+                <TableCell className="font-medium">
+                  {product.name}
+                  <span className="text-fg-muted block max-w-40 text-xs font-normal whitespace-normal md:hidden">
+                    {product.categories?.name} ·{" "}
+                    <span className="font-mono">
+                      {product.purchase_unit?.code}
+                    </span>
+                  </span>
+                </TableCell>
+                <TableCell className="text-fg-muted hidden md:table-cell">
                   {product.categories?.name}
                 </TableCell>
-                <TableCell className="text-fg-muted">
+                <TableCell className="text-fg-muted hidden lg:table-cell">
                   {PRODUCT_PURPOSE_LABEL[product.purpose] ?? product.purpose}
                 </TableCell>
-                <TableCell className="text-fg-muted font-mono text-xs">
+                <TableCell className="text-fg-muted hidden font-mono text-xs sm:table-cell">
                   {product.purchase_unit?.code}
                 </TableCell>
-                <TableCell className="text-fg-muted font-mono text-xs">
+                <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
                   {product.pricing_unit?.code}
                 </TableCell>
-                <TableCell className="text-fg-muted font-mono text-xs">
+                <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
                   {/* Sem unidade própria, quem compara é a de precificação. */}
                   {product.comparison_unit?.code ?? product.pricing_unit?.code}
                 </TableCell>
@@ -192,6 +183,28 @@ export default async function ProdutosPage({
           </TableBody>
         </Table>
       )}
+
+      {/* Categorias e unidades saíram do cabeçalho: são manutenção de catálogo,
+          não o que se vem fazer aqui todo dia — e o cadastro de produto já cria
+          a que faltar. Continuam alcançáveis porque é por Categorias que se
+          chega aos atributos, que não cabem no fluxo do produto. */}
+      <p className="text-fg-subtle border-border mt-8 border-t pt-4 text-xs">
+        Manutenção do catálogo:{" "}
+        <Link
+          href="/produtos/categorias"
+          className="hover:text-fg underline-offset-4 hover:underline"
+        >
+          categorias
+        </Link>{" "}
+        ({counts.categories}) ·{" "}
+        <Link
+          href="/produtos/unidades"
+          className="hover:text-fg underline-offset-4 hover:underline"
+        >
+          unidades
+        </Link>{" "}
+        ({counts.units})
+      </p>
     </div>
   );
 }

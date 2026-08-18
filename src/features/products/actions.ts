@@ -89,6 +89,9 @@ export async function createCategory(
 
   revalidatePath("/produtos/categorias");
   revalidatePath("/produtos");
+  // O cadastro de produto passou a criar categoria sem sair de lá; sem esta
+  // linha, a categoria nasceria e o select continuaria sem ela.
+  revalidatePath("/produtos/novo");
   return { error: null, savedAt: Date.now() };
 }
 
@@ -483,6 +486,7 @@ export async function createUnit(
 
   revalidatePath("/produtos/unidades");
   revalidatePath("/produtos");
+  revalidatePath("/produtos/novo");
   return { error: null, savedAt: Date.now() };
 }
 
