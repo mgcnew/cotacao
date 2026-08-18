@@ -69,6 +69,14 @@ const dialogContentVariants = cva(
         md: "sm:w-[min(40rem,calc(100vw-2rem))]",
         /** Área de trabalho: tabelas, abas, várias seções. */
         lg: "sm:w-[min(64rem,calc(100vw-2rem))]",
+        /**
+         * Matriz larga: comparação de respostas, decisão de compra.
+         *
+         * A tabela de comparação tem uma coluna por fornecedor. Com seis ela
+         * não cabe em tela nenhuma e rola de lado por dentro de qualquer
+         * jeito — mas em `xl` a rolagem começa depois, e não antes.
+         */
+        xl: "sm:w-[min(82rem,calc(100vw-2rem))]",
       },
     },
     defaultVariants: { size: "md" },

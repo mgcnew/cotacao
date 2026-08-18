@@ -86,7 +86,7 @@ export function RouteModal({
   /** Pode ser um `<Suspense>`: o modal abre antes de o nome chegar. */
   titulo: React.ReactNode;
   descricao?: React.ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   children: React.ReactNode;
 }) {
   const router = useRouter();
