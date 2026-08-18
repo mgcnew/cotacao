@@ -1,7 +1,10 @@
 "use client";
 
+import { ArrowRight, PackagePlus } from "lucide-react";
+import Link from "next/link";
 import { useActionState } from "react";
 
+import { useFechaModalAoConcluir, useModalDeRota } from "@/components/layout/route-modal";
 import {
   ErrorLine,
   OrderItemRows,
@@ -9,6 +12,8 @@ import {
   Submit,
   type OrderableProduct,
 } from "@/components/orders/order-item-rows";
+import { Button } from "@/components/ui/button";
+import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   createDirectOrder,
@@ -22,10 +27,6 @@ export type DirectOrderOptions = {
 
 /**
  * Os campos do pedido direto.
- *
- * Separados do formulário porque existem em dois lugares — a página
- * `/pedidos/novo` e o modal da lista — e são os mesmos campos com o mesmo
- * texto. O que muda é o que acontece depois de salvar.
  *
  * `idPrefixo` porque `id` tem que ser único na página: com o modal aberto por
  * cima da lista, dois campos "supplierId" quebrariam a associação do `<label>`.
@@ -83,16 +84,91 @@ export function CamposDoPedidoDireto({
 }
 
 /**
- * Pedido direto na página própria.
+ * O caminho barrado, com a saída — o mesmo texto na página e no modal.
  *
- * Aqui, criar abre o pedido: quem chegou em `/pedidos/novo` veio criar e vai
- * querer enviá-lo em seguida. É o `apos=abrir` que diz isso à action.
+ * Antes eram duas redações do mesmo aviso, uma em cada lugar. Aviso que muda de
+ * palavra conforme o embrulho é aviso que envelhece pela metade.
+ */
+export function FaltaCadastro({ suppliers, products }: DirectOrderOptions) {
+  const faltaFornecedor = suppliers.length === 0;
+  if (!faltaFornecedor && products.length > 0) return null;
+
+  return (
+    <div className="border-border bg-surface-sunken flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3">
+      <PackagePlus className="text-fg-subtle size-5 shrink-0" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="text-fg text-sm font-medium">
+          Falta cadastro para montar o pedido
+        </p>
+        <p className="text-fg-muted text-sm">
+          {faltaFornecedor
+            ? "Nenhum fornecedor ativo. Cadastre o fornecedor antes de comprar dele."
+            : "Nenhum produto ativo. O pedido grava as unidades do cadastro do produto, então ele precisa existir primeiro."}
+        </p>
+      </div>
+      <Button asChild size="sm" variant="outline" className="gap-1.5">
+        <Link href={faltaFornecedor ? "/fornecedores/novo" : "/produtos/novo"}>
+          {faltaFornecedor ? "Cadastrar fornecedor" : "Cadastrar produto"}
+          <ArrowRight className="size-3.5" aria-hidden />
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * O formulário do pedido direto — um só, para os dois embrulhos.
+ *
+ * Antes eram dois caminhos para a mesma operação: `/pedidos/novo` numa página e
+ * um modal na lista. Os campos já eram os mesmos; o que divergia era o que
+ * acontece depois de criar, e isso não justifica dois fluxos.
+ *
+ * Agora o componente pergunta onde está — `useModalDeRota()` devolve `null`
+ * fora do modal — e adapta as duas únicas coisas que realmente mudam:
+ *
+ *  - NA PÁGINA, criar abre o pedido. Quem digitou o endereço veio criar e vai
+ *    querer enviá-lo em seguida; é o `apos=abrir` que diz isso à action.
+ *  - NO MODAL, criar fecha e devolve a lista, que já vem com o pedido novo.
+ *
+ * O resto — campos, validação, action, mensagem de erro — é literalmente o
+ * mesmo código nos dois casos.
  */
 export function DirectOrderForm({ suppliers, products }: DirectOrderOptions) {
+  const modal = useModalDeRota();
   const [state, formAction] = useActionState<OrderActionState, FormData>(
-    createDirectOrder,
+    useFechaModalAoConcluir(createDirectOrder),
     { error: null },
   );
+
+  const campos = (
+    <CamposDoPedidoDireto
+      suppliers={suppliers}
+      products={products}
+      idPrefixo={modal ? "modal-" : ""}
+    />
+  );
+
+  const rodape = (
+    <>
+      <Submit label="Criar pedido" busy="Criando…" />
+      <p className="text-fg-subtle text-xs">
+        As unidades vêm do cadastro do produto. Nasce em rascunho — criar não
+        envia nada ao fornecedor.
+      </p>
+    </>
+  );
+
+  if (modal) {
+    return (
+      <form action={formAction} className="contents">
+        <DialogBody className="flex flex-col gap-4">
+          {campos}
+          <ErrorLine error={state.error} />
+        </DialogBody>
+        <DialogFooter>{rodape}</DialogFooter>
+      </form>
+    );
+  }
 
   return (
     <form
@@ -100,16 +176,10 @@ export function DirectOrderForm({ suppliers, products }: DirectOrderOptions) {
       className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5"
     >
       <input type="hidden" name="apos" value="abrir" />
-      <CamposDoPedidoDireto suppliers={suppliers} products={products} />
-
+      {campos}
       <ErrorLine error={state.error} />
-
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-fg-subtle text-xs">
-          As unidades vêm do cadastro do produto. O pedido nasce em rascunho —
-          criar não envia nada ao fornecedor.
-        </p>
-        <Submit label="Criar pedido" busy="Criando…" />
+        {rodape}
       </div>
     </form>
   );

@@ -1,4 +1,4 @@
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Plus } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -12,10 +12,7 @@ import {
   MetricsSkeleton,
   TableSkeleton,
 } from "@/components/layout/page-skeleton";
-import {
-  NewOrderDialog,
-  SendOrderDialog,
-} from "@/components/orders/order-dialogs";
+import { SendOrderDialog } from "@/components/orders/order-dialogs";
 import { OrderFilterFields } from "@/components/orders/order-filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +32,6 @@ import {
   type OrderFilters,
 } from "@/features/orders/filters";
 import {
-  listDirectOrderOptions,
   listOrders,
   orderNextStep,
   ORDERS_PAGE_SIZE,
@@ -110,13 +106,14 @@ export default async function PedidosPage({
               </Suspense>
             </FilterDialog>
             {podeCriar ? (
-              // A promessa vai SEM `await`: as opções do pedido saem agora, em
-              // paralelo com a lista, e o modal as desembrulha lá dentro.
-              // Esperar por elas aqui seguraria o cabeçalho inteiro por uma
-              // consulta que só importa depois do clique.
-              <NewOrderDialog
-                opcoes={listDirectOrderOptions(company.companyId)}
-              />
+              // Link, e não botão com estado: "novo pedido" é uma rota. Vindo
+              // daqui ela é interceptada e abre por cima da lista; de F5 ou do
+              // painel, abre em página inteira. Um caminho só, dois embrulhos.
+              <Button asChild size="sm" className="gap-1.5">
+                <Link href="/pedidos/novo">
+                  <Plus className="size-3.5" aria-hidden /> Novo pedido
+                </Link>
+              </Button>
             ) : null}
           </>
         }
@@ -214,7 +211,7 @@ async function ListaDePedidos({
               </Button>
             ) : podeCriar ? (
               <Button asChild size="sm">
-                <Link href="/pedidos/novo">Criar pedido direto</Link>
+                <Link href="/pedidos/novo">Criar pedido</Link>
               </Button>
             ) : null
           }
