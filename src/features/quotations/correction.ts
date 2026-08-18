@@ -102,3 +102,66 @@ export async function correctResponseItem(
   revalidatePath(`/compras/${parsed.data.roundId}/comparacao`);
   return { error: null, savedAt: Date.now() };
 }
+
+/**
+ * Lança o preço de um item no lugar do fornecedor.
+ *
+ * O caso é o do dia a dia: manda-se o link, mas negocia-se por telefone. Quando
+ * o preço vem por fora, quem compra lança — e a rodada anda sem depender de o
+ * fornecedor entrar no link.
+ *
+ * É o PRIMEIRO preço do item. Item já respondido se altera por
+ * `correctResponseItem`, que guarda o histórico da correção; a RPC recusa aqui
+ * justamente para não existirem dois caminhos gravando o mesmo valor.
+ */
+export async function recordManualQuotationItem(
+  _prev: CorrectionState,
+  formData: FormData,
+): Promise<CorrectionState> {
+  const company = await requireActiveCompany();
+
+  const roundId = String(formData.get("roundId") ?? "");
+  const supplierQuotationItemId = String(
+    formData.get("supplierQuotationItemId") ?? "",
+  );
+  const doesNotSupply = formData.get("doesNotSupply") === "on";
+  const precoBruto = String(formData.get("quotedPrice") ?? "").trim();
+
+  if (!supplierQuotationItemId) return { error: "Item inválido." };
+
+  // "12,50" é como se digita preço em português.
+  const preco = precoBruto
+    ? Number(precoBruto.replace(/\./g, "").replace(",", "."))
+    : null;
+
+  if (!doesNotSupply && (preco === null || !Number.isFinite(preco))) {
+    return { error: "Informe o preço." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_record_manual_quotation_item", {
+    p_company_id: company.companyId,
+    p_supplier_quotation_item_id: supplierQuotationItemId,
+    p_quoted_price: doesNotSupply ? undefined : (preco ?? undefined),
+    p_does_not_supply: doesNotSupply,
+    p_notes: String(formData.get("notes") ?? "").trim() || undefined,
+  });
+
+  if (error) {
+    if (error.message.includes("Permissão")) {
+      return { error: "Seu papel não permite lançar respostas." };
+    }
+    if (error.message.includes("já tem resposta")) {
+      return { error: "Este item já tem resposta — use a correção." };
+    }
+    if (error.message.includes("em andamento")) {
+      return { error: "A rodada precisa estar em andamento para lançar preço." };
+    }
+    return { error: `Não foi possível lançar: ${error.message}` };
+  }
+
+  revalidatePath(`/compras/${roundId}/comparacao`);
+  revalidatePath(`/compras/${roundId}`);
+  revalidatePath(`/compras/${roundId}/alocacao`);
+  return { error: null, savedAt: Date.now() };
+}

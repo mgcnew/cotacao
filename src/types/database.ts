@@ -2651,6 +2651,16 @@ export type Database = {
         Args: { p_items: Json; p_token: string }
         Returns: Json
       }
+      rpc_record_manual_quotation_item: {
+        Args: {
+          p_company_id: string
+          p_does_not_supply?: boolean
+          p_notes?: string
+          p_quoted_price?: number
+          p_supplier_quotation_item_id: string
+        }
+        Returns: string
+      }
       rpc_record_negotiation: {
         Args: {
           p_channel: string

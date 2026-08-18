@@ -34,6 +34,9 @@ export const carregarComparacao = cache(async (roundId: string) => {
     suppliers: comparison.suppliers,
     podeNegociar: permissions.has("negotiation.create"),
     podeCorrigir: permissions.has("quotation_response.correct"),
+    // Lançar no lugar do fornecedor: a permissão já existia na semente da
+    // 0005 e nunca tinha sido lida por tela nenhuma.
+    podeLancar: permissions.has("quotation_response.manual_create"),
   };
 });
 

@@ -2,6 +2,7 @@ import { BarChart3 } from "lucide-react";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { CorrectionForm } from "@/components/quotations/correction-form";
+import { ManualPriceForm } from "@/components/quotations/manual-price-form";
 import { NegotiationForm } from "@/components/quotations/negotiation-form";
 import { Badge } from "@/components/ui/badge";
 import type { DadosDaComparacao } from "@/features/rounds/comparacao";
@@ -30,7 +31,7 @@ const NORMALIZED = new Intl.NumberFormat("pt-BR", {
  * esconder justamente a proposta que se quer comparar.
  */
 export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
-  const { rows, suppliers, podeNegociar, podeCorrigir } = dados;
+  const { rows, suppliers, podeNegociar, podeCorrigir, podeLancar } = dados;
 
   return (
     <>
@@ -117,6 +118,32 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
                                 roundId={dados.round.id}
                                 currentPrice={cell.currentPrice}
                                 doesNotSupply
+                                supplierName={s.suppliers.name}
+                                productName={row.productName}
+                                pricingUnit={row.pricingUnit}
+                              />
+                            ) : null}
+                          </td>
+                        );
+                      }
+
+                      // Convidado que ainda não respondeu. Era só "aguardando"
+                      // e nada mais — mas o caso comum é justamente este: o
+                      // link foi mandado e o preço veio por telefone. Quem
+                      // ligou lança aqui, na célula que já está olhando.
+                      if (cell.responseItemId === null) {
+                        const sqi = row.supplierQuotationItemBySupplier.get(
+                          s.id,
+                        );
+                        return (
+                          <td key={s.id} className="px-3 py-2 align-top">
+                            <span className="text-fg-subtle block text-xs">
+                              aguardando
+                            </span>
+                            {podeLancar && sqi ? (
+                              <ManualPriceForm
+                                supplierQuotationItemId={sqi}
+                                roundId={dados.round.id}
                                 supplierName={s.suppliers.name}
                                 productName={row.productName}
                                 pricingUnit={row.pricingUnit}

@@ -35,6 +35,9 @@ const EVENT_LABEL: Record<string, string> = {
   "quotation.sent": "Cotação enviada ao fornecedor",
   "quotation.response_submitted": "Fornecedor respondeu a cotação",
   "quotation.response_corrected": "Resposta de fornecedor corrigida",
+  // Lançada por quem compra, não pelo fornecedor — daí o rótulo separado de
+  // "Fornecedor respondeu a cotação", que aqui seria mentira.
+  "quotation.manual_response_recorded": "Preço lançado pelo comprador",
   "negotiation.created": "Negociação registrada",
   "purchase.allocations_confirmed": "Compra confirmada e pedidos gerados",
   "order.created": "Pedido criado",
