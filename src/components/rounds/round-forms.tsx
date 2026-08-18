@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
+import { useFechaModalAoConcluir } from "@/components/layout/route-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -317,8 +318,10 @@ export function StartRoundPanel({
   itemCount: number;
   supplierCount: number;
 }) {
+  // Iniciar é o fim da montagem: dentro do modal, é a hora de fechar e devolver
+  // a lista — que já vem com a rodada em "Em andamento".
   const [state, formAction] = useActionState<RoundFormState, FormData>(
-    activateRound,
+    useFechaModalAoConcluir(activateRound),
     { error: null },
   );
 

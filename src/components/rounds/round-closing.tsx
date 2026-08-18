@@ -6,6 +6,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
+import { useFechaModalAoConcluir } from "@/components/layout/route-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -53,7 +54,7 @@ export function CompleteRoundForm({
 }) {
   const [confirmando, setConfirmando] = React.useState(false);
   const [state, formAction] = useActionState<RoundFormState, FormData>(
-    completeRound,
+    useFechaModalAoConcluir(completeRound),
     { error: null },
   );
 
@@ -118,7 +119,7 @@ export function CompleteRoundForm({
 export function CancelRoundForm({ roundId }: { roundId: string }) {
   const [confirmando, setConfirmando] = React.useState(false);
   const [state, formAction] = useActionState<RoundFormState, FormData>(
-    cancelRound,
+    useFechaModalAoConcluir(cancelRound),
     { error: null },
   );
 
