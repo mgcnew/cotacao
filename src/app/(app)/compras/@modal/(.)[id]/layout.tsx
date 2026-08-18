@@ -41,6 +41,11 @@ export default async function LayoutDoModalDaRodada({
   return (
     <RouteModal
       size="xl"
+      // As três views têm alturas muito diferentes — a rodada tem seções
+      // empilhadas, a comparação é uma tabela que às vezes tem uma linha. Sem
+      // altura fixa a caixa pula de tamanho a cada troca, e o pulo desfaz a
+      // ilusão de continuar no mesmo lugar.
+      alturaEstavel
       titulo={
         <Suspense
           fallback={

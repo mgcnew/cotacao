@@ -88,11 +88,23 @@ function DialogContent({
   size,
   children,
   impedirFechamentoAcidental = false,
+  alturaEstavel = false,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> &
   VariantProps<typeof dialogContentVariants> & {
     /** Esc e clique fora deixam de fechar. O X continua fechando. */
     impedirFechamentoAcidental?: boolean;
+    /**
+     * Altura fixa em vez de altura do conteúdo.
+     *
+     * Serve ao modal que troca de conteúdo por dentro. Sem isto, a caixa
+     * encolhe ao ir da rodada (muitas seções) para a comparação (uma tabela
+     * curta) e cresce de volta na seguinte — e o pulo faz parecer que se
+     * trocou de tela, que é exatamente o que o modal existe para evitar.
+     *
+     * Só no desktop: no celular a caixa já é a tela inteira.
+     */
+    alturaEstavel?: boolean;
   }) {
   const barrar = impedirFechamentoAcidental
     ? (evento: Event) => evento.preventDefault()
@@ -106,7 +118,11 @@ function DialogContent({
       />
       <DialogPrimitive.Content
         data-slot="dialog-content"
-        className={cn(dialogContentVariants({ size }), className)}
+        className={cn(
+          dialogContentVariants({ size }),
+          alturaEstavel && "sm:h-[85dvh]",
+          className,
+        )}
         onEscapeKeyDown={barrar}
         onInteractOutside={barrar}
         {...props}
