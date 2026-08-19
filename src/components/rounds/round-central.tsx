@@ -166,7 +166,7 @@ export function CorpoDaRodada({ dados }: { dados: DadosDaRodada }) {
           tela, tomada depois de olhar o que está nela. No cabeçalho, o painel
           de confirmação — que é largo — espremia o título em três linhas. */}
       {!dados.encerrada && (dados.podeFechar || dados.podeCancelar) ? (
-        <section className="border-border mt-10 border-t pt-6">
+        <section className="border-border mt-6 border-t pt-4">
           <h2 className="text-fg mb-1 text-sm font-semibold">
             Encerrar a rodada
           </h2>
@@ -260,7 +260,7 @@ function Montagem({
               : "nenhum ainda",
             estado: temItens ? "feito" : "agora",
             painel: (
-              <section id="passo-produtos" className="mb-10 scroll-mt-4">
+              <section>
                 <h2 className="text-fg mb-1 text-base font-semibold">
                   1 · Produtos
                 </h2>
@@ -386,7 +386,7 @@ function Montagem({
               : "nenhum ainda",
             estado: temFornecedores ? "feito" : temItens ? "agora" : "depois",
             painel: (
-              <section id="passo-fornecedores" className="mb-10 scroll-mt-4">
+              <section>
                 <h2 className="text-fg mb-1 text-base font-semibold">
                   2 · Fornecedores
                 </h2>
@@ -461,7 +461,7 @@ function Montagem({
             resumo: pronto ? "tudo pronto" : "depois dos dois acima",
             estado: pronto ? "agora" : "depois",
             painel: (
-              <section id="passo-iniciar" className="scroll-mt-4">
+              <section>
                 <h2 className="text-fg mb-1 text-base font-semibold">
                   3 · Conferir e iniciar
                 </h2>

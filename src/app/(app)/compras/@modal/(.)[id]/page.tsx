@@ -58,7 +58,7 @@ async function Conteudo({ id }: { id: string }) {
 
   return (
     <DialogBody>
-      <div className="mb-6 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <AcoesDaRodada dados={dados} />
       </div>
 

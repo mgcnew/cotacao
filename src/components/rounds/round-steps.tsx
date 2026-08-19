@@ -70,7 +70,7 @@ export function RoundSteps({ passos }: { passos: PassoRodada[] }) {
       <div
         role="tablist"
         aria-label="Montagem da rodada"
-        className="mb-6 grid gap-2 sm:grid-cols-3"
+        className="mb-4 grid gap-2 sm:grid-cols-3"
       >
         {passos.map((passo, indice) => {
           const selecionado = passo.chave === ativo;
