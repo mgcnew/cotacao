@@ -38,13 +38,21 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   ]);
 
   return (
-    <div className="flex min-h-screen">
+    /* A moldura ocupa a viewport e não cresce: quem rola é só o conteúdo.
+       Antes a janela inteira rolava, e o menu e o cabeçalho subiam junto —
+       o menu some justamente quando se quer trocar de tela, e o cabeçalho
+       leva embora o sino e o seletor de empresa.
+
+       `dvh` e não `vh` por causa do celular: com a barra do navegador
+       aparecendo e sumindo, `100vh` é maior que a tela visível e deixa uma
+       faixa cortada embaixo. */
+    <div className="flex h-dvh overflow-hidden">
       <AppSidebar
         companyName={activeCompany.companyName}
         permissions={[...permissions]}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="border-border bg-surface flex h-14 shrink-0 items-center gap-2 border-b px-4 sm:gap-4 sm:px-6">
           <MobileNav
             companyName={activeCompany.companyName}
@@ -76,7 +84,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             precisa de limite (formulário de campo único, que esticado vira uma
             linha de um metro) põe o seu `max-w-*` sem `mx-auto`, para começar
             nos mesmos 24px em vez de flutuar no meio. */}
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6">{children}</main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+          {children}
+        </main>
       </div>
     </div>
   );

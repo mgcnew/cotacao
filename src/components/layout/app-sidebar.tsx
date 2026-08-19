@@ -33,7 +33,8 @@ export function AppSidebar({ companyName, permissions }: Props) {
     >
       <div
         className={cn(
-          "flex h-14 items-center gap-2 px-3",
+          // `shrink-0` para o topo não ser espremido quando a lista cresce.
+          "flex h-14 shrink-0 items-center gap-2 px-3",
           collapsed && "justify-center px-0",
         )}
       >
@@ -52,7 +53,11 @@ export function AppSidebar({ companyName, permissions }: Props) {
         onExpand={() => setCollapsed(false)}
       />
 
-      <nav className="flex flex-1 flex-col gap-0.5 px-2 py-2">
+      {/* `min-h-0` é o que permite ao `overflow-y-auto` funcionar dentro de um
+          flex: sem ele o item cresce em vez de rolar, e empurra o rodapé para
+          fora da tela. Numa janela baixa, ou com muitos itens, a lista rola e
+          Configurações/Recolher continuam ancorados embaixo. */}
+      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2">
         {!collapsed && (
           <p className="text-fg-subtle px-2.5 pt-2 pb-1.5 text-[10px] font-semibold tracking-wider uppercase">
             Operação
@@ -68,7 +73,7 @@ export function AppSidebar({ companyName, permissions }: Props) {
         ))}
       </nav>
 
-      <div className="flex flex-col gap-0.5 px-2 pb-2">
+      <div className="flex shrink-0 flex-col gap-0.5 px-2 pb-2">
         {footer.map((item) => (
           <NavLink
             key={item.href}
