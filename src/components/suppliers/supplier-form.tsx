@@ -29,22 +29,22 @@ export function SupplierForm() {
   return (
     <form action={formAction} className="flex flex-col gap-6">
       <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-fg text-sm font-medium">
-            Nome
-          </label>
-          <Input
-            id="name"
-            name="name"
-            defaultValue={state.valores?.name ?? ""}
-            required
-            autoFocus
-            maxLength={120}
-            placeholder="Como sua equipe chama o fornecedor"
-          />
-        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="name" className="text-fg text-sm font-medium">
+              Nome
+            </label>
+            <Input
+              id="name"
+              name="name"
+              defaultValue={state.valores?.name ?? ""}
+              required
+              autoFocus
+              maxLength={120}
+              placeholder="Como sua equipe chama o fornecedor"
+            />
+          </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="legalName" className="text-fg text-sm font-medium">
               Razão social <span className="text-fg-subtle">(opcional)</span>
@@ -75,7 +75,7 @@ export function SupplierForm() {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="purchaseLimit"
@@ -96,7 +96,7 @@ export function SupplierForm() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 lg:col-span-2">
             <label htmlFor="notes" className="text-fg text-sm font-medium">
               Observações <span className="text-fg-subtle">(opcional)</span>
             </label>
@@ -127,7 +127,7 @@ export function SupplierForm() {
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="contactName"

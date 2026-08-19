@@ -86,18 +86,18 @@ export function ProductForm({ categories, units, attributes }: Props) {
   return (
     <form key={state.savedAt} action={formAction} className="flex flex-col gap-6">
       <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5">
-        <Field label="Nome" htmlFor="name">
-          <Input
-            id="name"
-            name="name"
-            required
-            autoFocus
-            maxLength={120}
-            placeholder="Coxa e sobrecoxa congelada"
-          />
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Field label="Nome" htmlFor="name">
+            <Input
+              id="name"
+              name="name"
+              required
+              autoFocus
+              maxLength={120}
+              placeholder="Coxa e sobrecoxa congelada"
+            />
+          </Field>
 
-        <div className="grid gap-4 sm:grid-cols-2">
           <Field
             label="Categoria"
             htmlFor="categoryId"
@@ -221,7 +221,7 @@ export function ProductForm({ categories, units, attributes }: Props) {
             </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {visibleAttributes.map((attr) => {
               const fieldId = `attr_${attr.id}`;
               const label = attr.unitSymbol

@@ -80,10 +80,15 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </header>
 
         {/* 24px dos lados no desktop, 16px no celular — e é AQUI que a margem
-            mora, não em cada página. As telas usam a largura que sobra; quem
-            precisa de limite (formulário de campo único, que esticado vira uma
-            linha de um metro) põe o seu `max-w-*` sem `mx-auto`, para começar
-            nos mesmos 24px em vez de flutuar no meio. */}
+            mora, não em cada página. Toda tela usa a largura que sobra, sem
+            `max-w-*` própria: uma coluna estreita encostada à esquerda deixava
+            24px de um lado e quase 500px do outro, e a folga desigual lia como
+            defeito de alinhamento.
+
+            O limite de leitura, onde é preciso, mora no campo e não na página:
+            os formulários põem os campos em grade (`sm:grid-cols-2`,
+            `lg:grid-cols-3`) para que nenhum deles fique sozinho esticado de
+            ponta a ponta. */}
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
           {children}
         </main>

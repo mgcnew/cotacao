@@ -15,7 +15,7 @@ export default async function NovaRodadaPage() {
   }
 
   return (
-    <div className="w-full max-w-3xl">
+    <div className="w-full">
       <PageHeader
         title="Nova rodada de compras"
         description="Primeiro o título. Grupos, produtos e fornecedores entram na sequência, com a rodada ainda em preparação."

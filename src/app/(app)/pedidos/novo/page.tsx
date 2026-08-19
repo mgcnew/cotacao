@@ -29,7 +29,7 @@ export default async function NovoPedidoPage() {
   );
 
   return (
-    <div className="w-full max-w-3xl">
+    <div className="w-full">
       <PageHeader
         title="Novo pedido"
         description="Compra fechada por fora da cotação — por telefone, no balcão, ou a reposição de sempre. O pedido segue o mesmo caminho: enviar, confirmar, receber."

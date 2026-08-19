@@ -96,7 +96,12 @@ export function RoundForm() {
       className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5"
     >
       <input type="hidden" name="apos" value="abrir" />
-      <CamposDaRodada />
+      {/* Lado a lado só aqui. No modal os mesmos campos ficam empilhados —
+          lá a caixa é estreita; aqui a rodada tem a página inteira, e dois
+          campos soltos um sobre o outro viravam duas linhas de um metro. */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <CamposDaRodada />
+      </div>
 
       <ErrorLine error={state.error} />
 
