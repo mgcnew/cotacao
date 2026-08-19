@@ -1,0 +1,26 @@
+diff --git a/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js b/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+index d6bb381..752938b 100644
+--- a/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
++++ b/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+@@ -708,7 +708,20 @@ async function startWatcher(opts) {
+             serverFields.hasAppNotFound = hasRootAppNotFound;
+             opts.fsChecker.middlewareMatcher = ((_serverFields_middleware = serverFields.middleware) == null ? void 0 : _serverFields_middleware.matchers) ? (0, _middlewareroutematcher.getMiddlewareRouteMatcher)((_serverFields_middleware1 = serverFields.middleware) == null ? void 0 : _serverFields_middleware1.matchers) : undefined;
+             const interceptionRoutes = (0, _generateinterceptionroutesrewrites.generateInterceptionRoutesRewrites)(Object.keys(appPaths), opts.nextConfig.basePath).map((item)=>(0, _filesystem.buildCustomRoute)('before_files_rewrite', item, opts.nextConfig.basePath, opts.nextConfig.experimental.caseSensitiveRoutes));
+-            opts.fsChecker.rewrites.beforeFiles.push(...interceptionRoutes);
++            // PATCH LOCAL -- vercel/next.js#91265
++            // O push original acumulava as rotas de interceptacao a cada
++            // recompilacao do dev: o marcador virava (.)(.)(.)... ate o caminho
++            // ficar invalido e a rota devolver 500, caindo na pagina inteira.
++            // Guardamos os rewrites de base uma vez e recompomos a lista.
++            if (!opts.fsChecker.__beforeFilesBase) {
++                opts.fsChecker.__beforeFilesBase = [
++                    ...opts.fsChecker.rewrites.beforeFiles
++                ];
++            }
++            opts.fsChecker.rewrites.beforeFiles = [
++                ...opts.fsChecker.__beforeFilesBase,
++                ...interceptionRoutes
++            ];
+             const exportPathMap = typeof nextConfig.exportPathMap === 'function' && await (nextConfig.exportPathMap == null ? void 0 : nextConfig.exportPathMap.call(nextConfig, {}, {
+                 dev: true,
+                 dir: opts.dir,
