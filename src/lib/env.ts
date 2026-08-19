@@ -22,11 +22,32 @@ const publicEnvSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.url().default("http://localhost:3000"),
 });
 
+/**
+ * O endereço público da aplicação — o que vai no link do fornecedor.
+ *
+ * Errar aqui não quebra nada visivelmente: a tela abre, o link é gerado, e só
+ * quem recebe descobre que ele aponta para `localhost`. Por isso a Vercel entra
+ * como rede de segurança. `VERCEL_PROJECT_PRODUCTION_URL` é o domínio estável
+ * do projeto; `VERCEL_URL` é o desta implantação, usado nas prévias.
+ *
+ * Nenhuma das duas chega ao browser (falta o prefixo NEXT_PUBLIC_), e não
+ * precisa: o link só é montado no servidor.
+ */
+function enderecoPublico(): string | undefined {
+  const explicito = unset(process.env.NEXT_PUBLIC_APP_URL);
+  if (explicito) return explicito;
+
+  const daVercel =
+    unset(process.env.VERCEL_PROJECT_PRODUCTION_URL) ??
+    unset(process.env.VERCEL_URL);
+  return daVercel ? `https://${daVercel}` : undefined;
+}
+
 export const publicEnv = publicEnvSchema.parse({
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  NEXT_PUBLIC_APP_URL: unset(process.env.NEXT_PUBLIC_APP_URL),
+  NEXT_PUBLIC_APP_URL: enderecoPublico(),
 });
 
 /**
