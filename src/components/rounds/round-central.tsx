@@ -253,225 +253,238 @@ function Montagem({
       <RoundSteps
         passos={[
           {
+            chave: "produtos",
             titulo: "Produtos",
             resumo: temItens
               ? `${itensAtivos} ${itensAtivos === 1 ? "produto" : "produtos"}`
               : "nenhum ainda",
             estado: temItens ? "feito" : "agora",
-            ancora: "passo-produtos",
+            painel: (
+              <section id="passo-produtos" className="mb-10 scroll-mt-4">
+                <h2 className="text-fg mb-1 text-base font-semibold">
+                  1 · Produtos
+                </h2>
+                <p className="text-fg-muted mb-4 text-sm">
+                  O que você quer cotar, e quanto pretende comprar de cada. É
+                  esta lista que cada fornecedor vai receber para preencher com
+                  o preço dele.
+                </p>
+
+                {podeMontar && produtosAtivos.length === 0 ? (
+                  <Aviso
+                    icone={Package}
+                    titulo="Nenhum produto no catálogo ainda"
+                    texto="A rodada cota produtos cadastrados — é o cadastro que guarda as unidades de compra e de preço, sem as quais não há como comparar propostas."
+                    acao={{
+                      href: "/produtos/novo",
+                      label: "Cadastrar produto",
+                    }}
+                  />
+                ) : null}
+
+                {podeMontar && produtosAtivos.length > 0 ? (
+                  <div className="mb-4">
+                    <ItemForm
+                      roundId={roundId}
+                      groups={groups}
+                      products={produtosAtivos.map((p) => ({
+                        id: p.id,
+                        name: p.name,
+                      }))}
+                    />
+                  </div>
+                ) : null}
+
+                {items.length === 0 ? (
+                  <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-center text-sm">
+                    Nenhum produto na rodada ainda.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Produto</TableHead>
+                        {!grupoIntocado ? <TableHead>Grupo</TableHead> : null}
+                        <TableHead className="text-right">Quantidade</TableHead>
+                        <TableHead>Cotado por</TableHead>
+                        <TableHead>Situação</TableHead>
+                        {podeMontar ? (
+                          <TableHead className="w-0 text-right">
+                            <span className="sr-only">Ações do item</span>
+                          </TableHead>
+                        ) : null}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map((item) => (
+                        <QuotationItemRow
+                          key={item.id}
+                          roundId={roundId}
+                          itemId={item.id}
+                          productName={item.products?.name ?? "Produto"}
+                          groupId={item.group_id}
+                          groupName={groupName.get(item.group_id) ?? "—"}
+                          quantity={Number(item.requested_quantity)}
+                          purchaseUnit={item.purchase_unit?.symbol ?? ""}
+                          pricingUnit={item.pricing_unit?.symbol ?? ""}
+                          commercialStatus={item.commercial_status}
+                          editable={podeMontar}
+                          groups={groups}
+                          hideGroup={grupoIntocado}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+
+                {podeMontar ? (
+                  <div className="mt-4">
+                    <Disclosure
+                      titulo="Separar os produtos em grupos"
+                      resumo={
+                        grupoIntocado
+                          ? "Opcional. Serve para cotar frios e hortifrúti no mesmo link, separados."
+                          : `${groups.length} ${groups.length === 1 ? "grupo" : "grupos"} nesta rodada.`
+                      }
+                      aberto={organizouGrupos}
+                    >
+                      <div className="flex flex-col gap-4">
+                        <p className="text-fg-muted text-sm">
+                          O grupo organiza a cotação por dentro: o fornecedor
+                          continua recebendo um link só, com os itens separados
+                          por seção. É diferente da categoria do produto, que é
+                          do catálogo.
+                        </p>
+                        <GroupForm roundId={roundId} />
+                        <div className="flex flex-wrap items-center gap-2">
+                          {groups.map((group) => (
+                            <GroupChip
+                              key={group.id}
+                              roundId={roundId}
+                              groupId={group.id}
+                              name={group.name}
+                              itemCount={
+                                items.filter((i) => i.group_id === group.id)
+                                  .length
+                              }
+                              editable={podeMontar}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </Disclosure>
+                  </div>
+                ) : null}
+              </section>
+            ),
           },
           {
+            chave: "fornecedores",
             titulo: "Fornecedores",
             resumo: temFornecedores
               ? `${roundSuppliers.length} ${roundSuppliers.length === 1 ? "convidado" : "convidados"}`
               : "nenhum ainda",
-            estado: temFornecedores
-              ? "feito"
-              : temItens
-                ? "agora"
-                : "depois",
-            ancora: "passo-fornecedores",
+            estado: temFornecedores ? "feito" : temItens ? "agora" : "depois",
+            painel: (
+              <section id="passo-fornecedores" className="mb-10 scroll-mt-4">
+                <h2 className="text-fg mb-1 text-base font-semibold">
+                  2 · Fornecedores
+                </h2>
+                <p className="text-fg-muted mb-4 text-sm">
+                  Quem você quer que dê preço. Cada um recebe o link da rodada
+                  preenchido com os seus itens — e não vê o preço dos outros.
+                </p>
+
+                {podeMontar && selectableSuppliers.length === 0 ? (
+                  <Aviso
+                    icone={Users}
+                    titulo="Nenhum fornecedor com contato ativo"
+                    texto="Para receber o link, o fornecedor precisa de um contato com WhatsApp cadastrado. É por ele que a cotação chega."
+                    acao={{
+                      href: "/fornecedores/novo",
+                      label: "Cadastrar fornecedor",
+                    }}
+                  />
+                ) : null}
+
+                {podeMontar && disponiveis.length > 0 ? (
+                  <div className="mb-4">
+                    <SupplierPickerForm
+                      roundId={roundId}
+                      suppliers={disponiveis}
+                    />
+                  </div>
+                ) : null}
+
+                {roundSuppliers.length === 0 ? (
+                  <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-center text-sm">
+                    Nenhum fornecedor convidado ainda.
+                  </p>
+                ) : (
+                  // Em preparação a lista é só quem foi convidado e por qual contato.
+                  // As colunas de envio e resposta viriam todas vazias.
+                  <ul className="flex flex-col gap-2">
+                    {roundSuppliers.map((rs) => (
+                      <li
+                        key={rs.id}
+                        className="border-border bg-surface flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
+                      >
+                        <span className="min-w-0">
+                          <span className="text-fg block text-sm font-medium">
+                            {rs.suppliers?.name}
+                          </span>
+                          <span className="text-fg-muted block text-xs">
+                            {rs.supplier_contacts?.name ?? "sem contato"}
+                            {rs.supplier_contacts?.whatsapp
+                              ? ` · ${rs.supplier_contacts.whatsapp}`
+                              : ""}
+                          </span>
+                        </span>
+                        {podeEditar ? (
+                          <ContactPicker
+                            roundId={roundId}
+                            roundSupplierId={rs.id}
+                            contactId={rs.supplier_contact_id}
+                            contacts={contatos.get(rs.supplier_id) ?? []}
+                          />
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ),
           },
           {
+            chave: "iniciar",
             titulo: "Conferir e iniciar",
             resumo: pronto ? "tudo pronto" : "depois dos dois acima",
             estado: pronto ? "agora" : "depois",
-            ancora: "passo-iniciar",
+            painel: (
+              <section id="passo-iniciar" className="scroll-mt-4">
+                <h2 className="text-fg mb-1 text-base font-semibold">
+                  3 · Conferir e iniciar
+                </h2>
+                <p className="text-fg-muted mb-4 text-sm">
+                  Última olhada antes de a rodada valer.
+                </p>
+
+                {podeMontar ? (
+                  <StartRoundPanel
+                    roundId={roundId}
+                    itemCount={itensAtivos}
+                    supplierCount={roundSuppliers.length}
+                  />
+                ) : (
+                  <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-sm">
+                    Seu papel não permite iniciar rodadas.
+                  </p>
+                )}
+              </section>
+            ),
           },
         ]}
       />
-
-      <section id="passo-produtos" className="mb-10 scroll-mt-4">
-        <h2 className="text-fg mb-1 text-base font-semibold">1 · Produtos</h2>
-        <p className="text-fg-muted mb-4 text-sm">
-          O que você quer cotar, e quanto pretende comprar de cada. É esta lista
-          que cada fornecedor vai receber para preencher com o preço dele.
-        </p>
-
-        {podeMontar && produtosAtivos.length === 0 ? (
-          <Aviso
-            icone={Package}
-            titulo="Nenhum produto no catálogo ainda"
-            texto="A rodada cota produtos cadastrados — é o cadastro que guarda as unidades de compra e de preço, sem as quais não há como comparar propostas."
-            acao={{ href: "/produtos/novo", label: "Cadastrar produto" }}
-          />
-        ) : null}
-
-        {podeMontar && produtosAtivos.length > 0 ? (
-          <div className="mb-4">
-            <ItemForm
-              roundId={roundId}
-              groups={groups}
-              products={produtosAtivos.map((p) => ({
-                id: p.id,
-                name: p.name,
-              }))}
-            />
-          </div>
-        ) : null}
-
-        {items.length === 0 ? (
-          <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-center text-sm">
-            Nenhum produto na rodada ainda.
-          </p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Produto</TableHead>
-                {!grupoIntocado ? <TableHead>Grupo</TableHead> : null}
-                <TableHead className="text-right">Quantidade</TableHead>
-                <TableHead>Cotado por</TableHead>
-                <TableHead>Situação</TableHead>
-                {podeMontar ? (
-                  <TableHead className="w-0 text-right">
-                    <span className="sr-only">Ações do item</span>
-                  </TableHead>
-                ) : null}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => (
-                <QuotationItemRow
-                  key={item.id}
-                  roundId={roundId}
-                  itemId={item.id}
-                  productName={item.products?.name ?? "Produto"}
-                  groupId={item.group_id}
-                  groupName={groupName.get(item.group_id) ?? "—"}
-                  quantity={Number(item.requested_quantity)}
-                  purchaseUnit={item.purchase_unit?.symbol ?? ""}
-                  pricingUnit={item.pricing_unit?.symbol ?? ""}
-                  commercialStatus={item.commercial_status}
-                  editable={podeMontar}
-                  groups={groups}
-                  hideGroup={grupoIntocado}
-                />
-              ))}
-            </TableBody>
-          </Table>
-        )}
-
-        {podeMontar ? (
-          <div className="mt-4">
-            <Disclosure
-              titulo="Separar os produtos em grupos"
-              resumo={
-                grupoIntocado
-                  ? "Opcional. Serve para cotar frios e hortifrúti no mesmo link, separados."
-                  : `${groups.length} ${groups.length === 1 ? "grupo" : "grupos"} nesta rodada.`
-              }
-              aberto={organizouGrupos}
-            >
-              <div className="flex flex-col gap-4">
-                <p className="text-fg-muted text-sm">
-                  O grupo organiza a cotação por dentro: o fornecedor continua
-                  recebendo um link só, com os itens separados por seção. É
-                  diferente da categoria do produto, que é do catálogo.
-                </p>
-                <GroupForm roundId={roundId} />
-                <div className="flex flex-wrap items-center gap-2">
-                  {groups.map((group) => (
-                    <GroupChip
-                      key={group.id}
-                      roundId={roundId}
-                      groupId={group.id}
-                      name={group.name}
-                      itemCount={
-                        items.filter((i) => i.group_id === group.id).length
-                      }
-                      editable={podeMontar}
-                    />
-                  ))}
-                </div>
-              </div>
-            </Disclosure>
-          </div>
-        ) : null}
-      </section>
-
-      <section id="passo-fornecedores" className="mb-10 scroll-mt-4">
-        <h2 className="text-fg mb-1 text-base font-semibold">
-          2 · Fornecedores
-        </h2>
-        <p className="text-fg-muted mb-4 text-sm">
-          Quem você quer que dê preço. Cada um recebe o link da rodada
-          preenchido com os seus itens — e não vê o preço dos outros.
-        </p>
-
-        {podeMontar && selectableSuppliers.length === 0 ? (
-          <Aviso
-            icone={Users}
-            titulo="Nenhum fornecedor com contato ativo"
-            texto="Para receber o link, o fornecedor precisa de um contato com WhatsApp cadastrado. É por ele que a cotação chega."
-            acao={{ href: "/fornecedores/novo", label: "Cadastrar fornecedor" }}
-          />
-        ) : null}
-
-        {podeMontar && disponiveis.length > 0 ? (
-          <div className="mb-4">
-            <SupplierPickerForm roundId={roundId} suppliers={disponiveis} />
-          </div>
-        ) : null}
-
-        {roundSuppliers.length === 0 ? (
-          <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-center text-sm">
-            Nenhum fornecedor convidado ainda.
-          </p>
-        ) : (
-          // Em preparação a lista é só quem foi convidado e por qual contato.
-          // As colunas de envio e resposta viriam todas vazias.
-          <ul className="flex flex-col gap-2">
-            {roundSuppliers.map((rs) => (
-              <li
-                key={rs.id}
-                className="border-border bg-surface flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
-              >
-                <span className="min-w-0">
-                  <span className="text-fg block text-sm font-medium">
-                    {rs.suppliers?.name}
-                  </span>
-                  <span className="text-fg-muted block text-xs">
-                    {rs.supplier_contacts?.name ?? "sem contato"}
-                    {rs.supplier_contacts?.whatsapp
-                      ? ` · ${rs.supplier_contacts.whatsapp}`
-                      : ""}
-                  </span>
-                </span>
-                {podeEditar ? (
-                  <ContactPicker
-                    roundId={roundId}
-                    roundSupplierId={rs.id}
-                    contactId={rs.supplier_contact_id}
-                    contacts={contatos.get(rs.supplier_id) ?? []}
-                  />
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section id="passo-iniciar" className="scroll-mt-4">
-        <h2 className="text-fg mb-1 text-base font-semibold">
-          3 · Conferir e iniciar
-        </h2>
-        <p className="text-fg-muted mb-4 text-sm">
-          Última olhada antes de a rodada valer.
-        </p>
-
-        {podeMontar ? (
-          <StartRoundPanel
-            roundId={roundId}
-            itemCount={itensAtivos}
-            supplierCount={roundSuppliers.length}
-          />
-        ) : (
-          <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-sm">
-            Seu papel não permite iniciar rodadas.
-          </p>
-        )}
-      </section>
     </>
   );
 }
