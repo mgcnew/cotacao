@@ -2689,6 +2689,22 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_round_snapshot: {
+        Args: { p_company_id: string; p_purchase_round_id: string }
+        Returns: {
+          alocacoes_rascunho: number
+          fornecedores: number
+          fornecedores_enviados: number
+          fornecedores_responderam: number
+          grupos_abertos: number
+          itens_alocados: number
+          itens_ativos: number
+          itens_com_resposta: number
+          itens_negociados: number
+          itens_prontos: number
+          pedidos_gerados: number
+        }[]
+      }
       rpc_search_company: {
         Args: {
           p_company_id: string

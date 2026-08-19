@@ -1,7 +1,10 @@
 import { ArrowRight, Package, Users } from "lucide-react";
 import Link from "next/link";
 
+import { Suspense } from "react";
+
 import { Disclosure } from "@/components/layout/disclosure";
+import { MetricsSkeleton } from "@/components/layout/page-skeleton";
 import {
   ContactPicker,
   EditRoundForm,
@@ -18,6 +21,7 @@ import {
   StartRoundPanel,
   SupplierPickerForm,
 } from "@/components/rounds/round-forms";
+import { IndicadoresDaRodada } from "@/components/rounds/round-indicators";
 import { RoundSteps } from "@/components/rounds/round-steps";
 import { SendControls } from "@/components/rounds/send-controls";
 import { Badge } from "@/components/ui/badge";
@@ -502,6 +506,19 @@ function Acompanhamento({
 }) {
   return (
     <>
+      {/* Indicadores e pendências primeiro: é a leitura de "em que pé estamos"
+          antes das listas do "o que tem dentro". Fronteira própria porque são
+          números — chegar depois deles não pode segurar o resto da tela. */}
+      <Suspense fallback={<MetricsSkeleton />}>
+        <IndicadoresDaRodada
+          roundId={roundId}
+          fornecedores={roundSuppliers.map((rs) => ({
+            supplierId: rs.supplier_id,
+            nome: rs.suppliers?.name ?? "Fornecedor",
+          }))}
+        />
+      </Suspense>
+
       {/* Os grupos só ganham uma seção própria depois que a rodada anda: é aí
           que eles passam a poder discordar entre si — um fechado, outro ainda
           esperando preço. Em preparação são todos iguais e ficam recolhidos
