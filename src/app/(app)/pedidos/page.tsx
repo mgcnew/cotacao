@@ -5,6 +5,7 @@ import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { FilterDialog } from "@/components/layout/filter-dialog";
+import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
 import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
 import {
@@ -260,18 +261,12 @@ async function ListaDePedidos({
                 return (
                   <TableRow key={order.id}>
                     <TableCell>
-                      {/* `prefetch={false}` nos links de linha. Com uma casca
-                          de carregamento no destino, o Next passa a prefazer
-                          cada rota visível — e numa lista de duzentos pedidos
-                          isso são duzentas renderizações no servidor para
-                          telas que ninguém abriu. O menu lateral continua
-                          prefazendo: lá são seis links, e sempre os mesmos. */}
-                      <Link
-                        href={`/pedidos/${order.id}`} prefetch={false}
+                      <IntentPrefetchLink
+                        href={`/pedidos/${order.id}`}
                         className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline"
                       >
                         #{order.orderNumber}
-                      </Link>
+                      </IntentPrefetchLink>
                       {order.roundTitle ? (
                         <span className="text-fg-subtle block text-xs">
                           {order.roundTitle}
@@ -354,14 +349,14 @@ async function ListaDePedidos({
                             passo.pending && podeAgir ? "default" : "outline"
                           }
                         >
-                          <Link href={`/pedidos/${order.id}`} prefetch={false}>
+                          <IntentPrefetchLink href={`/pedidos/${order.id}`}>
                             <span className="hidden sm:inline">
                               {podeAgir ? passo.label : "Abrir"}
                             </span>
                             <span className="sm:hidden">
                               {podeAgir ? passo.shortLabel : "Abrir"}
                             </span>
-                          </Link>
+                          </IntentPrefetchLink>
                         </Button>
                       )}
                     </TableCell>

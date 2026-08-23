@@ -1,8 +1,10 @@
 import { Package, Search } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
+import { TableSkeleton } from "@/components/layout/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
@@ -21,17 +23,51 @@ import { PRODUCT_PURPOSE_LABEL } from "@/features/products/purposes";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { normalizeListSearch, parseListPagination } from "@/lib/list-pagination";
 
-export default async function ProdutosPage({
+export default function ProdutosPage({
   searchParams,
 }: PageProps<"/produtos">) {
+  return (
+    <div className="w-full">
+      <PageHeader
+        title="Produtos"
+        description="Catálogo único: revenda e uso interno, separados pela finalidade."
+        action={
+          <Suspense fallback={null}>
+            <NovoProdutoAction />
+          </Suspense>
+        }
+      />
+
+      <Suspense fallback={<TableSkeleton rows={8} columns={7} />}>
+        <ProdutosContent searchParams={searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function NovoProdutoAction() {
   const company = await requireActiveCompany();
-  const [products, counts, permissions] = await Promise.all([
+  const permissions = await getPermissions(company.companyId);
+
+  return permissions.has("product.create") ? (
+    <Button asChild size="sm">
+      <Link href="/produtos/novo">Novo produto</Link>
+    </Button>
+  ) : null;
+}
+
+async function ProdutosContent({
+  searchParams,
+}: {
+  searchParams: PageProps<"/produtos">["searchParams"];
+}) {
+  const company = await requireActiveCompany();
+  const [products, permissions, parametros] = await Promise.all([
     listProducts(company.companyId),
-    getCatalogCounts(company.companyId),
     getPermissions(company.companyId),
+    searchParams,
   ]);
 
-  const parametros = await searchParams;
   const bruto = Array.isArray(parametros.busca)
     ? parametros.busca[0]
     : parametros.busca;
@@ -62,24 +98,17 @@ export default async function ProdutosPage({
   const podeEditar = permissions.has("product.update");
 
   return (
-    <div className="w-full">
-      <PageHeader
-        title="Produtos"
-        description="Catálogo único: revenda e uso interno, separados pela finalidade."
-        action={
-          podeCriar ? (
-            <Button asChild size="sm">
-              <Link href="/produtos/novo">Novo produto</Link>
-            </Button>
-          ) : null
-        }
-      />
-
+    <>
       {products.length > 0 ? (
         <form className="border-border bg-surface mb-4 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1 sm:max-w-md">
             <Search className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4" aria-hidden />
-            <Input name="busca" defaultValue={busca} placeholder="Buscar produto pelo nome" className="pl-8" />
+            <Input
+              name="busca"
+              defaultValue={busca}
+              placeholder="Buscar produto pelo nome"
+              className="pl-8"
+            />
           </div>
           <select
             name="status"
@@ -92,8 +121,14 @@ export default async function ProdutosPage({
             <option value="inativos">Somente inativos</option>
           </select>
           <input type="hidden" name="por_pagina" value={pagination.pageSize} />
-          <Button type="submit" size="sm" variant="outline">Filtrar</Button>
-          {temFiltro ? <Button asChild size="sm" variant="ghost"><Link href="/produtos">Limpar</Link></Button> : null}
+          <Button type="submit" size="sm" variant="outline">
+            Filtrar
+          </Button>
+          {temFiltro ? (
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/produtos">Limpar</Link>
+            </Button>
+          ) : null}
         </form>
       ) : null}
 
@@ -123,7 +158,7 @@ export default async function ProdutosPage({
         />
       ) : (
         <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
-        <Table>
+          <Table>
           <TableHeader>
             <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
               {/* Sete colunas não cabem num celular: a tabela rolaria de lado
@@ -197,12 +232,12 @@ export default async function ProdutosPage({
               </TableRow>
             ))}
           </TableBody>
-        </Table>
-        <DataTablePagination
-          page={pagination.page}
-          pageSize={pagination.pageSize}
-          total={filtrados.length}
-        />
+          </Table>
+          <DataTablePagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            total={filtrados.length}
+          />
         </div>
       )}
 
@@ -210,23 +245,51 @@ export default async function ProdutosPage({
           não o que se vem fazer aqui todo dia — e o cadastro de produto já cria
           a que faltar. Continuam alcançáveis porque é por Categorias que se
           chega aos atributos, que não cabem no fluxo do produto. */}
-      <p className="text-fg-subtle border-border mt-8 border-t pt-4 text-xs">
-        Manutenção do catálogo:{" "}
-        <Link
-          href="/produtos/categorias"
-          className="hover:text-fg underline-offset-4 hover:underline"
-        >
-          categorias
-        </Link>{" "}
-        ({counts.categories}) ·{" "}
-        <Link
-          href="/produtos/unidades"
-          className="hover:text-fg underline-offset-4 hover:underline"
-        >
-          unidades
-        </Link>{" "}
-        ({counts.units})
-      </p>
-    </div>
+      <Suspense fallback={<CatalogMaintenance />}>
+        <CatalogMaintenanceWithCounts companyId={company.companyId} />
+      </Suspense>
+    </>
+  );
+}
+
+function CatalogMaintenance({
+  categories,
+  units,
+}: {
+  categories?: number;
+  units?: number;
+}) {
+  return (
+    <p className="text-fg-subtle border-border mt-8 border-t pt-4 text-xs">
+      Manutenção do catálogo:{" "}
+      <Link
+        href="/produtos/categorias"
+        className="hover:text-fg underline-offset-4 hover:underline"
+      >
+        categorias
+      </Link>{" "}
+      {categories === undefined ? null : <>({categories})</>} ·{" "}
+      <Link
+        href="/produtos/unidades"
+        className="hover:text-fg underline-offset-4 hover:underline"
+      >
+        unidades
+      </Link>{" "}
+      {units === undefined ? null : <>({units})</>}
+    </p>
+  );
+}
+
+async function CatalogMaintenanceWithCounts({
+  companyId,
+}: {
+  companyId: string;
+}) {
+  const counts = await getCatalogCounts(companyId);
+  return (
+    <CatalogMaintenance
+      categories={counts.categories}
+      units={counts.units}
+    />
   );
 }

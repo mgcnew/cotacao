@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -78,13 +80,14 @@ export function hasAnyFilter(f: AnalyticsFilters): boolean {
  * vazia, que significa "o recorte não casou com nenhum produto" e deve zerar
  * o resultado em vez de ignorar o filtro.
  */
-export async function resolveProductIds(
+const resolveProductIdsCached = cache(async (
   companyId: string,
-  f: AnalyticsFilters,
-): Promise<string[] | null> {
-  if (!f.categoriaId && !f.produtoId) return null;
+  categoriaId: string | null,
+  produtoId: string | null,
+): Promise<string[] | null> => {
+  if (!categoriaId && !produtoId) return null;
 
-  if (f.produtoId && !f.categoriaId) return [f.produtoId];
+  if (produtoId && !categoriaId) return [produtoId];
 
   const supabase = await createServerSupabaseClient();
   let query = supabase
@@ -92,17 +95,26 @@ export async function resolveProductIds(
     .select("id")
     .eq("company_id", companyId);
 
-  if (f.categoriaId) query = query.eq("category_id", f.categoriaId);
-  if (f.produtoId) query = query.eq("id", f.produtoId);
+  if (categoriaId) query = query.eq("category_id", categoriaId);
+  if (produtoId) query = query.eq("id", produtoId);
 
   const { data: rows, error } = await query;
   if (error) throw new Error(`Falha ao aplicar o filtro: ${error.message}`);
 
   return (rows ?? []).map((r) => r.id);
+});
+
+export function resolveProductIds(
+  companyId: string,
+  f: AnalyticsFilters,
+): Promise<string[] | null> {
+  // Argumentos primitivos garantem deduplicação mesmo que mais de um painel
+  // construa um objeto de filtros equivalente durante o mesmo render.
+  return resolveProductIdsCached(companyId, f.categoriaId, f.produtoId);
 }
 
 /** Opções dos seletores, já restritas à empresa ativa pela RLS. */
-export async function getFilterOptions(companyId: string) {
+export const getAnalyticsReferences = cache(async (companyId: string) => {
   const supabase = await createServerSupabaseClient();
 
   const [categorias, produtos, fornecedores] = await Promise.all([
@@ -128,4 +140,8 @@ export async function getFilterOptions(companyId: string) {
     produtos: produtos.data ?? [],
     fornecedores: fornecedores.data ?? [],
   };
+});
+
+export function getFilterOptions(companyId: string) {
+  return getAnalyticsReferences(companyId);
 }

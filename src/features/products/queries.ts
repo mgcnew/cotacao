@@ -35,11 +35,9 @@ export async function listProducts(companyId: string) {
 export async function getCatalogCounts(companyId: string) {
   const supabase = await createServerSupabaseClient();
 
-  const [products, categories, units] = await Promise.all([
-    supabase
-      .from("products")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId),
+  // A página já traz todos os produtos para busca e paginação. Recontá-los no
+  // banco era uma quarta viagem HTTP cujo resultado nem era exibido.
+  const [categories, units] = await Promise.all([
     supabase
       .from("categories")
       .select("id", { count: "exact", head: true })
@@ -51,7 +49,6 @@ export async function getCatalogCounts(companyId: string) {
   ]);
 
   return {
-    products: products.count ?? 0,
     categories: categories.count ?? 0,
     units: units.count ?? 0,
   };

@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { Pencil, X } from "lucide-react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { useFechaAoSalvar } from "@/components/layout/fecha-ao-salvar";
 import { ErrorLine } from "@/components/layout/form-feedback";
+import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
 import { ResponseProgress } from "@/components/rounds/response-progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -150,17 +150,12 @@ export function RoundRow({
     <TableRow>
       <TableCell>
         <span className="flex items-center gap-1">
-          {/* Sem prefetch nos links de linha: com casca de carregamento no
-              destino, cada rota visível viraria uma renderização no servidor
-              por rodada listada. O menu lateral segue prefazendo — seis links,
-              sempre os mesmos. */}
-          <Link
+          <IntentPrefetchLink
             href={`/compras/${round.id}`}
-            prefetch={false}
             className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline"
           >
             {round.title}
-          </Link>
+          </IntentPrefetchLink>
           {podeEditar ? (
             <Button
               type="button"
@@ -205,14 +200,14 @@ export function RoundRow({
           size="sm"
           variant={passo.pending && podeAgir ? "default" : "outline"}
         >
-          <Link href={`/compras/${round.id}${passo.path}`} prefetch={false}>
+          <IntentPrefetchLink href={`/compras/${round.id}${passo.path}`}>
             <span className="hidden sm:inline">
               {podeAgir ? passo.label : "Abrir"}
             </span>
             <span className="sm:hidden">
               {podeAgir ? passo.shortLabel : "Abrir"}
             </span>
-          </Link>
+          </IntentPrefetchLink>
         </Button>
       </TableCell>
     </TableRow>

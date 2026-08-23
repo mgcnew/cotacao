@@ -2,6 +2,7 @@ import "server-only";
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 import { publicEnv } from "@/lib/env";
 import type { Database } from "@/types/database";
@@ -37,7 +38,7 @@ const fetchMedido: typeof fetch = async (input, init) => {
   }
 };
 
-export async function createServerSupabaseClient() {
+export const createServerSupabaseClient = cache(async () => {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
@@ -62,7 +63,7 @@ export async function createServerSupabaseClient() {
       },
     },
   );
-}
+});
 
 /**
  * Usuário autenticado validado no servidor de auth do Supabase.

@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  getAnalyticsReferences,
   resolveProductIds,
   type AnalyticsFilters,
 } from "@/features/analytics/filters";
@@ -142,25 +143,17 @@ export async function getSupplierPerformance(
     statsQuery = statsQuery.in("product_id", productIds);
   }
 
-  const [statsRes, suppliersRes] = await Promise.all([
+  const [statsRes, references] = await Promise.all([
     statsQuery,
-    supabase
-      .from("suppliers")
-      .select("id, name")
-      .eq("company_id", companyId),
+    getAnalyticsReferences(companyId),
   ]);
 
   if (statsRes.error) {
     throw new Error(`Falha ao carregar desempenho: ${statsRes.error.message}`);
   }
-  if (suppliersRes.error) {
-    throw new Error(
-      `Falha ao carregar fornecedores: ${suppliersRes.error.message}`,
-    );
-  }
 
   const nameById = new Map(
-    (suppliersRes.data ?? []).map((s) => [s.id, s.name]),
+    references.fornecedores.map((s) => [s.id, s.name]),
   );
   const acc = new Map<string, SupplierPerformance>();
 
@@ -241,16 +234,13 @@ export async function getPriceHistory(
   const rows = data ?? [];
   if (rows.length === 0) return [];
 
-  const [products, suppliers] = await Promise.all([
-    supabase.from("products").select("id, name").eq("company_id", companyId),
-    supabase.from("suppliers").select("id, name").eq("company_id", companyId),
-  ]);
+  const references = await getAnalyticsReferences(companyId);
 
   const productName = new Map(
-    (products.data ?? []).map((p) => [p.id, p.name]),
+    references.produtos.map((p) => [p.id, p.name]),
   );
   const supplierName = new Map(
-    (suppliers.data ?? []).map((s) => [s.id, s.name]),
+    references.fornecedores.map((s) => [s.id, s.name]),
   );
 
   return rows.map((row) => ({

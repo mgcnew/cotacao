@@ -76,30 +76,3 @@ export async function listSupplierCategoryIds(
   }
   return new Set((data ?? []).map((row) => row.category_id));
 }
-
-export async function getSupplierCounts(companyId: string) {
-  const supabase = await createServerSupabaseClient();
-
-  const [total, ativos, contatos] = await Promise.all([
-    supabase
-      .from("suppliers")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId),
-    supabase
-      .from("suppliers")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("status", "active"),
-    supabase
-      .from("supplier_contacts")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("is_active", true),
-  ]);
-
-  return {
-    total: total.count ?? 0,
-    ativos: ativos.count ?? 0,
-    contatos: contatos.count ?? 0,
-  };
-}

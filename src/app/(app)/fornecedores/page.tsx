@@ -1,8 +1,11 @@
 import { Search, Truck } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
+import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
 import { PageHeader } from "@/components/layout/page-header";
+import { TableSkeleton } from "@/components/layout/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
@@ -16,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCnpj } from "@/features/company/cnpj";
-import { getSupplierCounts, listSuppliers } from "@/features/suppliers/queries";
+import { listSuppliers } from "@/features/suppliers/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { normalizeListSearch, parseListPagination } from "@/lib/list-pagination";
 
@@ -26,21 +29,59 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: "Bloqueado",
 };
 
-export default async function FornecedoresPage({
+export default function FornecedoresPage({
   searchParams,
 }: PageProps<"/fornecedores">) {
+  return (
+    <div className="w-full">
+      <PageHeader
+        title="Fornecedores"
+        description="Cadastro, contatos e situação da rede de fornecimento."
+        action={
+          <Suspense fallback={null}>
+            <NovoFornecedorAction />
+          </Suspense>
+        }
+      />
+
+      <Suspense fallback={<TableSkeleton rows={6} columns={4} />}>
+        <FornecedoresContent searchParams={searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function NovoFornecedorAction() {
   const company = await requireActiveCompany();
-  const [suppliers, counts, permissions] = await Promise.all([
+  const permissions = await getPermissions(company.companyId);
+
+  return permissions.has("supplier.create") ? (
+    <Button asChild size="sm">
+      <Link href="/fornecedores/novo">Novo fornecedor</Link>
+    </Button>
+  ) : null;
+}
+
+async function FornecedoresContent({
+  searchParams,
+}: {
+  searchParams: PageProps<"/fornecedores">["searchParams"];
+}) {
+  const company = await requireActiveCompany();
+  const [suppliers, permissions, params] = await Promise.all([
     listSuppliers(company.companyId),
-    getSupplierCounts(company.companyId),
     getPermissions(company.companyId),
+    searchParams,
   ]);
 
   const podeCriar = permissions.has("supplier.create");
-  const params = await searchParams;
-  const buscaBruta = Array.isArray(params.busca) ? params.busca[0] : params.busca;
+  const buscaBruta = Array.isArray(params.busca)
+    ? params.busca[0]
+    : params.busca;
   const busca = (buscaBruta ?? "").trim();
-  const statusBruto = Array.isArray(params.status) ? params.status[0] : params.status;
+  const statusBruto = Array.isArray(params.status)
+    ? params.status[0]
+    : params.status;
   const status = ["active", "inactive", "blocked"].includes(statusBruto ?? "")
     ? statusBruto
     : "todos";
@@ -49,7 +90,10 @@ export default async function FornecedoresPage({
     if (status !== "todos" && supplier.status !== status) return false;
     if (!needle) return true;
     const contacts = supplier.supplier_contacts
-      ?.map((contact) => `${contact.name} ${contact.whatsapp ?? ""} ${contact.phone ?? ""}`)
+      ?.map(
+        (contact) =>
+          `${contact.name} ${contact.whatsapp ?? ""} ${contact.phone ?? ""}`,
+      )
       .join(" ");
     return normalizeListSearch(
       `${supplier.name} ${supplier.legal_name ?? ""} ${supplier.document_number ?? ""} ${contacts ?? ""}`,
@@ -58,21 +102,20 @@ export default async function FornecedoresPage({
   const pagination = parseListPagination(params, filtrados.length);
   const visiveis = filtrados.slice(pagination.start, pagination.end);
   const temFiltro = Boolean(busca) || status !== "todos";
+  const counts = {
+    total: suppliers.length,
+    ativos: suppliers.filter((supplier) => supplier.status === "active").length,
+    contatos: suppliers.reduce(
+      (total, supplier) =>
+        total +
+        (supplier.supplier_contacts?.filter((contact) => contact.is_active)
+          .length ?? 0),
+      0,
+    ),
+  };
 
   return (
-    <div className="w-full">
-      <PageHeader
-        title="Fornecedores"
-        description={`${counts.ativos} de ${counts.total} ativos · ${counts.contatos} contatos.`}
-        action={
-          podeCriar ? (
-            <Button asChild size="sm">
-              <Link href="/fornecedores/novo">Novo fornecedor</Link>
-            </Button>
-          ) : null
-        }
-      />
-
+    <>
       {suppliers.length > 0 ? (
         <form className="border-border bg-surface mb-4 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1 sm:max-w-md">
@@ -96,8 +139,17 @@ export default async function FornecedoresPage({
             <option value="blocked">Bloqueados</option>
           </select>
           <input type="hidden" name="por_pagina" value={pagination.pageSize} />
-          <Button type="submit" size="sm" variant="outline">Filtrar</Button>
-          {temFiltro ? <Button asChild size="sm" variant="ghost"><Link href="/fornecedores">Limpar</Link></Button> : null}
+          <Button type="submit" size="sm" variant="outline">
+            Filtrar
+          </Button>
+          {temFiltro ? (
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/fornecedores">Limpar</Link>
+            </Button>
+          ) : null}
+          <span className="text-fg-subtle text-xs sm:ml-auto">
+            {counts.ativos} de {counts.total} ativos · {counts.contatos} contatos
+          </span>
         </form>
       ) : null}
 
@@ -119,11 +171,15 @@ export default async function FornecedoresPage({
           icon={Truck}
           title="Nenhum fornecedor neste filtro"
           description="Ajuste a busca ou a situação para encontrar outros fornecedores."
-          action={<Button asChild size="sm" variant="outline"><Link href="/fornecedores">Limpar filtros</Link></Button>}
+          action={
+            <Button asChild size="sm" variant="outline">
+              <Link href="/fornecedores">Limpar filtros</Link>
+            </Button>
+          }
         />
       ) : (
         <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
-        <Table>
+          <Table>
           <TableHeader>
             <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
               {/* No celular sobram Fornecedor e Situação. CNPJ e contato
@@ -145,14 +201,12 @@ export default async function FornecedoresPage({
               return (
                 <TableRow key={supplier.id}>
                   <TableCell>
-                    {/* Sem prefetch: um link de linha por fornecedor viraria
-                        uma renderização no servidor por linha visível. */}
-                    <Link
-                      href={`/fornecedores/${supplier.id}`} prefetch={false}
+                    <IntentPrefetchLink
+                      href={`/fornecedores/${supplier.id}`}
                       className="text-fg hover:text-primary font-medium"
                     >
                       {supplier.name}
-                    </Link>
+                    </IntentPrefetchLink>
                     {supplier.legal_name ? (
                       <span className="text-fg-subtle block text-xs">
                         {supplier.legal_name}
@@ -198,14 +252,14 @@ export default async function FornecedoresPage({
               );
             })}
           </TableBody>
-        </Table>
-        <DataTablePagination
-          page={pagination.page}
-          pageSize={pagination.pageSize}
-          total={filtrados.length}
-        />
+          </Table>
+          <DataTablePagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            total={filtrados.length}
+          />
         </div>
       )}
-    </div>
+    </>
   );
 }
