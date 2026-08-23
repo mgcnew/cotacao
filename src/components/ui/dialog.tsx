@@ -114,10 +114,12 @@ function DialogContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         data-slot="dialog-overlay"
-        className="data-[state=open]:animate-ds-fade fixed inset-0 z-50 bg-black/50"
+        className="data-[state=open]:animate-ds-fade fixed inset-0 z-50 bg-black/55"
       />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        data-visual="glass"
+        data-size={size ?? "md"}
         className={cn(
           dialogContentVariants({ size }),
           alturaEstavel && "sm:h-[85dvh]",

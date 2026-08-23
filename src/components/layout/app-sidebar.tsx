@@ -25,6 +25,7 @@ export function AppSidebar({ companyName, permissions }: Props) {
 
   return (
     <aside
+      data-slot="app-sidebar"
       className={cn(
         "border-border bg-surface hidden shrink-0 flex-col border-r md:flex",
         "transition-[width] duration-(--dur) ease-(--ease-ds)",

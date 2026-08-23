@@ -5,11 +5,12 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(31);
+select plan(35);
 
 -- Tabelas principais
 select has_table('public','suppliers','suppliers');
 select has_table('public','purchase_rounds','purchase_rounds');
+select has_table('public','round_supplier_groups','round_supplier_groups');
 select has_table('public','quotation_responses','quotation_responses');
 select has_table('public','negotiations','negotiations');
 select has_table('public','purchase_allocations','purchase_allocations');
@@ -48,6 +49,15 @@ select has_function('public','rpc_create_order_revision',
 select has_function('public','rpc_post_receipt',
   array['uuid','uuid','timestamp with time zone','jsonb','text'],
   'rpc_post_receipt');
+select has_function('public','rpc_upsert_round_supplier_groups',
+  array['uuid','uuid','uuid','uuid','uuid[]'],
+  'rpc_upsert_round_supplier_groups');
+select has_function('public','rpc_remove_round_supplier',
+  array['uuid','uuid','text'],
+  'rpc_remove_round_supplier');
+select has_function('private','retire_closed_round_supplier_groups',
+  array[]::text[],
+  'retire_closed_round_supplier_groups');
 
 -- RPCs públicas
 select has_function('public','rpc_public_get_quotation',

@@ -46,14 +46,17 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
        `dvh` e não `vh` por causa do celular: com a barra do navegador
        aparecendo e sumindo, `100vh` é maior que a tela visível e deixa uma
        faixa cortada embaixo. */
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-dvh overflow-hidden" data-slot="app-shell">
       <AppSidebar
         companyName={activeCompany.companyName}
         permissions={[...permissions]}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="border-border bg-surface flex h-14 shrink-0 items-center gap-2 border-b px-4 sm:gap-4 sm:px-6">
+        <header
+          data-slot="app-header"
+          className="border-border bg-surface flex h-14 shrink-0 items-center gap-2 border-b px-4 sm:gap-4 sm:px-6"
+        >
           <MobileNav
             companyName={activeCompany.companyName}
             permissions={[...permissions]}
@@ -89,7 +92,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             os formulários põem os campos em grade (`sm:grid-cols-2`,
             `lg:grid-cols-3`) para que nenhum deles fique sozinho esticado de
             ponta a ponta. */}
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <main
+          data-slot="app-main"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"
+        >
           {children}
         </main>
       </div>

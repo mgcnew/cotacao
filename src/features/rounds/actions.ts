@@ -279,29 +279,45 @@ export async function addQuotationItem(
 
   if (error) return { error: describeWriteError(error) };
 
-  await linkItemToRoundSuppliers(parsed.data.roundId, item.id);
+  await linkItemToRoundSuppliers(parsed.data.roundId, item.id, groupId);
 
   revalidatePath(`/compras/${parsed.data.roundId}`);
   return { error: null, savedAt: Date.now() };
 }
 
 /**
- * Liga um item novo a todos os fornecedores já na rodada.
+ * Liga um item novo somente aos fornecedores atribuídos ao grupo dele.
  *
  * Quem já recebeu o link é marcado com `added_after_initial_send`, que é como
  * o schema registra "isto entrou depois" — o documento mestre pede que itens
  * acrescentados sejam destacados para o fornecedor, e sem essa marca não teria
  * como saber quais são.
  */
-async function linkItemToRoundSuppliers(roundId: string, itemId: string) {
+async function linkItemToRoundSuppliers(
+  roundId: string,
+  itemId: string,
+  groupId: string,
+) {
   const company = await requireActiveCompany();
   const supabase = await createServerSupabaseClient();
+
+  const { data: assignments } = await supabase
+    .from("round_supplier_groups")
+    .select("round_supplier_id")
+    .eq("company_id", company.companyId)
+    .eq("group_id", groupId)
+    .is("removed_at", null);
+
+  const assignedIds = (assignments ?? []).map((row) => row.round_supplier_id);
+  if (assignedIds.length === 0) return;
 
   const { data: roundSuppliers } = await supabase
     .from("round_suppliers")
     .select("id, first_sent_at")
     .eq("company_id", company.companyId)
-    .eq("purchase_round_id", roundId);
+    .eq("purchase_round_id", roundId)
+    .in("id", assignedIds)
+    .is("removed_at", null);
 
   if (!roundSuppliers || roundSuppliers.length === 0) return;
 
@@ -316,7 +332,7 @@ async function linkItemToRoundSuppliers(roundId: string, itemId: string) {
 }
 
 /**
- * Coloca um fornecedor na rodada, já com todos os itens existentes.
+ * Coloca um fornecedor na rodada e materializa os grupos escolhidos.
  *
  * O contato principal ativo é escolhido automaticamente: é para ele que o link
  * da cotação vai.
@@ -357,53 +373,116 @@ export async function addRoundSupplier(
     };
   }
 
-  const { data: roundSupplier, error } = await supabase
-    .from("round_suppliers")
-    .insert({
-      company_id: company.companyId,
-      purchase_round_id: parsed.data.roundId,
-      supplier_id: parsed.data.supplierId,
-      supplier_contact_id: contactId,
-    })
-    .select("id")
-    .single();
+  let groupIds = formData.getAll("groupId").map(String).filter(Boolean);
+  if (groupIds.length === 0) {
+    const { data: groups, error: groupsError } = await supabase
+      .from("purchase_round_groups")
+      .select("id")
+      .eq("company_id", company.companyId)
+      .eq("purchase_round_id", parsed.data.roundId)
+      .in("status", ["draft", "open"]);
 
-  if (error) {
-    return {
-      error:
-        error.code === "23505"
-          ? "Este fornecedor já está nesta rodada."
-          : describeWriteError(error),
-    };
-  }
-
-  // Todos os itens atuais da rodada vão para ele.
-  const { data: items } = await supabase
-    .from("quotation_items")
-    .select("id")
-    .eq("company_id", company.companyId)
-    .eq("purchase_round_id", parsed.data.roundId);
-
-  if (items && items.length > 0) {
-    const { error: linkError } = await supabase
-      .from("supplier_quotation_items")
-      .insert(
-        items.map((item) => ({
-          company_id: company.companyId,
-          round_supplier_id: roundSupplier.id,
-          quotation_item_id: item.id,
-        })),
-      );
-
-    if (linkError) {
-      return {
-        error: `Fornecedor entrou na rodada, mas os itens não foram vinculados: ${linkError.message}`,
-      };
+    if (groupsError) {
+      return { error: `Falha ao carregar os grupos: ${groupsError.message}` };
     }
+    groupIds = (groups ?? []).map((group) => group.id);
   }
 
-  revalidatePath(`/compras/${parsed.data.roundId}`);
+  const { error } = await supabase.rpc("rpc_upsert_round_supplier_groups", {
+    p_company_id: company.companyId,
+    p_purchase_round_id: parsed.data.roundId,
+    p_supplier_id: parsed.data.supplierId,
+    p_supplier_contact_id: contactId,
+    p_group_ids: groupIds,
+  });
+
+  if (error) return { error: descreverErroDeRpc(error.message) };
+
+  revalidateRoundPaths(parsed.data.roundId);
   return { error: null, savedAt: Date.now() };
+}
+
+/** Salva contato e grupos de um fornecedor novo ou já participante. */
+export async function upsertRoundSupplierGroups(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const parsed = z
+    .object({
+      roundId: z.uuid({ error: "Rodada inválida" }),
+      supplierId: z.uuid({ error: "Escolha o fornecedor" }),
+      contactId: z.uuid({ error: "Escolha o contato" }),
+      groupIds: z.array(z.uuid()).min(1, "Escolha ao menos um grupo"),
+    })
+    .safeParse({
+      roundId: formData.get("roundId"),
+      supplierId: formData.get("supplierId"),
+      contactId: formData.get("contactId"),
+      groupIds: formData.getAll("groupId"),
+    });
+
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_upsert_round_supplier_groups", {
+    p_company_id: company.companyId,
+    p_purchase_round_id: parsed.data.roundId,
+    p_supplier_id: parsed.data.supplierId,
+    p_supplier_contact_id: parsed.data.contactId,
+    p_group_ids: parsed.data.groupIds,
+  });
+
+  if (error) return { error: descreverErroDeRpc(error.message) };
+
+  revalidateRoundPaths(parsed.data.roundId);
+  return { error: null, savedAt: Date.now() };
+}
+
+/** Retira a participação, revoga o link e preserva todo o histórico. */
+export async function removeRoundSupplier(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const parsed = z
+    .object({
+      roundId: z.uuid({ error: "Rodada inválida" }),
+      roundSupplierId: z.uuid({ error: "Fornecedor inválido" }),
+      reason: z
+        .string()
+        .trim()
+        .min(3, "Informe o motivo da retirada")
+        .max(500, "Motivo muito longo"),
+    })
+    .safeParse({
+      roundId: formData.get("roundId"),
+      roundSupplierId: formData.get("roundSupplierId"),
+      reason: formData.get("reason"),
+    });
+
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_remove_round_supplier", {
+    p_company_id: company.companyId,
+    p_round_supplier_id: parsed.data.roundSupplierId,
+    p_reason: parsed.data.reason,
+  });
+
+  if (error) return { error: descreverErroDeRpc(error.message) };
+
+  revalidateRoundPaths(parsed.data.roundId);
+  return { error: null, savedAt: Date.now() };
+}
+
+function revalidateRoundPaths(roundId: string) {
+  revalidatePath(`/compras/${roundId}`);
+  revalidatePath(`/compras/${roundId}/comparacao`);
+  revalidatePath(`/compras/${roundId}/alocacao`);
+  revalidatePath("/compras");
 }
 
 /**

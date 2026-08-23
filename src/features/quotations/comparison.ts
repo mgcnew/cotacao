@@ -36,6 +36,7 @@ export type ComparisonCell = {
 
 export type ComparisonRow = {
   itemId: string;
+  commercialStatus: string;
   supplierQuotationItemBySupplier: Map<string, string>;
   productName: string;
   groupName: string;
@@ -61,6 +62,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         `
         id,
         requested_quantity,
+        commercial_status,
         group_id,
         products!inner ( name ),
         purchase_unit:units!quotation_items_company_id_purchase_unit_id_fkey ( symbol ),
@@ -77,7 +79,9 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       .order("created_at"),
     supabase
       .from("round_suppliers")
-      .select("id, supplier_id, completed_at, suppliers!inner ( name )")
+      .select(
+        "id, supplier_id, completed_at, removed_at, suppliers!inner ( name )",
+      )
       .eq("company_id", companyId)
       .eq("purchase_round_id", roundId)
       .order("created_at"),
@@ -93,7 +97,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
   }
 
   const items = itemsRes.data ?? [];
-  const roundSuppliers = roundSuppliersRes.data ?? [];
+  const allRoundSuppliers = roundSuppliersRes.data ?? [];
 
   const groups = await supabase
     .from("purchase_round_groups")
@@ -103,18 +107,17 @@ export async function getRoundComparison(companyId: string, roundId: string) {
 
   const groupName = new Map((groups.data ?? []).map((g) => [g.id, g.name]));
 
-  if (items.length === 0 || roundSuppliers.length === 0) {
-    return { rows: [] as ComparisonRow[], suppliers: roundSuppliers };
+  if (items.length === 0 || allRoundSuppliers.length === 0) {
+    return { rows: [] as ComparisonRow[], suppliers: allRoundSuppliers };
   }
 
-  const roundSupplierIds = roundSuppliers.map((rs) => rs.id);
+  const roundSupplierIds = allRoundSuppliers.map((rs) => rs.id);
 
   const { data: links, error: linksError } = await supabase
     .from("supplier_quotation_items")
-    .select("id, round_supplier_id, quotation_item_id")
+    .select("id, round_supplier_id, quotation_item_id, removed_at")
     .eq("company_id", companyId)
-    .in("round_supplier_id", roundSupplierIds)
-    .is("removed_at", null);
+    .in("round_supplier_id", roundSupplierIds);
 
   if (linksError) {
     throw new Error(`Falha ao carregar vínculos: ${linksError.message}`);
@@ -224,6 +227,17 @@ export async function getRoundComparison(companyId: string, roundId: string) {
   const responseByLink = new Map(
     (responsesRes.data ?? []).map((r) => [r.supplier_quotation_item_id, r]),
   );
+  // Participante retirado continua na comparação somente quando deixou uma
+  // resposta. Assim o histórico não some, mas uma inclusão desfeita antes de
+  // qualquer preço também não vira uma coluna vazia para sempre.
+  const roundSuppliers = allRoundSuppliers.filter(
+    (supplier) =>
+      supplier.removed_at === null ||
+      (links ?? []).some(
+        (link) =>
+          link.round_supplier_id === supplier.id && responseByLink.has(link.id),
+      ),
+  );
 
   const rows: ComparisonRow[] = items.map((item) => {
     const cells = new Map<string, ComparisonCell>();
@@ -233,7 +247,10 @@ export async function getRoundComparison(companyId: string, roundId: string) {
 
     for (const rs of roundSuppliers) {
       const link = (links ?? []).find(
-        (l) => l.round_supplier_id === rs.id && l.quotation_item_id === item.id,
+        (l) =>
+          l.round_supplier_id === rs.id &&
+          l.quotation_item_id === item.id &&
+          (l.removed_at === null || responseByLink.has(l.id)),
       );
       if (!link) continue;
 
@@ -290,6 +307,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
 
     return {
       itemId: item.id,
+      commercialStatus: item.commercial_status,
       supplierQuotationItemBySupplier: linkBySupplier,
       productName: item.products.name,
       groupName: groupName.get(item.group_id) ?? "—",

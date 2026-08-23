@@ -295,6 +295,301 @@ export type Database = {
           },
         ]
       }
+      whatsapp_connections: {
+        Row: {
+          company_id: string
+          created_at: string
+          display_name: string
+          id: string
+          instance_name: string
+          last_connected_at: string | null
+          last_error: string | null
+          last_event_at: string | null
+          last_sync_at: string | null
+          phone_number: string | null
+          provider_mode: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          display_name?: string
+          id?: string
+          instance_name: string
+          last_connected_at?: string | null
+          last_error?: string | null
+          last_event_at?: string | null
+          last_sync_at?: string | null
+          phone_number?: string | null
+          provider_mode?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          display_name?: string
+          id?: string
+          instance_name?: string
+          last_connected_at?: string | null
+          last_error?: string | null
+          last_event_at?: string | null
+          last_sync_at?: string | null
+          phone_number?: string | null
+          provider_mode?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_connections_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_conversations: {
+        Row: {
+          assigned_user_id: string | null
+          awaiting_side: string | null
+          company_id: string
+          connection_id: string
+          created_at: string
+          display_name: string | null
+          id: string
+          last_direction: string | null
+          last_message_at: string | null
+          last_message_preview: string | null
+          normalized_phone: string | null
+          order_id: string | null
+          purchase_round_id: string | null
+          remote_jid: string
+          status: string
+          supplier_contact_id: string | null
+          supplier_id: string | null
+          unread_count: number
+          updated_at: string
+        }
+        Insert: {
+          assigned_user_id?: string | null
+          awaiting_side?: string | null
+          company_id: string
+          connection_id: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          last_direction?: string | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          normalized_phone?: string | null
+          order_id?: string | null
+          purchase_round_id?: string | null
+          remote_jid: string
+          status?: string
+          supplier_contact_id?: string | null
+          supplier_id?: string | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Update: {
+          assigned_user_id?: string | null
+          awaiting_side?: string | null
+          company_id?: string
+          connection_id?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          last_direction?: string | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          normalized_phone?: string | null
+          order_id?: string | null
+          purchase_round_id?: string | null
+          remote_jid?: string
+          status?: string
+          supplier_contact_id?: string | null
+          supplier_id?: string | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversations_company_id_connection_id_fkey"
+            columns: ["company_id", "connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_company_id_supplier_id_fkey"
+            columns: ["company_id", "supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_company_id_supplier_contact_id_fkey"
+            columns: ["company_id", "supplier_contact_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_contacts"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_company_id_purchase_round_id_fkey"
+            columns: ["company_id", "purchase_round_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_rounds"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_company_id_order_id_fkey"
+            columns: ["company_id", "order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["company_id", "id"]
+          },
+        ]
+      }
+      whatsapp_messages: {
+        Row: {
+          body: string | null
+          company_id: string
+          connection_id: string
+          conversation_id: string
+          created_at: string
+          delivered_at: string | null
+          direction: string
+          error_message: string | null
+          external_message_id: string | null
+          id: string
+          media_file_name: string | null
+          media_mime_type: string | null
+          media_path: string | null
+          message_type: string
+          occurred_at: string
+          raw_payload: Json
+          read_at: string | null
+          reply_to_external_id: string | null
+          sender_user_id: string | null
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          company_id: string
+          connection_id: string
+          conversation_id: string
+          created_at?: string
+          delivered_at?: string | null
+          direction: string
+          error_message?: string | null
+          external_message_id?: string | null
+          id?: string
+          media_file_name?: string | null
+          media_mime_type?: string | null
+          media_path?: string | null
+          message_type?: string
+          occurred_at?: string
+          raw_payload?: Json
+          read_at?: string | null
+          reply_to_external_id?: string | null
+          sender_user_id?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          company_id?: string
+          connection_id?: string
+          conversation_id?: string
+          created_at?: string
+          delivered_at?: string | null
+          direction?: string
+          error_message?: string | null
+          external_message_id?: string | null
+          id?: string
+          media_file_name?: string | null
+          media_mime_type?: string | null
+          media_path?: string | null
+          message_type?: string
+          occurred_at?: string
+          raw_payload?: Json
+          read_at?: string | null
+          reply_to_external_id?: string | null
+          sender_user_id?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_company_id_connection_id_fkey"
+            columns: ["company_id", "connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_company_id_conversation_id_fkey"
+            columns: ["company_id", "conversation_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversations"
+            referencedColumns: ["company_id", "id"]
+          },
+        ]
+      }
+      whatsapp_webhook_events: {
+        Row: {
+          company_id: string
+          connection_id: string
+          error_message: string | null
+          event_type: string
+          id: string
+          payload: Json
+          processed_at: string | null
+          provider_event_key: string
+          received_at: string
+          status: string
+        }
+        Insert: {
+          company_id: string
+          connection_id: string
+          error_message?: string | null
+          event_type: string
+          id?: string
+          payload: Json
+          processed_at?: string | null
+          provider_event_key: string
+          received_at?: string
+          status?: string
+        }
+        Update: {
+          company_id?: string
+          connection_id?: string
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          provider_event_key?: string
+          received_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_webhook_events_company_id_connection_id_fkey"
+            columns: ["company_id", "connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["company_id", "id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           created_at: string
@@ -1919,6 +2214,54 @@ export type Database = {
           },
         ]
       }
+      round_supplier_groups: {
+        Row: {
+          added_after_initial_send: boolean
+          company_id: string
+          created_at: string
+          group_id: string
+          id: string
+          removed_at: string | null
+          round_supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          added_after_initial_send?: boolean
+          company_id: string
+          created_at?: string
+          group_id: string
+          id?: string
+          removed_at?: string | null
+          round_supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          added_after_initial_send?: boolean
+          company_id?: string
+          created_at?: string
+          group_id?: string
+          id?: string
+          removed_at?: string | null
+          round_supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "round_supplier_groups_company_id_group_id_fkey"
+            columns: ["company_id", "group_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_round_groups"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "round_supplier_groups_company_id_round_supplier_id_fkey"
+            columns: ["company_id", "round_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "round_suppliers"
+            referencedColumns: ["company_id", "id"]
+          },
+        ]
+      }
       round_suppliers: {
         Row: {
           company_id: string
@@ -1928,6 +2271,9 @@ export type Database = {
           first_sent_at: string | null
           id: string
           purchase_round_id: string
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by: string | null
           supplier_contact_id: string | null
           supplier_id: string
           updated_at: string
@@ -1940,6 +2286,9 @@ export type Database = {
           first_sent_at?: string | null
           id?: string
           purchase_round_id: string
+          removal_reason?: string | null
+          removed_at?: string | null
+          removed_by?: string | null
           supplier_contact_id?: string | null
           supplier_id: string
           updated_at?: string
@@ -1952,6 +2301,9 @@ export type Database = {
           first_sent_at?: string | null
           id?: string
           purchase_round_id?: string
+          removal_reason?: string | null
+          removed_at?: string | null
+          removed_by?: string | null
           supplier_contact_id?: string | null
           supplier_id?: string
           updated_at?: string
@@ -2630,6 +2982,14 @@ export type Database = {
         Args: { p_company_id: string; p_round_supplier_id: string }
         Returns: Json
       }
+      rpc_remove_round_supplier: {
+        Args: {
+          p_company_id: string
+          p_reason: string
+          p_round_supplier_id: string
+        }
+        Returns: Json
+      }
       rpc_post_receipt: {
         Args: {
           p_company_id: string
@@ -2704,6 +3064,16 @@ export type Database = {
           itens_prontos: number
           pedidos_gerados: number
         }[]
+      }
+      rpc_upsert_round_supplier_groups: {
+        Args: {
+          p_company_id: string
+          p_group_ids: string[]
+          p_purchase_round_id: string
+          p_supplier_contact_id: string
+          p_supplier_id: string
+        }
+        Returns: Json
       }
       rpc_search_company: {
         Args: {

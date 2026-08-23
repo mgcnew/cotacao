@@ -8,6 +8,7 @@ import {
   listRoundGroups,
   listRoundItems,
   listRoundSupplierContacts,
+  listRoundSupplierGroups,
   listRoundSuppliers,
   listSelectableSuppliers,
 } from "@/features/rounds/queries";
@@ -61,20 +62,25 @@ export const carregarRodada = cache(async (roundId: string) => {
   // etapa seguinte, com token e reenvio. Aqui a montagem se encerra.
   const podeMontar = podeEditar && emPreparacao;
 
-  const [products, selectableSuppliers, contatos] = await Promise.all([
-    podeMontar ? listProducts(company.companyId) : Promise.resolve([]),
-    podeMontar
-      ? listSelectableSuppliers(company.companyId)
-      : Promise.resolve([]),
-    // Só há o que trocar quando o fornecedor tem mais de um contato ativo; a
-    // consulta é uma para a tabela toda, não uma por linha.
-    podeEditar && !encerrada
-      ? listRoundSupplierContacts(
-          company.companyId,
-          roundSuppliers.map((rs) => rs.supplier_id),
-        )
-      : Promise.resolve(new Map()),
-  ]);
+  const [products, selectableSuppliers, contatos, supplierGroups] =
+    await Promise.all([
+      podeMontar ? listProducts(company.companyId) : Promise.resolve([]),
+      podeEditar && !encerrada
+        ? listSelectableSuppliers(company.companyId)
+        : Promise.resolve([]),
+      // Só há o que trocar quando o fornecedor tem mais de um contato ativo; a
+      // consulta é uma para a tabela toda, não uma por linha.
+      podeEditar && !encerrada
+        ? listRoundSupplierContacts(
+            company.companyId,
+            roundSuppliers.map((rs) => rs.supplier_id),
+          )
+        : Promise.resolve(new Map()),
+      listRoundSupplierGroups(
+        company.companyId,
+        roundSuppliers.map((rs) => rs.id),
+      ),
+    ]);
 
   const itensAtivos = items.filter((i) => i.commercial_status !== "cancelled");
   const itensEmAberto = items.filter((i) => i.commercial_status === "open");
@@ -92,6 +98,7 @@ export const carregarRodada = cache(async (roundId: string) => {
     products,
     selectableSuppliers,
     contatos,
+    supplierGroups,
     podeEditar,
     podeEnviar,
     podeMontar,

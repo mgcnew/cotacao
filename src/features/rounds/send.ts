@@ -65,7 +65,7 @@ export async function generateQuotationLink(
   const supabase = await createServerSupabaseClient();
   const { data: roundSupplier, error: readError } = await supabase
     .from("round_suppliers")
-    .select("id, supplier_id, purchase_round_id")
+    .select("id, supplier_id, purchase_round_id, removed_at")
     .eq("company_id", company.companyId)
     .eq("id", roundSupplierId)
     .maybeSingle();
@@ -75,6 +75,23 @@ export async function generateQuotationLink(
   }
   if (!roundSupplier) {
     return { error: "Fornecedor não encontrado nesta rodada." };
+  }
+  if (roundSupplier.removed_at) {
+    return { error: "Este fornecedor foi retirado da rodada." };
+  }
+
+  const { count: activeItems, error: itemsError } = await supabase
+    .from("supplier_quotation_items")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", company.companyId)
+    .eq("round_supplier_id", roundSupplier.id)
+    .is("removed_at", null);
+
+  if (itemsError) {
+    return { error: `Falha ao conferir os produtos: ${itemsError.message}` };
+  }
+  if (!activeItems) {
+    return { error: "Escolha ao menos um grupo com produtos antes de gerar o link." };
   }
 
   let service: ReturnType<typeof createServiceRoleClient>;

@@ -27,7 +27,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 /** Rotas que não exigem sessão. Os portais do fornecedor entram aqui: ele
  *  acessa por token, sem login. */
-const PUBLIC_PREFIXES = ["/login", "/signup", "/auth", "/q/", "/o/"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/signup",
+  "/auth",
+  "/q/",
+  "/o/",
+  "/api/evolution/",
+];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PREFIXES.some(

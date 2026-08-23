@@ -3,10 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { getAllocationBoard } from "@/features/allocations/queries";
+import { carregarRodadaBasica } from "@/features/rounds/central";
 import { requireActiveCompany, requireUser } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type AllocationState = { error: string | null; savedAt?: number };
+
+export type RecommendationState = AllocationState & { createdCount?: number };
 
 /**
  * Decisão de compra: de quem comprar cada item, e quanto.
@@ -143,6 +147,92 @@ export async function allocateItem(
 
   revalidatePath(`/compras/${parsed.data.roundId}/alocacao`);
   return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Materializa, em um único INSERT, a proposta de menor preço da tela.
+ *
+ * A leitura pode sugerir automaticamente; a gravação continua dependendo de
+ * uma ação explícita do comprador. Itens que já têm qualquer decisão ficam de
+ * fora para não apagar uma divisão deliberada entre fornecedores.
+ */
+export async function allocateBestPrices(
+  _prev: RecommendationState,
+  formData: FormData,
+): Promise<RecommendationState> {
+  const company = await requireActiveCompany();
+  const user = await requireUser();
+  const parsed = z.uuid({ error: "Rodada inválida" }).safeParse(formData.get("roundId"));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const roundId = parsed.data;
+  const [round, board] = await Promise.all([
+    carregarRodadaBasica(roundId),
+    getAllocationBoard(company.companyId, roundId),
+  ]);
+  if (!round || round.status !== "active") {
+    return { error: "A rodada precisa estar em andamento para aplicar a sugestão." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const itemIds = board.rows.map((row) => row.itemId);
+  const { data: openItems, error: openError } = itemIds.length
+    ? await supabase
+        .from("quotation_items")
+        .select("id")
+        .eq("company_id", company.companyId)
+        .eq("purchase_round_id", roundId)
+        .eq("commercial_status", "open")
+        .in("id", itemIds)
+    : { data: [], error: null };
+
+  if (openError) return { error: `Falha ao conferir os itens: ${openError.message}` };
+  const openIds = new Set((openItems ?? []).map((item) => item.id));
+
+  const rows = board.rows.flatMap((row) => {
+    if (!openIds.has(row.itemId) || (board.allocationsByItem.get(row.itemId)?.length ?? 0) > 0) return [];
+
+    const candidates = board.suppliers
+      .filter((supplier) => supplier.removed_at === null)
+      .flatMap((supplier) => {
+        const cell = row.cells.get(supplier.id);
+        return cell && !cell.doesNotSupply && cell.responseItemId && cell.currentPrice !== null
+          ? [{ supplierId: supplier.supplier_id, responseItemId: cell.responseItemId, price: cell.currentPrice, name: supplier.suppliers.name }]
+          : [];
+      })
+      .sort((a, b) => a.price - b.price || a.name.localeCompare(b.name));
+
+    const best = candidates[0];
+    if (!best) return [];
+    return [{
+      company_id: company.companyId,
+      purchase_round_id: roundId,
+      quotation_item_id: row.itemId,
+      supplier_id: best.supplierId,
+      quotation_response_item_id: best.responseItemId,
+      allocated_quantity: row.requestedQuantity,
+      selected_price: best.price,
+      benchmark_price_at_decision: best.price,
+      decision_reason: "Sugestão automática: menor preço vigente",
+      allocated_by: user.id,
+    }];
+  });
+
+  if (rows.length === 0) {
+    return { error: "Não há novos itens com preço para sugerir." };
+  }
+
+  const { error } = await supabase.from("purchase_allocations").insert(rows);
+  if (error) {
+    if (error.code === "42501" || error.message.includes("row-level security")) {
+      return { error: "Seu papel não permite decidir a compra." };
+    }
+    return { error: `Não foi possível aplicar a sugestão: ${error.message}` };
+  }
+
+  revalidatePath(`/compras/${roundId}/alocacao`);
+  revalidatePath(`/compras/${roundId}`);
+  return { error: null, savedAt: Date.now(), createdCount: rows.length };
 }
 
 /**

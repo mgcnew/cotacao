@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { RouteModal } from "@/components/layout/route-modal";
 import { descreverRodada } from "@/components/rounds/round-central";
+import { RoundModalNav } from "@/components/rounds/round-modal-nav";
 import { carregarRodada, carregarRodadaBasica } from "@/features/rounds/central";
 
 /**
@@ -65,9 +66,18 @@ export default async function LayoutDoModalDaRodada({
         </Suspense>
       }
     >
+      <Suspense fallback={<div className="border-border h-11 shrink-0 border-b" />}>
+        <Navigation id={id} />
+      </Suspense>
       {children}
     </RouteModal>
   );
+}
+
+async function Navigation({ id }: { id: string }) {
+  const round = await carregarRodadaBasica(id);
+  if (!round || round.status === "draft") return null;
+  return <RoundModalNav roundId={id} />;
 }
 
 /** Uma leitura só, para o modal ter nome antes do resto chegar. */

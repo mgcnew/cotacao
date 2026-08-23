@@ -5,13 +5,15 @@ import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { ErrorLine } from "@/components/layout/form-feedback";
+import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   allocateItem,
   confirmAllocations,
+  allocateBestPrices,
   type AllocationState,
+  type RecommendationState,
 } from "@/features/allocations/actions";
 
 const selectClass =
@@ -34,6 +36,8 @@ export function AllocateForm({
   purchaseUnit,
   suppliers,
   suggestedQuantity,
+  initialSupplierId,
+  buttonLabel = "Decidir compra",
 }: {
   roundId: string;
   quotationItemId: string;
@@ -41,6 +45,8 @@ export function AllocateForm({
   purchaseUnit: string;
   suppliers: { id: string; name: string; price: number }[];
   suggestedQuantity: number;
+  initialSupplierId?: string;
+  buttonLabel?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [state, formAction] = useActionState<AllocationState, FormData>(
@@ -59,7 +65,7 @@ export function AllocateForm({
         disabled={suppliers.length === 0}
       >
         <ShoppingBag className="size-3.5" aria-hidden />
-        {suppliers.length === 0 ? "Sem resposta com preço" : "Decidir compra"}
+        {suppliers.length === 0 ? "Sem resposta com preço" : buttonLabel}
       </Button>
     );
   }
@@ -87,6 +93,7 @@ export function AllocateForm({
             id={`forn-${quotationItemId}`}
             name="supplierId"
             required
+            defaultValue={initialSupplierId ?? ""}
             className={selectClass}
           >
             <option value="">Selecione…</option>
@@ -142,6 +149,34 @@ export function AllocateForm({
           Fechar
         </Button>
       </div>
+    </form>
+  );
+}
+
+/** Aceita em lote somente os itens ainda sem decisão. */
+export function ApplyRecommendationsForm({
+  roundId,
+  itemCount,
+}: {
+  roundId: string;
+  itemCount: number;
+}) {
+  const [state, formAction] = useActionState<RecommendationState, FormData>(
+    allocateBestPrices,
+    { error: null },
+  );
+
+  return (
+    <form action={formAction} className="flex flex-col items-end gap-1.5">
+      <input type="hidden" name="roundId" value={roundId} />
+      <Submit
+        label={`Aplicar ${itemCount === 1 ? "recomendação" : `${itemCount} recomendações`}`}
+        busy="Aplicando…"
+      />
+      <ErrorLine error={state.error} />
+      <SuccessLine
+        message={state.savedAt ? `${state.createdCount ?? itemCount} decisões adicionadas ao rascunho.` : null}
+      />
     </form>
   );
 }

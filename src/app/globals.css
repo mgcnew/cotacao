@@ -104,18 +104,31 @@
   --chart-5: var(--neutral);
 }
 
+/* Textura discreta na área de conversa: melhora a separação das bolhas sem
+   carregar imagem ou efeito caro. Funciona igualmente nos dois temas. */
+.wa-chat-bg {
+  background-color: color-mix(in oklab, var(--surface-muted) 58%, transparent);
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    color-mix(in oklab, var(--fg-subtle) 10%, transparent) 1px,
+    transparent 0
+  );
+  background-size: 20px 20px;
+}
+
 .dark {
-  --bg: #0d0d0f;
-  --fg: #ededef;
-  --fg-muted: #a2a2ab;
-  --fg-subtle: #74747e;
-  --surface: #15151a;
-  --surface-muted: #1c1c22;
-  --surface-elevated: #1f1f26;
-  --surface-sunken: #111114;
-  --border-color: #26262e;
-  --border-strong: #35353f;
-  --input-bg: #15151a;
+  /* Carvão levemente frio: mais profundidade sem cair no preto puro. */
+  --bg: #0b0d12;
+  --fg: #f0f1f4;
+  --fg-muted: #a8abb6;
+  --fg-subtle: #777b89;
+  --surface: #12151c;
+  --surface-muted: #1a1e27;
+  --surface-elevated: #191d26;
+  --surface-sunken: #0e1117;
+  --border-color: #292e3a;
+  --border-strong: #3a4150;
+  --input-bg: #171b24;
 
   --success: #43be83;
   --warning: #dda43a;
@@ -130,9 +143,17 @@
   --destructive-soft: color-mix(in oklab, var(--destructive) 14%, var(--surface));
   --info-soft: color-mix(in oklab, var(--info) 14%, var(--surface));
 
-  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.3);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 12px 32px -12px rgba(0, 0, 0, 0.65), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-sm:
+    0 1px 2px rgba(0, 0, 0, 0.38), 0 8px 20px -18px rgba(0, 0, 0, 0.9);
+  --shadow-md:
+    0 22px 60px -24px rgba(0, 0, 0, 0.88),
+    0 8px 24px -18px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+
+  /* Vidro só é consumido pelo modal em desktop. */
+  --glass-surface: color-mix(in oklab, var(--surface-elevated) 76%, transparent);
+  --glass-line: color-mix(in oklab, white 15%, var(--border-color));
 
   color-scheme: dark;
 
@@ -331,6 +352,10 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
+  ::selection {
+    color: var(--fg);
+    background: color-mix(in oklab, var(--primary) 38%, transparent);
+  }
   html {
     @apply font-sans;
   }
@@ -342,6 +367,73 @@
   table {
     border-collapse: collapse;
     width: 100%;
+  }
+}
+
+/* ============================================================
+   POLIMENTO ESCURO
+
+   Sombras e contrastes são baratos e ficam nos componentes compartilhados.
+   Blur é reservado ao diálogo aberto e somente em desktop: não há uma camada
+   animada sendo recalculada durante todo o uso do sistema.
+   ============================================================ */
+
+.dark {
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.dark [data-slot="app-header"],
+.dark [data-slot="app-sidebar"] {
+  background: color-mix(in oklab, var(--surface) 94%, var(--bg));
+}
+
+.dark [data-slot="app-main"] {
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.012);
+}
+
+.dark [data-slot="metric"],
+.dark [data-slot="card"] {
+  box-shadow: var(--shadow-xs), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.dark [data-slot="table-header"] {
+  background: color-mix(in oklab, var(--surface-muted) 72%, transparent);
+}
+
+.dark [data-slot="input"],
+.dark select {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.dark [data-slot="button"][data-variant="outline"] {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.dark [data-slot="dialog-overlay"] {
+  /* Transparente o bastante para o vidro ter algo para refratar. */
+  background: rgba(3, 5, 9, 0.56);
+}
+
+@media (min-width: 640px) {
+  .dark [data-slot="dialog-content"] {
+    border-color: var(--glass-line);
+    background: var(--glass-surface);
+    background-clip: padding-box;
+    box-shadow:
+      var(--shadow-md),
+      inset 0 1px 0 rgba(255, 255, 255, 0.065),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.012);
+  }
+
+  @supports (backdrop-filter: blur(1px)) {
+    .dark [data-slot="dialog-content"] {
+      backdrop-filter: blur(20px) saturate(124%);
+    }
+  }
+
+  .dark [data-slot="dialog-header"],
+  .dark [data-slot="dialog-footer"] {
+    background: color-mix(in oklab, var(--surface) 38%, transparent);
   }
 }
 

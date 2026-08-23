@@ -24,6 +24,7 @@ import {
 import { IndicadoresDaRodada } from "@/components/rounds/round-indicators";
 import { RoundSteps } from "@/components/rounds/round-steps";
 import { SendControls } from "@/components/rounds/send-controls";
+import { SupplierGroupManager } from "@/components/rounds/supplier-group-manager";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,12 +86,18 @@ export function descreverRodada(dados: DadosDaRodada): string {
  * "Voltar" não está aqui de propósito — na página ele é um link para a lista,
  * no modal ele é o X que já existe no canto. Quem embrulha decide como se sai.
  */
-export function AcoesDaRodada({ dados }: { dados: DadosDaRodada }) {
+export function AcoesDaRodada({
+  dados,
+  showEdit = true,
+}: {
+  dados: DadosDaRodada;
+  showEdit?: boolean;
+}) {
   const id = dados.round.id;
 
   return (
     <>
-      {dados.podeEditar && !dados.encerrada ? (
+      {showEdit && dados.podeEditar && !dados.encerrada ? (
         <EditRoundForm
           roundId={id}
           title={dados.round.title}
@@ -153,12 +160,13 @@ export function CorpoDaRodada({ dados }: { dados: DadosDaRodada }) {
           groupName={dados.groupName}
           roundSuppliers={dados.roundSuppliers}
           contatos={dados.contatos}
+          supplierGroups={dados.supplierGroups}
+          selectableSuppliers={dados.selectableSuppliers}
           podeEditar={dados.podeEditar}
           podeEnviar={dados.podeEnviar}
           podeFechar={dados.podeFechar && dados.emAndamento}
           podeCancelarGrupo={dados.podeCancelar && dados.emAndamento}
           encerrada={dados.encerrada}
-          totalItens={dados.itensAtivos.length}
         />
       )}
 
@@ -227,7 +235,7 @@ function Montagem({
   itensAtivos: number;
   products: Produto[];
   roundSuppliers: RoundSupplier[];
-  selectableSuppliers: { id: string; name: string }[];
+  selectableSuppliers: DadosDaRodada["selectableSuppliers"];
   contatos: Contatos;
 }) {
   const temItens = itensAtivos > 0;
@@ -497,12 +505,13 @@ function Acompanhamento({
   groupName,
   roundSuppliers,
   contatos,
+  supplierGroups,
+  selectableSuppliers,
   podeEditar,
   podeEnviar,
   podeFechar,
   podeCancelarGrupo,
   encerrada,
-  totalItens,
 }: {
   roundId: string;
   items: Item[];
@@ -510,12 +519,13 @@ function Acompanhamento({
   groupName: Map<string, string>;
   roundSuppliers: RoundSupplier[];
   contatos: Contatos;
+  supplierGroups: Map<string, string[]>;
+  selectableSuppliers: DadosDaRodada["selectableSuppliers"];
   podeEditar: boolean;
   podeEnviar: boolean;
   podeFechar: boolean;
   podeCancelarGrupo: boolean;
   encerrada: boolean;
-  totalItens: number;
 }) {
   return (
     <>
@@ -611,11 +621,36 @@ function Acompanhamento({
           Gere o link, mande pelo seu canal e registre o envio.
         </p>
 
+        {podeEditar && !encerrada ? (
+          <SupplierGroupManager
+            roundId={roundId}
+            groups={groups.map((group) => ({
+              ...group,
+              itemCount: items.filter(
+                (item) =>
+                  item.group_id === group.id &&
+                  item.commercial_status !== "cancelled",
+              ).length,
+            }))}
+            participants={roundSuppliers.map((rs) => ({
+              roundSupplierId: rs.id,
+              supplierId: rs.supplier_id,
+              name: rs.suppliers?.name ?? "Fornecedor",
+              contactId: rs.supplier_contact_id,
+              contacts: contatos.get(rs.supplier_id) ?? [],
+              groupIds: supplierGroups.get(rs.id) ?? [],
+              firstSentAt: rs.first_sent_at,
+            }))}
+            suppliers={selectableSuppliers}
+          />
+        ) : null}
+
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Fornecedor</TableHead>
               <TableHead>Contato</TableHead>
+              <TableHead>Grupos</TableHead>
               <TableHead>Enviado</TableHead>
               <TableHead>Abriu o link</TableHead>
               <TableHead>Respondeu</TableHead>
@@ -649,6 +684,12 @@ function Acompanhamento({
                   ) : null}
                 </TableCell>
                 <TableCell className="text-fg-muted text-xs">
+                  {(supplierGroups.get(rs.id) ?? [])
+                    .map((groupId) => groupName.get(groupId))
+                    .filter(Boolean)
+                    .join(", ") || "nenhum"}
+                </TableCell>
+                <TableCell className="text-fg-muted text-xs">
                   {rs.first_sent_at
                     ? DATA_HORA.format(new Date(rs.first_sent_at))
                     : "ainda não"}
@@ -667,6 +708,10 @@ function Acompanhamento({
                     const respondidos =
                       rs.quotation_responses?.[0]?.quotation_response_items
                         ?.length ?? 0;
+                    const totalAtribuidos =
+                      rs.supplier_quotation_items?.filter(
+                        (item) => item.removed_at === null,
+                      ).length ?? 0;
                     if (respondidos === 0) {
                       return <span className="text-fg-subtle">—</span>;
                     }
@@ -675,7 +720,7 @@ function Acompanhamento({
                         <Badge
                           variant={rs.completed_at ? "default" : "secondary"}
                         >
-                          {respondidos} de {totalItens}
+                          {respondidos} de {totalAtribuidos}
                         </Badge>
                         {rs.completed_at ? (
                           <span className="text-fg-subtle mt-0.5 block">
@@ -693,6 +738,14 @@ function Acompanhamento({
                       roundId={roundId}
                       supplierName={rs.suppliers?.name ?? "fornecedor"}
                       alreadySent={rs.first_sent_at !== null}
+                      groupSummary={(supplierGroups.get(rs.id) ?? [])
+                        .map((groupId) => groupName.get(groupId))
+                        .filter((name): name is string => Boolean(name))}
+                      itemCount={
+                        rs.supplier_quotation_items?.filter(
+                          (item) => item.removed_at === null,
+                        ).length ?? 0
+                      }
                     />
                   </TableCell>
                 ) : null}

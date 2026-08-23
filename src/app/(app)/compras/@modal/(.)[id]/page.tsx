@@ -9,6 +9,7 @@ import {
   AcoesDaRodada,
   CorpoDaRodada,
 } from "@/components/rounds/round-central";
+import { RoundModalContent, type RoundModalView } from "@/components/rounds/round-modal-content";
 import { DialogBody } from "@/components/ui/dialog";
 import { carregarRodada } from "@/features/rounds/central";
 
@@ -22,10 +23,14 @@ import { carregarRodada } from "@/features/rounds/central";
  */
 export default async function RodadaEmModal({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { id } = await params;
+  const { view } = await searchParams;
+  const modalView: RoundModalView = view === "distribution" || view === "scope" ? view : "responses";
 
   return (
     <Suspense
@@ -37,12 +42,12 @@ export default async function RodadaEmModal({
         </DialogBody>
       }
     >
-      <Conteudo id={id} />
+      <Conteudo id={id} view={modalView} />
     </Suspense>
   );
 }
 
-async function Conteudo({ id }: { id: string }) {
+async function Conteudo({ id, view }: { id: string; view: RoundModalView }) {
   const dados = await carregarRodada(id);
 
   if (!dados) {
@@ -58,11 +63,12 @@ async function Conteudo({ id }: { id: string }) {
 
   return (
     <DialogBody>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <AcoesDaRodada dados={dados} />
-      </div>
-
-      <CorpoDaRodada dados={dados} />
+      {dados.emPreparacao ? (
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-2"><AcoesDaRodada dados={dados} showEdit={false} /></div>
+          <CorpoDaRodada dados={dados} />
+        </>
+      ) : <RoundModalContent dados={dados} view={view} />}
     </DialogBody>
   );
 }

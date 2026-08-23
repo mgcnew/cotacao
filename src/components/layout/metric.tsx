@@ -47,6 +47,7 @@ export function Metric({
   if (href) {
     return (
       <Link
+        data-slot="metric"
         href={href}
         className={`${classe} hover:border-ring focus-visible:border-ring focus-visible:ring-ring/50 transition-colors outline-none focus-visible:ring-3`}
       >
@@ -55,5 +56,5 @@ export function Metric({
     );
   }
 
-  return <div className={classe}>{conteudo}</div>;
+  return <div data-slot="metric" className={classe}>{conteudo}</div>;
 }

@@ -149,19 +149,50 @@ export async function listRoundSuppliers(companyId: string, roundId: string) {
       first_sent_at,
       first_accessed_at,
       completed_at,
+      removed_at,
       suppliers!inner ( name ),
       supplier_contacts ( name, whatsapp ),
+      supplier_quotation_items ( id, removed_at ),
       quotation_responses ( status, submitted_at, quotation_response_items ( id ) )
     `,
     )
     .eq("company_id", companyId)
     .eq("purchase_round_id", roundId)
+    .is("removed_at", null)
     .order("created_at");
 
   if (error) {
     throw new Error(`Falha ao listar fornecedores da rodada: ${error.message}`);
   }
   return data ?? [];
+}
+
+/** Grupos atualmente atribuídos a cada participante ativo da rodada. */
+export async function listRoundSupplierGroups(
+  companyId: string,
+  roundSupplierIds: string[],
+): Promise<Map<string, string[]>> {
+  if (roundSupplierIds.length === 0) return new Map();
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("round_supplier_groups")
+    .select("round_supplier_id, group_id")
+    .eq("company_id", companyId)
+    .in("round_supplier_id", roundSupplierIds)
+    .is("removed_at", null);
+
+  if (error) {
+    throw new Error(`Falha ao listar grupos dos fornecedores: ${error.message}`);
+  }
+
+  const porFornecedor = new Map<string, string[]>();
+  for (const row of data ?? []) {
+    const groups = porFornecedor.get(row.round_supplier_id) ?? [];
+    groups.push(row.group_id);
+    porFornecedor.set(row.round_supplier_id, groups);
+  }
+  return porFornecedor;
 }
 
 /**
@@ -210,14 +241,22 @@ export async function listSelectableSuppliers(companyId: string) {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("suppliers")
-    .select("id, name, supplier_contacts!inner ( id, is_active )")
+    .select(
+      "id, name, supplier_contacts!inner ( id, name, role, whatsapp, is_active, is_primary )",
+    )
     .eq("company_id", companyId)
     .eq("status", "active")
     .eq("supplier_contacts.is_active", true)
     .order("name");
 
   if (error) throw new Error(`Falha ao listar fornecedores: ${error.message}`);
-  return (data ?? []).map((s) => ({ id: s.id, name: s.name }));
+  return (data ?? []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    contacts: s.supplier_contacts
+      .filter((c) => c.is_active)
+      .sort((a, b) => Number(b.is_primary) - Number(a.is_primary)),
+  }));
 }
 
 /** Pedidos com a condição de atraso derivada pela view. */

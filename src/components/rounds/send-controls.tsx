@@ -13,10 +13,16 @@ import {
   type SendState,
 } from "@/features/rounds/send";
 
-function GenerateButton({ hasLink }: { hasLink: boolean }) {
+function GenerateButton({
+  hasLink,
+  disabled,
+}: {
+  hasLink: boolean;
+  disabled: boolean;
+}) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" variant="ghost" disabled={pending}>
+    <Button type="submit" size="sm" variant="ghost" disabled={pending || disabled}>
       {pending ? "Gerando…" : hasLink ? "Gerar outro link" : "Gerar link"}
     </Button>
   );
@@ -76,11 +82,17 @@ export function SendControls({
   roundId,
   supplierName,
   alreadySent,
+  groupSummary,
+  itemCount,
+  showSummary = true,
 }: {
   roundSupplierId: string;
   roundId: string;
   supplierName: string;
   alreadySent: boolean;
+  groupSummary: string[];
+  itemCount: number;
+  showSummary?: boolean;
 }) {
   const [linkState, generateAction] = useActionState<SendState, FormData>(
     generateQuotationLink,
@@ -93,10 +105,18 @@ export function SendControls({
 
   return (
     <div className="flex flex-col items-end gap-2">
+      {showSummary ? (
+        <span className="text-fg-subtle max-w-64 text-right text-xs">
+          {groupSummary.length > 0 ? groupSummary.join(", ") : "Nenhum grupo"} ·{" "}
+          {itemCount} {itemCount === 1 ? "produto" : "produtos"}
+        </span>
+      ) : null}
       <form action={generateAction}>
         <input type="hidden" name="roundSupplierId" value={roundSupplierId} />
         <input type="hidden" name="roundId" value={roundId} />
-        <GenerateButton hasLink={Boolean(linkState.url)} />
+        <span title={itemCount === 0 ? "Escolha um grupo com produtos" : undefined}>
+          <GenerateButton hasLink={Boolean(linkState.url)} disabled={itemCount === 0} />
+        </span>
       </form>
 
       <ErrorLine error={linkState.error} />

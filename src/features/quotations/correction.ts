@@ -163,5 +163,10 @@ export async function recordManualQuotationItem(
   revalidatePath(`/compras/${roundId}/comparacao`);
   revalidatePath(`/compras/${roundId}`);
   revalidatePath(`/compras/${roundId}/alocacao`);
+  // A tabela de Compras e a Central de Atenção leem o progresso agregado da
+  // rodada. Sem invalidá-las, o preço manual já existia no banco, mas a barra
+  // atrás do modal continuava mostrando o número anterior até um recarregamento.
+  revalidatePath("/compras");
+  revalidatePath("/dashboard");
   return { error: null, savedAt: Date.now() };
 }

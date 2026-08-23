@@ -3,6 +3,7 @@ import {
   ClipboardList,
   LayoutGrid,
   Package,
+  MessageCircle,
   Settings,
   ShoppingCart,
   Truck,
@@ -32,6 +33,12 @@ export const OPERATION_NAV: NavItem[] = [
     label: "Pedidos",
     icon: ClipboardList,
     permission: "order.view",
+  },
+  {
+    href: "/whatsapp",
+    label: "WhatsApp Compras",
+    icon: MessageCircle,
+    permission: "purchase_round.view",
   },
   {
     href: "/produtos",

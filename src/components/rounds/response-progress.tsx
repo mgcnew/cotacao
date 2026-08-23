@@ -1,9 +1,9 @@
 /**
- * Quantos fornecedores já responderam, em número e em barra.
+ * Quantos fornecedores já responderam ao menos um item, em número e barra.
  *
  * A barra existe porque "3 de 8" exige uma conta mental que a lista faz o
  * tempo todo; a proporção se vê sem pensar. Mas o número fica: barra sozinha
- * não diz quantos faltam, e é isso que se vai cobrar.
+ * não diz quantos ainda não deram nenhum retorno, e é isso que se vai cobrar.
  *
  * `role="progressbar"` com os três `aria-value*` é o que faz o leitor de tela
  * anunciar "3 de 8" em vez de ignorar uma `div` colorida. O `aria-label`

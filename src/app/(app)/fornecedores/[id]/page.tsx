@@ -26,6 +26,7 @@ import {
   listSupplierContacts,
 } from "@/features/suppliers/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { startWhatsAppConversationAction } from "@/features/whatsapp/actions";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "Ativo",
@@ -56,6 +57,7 @@ export default async function FornecedorPage({
   if (!supplier) notFound();
 
   const podeEditar = permissions.has("supplier.update");
+  const podeConversar = permissions.has("purchase_round.send");
   const categoriasAtivas = categories.filter((c) => c.isActive);
 
   return (
@@ -142,7 +144,7 @@ export default async function FornecedorPage({
                 <TableHead>WhatsApp</TableHead>
                 <TableHead>E-mail</TableHead>
                 <TableHead>Situação</TableHead>
-                {podeEditar ? <TableHead className="w-0" /> : null}
+                {podeEditar || podeConversar ? <TableHead className="w-0" /> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -170,8 +172,17 @@ export default async function FornecedorPage({
                       {contact.is_active ? "Ativo" : "Inativo"}
                     </Badge>
                   </TableCell>
-                  {podeEditar ? (
-                    <TableCell>
+                  {podeEditar || podeConversar ? (
+                    <TableCell className="space-y-1">
+                      {podeConversar && contact.is_active && contact.whatsapp ? (
+                        <form action={startWhatsAppConversationAction}>
+                          <input type="hidden" name="contact_id" value={contact.id} />
+                          <Button type="submit" size="sm" variant="outline">
+                            Conversar
+                          </Button>
+                        </form>
+                      ) : null}
+                      {podeEditar ? (
                       <form
                         action={setContactActive.bind(
                           null,
@@ -189,6 +200,7 @@ export default async function FornecedorPage({
                           {contact.is_active ? "Desativar" : "Reativar"}
                         </Button>
                       </form>
+                      ) : null}
                     </TableCell>
                   ) : null}
                 </TableRow>

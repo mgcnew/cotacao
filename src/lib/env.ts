@@ -64,6 +64,8 @@ const serverEnvSchema = z.object({
   EVOLUTION_API_URL: z.url().optional(),
   EVOLUTION_API_KEY: z.string().optional(),
   EVOLUTION_INSTANCE: z.string().optional(),
+  EVOLUTION_WEBHOOK_SECRET: z.string().min(24).optional(),
+  CRON_SECRET: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -81,6 +83,8 @@ export function getServerEnv(): ServerEnv {
     EVOLUTION_API_URL: unset(process.env.EVOLUTION_API_URL),
     EVOLUTION_API_KEY: unset(process.env.EVOLUTION_API_KEY),
     EVOLUTION_INSTANCE: unset(process.env.EVOLUTION_INSTANCE),
+    EVOLUTION_WEBHOOK_SECRET: unset(process.env.EVOLUTION_WEBHOOK_SECRET),
+    CRON_SECRET: unset(process.env.CRON_SECRET),
   });
   return cachedServerEnv;
 }
