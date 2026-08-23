@@ -14,13 +14,14 @@ import type { AttentionItem } from "@/features/dashboard/attention";
 export function AttentionList({ items }: { items: AttentionItem[] }) {
   if (items.length === 0) {
     return (
-      <div className="border-border bg-surface flex items-center gap-3 rounded-xl border border-dashed px-4 py-6">
-        <CheckCircle2 className="text-success size-5 shrink-0" aria-hidden />
+      <div className="flex items-center gap-3 px-5 py-8">
+        <span className="bg-success-soft text-success grid size-10 shrink-0 place-items-center rounded-xl">
+          <CheckCircle2 className="size-5" aria-hidden />
+        </span>
         <div className="text-sm">
           <p className="text-fg font-medium">Nada pedindo atenção agora</p>
           <p className="text-fg-muted">
-            Sem atrasos, divergências ou pedidos parados. O que estiver em
-            andamento aparece nos números abaixo.
+            Sem atrasos, divergências ou processos parados.
           </p>
         </div>
       </div>
@@ -28,15 +29,15 @@ export function AttentionList({ items }: { items: AttentionItem[] }) {
   }
 
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="divide-border divide-y">
       {items.map((item) => (
         <li key={item.key}>
           <Link
             href={item.href}
-            className="border-border bg-surface hover:border-ring focus-visible:border-ring focus-visible:ring-ring/50 flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors outline-none focus-visible:ring-3"
+            className="hover:bg-surface-sunken focus-visible:bg-surface-sunken focus-visible:ring-ring/40 flex items-center gap-3 px-4 py-3.5 transition-colors outline-none focus-visible:ring-3 sm:px-5"
           >
             <span
-              className={`grid size-8 shrink-0 place-items-center rounded-lg ${
+              className={`grid size-9 shrink-0 place-items-center rounded-xl ${
                 item.severity === "high"
                   ? "bg-destructive-soft text-destructive"
                   : "bg-surface-muted text-fg-subtle"
@@ -47,8 +48,11 @@ export function AttentionList({ items }: { items: AttentionItem[] }) {
             </span>
 
             <span className="min-w-0 flex-1">
-              <span className="text-fg block text-sm font-medium">
-                {item.title}
+              <span className="flex items-center gap-2">
+                <span className="text-fg block text-sm font-medium">{item.title}</span>
+                {item.severity === "high" ? (
+                  <span className="bg-destructive-soft text-destructive rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase">Urgente</span>
+                ) : null}
               </span>
               <span className="text-fg-muted block text-xs">{item.hint}</span>
             </span>

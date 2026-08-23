@@ -1,10 +1,12 @@
-import { Truck } from "lucide-react";
+import { Search, Truck } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -16,6 +18,7 @@ import {
 import { formatCnpj } from "@/features/company/cnpj";
 import { getSupplierCounts, listSuppliers } from "@/features/suppliers/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { normalizeListSearch, parseListPagination } from "@/lib/list-pagination";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "Ativo",
@@ -23,7 +26,9 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: "Bloqueado",
 };
 
-export default async function FornecedoresPage() {
+export default async function FornecedoresPage({
+  searchParams,
+}: PageProps<"/fornecedores">) {
   const company = await requireActiveCompany();
   const [suppliers, counts, permissions] = await Promise.all([
     listSuppliers(company.companyId),
@@ -32,6 +37,27 @@ export default async function FornecedoresPage() {
   ]);
 
   const podeCriar = permissions.has("supplier.create");
+  const params = await searchParams;
+  const buscaBruta = Array.isArray(params.busca) ? params.busca[0] : params.busca;
+  const busca = (buscaBruta ?? "").trim();
+  const statusBruto = Array.isArray(params.status) ? params.status[0] : params.status;
+  const status = ["active", "inactive", "blocked"].includes(statusBruto ?? "")
+    ? statusBruto
+    : "todos";
+  const needle = normalizeListSearch(busca);
+  const filtrados = suppliers.filter((supplier) => {
+    if (status !== "todos" && supplier.status !== status) return false;
+    if (!needle) return true;
+    const contacts = supplier.supplier_contacts
+      ?.map((contact) => `${contact.name} ${contact.whatsapp ?? ""} ${contact.phone ?? ""}`)
+      .join(" ");
+    return normalizeListSearch(
+      `${supplier.name} ${supplier.legal_name ?? ""} ${supplier.document_number ?? ""} ${contacts ?? ""}`,
+    ).includes(needle);
+  });
+  const pagination = parseListPagination(params, filtrados.length);
+  const visiveis = filtrados.slice(pagination.start, pagination.end);
+  const temFiltro = Boolean(busca) || status !== "todos";
 
   return (
     <div className="w-full">
@@ -47,6 +73,34 @@ export default async function FornecedoresPage() {
         }
       />
 
+      {suppliers.length > 0 ? (
+        <form className="border-border bg-surface mb-4 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <Search className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4" aria-hidden />
+            <Input
+              name="busca"
+              defaultValue={busca}
+              placeholder="Buscar nome, CNPJ ou contato"
+              className="pl-8"
+            />
+          </div>
+          <select
+            name="status"
+            defaultValue={status}
+            className="border-input bg-background text-fg h-8 rounded-lg border px-2.5 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/30"
+            aria-label="Filtrar fornecedores por situação"
+          >
+            <option value="todos">Todas as situações</option>
+            <option value="active">Ativos</option>
+            <option value="inactive">Inativos</option>
+            <option value="blocked">Bloqueados</option>
+          </select>
+          <input type="hidden" name="por_pagina" value={pagination.pageSize} />
+          <Button type="submit" size="sm" variant="outline">Filtrar</Button>
+          {temFiltro ? <Button asChild size="sm" variant="ghost"><Link href="/fornecedores">Limpar</Link></Button> : null}
+        </form>
+      ) : null}
+
       {suppliers.length === 0 ? (
         <EmptyState
           icon={Truck}
@@ -60,10 +114,18 @@ export default async function FornecedoresPage() {
             ) : null
           }
         />
+      ) : filtrados.length === 0 ? (
+        <EmptyState
+          icon={Truck}
+          title="Nenhum fornecedor neste filtro"
+          description="Ajuste a busca ou a situação para encontrar outros fornecedores."
+          action={<Button asChild size="sm" variant="outline"><Link href="/fornecedores">Limpar filtros</Link></Button>}
+        />
       ) : (
+        <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
               {/* No celular sobram Fornecedor e Situação. CNPJ e contato
                   reaparecem embaixo do nome — e o contato é o que mais importa
                   ver ali: sem ele o fornecedor não entra em rodada. */}
@@ -76,7 +138,7 @@ export default async function FornecedoresPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {suppliers.map((supplier) => {
+            {visiveis.map((supplier) => {
               const principal = supplier.supplier_contacts?.find(
                 (c) => c.is_primary && c.is_active,
               );
@@ -137,6 +199,12 @@ export default async function FornecedoresPage() {
             })}
           </TableBody>
         </Table>
+        <DataTablePagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={filtrados.length}
+        />
+        </div>
       )}
     </div>
   );

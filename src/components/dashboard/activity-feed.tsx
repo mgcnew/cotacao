@@ -35,7 +35,7 @@ export function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
   if (entries.length === 0) return null;
 
   return (
-    <ul className="flex flex-col">
+    <ul className="relative flex flex-col before:absolute before:top-5 before:bottom-5 before:left-[1.18rem] before:w-px before:bg-border">
       {entries.map((entry) => {
         const conteudo = (
           <>
@@ -57,19 +57,22 @@ export function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
         );
 
         return (
-          <li
-            key={entry.id}
-            className="border-border flex items-baseline gap-3 border-b py-2.5 last:border-b-0"
-          >
+          <li key={entry.id} className="relative flex gap-3 px-4 py-3 sm:px-5">
+            <span
+              className={`relative z-10 mt-1.5 size-2.5 shrink-0 rounded-full ring-4 ring-surface ${
+                entry.bySupplier ? "bg-primary" : "bg-fg-subtle"
+              }`}
+              aria-hidden
+            />
             {entry.href ? (
               <Link
                 href={entry.href}
-                className="hover:text-primary flex flex-1 items-baseline gap-3 underline-offset-4 hover:underline"
+                className="hover:text-primary flex min-w-0 flex-1 items-baseline gap-3 underline-offset-4 hover:underline"
               >
                 {conteudo}
               </Link>
             ) : (
-              conteudo
+              <span className="flex min-w-0 flex-1 items-baseline gap-3">{conteudo}</span>
             )}
           </li>
         );

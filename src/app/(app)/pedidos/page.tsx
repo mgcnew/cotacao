@@ -16,6 +16,7 @@ import { SendOrderDialog } from "@/components/orders/order-dialogs";
 import { OrderFilterFields } from "@/components/orders/order-filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
   Table,
   TableBody,
@@ -39,6 +40,7 @@ import {
   summarizeOrders,
 } from "@/features/orders/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { parseListPagination } from "@/lib/list-pagination";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -74,7 +76,8 @@ export default async function PedidosPage({
 
   if (!permissions.has("order.view")) redirect("/dashboard");
 
-  const filters = parseOrderFilters(await searchParams);
+  const params = await searchParams;
+  const filters = parseOrderFilters(params);
   const podeCriar = permissions.has("order.create");
 
   return (
@@ -135,6 +138,7 @@ export default async function PedidosPage({
           filters={filters}
           permissions={permissions}
           podeCriar={podeCriar}
+          paginationParams={params}
         />
       </Suspense>
     </div>
@@ -157,15 +161,19 @@ async function ListaDePedidos({
   filters,
   permissions,
   podeCriar,
+  paginationParams,
 }: {
   companyId: string;
   filters: OrderFilters;
   permissions: Set<string>;
   podeCriar: boolean;
+  paginationParams: Record<string, string | string[] | undefined>;
 }) {
   const filtrando = hasAnyOrderFilter(filters);
   const { rows: orders, truncated } = await listOrders(companyId, filters);
   const resumo = summarizeOrders(orders);
+  const pagination = parseListPagination(paginationParams, orders.length);
+  const visibleOrders = orders.slice(pagination.start, pagination.end);
 
   return (
     <>
@@ -217,10 +225,10 @@ async function ListaDePedidos({
           }
         />
       ) : (
-        <>
+        <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
                 {/* No celular sobram Pedido, Situação e a ação: uma tabela de
                     sete colunas rola de lado e leva o botão para fora da tela —
                     que era justamente o problema. O que some da linha reaparece
@@ -239,7 +247,7 @@ async function ListaDePedidos({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.map((order) => {
+              {visibleOrders.map((order) => {
                 const passo = orderNextStep(order.status);
                 // Sem a permissão, o passo existe mas não é desta pessoa: o
                 // botão vira apenas a porta de entrada do pedido.
@@ -363,13 +371,19 @@ async function ListaDePedidos({
             </TableBody>
           </Table>
 
+          <DataTablePagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            total={orders.length}
+          />
+
           {truncated ? (
-            <p className="text-fg-subtle mt-3 text-xs">
+            <p className="text-fg-subtle border-border border-t px-3 py-2 text-xs">
               Mostrando os {ORDERS_PAGE_SIZE} pedidos mais recentes. Use os
               filtros para chegar aos mais antigos.
             </p>
           ) : null}
-        </>
+        </div>
       )}
     </>
   );

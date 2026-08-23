@@ -1,4 +1,5 @@
 import {
+  CardSkeleton,
   ListSkeleton,
   MetricsSkeleton,
   PageHeaderSkeleton,
@@ -7,23 +8,25 @@ import {
 } from "@/components/layout/page-skeleton";
 
 /**
- * Casca do dashboard, na mesma ordem da tela: pendências, depois números.
- *
- * A ordem importa mesmo no esqueleto — é ela que ensina onde olhar. Se o
- * carregamento mostrasse os números primeiro e a lista depois, o olho iria para
- * o lugar errado e voltaria quando o dado chegasse.
+ * Casca do dashboard na mesma hierarquia visual da central: resumo executivo,
+ * prioridades com fluxo lateral e resultado financeiro.
  */
 export default function Loading() {
   return (
     <PageSkeleton>
-      <PageHeaderSkeleton action={false} />
+      <PageHeaderSkeleton />
 
-      <section className="mb-8">
-        <SectionTitleSkeleton lines={2} />
-        <ListSkeleton rows={3} />
+      <section className="mb-6">
+        <SectionTitleSkeleton />
+        <MetricsSkeleton />
       </section>
 
-      <section className="mb-8">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,.75fr)]">
+        <ListSkeleton rows={4} />
+        <CardSkeleton lines={5} />
+      </div>
+
+      <section className="mt-6">
         <SectionTitleSkeleton />
         <MetricsSkeleton />
       </section>

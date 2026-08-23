@@ -1,11 +1,24 @@
+import {
+  BadgeDollarSign,
+  CalendarDays,
+  ClipboardList,
+  MessageCircle,
+  MessageSquareText,
+  Plus,
+  Scale,
+  ShoppingCart,
+  TrendingDown,
+  TriangleAlert,
+  WalletCards,
+} from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { AttentionList } from "@/components/dashboard/attention-list";
+import { DashboardMetric } from "@/components/dashboard/dashboard-metric";
 import { FirstSteps } from "@/components/dashboard/first-steps";
-import { Metric } from "@/components/layout/metric";
-import { PageHeader } from "@/components/layout/page-header";
+import { Button } from "@/components/ui/button";
 import {
   CardSkeleton,
   ListSkeleton,
@@ -26,57 +39,85 @@ const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
-const MES = new Intl.DateTimeFormat("pt-BR", {
+const MONTH = new Intl.DateTimeFormat("pt-BR", {
   month: "long",
   year: "numeric",
 });
-const HORA = new Intl.DateTimeFormat("pt-BR", {
+const TODAY = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "long",
+  day: "2-digit",
+  month: "long",
+});
+const TIME = new Intl.DateTimeFormat("pt-BR", {
   hour: "2-digit",
   minute: "2-digit",
 });
 
-/**
- * Central Operacional — documento mestre, seção 13.
- *
- * A ordem da página é a ordem das perguntas que ela responde: primeiro o que
- * precisa de atenção agora, depois como estão as compras, depois o dinheiro.
- * Pendência acionável vem antes de qualquer número — o documento é explícito
- * que atividade recente tem prioridade inferior.
- *
- * COMO A PÁGINA CHEGA
- *
- * Em três blocos independentes, cada um com sua fronteira de `Suspense`. Antes
- * era um `Promise.all` só: a página inteira esperava a consulta mais lenta, e
- * como o painel faz doze consultas, "a mais lenta" era sempre alguma. Agora o
- * bloco que fica pronto aparece, sem esperar os outros.
- *
- * A divisão não é arbitrária — segue a dependência entre os dados. Panorama
- * junta pendências e números porque um decide o outro: sem rodada, sem pedido e
- * sem pendência, a tela mostra os primeiros passos em vez de uma parede de
- * zeros. Financeiro e atividade não dependem de ninguém e vão sozinhos.
- */
 export default async function DashboardPage() {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
 
   return (
     <div className="w-full">
-      <PageHeader
-        title="Central operacional"
-        description={`${company.companyName} · ${company.roleName}`}
-      />
+      <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-primary mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">
+            Visão operacional
+          </p>
+          <h1 className="text-fg text-2xl font-semibold tracking-tight sm:text-3xl">
+            Central de compras
+          </h1>
+          <p className="text-fg-muted mt-1 text-sm">
+            {company.companyName} · {company.roleName}. Prioridades, andamento e
+            resultado em um só lugar.
+          </p>
+        </div>
+
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          <div className="text-fg-subtle flex items-center gap-2 text-xs capitalize">
+            <CalendarDays className="size-4" aria-hidden />
+            {TODAY.format(new Date())}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {permissions.has("purchase_round.create") ? (
+              <Button asChild size="sm">
+                <Link href="/compras/nova">
+                  <Plus aria-hidden /> Nova rodada
+                </Link>
+              </Button>
+            ) : null}
+            {permissions.has("order.create") ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href="/pedidos/novo">Novo pedido</Link>
+              </Button>
+            ) : null}
+            {permissions.has("purchase_round.view") ? (
+              <Button
+                asChild
+                size="icon-sm"
+                variant="outline"
+                title="WhatsApp Compras"
+              >
+                <Link href="/whatsapp" aria-label="Abrir WhatsApp Compras">
+                  <MessageCircle aria-hidden />
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </header>
 
       <Suspense
         fallback={
           <>
-            <section className="mb-8">
-              <SectionTitleSkeleton lines={2} />
-              <ListSkeleton rows={3} />
-            </section>
-            <section className="mb-8">
+            <section className="mb-6">
               <SectionTitleSkeleton />
               <MetricsSkeleton />
             </section>
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,.75fr)]">
+              <ListSkeleton rows={4} />
+              <CardSkeleton lines={5} />
+            </div>
           </>
         }
       >
@@ -86,37 +127,34 @@ export default async function DashboardPage() {
       {permissions.has("analytics.view") ? (
         <Suspense
           fallback={
-            <section className="mb-8">
+            <section className="mt-6">
               <SectionTitleSkeleton />
               <MetricsSkeleton />
             </section>
           }
         >
-          <Financeiro companyId={company.companyId} />
+          <Financial companyId={company.companyId} />
         </Suspense>
       ) : null}
 
       <Suspense
         fallback={
-          <section>
-            <SectionTitleSkeleton lines={2} />
-            <CardSkeleton lines={4} />
+          <section className="mt-6">
+            <SectionTitleSkeleton />
+            <CardSkeleton lines={5} />
           </section>
         }
       >
-        <Atividade companyId={company.companyId} />
+        <RecentActivity companyId={company.companyId} />
       </Suspense>
 
-      {/* Página inteira renderizada no servidor a cada visita. O carimbo evita
-          a dúvida de sempre diante de um painel: "isto é de quando?" */}
-      <p className="text-fg-subtle mt-8 text-xs">
-        Números apurados em {HORA.format(new Date())}.
+      <p className="text-fg-subtle mt-5 text-right text-[11px]">
+        Atualizado às {TIME.format(new Date())}
       </p>
     </div>
   );
 }
 
-/** Pendências e números do momento — o miolo da tela. */
 async function Panorama({
   companyId,
   permissions,
@@ -124,158 +162,302 @@ async function Panorama({
   companyId: string;
   permissions: Set<string>;
 }) {
-  const podeVerRodadas = permissions.has("purchase_round.view");
-  const podeVerPedidos = permissions.has("order.view");
-
-  const [atencao, situacao] = await Promise.all([
+  const canSeeRounds = permissions.has("purchase_round.view");
+  const canSeeOrders = permissions.has("order.view");
+  const [attention, situation] = await Promise.all([
     getAttentionItems(companyId, permissions),
     getSituationSummary(companyId, permissions),
   ]);
-
-  // Empresa que ainda não cotou nem comprou não tem o que acompanhar. Em vez
-  // de uma tela de zeros, os passos até a primeira cotação.
-  const comecando =
-    situacao.rondasAtivas === 0 &&
-    situacao.pedidosEmAberto === 0 &&
-    atencao.length === 0;
-  const passos = comecando
+  const starting =
+    situation.rondasAtivas === 0 &&
+    situation.pedidosEmAberto === 0 &&
+    attention.length === 0;
+  const steps = starting
     ? await getFirstSteps(companyId, permissions)
     : null;
 
+  if (steps?.length) {
+    return (
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,.8fr)]">
+        <FirstSteps steps={steps} />
+        <div className="border-border bg-surface relative overflow-hidden rounded-2xl border p-6 shadow-xs">
+          <div
+            className="bg-primary/8 absolute -top-16 -right-16 size-44 rounded-full"
+            aria-hidden
+          />
+          <ShoppingCart className="text-primary relative size-7" aria-hidden />
+          <h2 className="text-fg relative mt-5 text-lg font-semibold">
+            Sua operação começa aqui
+          </h2>
+          <p className="text-fg-muted relative mt-2 text-sm leading-relaxed">
+            Depois da primeira cotação, este espaço passa a mostrar respostas,
+            pedidos, atrasos e economia automaticamente.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  const critical = attention.filter(
+    (item) => item.severity === "high",
+  ).length;
+  const responseRate =
+    situation.fornecedoresTotal > 0
+      ? Math.round(
+          (situation.fornecedoresResponderam / situation.fornecedoresTotal) *
+            100,
+        )
+      : 0;
+
   return (
     <>
-      {passos && passos.length > 0 ? (
-        <div className="mb-8">
-          <FirstSteps steps={passos} />
-        </div>
-      ) : null}
-
-      <section className="mb-8">
-        <h2 className="text-fg mb-1 text-sm font-semibold">
-          Precisa da sua atenção
-        </h2>
-        <p className="text-fg-muted mb-3 text-sm">
-          Condições que continuam valendo até alguém resolver — diferente do
-          sino, que avisa o que acabou de acontecer.
-        </p>
-        <AttentionList items={atencao} />
-      </section>
-
-      {podeVerRodadas || podeVerPedidos ? (
-        <section className="mb-8">
-          <h2 className="text-fg mb-3 text-sm font-semibold">Em andamento</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {podeVerRodadas ? (
+      {canSeeRounds || canSeeOrders ? (
+        <section className="mb-6" aria-labelledby="dashboard-summary">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2
+                id="dashboard-summary"
+                className="text-fg text-base font-semibold"
+              >
+                Resumo executivo
+              </h2>
+              <p className="text-fg-muted text-xs">
+                O pulso da operação neste momento.
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                critical > 0
+                  ? "bg-destructive-soft text-destructive"
+                  : "bg-success-soft text-success"
+              }`}
+            >
+              {critical > 0
+                ? `${critical} ${critical === 1 ? "prioridade crítica" : "prioridades críticas"}`
+                : "Operação sem criticidade"}
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {canSeeRounds ? (
               <>
-                <Metric
-                  label="Rodadas de compra"
-                  value={String(situacao.rondasAtivas)}
+                <DashboardMetric
+                  icon={ShoppingCart}
+                  label="Rodadas em andamento"
+                  value={String(situation.rondasAtivas)}
                   hint={
-                    situacao.rodadaUnica
-                      ? situacao.rodadaUnica.title
-                      : "cotações abertas agora"
+                    situation.rodadaUnica?.title ?? "Cotações abertas agora"
                   }
                   href={
-                    situacao.rodadaUnica
-                      ? `/compras/${situacao.rodadaUnica.id}`
+                    situation.rodadaUnica
+                      ? `/compras/${situation.rodadaUnica.id}`
                       : "/compras"
                   }
+                  tone="info"
                 />
-                <Metric
+                <DashboardMetric
+                  icon={MessageSquareText}
                   label="Aguardando resposta"
-                  value={String(situacao.fornecedoresPendentes)}
-                  hint="fornecedores que ainda não responderam"
-                  href="/compras"
+                  value={String(situation.fornecedoresPendentes)}
+                  hint={`${responseRate}% dos fornecedores já responderam`}
+                  href="/compras?situacao=aguardando"
+                  tone={
+                    situation.fornecedoresPendentes > 0 ? "neutral" : "good"
+                  }
                 />
               </>
             ) : null}
-
-            {podeVerPedidos ? (
+            {canSeeOrders ? (
               <>
-                <Metric
+                <DashboardMetric
+                  icon={ClipboardList}
                   label="Pedidos em aberto"
-                  value={String(situacao.pedidosEmAberto)}
-                  hint="enviados e ainda não recebidos por inteiro"
+                  value={String(situation.pedidosEmAberto)}
+                  hint="Enviados e ainda não recebidos por inteiro"
                   href="/pedidos?situacao=abertos"
                 />
-                <Metric
-                  label="Atrasados"
-                  value={String(situacao.pedidosAtrasados)}
-                  hint="prazo vencido, mercadoria por vir"
-                  tone={situacao.pedidosAtrasados > 0 ? "bad" : "neutral"}
+                <DashboardMetric
+                  icon={TriangleAlert}
+                  label="Pedidos atrasados"
+                  value={String(situation.pedidosAtrasados)}
+                  hint={
+                    situation.pedidosAtrasados > 0
+                      ? "Prazo vencido e mercadoria pendente"
+                      : "Nenhuma entrega fora do prazo"
+                  }
                   href="/pedidos?situacao=atrasados"
+                  tone={situation.pedidosAtrasados > 0 ? "bad" : "good"}
                 />
               </>
             ) : null}
           </div>
         </section>
       ) : null}
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,.75fr)]">
+        <section
+          className="border-border bg-surface overflow-hidden rounded-2xl border shadow-xs"
+          aria-labelledby="attention-title"
+        >
+          <header className="border-border flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-5">
+            <div>
+              <h2
+                id="attention-title"
+                className="text-fg text-base font-semibold"
+              >
+                Prioridades de hoje
+              </h2>
+              <p className="text-fg-muted mt-0.5 text-xs">
+                Ordenadas por urgência e prontas para ação.
+              </p>
+            </div>
+            {attention.length ? (
+              <span className="bg-surface-muted text-fg-muted grid min-w-7 place-items-center rounded-full px-2 text-xs font-semibold leading-7">
+                {attention.length}
+              </span>
+            ) : null}
+          </header>
+          <AttentionList items={attention} />
+        </section>
+
+        {canSeeRounds || canSeeOrders ? (
+          <aside
+            className="border-border bg-surface rounded-2xl border p-5 shadow-xs"
+            aria-labelledby="flow-title"
+          >
+            <h2 id="flow-title" className="text-fg text-base font-semibold">
+              Fluxo da operação
+            </h2>
+            <p className="text-fg-muted mt-0.5 text-xs">
+              Leitura rápida do trabalho em curso.
+            </p>
+
+            {canSeeRounds ? (
+              <div className="mt-5">
+                <div className="flex items-end justify-between gap-3 text-xs">
+                  <span className="text-fg-muted">Respostas das cotações</span>
+                  <strong className="text-fg tabular-nums">
+                    {situation.fornecedoresResponderam}/
+                    {situation.fornecedoresTotal}
+                  </strong>
+                </div>
+                <div className="bg-surface-muted mt-2 h-2 overflow-hidden rounded-full">
+                  <div
+                    className="bg-primary h-full rounded-full transition-[width]"
+                    style={{ width: `${responseRate}%` }}
+                  />
+                </div>
+                <p className="text-fg-subtle mt-1.5 text-[11px]">
+                  {responseRate}% concluído nas rodadas ativas
+                </p>
+              </div>
+            ) : null}
+
+            <div className="border-border mt-5 divide-y border-y">
+              {canSeeRounds ? (
+                <Link
+                  href="/compras"
+                  className="hover:text-primary flex items-center justify-between py-3 text-sm"
+                >
+                  <span className="text-fg-muted">Rodadas ativas</span>
+                  <strong className="text-fg tabular-nums">
+                    {situation.rondasAtivas}
+                  </strong>
+                </Link>
+              ) : null}
+              {canSeeOrders ? (
+                <Link
+                  href="/pedidos?situacao=abertos"
+                  className="hover:text-primary flex items-center justify-between py-3 text-sm"
+                >
+                  <span className="text-fg-muted">Pedidos em aberto</span>
+                  <strong className="text-fg tabular-nums">
+                    {situation.pedidosEmAberto}
+                  </strong>
+                </Link>
+              ) : null}
+              <div className="flex items-center justify-between py-3 text-sm">
+                <span className="text-fg-muted">Ações pendentes</span>
+                <strong className="text-fg tabular-nums">
+                  {attention.length}
+                </strong>
+              </div>
+            </div>
+          </aside>
+        ) : null}
+      </div>
     </>
   );
 }
 
-/**
- * O dinheiro do mês.
- *
- * Depende do fuso da empresa para saber onde o mês começa — por isso `getCompany`
- * vem antes, e não em paralelo.
- */
-async function Financeiro({ companyId }: { companyId: string }) {
-  const dados = await getCompany(companyId);
-  if (!dados) return null;
-
-  const financeiro = await getMonthFinancials(companyId, dados.timezone);
+async function Financial({ companyId }: { companyId: string }) {
+  const company = await getCompany(companyId);
+  if (!company) return null;
+  const financial = await getMonthFinancials(companyId, company.timezone);
 
   return (
-    <section className="mb-8">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-fg text-sm font-semibold">
-          Financeiro de {MES.format(new Date(`${financeiro.de}T12:00:00`))}
-        </h2>
-        <Link
-          href="/analises"
-          className="text-primary text-xs underline-offset-4 hover:underline"
-        >
-          Cruzar período, produto e fornecedor em Análises
-        </Link>
-      </div>
+    <section
+      className="border-border bg-surface mt-6 overflow-hidden rounded-2xl border shadow-xs"
+      aria-labelledby="financial-title"
+    >
+      <header className="border-border flex flex-wrap items-center justify-between gap-3 border-b px-4 py-4 sm:px-5">
+        <div>
+          <h2
+            id="financial-title"
+            className="text-fg text-base font-semibold capitalize"
+          >
+            Resultado de {MONTH.format(new Date(`${financial.de}T12:00:00`))}
+          </h2>
+          <p className="text-fg-muted mt-0.5 text-xs">
+            Valores realizados a partir das mercadorias recebidas.
+          </p>
+        </div>
+        <Button asChild size="sm" variant="outline">
+          <Link href="/analises">Ver análise completa</Link>
+        </Button>
+      </header>
 
-      {financeiro.itensRecebidos === 0 ? (
-        <p className="border-border bg-surface-sunken text-fg-muted rounded-xl border px-4 py-3 text-sm">
-          Nenhuma mercadoria recebida neste mês. Economia se mede contra o preço
-          da nota fiscal, então os números aparecem depois da primeira entrada.
-        </p>
+      {financial.itensRecebidos === 0 ? (
+        <div className="flex items-center gap-3 px-5 py-6">
+          <WalletCards className="text-fg-subtle size-5" aria-hidden />
+          <p className="text-fg-muted text-sm">
+            Os resultados aparecem depois da primeira entrada de mercadoria do
+            mês.
+          </p>
+        </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Metric
+        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardMetric
+            icon={WalletCards}
             label="Total comprado"
-            value={MONEY.format(financeiro.totalComprado)}
-            hint={`${financeiro.itensRecebidos} ${financeiro.itensRecebidos === 1 ? "item recebido" : "itens recebidos"}, pelo preço da nota`}
+            value={MONEY.format(financial.totalComprado)}
+            hint={`${financial.itensRecebidos} ${financial.itensRecebidos === 1 ? "item recebido" : "itens recebidos"}`}
           />
-          <Metric
+          <DashboardMetric
+            icon={TrendingDown}
             label="Economia negociada"
-            value={MONEY.format(financeiro.economiaNegociada)}
-            hint="cotado menos combinado"
+            value={MONEY.format(financial.economiaNegociada)}
+            hint="Diferença entre cotado e combinado"
+            tone={financial.economiaNegociada > 0 ? "good" : "neutral"}
           />
-          <Metric
+          <DashboardMetric
+            icon={BadgeDollarSign}
             label="Economia realizada"
-            value={MONEY.format(financeiro.economiaRealizada)}
-            hint="cotado menos o preço da nota"
-            // Realizada negativa é a nota tendo vindo acima do cotado: não é
-            // ausência de economia, é prejuízo, e merece o alerta.
+            value={MONEY.format(financial.economiaRealizada)}
+            hint="Diferença entre cotado e preço da nota"
             tone={
-              financeiro.economiaRealizada > 0
+              financial.economiaRealizada > 0
                 ? "good"
-                : financeiro.economiaRealizada < 0
+                : financial.economiaRealizada < 0
                   ? "bad"
                   : "neutral"
             }
           />
-          <Metric
+          <DashboardMetric
+            icon={Scale}
             label="Impacto de divergências"
-            value={MONEY.format(financeiro.impactoDivergencias)}
-            hint="o que a nota cobrou além do combinado"
-            tone={financeiro.impactoDivergencias > 0 ? "bad" : "neutral"}
+            value={MONEY.format(financial.impactoDivergencias)}
+            hint="Valor cobrado além do combinado"
+            tone={financial.impactoDivergencias > 0 ? "bad" : "good"}
           />
         </div>
       )}
@@ -283,19 +465,24 @@ async function Financeiro({ companyId }: { companyId: string }) {
   );
 }
 
-/** O que andou acontecendo. Fica por último de propósito. */
-async function Atividade({ companyId }: { companyId: string }) {
-  const atividade = await listRecentActivity(companyId);
-  if (atividade.length === 0) return null;
+async function RecentActivity({ companyId }: { companyId: string }) {
+  const activity = await listRecentActivity(companyId);
+  if (activity.length === 0) return null;
 
   return (
-    <section>
-      <h2 className="text-fg mb-1 text-sm font-semibold">Atividade recente</h2>
-      <p className="text-fg-muted mb-2 text-sm">
-        O que andou acontecendo. Fica por último de propósito: o que exige ação
-        está lá em cima.
-      </p>
-      <ActivityFeed entries={atividade} />
+    <section
+      className="border-border bg-surface mt-6 overflow-hidden rounded-2xl border shadow-xs"
+      aria-labelledby="activity-title"
+    >
+      <header className="border-border border-b px-4 py-4 sm:px-5">
+        <h2 id="activity-title" className="text-fg text-base font-semibold">
+          Movimentações recentes
+        </h2>
+        <p className="text-fg-muted mt-0.5 text-xs">
+          O histórico mais recente da operação e dos fornecedores.
+        </p>
+      </header>
+      <ActivityFeed entries={activity} />
     </section>
   );
 }

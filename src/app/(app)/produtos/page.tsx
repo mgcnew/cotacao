@@ -1,11 +1,12 @@
-import { Package } from "lucide-react";
+import { Package, Search } from "lucide-react";
 import Link from "next/link";
-
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -18,20 +19,7 @@ import { setProductActive } from "@/features/products/actions";
 import { getCatalogCounts, listProducts } from "@/features/products/queries";
 import { PRODUCT_PURPOSE_LABEL } from "@/features/products/purposes";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
-
-/**
- * Compara nomes ignorando acento e caixa.
- *
- * A busca global chega aqui por `?busca=`, e ela é acento-insensível no banco
- * (0031). Filtrar com `includes` cru desfaria isso: quem clicasse em "Linguiça"
- * na sugestão cairia numa lista vazia.
- */
-function normaliza(valor: string): string {
-  return valor
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-}
+import { normalizeListSearch, parseListPagination } from "@/lib/list-pagination";
 
 export default async function ProdutosPage({
   searchParams,
@@ -48,10 +36,27 @@ export default async function ProdutosPage({
     ? parametros.busca[0]
     : parametros.busca;
   const busca = (bruto ?? "").trim();
+  const statusBruto = Array.isArray(parametros.status)
+    ? parametros.status[0]
+    : parametros.status;
+  const status = ["ativos", "inativos"].includes(statusBruto ?? "")
+    ? statusBruto
+    : "todos";
 
-  const visiveis = busca
-    ? products.filter((p) => normaliza(p.name).includes(normaliza(busca)))
-    : products;
+  const filtrados = products.filter((product) => {
+    if (
+      busca &&
+      !normalizeListSearch(product.name).includes(normalizeListSearch(busca))
+    ) {
+      return false;
+    }
+    if (status === "ativos" && !product.is_active) return false;
+    if (status === "inativos" && product.is_active) return false;
+    return true;
+  });
+  const pagination = parseListPagination(parametros, filtrados.length);
+  const visiveis = filtrados.slice(pagination.start, pagination.end);
+  const temFiltro = Boolean(busca) || status !== "todos";
 
   const podeCriar = permissions.has("product.create");
   const podeEditar = permissions.has("product.update");
@@ -70,23 +75,33 @@ export default async function ProdutosPage({
         }
       />
 
-      {busca ? (
-        <p className="border-border bg-surface-sunken text-fg-muted mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm">
-          <span>
-            Mostrando {visiveis.length}{" "}
-            {visiveis.length === 1 ? "produto" : "produtos"} para “{busca}”.
-          </span>
-          <Link href="/produtos" className="text-primary text-xs">
-            Ver o catálogo inteiro
-          </Link>
-        </p>
+      {products.length > 0 ? (
+        <form className="border-border bg-surface mb-4 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <Search className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4" aria-hidden />
+            <Input name="busca" defaultValue={busca} placeholder="Buscar produto pelo nome" className="pl-8" />
+          </div>
+          <select
+            name="status"
+            defaultValue={status}
+            className="border-input bg-background text-fg h-8 rounded-lg border px-2.5 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/30"
+            aria-label="Filtrar produtos por situação"
+          >
+            <option value="todos">Todas as situações</option>
+            <option value="ativos">Somente ativos</option>
+            <option value="inativos">Somente inativos</option>
+          </select>
+          <input type="hidden" name="por_pagina" value={pagination.pageSize} />
+          <Button type="submit" size="sm" variant="outline">Filtrar</Button>
+          {temFiltro ? <Button asChild size="sm" variant="ghost"><Link href="/produtos">Limpar</Link></Button> : null}
+        </form>
       ) : null}
 
-      {visiveis.length === 0 && busca ? (
+      {filtrados.length === 0 && temFiltro ? (
         <EmptyState
           icon={Package}
-          title="Nenhum produto com esse nome"
-          description={`Nada no catálogo casa com “${busca}”.`}
+          title="Nenhum produto neste filtro"
+          description="Ajuste a busca ou a situação para encontrar outros itens do catálogo."
           action={
             <Button asChild size="sm" variant="outline">
               <Link href="/produtos">Ver o catálogo inteiro</Link>
@@ -107,9 +122,10 @@ export default async function ProdutosPage({
           }
         />
       ) : (
+        <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
               {/* Sete colunas não cabem num celular: a tabela rolaria de lado
                   e levaria o botão de ação para fora da tela. O que some da
                   linha reaparece embaixo do nome do produto. */}
@@ -182,6 +198,12 @@ export default async function ProdutosPage({
             ))}
           </TableBody>
         </Table>
+        <DataTablePagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={filtrados.length}
+        />
+        </div>
       )}
 
       {/* Categorias e unidades saíram do cabeçalho: são manutenção de catálogo,

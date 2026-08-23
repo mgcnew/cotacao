@@ -21,6 +21,8 @@ export type SituationSummary = {
   /** Título da rodada quando há só uma — dá nome ao que está acontecendo. */
   rodadaUnica: { id: string; title: string } | null;
   fornecedoresPendentes: number;
+  fornecedoresTotal: number;
+  fornecedoresResponderam: number;
   pedidosEmAberto: number;
   pedidosAtrasados: number;
 };
@@ -41,6 +43,14 @@ export async function getSituationSummary(
     rodadaUnica: unica ? { id: unica.roundId, title: unica.title } : null,
     fornecedoresPendentes: ativas.reduce(
       (soma, r) => soma + r.suppliersPending,
+      0,
+    ),
+    fornecedoresTotal: ativas.reduce(
+      (soma, r) => soma + r.totalSuppliers,
+      0,
+    ),
+    fornecedoresResponderam: ativas.reduce(
+      (soma, r) => soma + r.suppliersCompleted,
       0,
     ),
     pedidosEmAberto: podeVerPedidos ? s.pedidosEmAberto : 0,

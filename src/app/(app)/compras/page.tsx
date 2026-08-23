@@ -15,6 +15,7 @@ import { NewRoundDialog } from "@/components/rounds/round-dialogs";
 import { RoundFilterFields } from "@/components/rounds/round-filter-bar";
 import { RoundRow } from "@/components/rounds/round-row";
 import { Button } from "@/components/ui/button";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
   Table,
   TableBody,
@@ -34,6 +35,7 @@ import {
 } from "@/features/rounds/queries";
 import { roundNextStep } from "@/features/rounds/status";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { parseListPagination } from "@/lib/list-pagination";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
@@ -57,7 +59,8 @@ export default async function ComprasPage({
 
   if (!permissions.has("purchase_round.view")) redirect("/dashboard");
 
-  const filters = parseRoundFilters(await searchParams);
+  const params = await searchParams;
+  const filters = parseRoundFilters(params);
   const podeCriar = permissions.has("purchase_round.create");
 
   return (
@@ -102,6 +105,7 @@ export default async function ComprasPage({
           filters={filters}
           permissions={permissions}
           podeCriar={podeCriar}
+          paginationParams={params}
         />
       </Suspense>
     </div>
@@ -113,16 +117,20 @@ async function ListaDeRodadas({
   filters,
   permissions,
   podeCriar,
+  paginationParams,
 }: {
   companyId: string;
   filters: RoundFilters;
   permissions: Set<string>;
   podeCriar: boolean;
+  paginationParams: Record<string, string | string[] | undefined>;
 }) {
   const filtrando = hasAnyRoundFilter(filters);
   const podeEditarRodada = permissions.has("purchase_round.update");
   const rounds = await listRoundsWithProgress(companyId, filters);
   const resumo = summarizeRounds(rounds);
+  const pagination = parseListPagination(paginationParams, rounds.length);
+  const visibleRounds = rounds.slice(pagination.start, pagination.end);
 
   return (
     <>
@@ -176,9 +184,10 @@ async function ListaDeRodadas({
           }
         />
       ) : (
+        <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
               {/* No celular sobram Rodada, Situação e a ação. O que some da
                   linha reaparece embaixo do título, para a tabela não rolar de
                   lado e levar o botão para fora da tela. */}
@@ -198,7 +207,7 @@ async function ListaDeRodadas({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rounds.map((round) => {
+            {visibleRounds.map((round) => {
               const id = round.purchase_round_id ?? "";
               const status = round.status ?? "";
               const passo = roundNextStep(status, {
@@ -240,6 +249,12 @@ async function ListaDeRodadas({
             })}
           </TableBody>
         </Table>
+        <DataTablePagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={rounds.length}
+        />
+        </div>
       )}
     </>
   );
