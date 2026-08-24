@@ -11,6 +11,7 @@ import { normalizeBarcode } from "@/features/products/barcodes";
 import { PRODUCT_PURPOSE_VALUES } from "@/features/products/purposes";
 import { UNIT_KIND_VALUES } from "@/features/products/units";
 import { requireActiveCompany } from "@/lib/auth/dal";
+import { normalizeEntityName } from "@/lib/entity-name";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -302,6 +303,23 @@ export async function createProduct(
   }
 
   const supabase = await createServerSupabaseClient();
+
+  const { data: productWithName, error: nameReadError } = await supabase
+    .from("products")
+    .select("id")
+    .eq("company_id", company.companyId)
+    .eq("normalized_name", normalizeEntityName(parsed.data.name))
+    .limit(1)
+    .maybeSingle();
+
+  if (nameReadError) {
+    return {
+      error: `Não foi possível verificar o nome do produto: ${nameReadError.message}`,
+    };
+  }
+  if (productWithName) {
+    return { error: "Já existe um produto com este nome nesta empresa." };
+  }
 
   if (parsed.data.barcode) {
     const { data: barcodeInUse, error: barcodeReadError } = await supabase

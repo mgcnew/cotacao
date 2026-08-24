@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { isValidCnpj, onlyDigits } from "@/features/company/cnpj";
 import { requireActiveCompany } from "@/lib/auth/dal";
+import { normalizeEntityName } from "@/lib/entity-name";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -170,6 +171,29 @@ export async function createSupplier(
   }
 
   const supabase = await createServerSupabaseClient();
+  const { data: supplierWithName, error: nameReadError } = await supabase
+    .from("suppliers")
+    .select("id")
+    .eq("company_id", company.companyId)
+    .eq("normalized_name", normalizeEntityName(parsed.data.name))
+    .limit(1)
+    .maybeSingle();
+
+  if (nameReadError) {
+    return {
+      error: `Não foi possível verificar o nome do fornecedor: ${nameReadError.message}`,
+      valores: digitados(formData),
+      respondidoEm: Date.now(),
+    };
+  }
+  if (supplierWithName) {
+    return {
+      error: "Já existe um fornecedor com este nome nesta empresa.",
+      valores: digitados(formData),
+      respondidoEm: Date.now(),
+    };
+  }
+
   const { data, error } = await supabase.rpc(
     "rpc_create_supplier_with_contact",
     {
@@ -193,7 +217,9 @@ export async function createSupplier(
   if (error) {
     if (error.code === "23505") {
       return {
-        error: "Já existe um fornecedor com este CNPJ nesta empresa.",
+        error: error.message.includes("nome")
+          ? "Já existe um fornecedor com este nome nesta empresa."
+          : "Já existe um fornecedor com este CNPJ nesta empresa.",
         valores: digitados(formData),
         respondidoEm: Date.now(),
       };

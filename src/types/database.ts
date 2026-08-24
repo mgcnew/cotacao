@@ -1411,6 +1411,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          normalized_name: string
           photo_path: string | null
           pricing_unit_id: string
           purchase_unit_id: string
@@ -1426,6 +1427,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          normalized_name?: never
           photo_path?: string | null
           pricing_unit_id: string
           purchase_unit_id: string
@@ -1441,6 +1443,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          normalized_name?: never
           photo_path?: string | null
           pricing_unit_id?: string
           purchase_unit_id?: string
@@ -2787,6 +2790,7 @@ export type Database = {
           id: string
           legal_name: string | null
           name: string
+          normalized_name: string
           notes: string | null
           purchase_limit: number | null
           status: string
@@ -2799,6 +2803,7 @@ export type Database = {
           id?: string
           legal_name?: string | null
           name: string
+          normalized_name?: never
           notes?: string | null
           purchase_limit?: number | null
           status?: string
@@ -2811,6 +2816,7 @@ export type Database = {
           id?: string
           legal_name?: string | null
           name?: string
+          normalized_name?: never
           notes?: string | null
           purchase_limit?: number | null
           status?: string
