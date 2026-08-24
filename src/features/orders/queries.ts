@@ -99,7 +99,7 @@ export function orderNextStep(status: string): OrderNextStep {
 export async function listDirectOrderOptions(companyId: string) {
   const supabase = await createServerSupabaseClient();
 
-  const [suppliers, products, shoppingItems] = await Promise.all([
+  const [suppliers, products, shoppingItems, supplierNotices] = await Promise.all([
     supabase
       .from("suppliers")
       .select("id, name")
@@ -120,6 +120,13 @@ export async function listDirectOrderOptions(companyId: string) {
       .eq("is_active", true)
       .order("name"),
     listPendingShoppingItems(companyId),
+    supabase
+      .from("supplier_notices")
+      .select("id, supplier_id, kind, title, amount, due_date, priority")
+      .eq("company_id", companyId)
+      .eq("status", "open")
+      .order("priority")
+      .order("created_at", { ascending: false }),
   ]);
 
   if (suppliers.error) {
@@ -128,9 +135,32 @@ export async function listDirectOrderOptions(companyId: string) {
   if (products.error) {
     throw new Error(`Falha ao listar produtos: ${products.error.message}`);
   }
+  if (supplierNotices.error) {
+    throw new Error(`Falha ao listar avisos: ${supplierNotices.error.message}`);
+  }
+
+  const noticesBySupplier = new Map<
+    string,
+    NonNullable<typeof supplierNotices.data>
+  >();
+  for (const notice of supplierNotices.data ?? []) {
+    const current = noticesBySupplier.get(notice.supplier_id) ?? [];
+    current.push(notice);
+    noticesBySupplier.set(notice.supplier_id, current);
+  }
 
   return {
-    suppliers: suppliers.data ?? [],
+    suppliers: (suppliers.data ?? []).map((supplier) => ({
+      ...supplier,
+      openNotices: (noticesBySupplier.get(supplier.id) ?? []).map((notice) => ({
+        id: notice.id,
+        kind: notice.kind,
+        title: notice.title,
+        amount: notice.amount,
+        dueDate: notice.due_date,
+        priority: notice.priority,
+      })),
+    })),
     products: (products.data ?? []).map((p) => ({
       id: p.id,
       name: p.name,

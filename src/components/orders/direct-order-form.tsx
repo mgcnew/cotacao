@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowRight, PackagePlus } from "lucide-react";
+import { AlertTriangle, ArrowRight, Bell, PackagePlus } from "lucide-react";
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { useFechaModalAoConcluir, useModalDeRota } from "@/components/layout/route-modal";
 import {
@@ -19,9 +19,31 @@ import {
   createDirectOrder,
   type OrderActionState,
 } from "@/features/orders/actions";
+import {
+  formatSupplierNoticeDate,
+  isSupplierNoticeOverdue,
+  SUPPLIER_NOTICE_KIND_LABEL,
+  type SupplierNoticeKind,
+} from "@/features/suppliers/notices";
+
+const CURRENCY = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
 
 export type DirectOrderOptions = {
-  suppliers: { id: string; name: string }[];
+  suppliers: {
+    id: string;
+    name: string;
+    openNotices: {
+      id: string;
+      kind: string;
+      title: string;
+      amount: number | null;
+      dueDate: string | null;
+      priority: string;
+    }[];
+  }[];
   products: OrderableProduct[];
   shoppingItems?: {
     id: string;
@@ -48,6 +70,13 @@ export function CamposDoPedidoDireto({
 }: DirectOrderOptions & { idPrefixo?: string }) {
   const idFornecedor = `${idPrefixo}supplierId`;
   const idPrazo = `${idPrefixo}deliveryDueDate`;
+  const [supplierId, setSupplierId] = useState("");
+  const selectedSupplier =
+    suppliers.find((supplier) => supplier.id === supplierId) ?? null;
+  const openNotices = selectedSupplier?.openNotices ?? [];
+  const hasImportantNotice = openNotices.some(
+    (notice) => notice.priority === "high",
+  );
 
   return (
     <>
@@ -60,6 +89,8 @@ export function CamposDoPedidoDireto({
             id={idFornecedor}
             name="supplierId"
             required
+            value={supplierId}
+            onChange={(event) => setSupplierId(event.target.value)}
             className={selectClass}
           >
             <option value="">Selecione…</option>
@@ -84,6 +115,67 @@ export function CamposDoPedidoDireto({
           />
         </div>
       </div>
+
+      {selectedSupplier && openNotices.length > 0 ? (
+        <section
+          className={
+            hasImportantNotice
+              ? "border-warning/40 bg-warning/5 rounded-xl border p-3"
+              : "border-border bg-surface-sunken rounded-xl border p-3"
+          }
+        >
+          <div className="flex items-start gap-2">
+            {hasImportantNotice ? (
+              <AlertTriangle
+                className="text-warning mt-0.5 size-4 shrink-0"
+                aria-hidden
+              />
+            ) : (
+              <Bell className="text-fg-subtle mt-0.5 size-4 shrink-0" aria-hidden />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-fg text-sm font-medium">
+                Revise antes de comprar de {selectedSupplier.name}
+              </p>
+              <ul className="text-fg-muted mt-1 space-y-1 text-sm">
+                {openNotices.slice(0, 3).map((notice) => (
+                  <li key={notice.id}>
+                    <span className="font-medium">
+                      {SUPPLIER_NOTICE_KIND_LABEL[
+                        notice.kind as SupplierNoticeKind
+                      ] ?? "Registro"}
+                      :
+                    </span>{" "}
+                    {notice.title}
+                    {notice.amount !== null
+                      ? ` · ${CURRENCY.format(Number(notice.amount))}`
+                      : ""}
+                    {notice.dueDate
+                      ? ` · ${
+                          isSupplierNoticeOverdue(notice.dueDate)
+                            ? "venceu em"
+                            : "até"
+                        } ${formatSupplierNoticeDate(notice.dueDate)}`
+                      : ""}
+                  </li>
+                ))}
+              </ul>
+              {openNotices.length > 3 ? (
+                <p className="text-fg-subtle mt-1 text-xs">
+                  E mais {openNotices.length - 3} registro(s) em aberto.
+                </p>
+              ) : null}
+              <Link
+                href={`/fornecedores/${selectedSupplier.id}`}
+                target="_blank"
+                className="text-primary mt-2 inline-block text-xs font-medium hover:underline"
+              >
+                Abrir ficha do fornecedor
+              </Link>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <OrderItemRows
         products={products}

@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { isValidCnpj, onlyDigits } from "@/features/company/cnpj";
+import {
+  SUPPLIER_NOTICE_KINDS,
+  SUPPLIER_NOTICE_PRIORITIES,
+} from "@/features/suppliers/notices";
 import { requireActiveCompany } from "@/lib/auth/dal";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -42,6 +46,18 @@ export type SupplierFormState = {
   respondidoEm?: number;
 };
 export type ContactFormState = { error: string | null; savedAt?: number };
+
+export type SupplierNoticeFormState = {
+  error: string | null;
+  savedAt?: number;
+  values?: Record<string, string>;
+  respondedAt?: number;
+};
+
+export type SupplierNoticeStatusState = {
+  error: string | null;
+  savedAt?: number;
+};
 
 function describeWriteError(
   error: { code?: string; message: string },
@@ -124,6 +140,269 @@ function digitados(formData: FormData): Record<string, string> {
   return Object.fromEntries(
     campos.map((c) => [c, String(formData.get(c) ?? "")]),
   );
+}
+
+function noticeValues(formData: FormData): Record<string, string> {
+  return Object.fromEntries(
+    ["kind", "title", "description", "amount", "dueDate", "priority"].map(
+      (field) => [field, String(formData.get(field) ?? "")],
+    ),
+  );
+}
+
+const supplierNoticeSchema = z.object({
+  kind: z.enum(SUPPLIER_NOTICE_KINDS, { error: "Escolha o tipo do registro." }),
+  title: z
+    .string()
+    .trim()
+    .min(3, { error: "Informe um título com pelo menos 3 caracteres." })
+    .max(120, { error: "Título muito longo." }),
+  description: z
+    .string()
+    .trim()
+    .max(1500, { error: "Descrição muito longa." })
+    .optional()
+    .transform((value) => value || null),
+  amount: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => {
+      if (!value) return null;
+      return Number(
+        value.includes(",")
+          ? value.replace(/\./g, "").replace(",", ".")
+          : value,
+      );
+    })
+    .refine(
+      (value) => value === null || (Number.isFinite(value) && value > 0),
+      { error: "Informe um valor maior que zero." },
+    ),
+  dueDate: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || null)
+    .refine(
+      (value) => value === null || /^\d{4}-\d{2}-\d{2}$/.test(value),
+      { error: "Data de validade inválida." },
+    ),
+  priority: z.enum(SUPPLIER_NOTICE_PRIORITIES, {
+    error: "Escolha a prioridade.",
+  }),
+});
+
+function revalidateSupplierNoticePaths(supplierId: string) {
+  revalidatePath(`/fornecedores/${supplierId}`);
+  revalidatePath("/fornecedores");
+  revalidatePath("/pedidos/novo");
+  revalidatePath("/pedidos");
+}
+
+async function parseSupplierNotice(formData: FormData) {
+  return supplierNoticeSchema.safeParse({
+    kind: formData.get("kind"),
+    title: formData.get("title"),
+    description: formData.get("description"),
+    amount: formData.get("amount"),
+    dueDate: formData.get("dueDate"),
+    priority: formData.get("priority"),
+  });
+}
+
+export async function createSupplierNotice(
+  supplierId: string,
+  _prev: SupplierNoticeFormState,
+  formData: FormData,
+): Promise<SupplierNoticeFormState> {
+  const company = await requireActiveCompany();
+  const values = noticeValues(formData);
+  const parsed = await parseSupplierNotice(formData);
+
+  if (!z.string().uuid().safeParse(supplierId).success) {
+    return { error: "Fornecedor inválido.", values, respondedAt: Date.now() };
+  }
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0].message,
+      values,
+      respondedAt: Date.now(),
+    };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.from("supplier_notices").insert({
+    company_id: company.companyId,
+    supplier_id: supplierId,
+    kind: parsed.data.kind,
+    title: parsed.data.title,
+    description: parsed.data.description,
+    amount: parsed.data.amount,
+    due_date: parsed.data.dueDate,
+    priority: parsed.data.priority,
+  });
+
+  if (error) {
+    return {
+      error: describeWriteError(error, "um aviso"),
+      values,
+      respondedAt: Date.now(),
+    };
+  }
+
+  revalidateSupplierNoticePaths(supplierId);
+  return { error: null, savedAt: Date.now() };
+}
+
+export async function updateSupplierNotice(
+  noticeId: string,
+  supplierId: string,
+  _prev: SupplierNoticeFormState,
+  formData: FormData,
+): Promise<SupplierNoticeFormState> {
+  const company = await requireActiveCompany();
+  const values = noticeValues(formData);
+  const ids = z
+    .object({ noticeId: z.string().uuid(), supplierId: z.string().uuid() })
+    .safeParse({ noticeId, supplierId });
+  const parsed = await parseSupplierNotice(formData);
+
+  if (!ids.success) {
+    return { error: "Registro inválido.", values, respondedAt: Date.now() };
+  }
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0].message,
+      values,
+      respondedAt: Date.now(),
+    };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: notice, error: readError } = await supabase
+    .from("supplier_notices")
+    .select("status")
+    .eq("company_id", company.companyId)
+    .eq("supplier_id", supplierId)
+    .eq("id", noticeId)
+    .maybeSingle();
+
+  if (readError || !notice) {
+    return {
+      error: readError
+        ? `Não foi possível carregar o registro: ${readError.message}`
+        : "Registro não encontrado.",
+      values,
+      respondedAt: Date.now(),
+    };
+  }
+  if (notice.status !== "open") {
+    return {
+      error: "Reabra este registro antes de editá-lo.",
+      values,
+      respondedAt: Date.now(),
+    };
+  }
+
+  const { data: updated, error } = await supabase
+    .from("supplier_notices")
+    .update({
+      kind: parsed.data.kind,
+      title: parsed.data.title,
+      description: parsed.data.description,
+      amount: parsed.data.amount,
+      due_date: parsed.data.dueDate,
+      priority: parsed.data.priority,
+    })
+    .eq("company_id", company.companyId)
+    .eq("supplier_id", supplierId)
+    .eq("id", noticeId)
+    .eq("status", "open")
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return {
+      error: describeWriteError(error, "um aviso"),
+      values,
+      respondedAt: Date.now(),
+    };
+  }
+  if (!updated) {
+    return {
+      error: "O registro foi resolvido ou não está mais disponível.",
+      values,
+      respondedAt: Date.now(),
+    };
+  }
+
+  revalidateSupplierNoticePaths(supplierId);
+  return { error: null, savedAt: Date.now() };
+}
+
+const resolutionSchema = z.object({
+  resolutionNote: z
+    .string()
+    .trim()
+    .max(500, { error: "Conclusão muito longa." })
+    .optional()
+    .transform((value) => value || null),
+});
+
+export async function resolveSupplierNotice(
+  noticeId: string,
+  supplierId: string,
+  _prev: SupplierNoticeStatusState,
+  formData: FormData,
+): Promise<SupplierNoticeStatusState> {
+  const company = await requireActiveCompany();
+  const parsed = resolutionSchema.safeParse({
+    resolutionNote: formData.get("resolutionNote"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: resolved, error } = await supabase
+    .from("supplier_notices")
+    .update({ status: "resolved", resolution_note: parsed.data.resolutionNote })
+    .eq("company_id", company.companyId)
+    .eq("supplier_id", supplierId)
+    .eq("id", noticeId)
+    .eq("status", "open")
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { error: describeWriteError(error, "o registro") };
+  if (!resolved) return { error: "O registro já foi resolvido ou não existe." };
+  revalidateSupplierNoticePaths(supplierId);
+  return { error: null, savedAt: Date.now() };
+}
+
+export async function reopenSupplierNotice(
+  noticeId: string,
+  supplierId: string,
+  _prev: SupplierNoticeStatusState,
+  _formData: FormData,
+): Promise<SupplierNoticeStatusState> {
+  void _prev;
+  void _formData;
+  const company = await requireActiveCompany();
+  const supabase = await createServerSupabaseClient();
+  const { data: reopened, error } = await supabase
+    .from("supplier_notices")
+    .update({ status: "open" })
+    .eq("company_id", company.companyId)
+    .eq("supplier_id", supplierId)
+    .eq("id", noticeId)
+    .eq("status", "resolved")
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { error: describeWriteError(error, "o registro") };
+  if (!reopened) return { error: "O registro já está aberto ou não existe." };
+  revalidateSupplierNoticePaths(supplierId);
+  return { error: null, savedAt: Date.now() };
 }
 
 export async function createSupplier(

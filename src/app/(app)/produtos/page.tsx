@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/layout/empty-state";
 import { FilterDialog } from "@/components/layout/filter-dialog";
 import { PageHeader } from "@/components/layout/page-header";
 import { TableSkeleton } from "@/components/layout/page-skeleton";
+import { AdaptivePageSize } from "@/components/ui/adaptive-page-size";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
@@ -54,6 +55,7 @@ function ProductFilterFields({
           className="h-8"
         />
       </div>
+      <input type="hidden" name="por_pagina" value={pageSize} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor="product-status" className="text-fg-muted text-xs">
           Situação
@@ -87,7 +89,6 @@ function ProductFilterFields({
           ))}
         </select>
       </div>
-      <input type="hidden" name="por_pagina" value={pageSize} />
     </div>
   );
 }
@@ -176,7 +177,9 @@ async function ProdutosContent({
     if (categoria && product.category_id !== categoria) return false;
     return true;
   });
-  const pagination = parseListPagination(parametros, filtrados.length);
+  const pagination = parseListPagination(parametros, filtrados.length, {
+    pageSizeRange: { min: 6, max: 15, default: 10 },
+  });
   const visiveis = filtrados.slice(pagination.start, pagination.end);
   const filtrosAtivos =
     Number(Boolean(busca)) +
@@ -228,8 +231,15 @@ async function ProdutosContent({
           }
         />
       ) : (
-        <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
-          <Table>
+        <>
+          <AdaptivePageSize current={pagination.pageSize} />
+          <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-[calc(100dvh-14rem)]">
+            <Table
+              containerClassName="min-h-0 flex-1"
+              className={
+                visiveis.length === pagination.pageSize ? "h-full" : undefined
+              }
+            >
           <TableHeader>
             <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
               {/* Sete colunas não cabem num celular: a tabela rolaria de lado
@@ -303,13 +313,15 @@ async function ProdutosContent({
               </TableRow>
             ))}
           </TableBody>
-          </Table>
-          <DataTablePagination
-            page={pagination.page}
-            pageSize={pagination.pageSize}
-            total={filtrados.length}
-          />
-        </div>
+            </Table>
+            <DataTablePagination
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              total={filtrados.length}
+              allowPageSize={false}
+            />
+          </div>
+        </>
       )}
 
       {/* Categorias e unidades saíram do cabeçalho: são manutenção de catálogo,

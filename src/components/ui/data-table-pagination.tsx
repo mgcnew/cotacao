@@ -19,10 +19,12 @@ export function DataTablePagination({
   page,
   pageSize,
   total,
+  allowPageSize = true,
 }: {
   page: number;
   pageSize: number;
   total: number;
+  allowPageSize?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -54,21 +56,23 @@ export function DataTablePagination({
         <span className="tabular-nums">
           {start}–{end} de {total}
         </span>
-        <label className="flex items-center gap-1.5">
-          <span>Por página</span>
-          <select
-            value={pageSize}
-            onChange={(event) => changeSize(event.target.value)}
-            className="border-input bg-background text-fg h-7 rounded-md border px-2 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-            aria-label="Registros por página"
-          >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </label>
+        {allowPageSize ? (
+          <label className="flex items-center gap-1.5">
+            <span>Por página</span>
+            <select
+              value={pageSize}
+              onChange={(event) => changeSize(event.target.value)}
+              className="border-input bg-background text-fg h-7 rounded-md border px-2 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+              aria-label="Registros por página"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
 
       <nav className="flex items-center gap-1" aria-label="Paginação da tabela">

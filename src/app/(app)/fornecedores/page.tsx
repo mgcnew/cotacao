@@ -1,4 +1,4 @@
-import { Truck } from "lucide-react";
+import { AlertTriangle, Bell, Truck } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -7,6 +7,7 @@ import { FilterDialog } from "@/components/layout/filter-dialog";
 import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
 import { PageHeader } from "@/components/layout/page-header";
 import { TableSkeleton } from "@/components/layout/page-skeleton";
+import { AdaptivePageSize } from "@/components/ui/adaptive-page-size";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
@@ -60,6 +61,7 @@ function SupplierFilterFields({
           className="h-8"
         />
       </div>
+      <input type="hidden" name="por_pagina" value={pageSize} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor="supplier-status" className="text-fg-muted text-xs">
           Situação
@@ -94,7 +96,6 @@ function SupplierFilterFields({
           ))}
         </select>
       </div>
-      <input type="hidden" name="por_pagina" value={pageSize} />
     </div>
   );
 }
@@ -195,7 +196,9 @@ async function FornecedoresContent({
       `${supplier.name} ${supplier.legal_name ?? ""} ${supplier.document_number ?? ""} ${contacts ?? ""}`,
     ).includes(needle);
   });
-  const pagination = parseListPagination(params, filtrados.length);
+  const pagination = parseListPagination(params, filtrados.length, {
+    pageSizeRange: { min: 6, max: 15, default: 10 },
+  });
   const visiveis = filtrados.slice(pagination.start, pagination.end);
   const filtrosAtivos =
     Number(Boolean(busca)) +
@@ -209,6 +212,10 @@ async function FornecedoresContent({
         total +
         (supplier.supplier_contacts?.filter((contact) => contact.is_active)
           .length ?? 0),
+      0,
+    ),
+    avisos: suppliers.reduce(
+      (total, supplier) => total + supplier.openNoticeCount,
       0,
     ),
   };
@@ -228,6 +235,7 @@ async function FornecedoresContent({
           </FilterDialog>
           <span className="text-fg-subtle text-xs sm:ml-auto">
             {counts.ativos} de {counts.total} ativos · {counts.contatos} contatos
+            {counts.avisos > 0 ? ` · ${counts.avisos} avisos abertos` : ""}
           </span>
         </div>
       ) : null}
@@ -257,8 +265,15 @@ async function FornecedoresContent({
           }
         />
       ) : (
-        <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
-          <Table>
+        <>
+          <AdaptivePageSize current={pagination.pageSize} />
+          <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-[calc(100dvh-14rem)]">
+            <Table
+              containerClassName="min-h-0 flex-1"
+              className={
+                visiveis.length === pagination.pageSize ? "h-full" : undefined
+              }
+            >
           <TableHeader>
             <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
               {/* No celular sobram Fornecedor e Situação. CNPJ e contato
@@ -289,6 +304,25 @@ async function FornecedoresContent({
                     {supplier.legal_name ? (
                       <span className="text-fg-subtle block text-xs">
                         {supplier.legal_name}
+                      </span>
+                    ) : null}
+                    {supplier.openNoticeCount > 0 ? (
+                      <span
+                        className={
+                          supplier.hasImportantNotice
+                            ? "text-warning mt-1 flex items-center gap-1 text-xs font-medium"
+                            : "text-fg-muted mt-1 flex items-center gap-1 text-xs"
+                        }
+                      >
+                        {supplier.hasImportantNotice ? (
+                          <AlertTriangle className="size-3.5" aria-hidden />
+                        ) : (
+                          <Bell className="size-3.5" aria-hidden />
+                        )}
+                        {supplier.openNoticeCount}{" "}
+                        {supplier.openNoticeCount === 1
+                          ? "aviso em aberto"
+                          : "avisos em aberto"}
                       </span>
                     ) : null}
                     <span className="text-fg-muted block max-w-40 text-xs whitespace-normal sm:hidden">
@@ -331,13 +365,15 @@ async function FornecedoresContent({
               );
             })}
           </TableBody>
-          </Table>
-          <DataTablePagination
-            page={pagination.page}
-            pageSize={pagination.pageSize}
-            total={filtrados.length}
-          />
-        </div>
+            </Table>
+            <DataTablePagination
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              total={filtrados.length}
+              allowPageSize={false}
+            />
+          </div>
+        </>
       )}
     </>
   );
