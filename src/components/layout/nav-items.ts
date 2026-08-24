@@ -4,6 +4,7 @@ import {
   ListChecks,
   LayoutGrid,
   Package,
+  PackageCheck,
   MessageCircle,
   Settings,
   ShoppingCart,
@@ -34,6 +35,12 @@ export const OPERATION_NAV: NavItem[] = [
     label: "Pedidos",
     icon: ClipboardList,
     permission: "order.view",
+  },
+  {
+    href: "/recebimentos",
+    label: "Recebimentos",
+    icon: PackageCheck,
+    permission: "receipt.view",
   },
   {
     href: "/lista-compras",

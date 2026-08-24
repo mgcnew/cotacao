@@ -12,8 +12,8 @@ import {
   NewRevisionForm,
   type EditableItem,
 } from "@/components/orders/order-crud-forms";
-import { ReceiptForm } from "@/components/orders/order-forms";
 import { SendOrderControls } from "@/components/orders/send-order-controls";
+import { ArrivalDialog } from "@/components/receipts/arrival-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -93,15 +93,21 @@ export default async function PedidoPage({
   if (!order) notFound();
   if (!permissions.has("order.view")) redirect("/dashboard");
 
-  const [revision, draft, revisions, receipts, divergences, supplierDivergences] =
-    await Promise.all([
-      getCurrentRevision(company.companyId, id, order.current_revision_id),
-      getDraftRevision(company.companyId, id),
-      listOrderRevisions(company.companyId, id),
-      listOrderReceipts(company.companyId, id),
-      listOrderDivergences(company.companyId, id),
-      listSupplierDivergences(company.companyId, id),
-    ]);
+  const [
+    revision,
+    draft,
+    revisions,
+    receipts,
+    divergences,
+    supplierDivergences,
+  ] = await Promise.all([
+    getCurrentRevision(company.companyId, id, order.current_revision_id),
+    getDraftRevision(company.companyId, id),
+    listOrderRevisions(company.companyId, id),
+    listOrderReceipts(company.companyId, id),
+    listOrderDivergences(company.companyId, id),
+    listSupplierDivergences(company.companyId, id),
+  ]);
 
   const podeEnviar = permissions.has("order.send");
   const podeReceber = permissions.has("receipt.create");
@@ -112,7 +118,8 @@ export default async function PedidoPage({
   const podeEncerrarSaldo = permissions.has("receipt.post");
 
   const encerrado = order.status === "received" || order.status === "cancelled";
-  const podeMexerNoRascunho = Boolean(draft) && podeEditarRascunho && !encerrado;
+  const podeMexerNoRascunho =
+    Boolean(draft) && podeEditarRascunho && !encerrado;
   // Uma revisão nova só faz sentido quando não há outra em preparação — a RPC
   // recusa a segunda, e oferecer o botão seria prometer o que ela nega.
   const podeCriarRevisao =
@@ -148,6 +155,12 @@ export default async function PedidoPage({
   );
   const pendentes = (revision?.items ?? []).filter(
     (i) => i.pendingQuantity > 0,
+  );
+  const chegadaPendente = receipts.find(
+    (receipt) => receipt.status === "draft",
+  );
+  const recebimentosConcluidos = receipts.filter(
+    (receipt) => receipt.status !== "draft",
   );
 
   return (
@@ -328,21 +341,43 @@ export default async function PedidoPage({
         </section>
       ) : null}
 
-      {podeReceber &&
-      revision &&
+      {revision &&
       pendentes.length > 0 &&
       (order.status === "awaiting_delivery" ||
         order.status === "partially_received") ? (
-        <section className="mb-6">
-          <h2 className="text-fg mb-1 text-sm font-semibold">
-            Dar entrada na mercadoria
-          </h2>
-          <p className="text-fg-muted mb-3 text-sm">
-            Quantidade recebida é o que entrou fisicamente; a de precificação é
-            a base do dinheiro. Os dois números existem porque nem sempre
-            coincidem.
-          </p>
-          <ReceiptForm orderId={id} items={pendentes} />
+        <section className="border-border bg-surface mb-6 rounded-xl border p-4">
+          <h2 className="text-fg text-sm font-semibold">Recebimento</h2>
+          {chegadaPendente ? (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-fg-muted text-sm">
+                Mercadoria chegou e está aguardando a conferência de quantidades
+                e valores.
+              </p>
+              {podeEncerrarSaldo ? (
+                <Button asChild size="sm">
+                  <Link href={`/recebimentos/${chegadaPendente.id}`}>
+                    Abrir conferência
+                  </Link>
+                </Button>
+              ) : (
+                <Badge variant="outline">A conferir</Badge>
+              )}
+            </div>
+          ) : (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-fg-muted text-sm">
+                Registre a chegada sem alterar o saldo. A entrada só será
+                efetivada após a conferência.
+              </p>
+              {podeReceber ? (
+                <ArrivalDialog
+                  orderId={id}
+                  orderNumber={order.order_number}
+                  supplierName={order.suppliers.name}
+                />
+              ) : null}
+            </div>
+          )}
         </section>
       ) : null}
 
@@ -376,9 +411,7 @@ export default async function PedidoPage({
                     ) : null}
                   </span>
                 </div>
-                {d.notes ? (
-                  <p className="text-fg-muted">{d.notes}</p>
-                ) : null}
+                {d.notes ? <p className="text-fg-muted">{d.notes}</p> : null}
               </li>
             ))}
           </ul>
@@ -434,13 +467,13 @@ export default async function PedidoPage({
         </div>
       ) : null}
 
-      {receipts.length > 0 ? (
+      {recebimentosConcluidos.length > 0 ? (
         <section className="mb-6">
           <h2 className="text-fg mb-3 text-sm font-semibold">
             Recebimentos registrados
           </h2>
           <ul className="flex flex-col gap-2">
-            {receipts.map((r) => (
+            {recebimentosConcluidos.map((r) => (
               <li
                 key={r.id}
                 className="border-border bg-surface flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm"
@@ -450,6 +483,10 @@ export default async function PedidoPage({
                     ? DATA_HORA.format(new Date(r.receivedAt))
                     : "—"}{" "}
                   · {r.itemCount} {r.itemCount === 1 ? "item" : "itens"}
+                  {r.invoiceNumber ? ` · NF ${r.invoiceNumber}` : ""}
+                  {r.invoiceTotal !== null
+                    ? ` · ${MONEY.format(r.invoiceTotal)}`
+                    : ""}
                   {r.notes ? (
                     <span className="text-fg-subtle block text-xs">
                       {r.notes}
@@ -509,9 +546,7 @@ export default async function PedidoPage({
         </section>
       ) : null}
 
-      {podeCancelar && !encerrado ? (
-        <CancelOrderForm orderId={id} />
-      ) : null}
+      {podeCancelar && !encerrado ? <CancelOrderForm orderId={id} /> : null}
     </div>
   );
 }

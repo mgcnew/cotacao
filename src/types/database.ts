@@ -2087,9 +2087,14 @@ export type Database = {
       }
       receipts: {
         Row: {
+          checked_at: string | null
+          checked_by: string | null
           company_id: string
           created_at: string
           id: string
+          invoice_number: string | null
+          invoice_series: string | null
+          invoice_total: number | null
           notes: string | null
           order_id: string
           received_at: string | null
@@ -2098,9 +2103,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          checked_at?: string | null
+          checked_by?: string | null
           company_id: string
           created_at?: string
           id?: string
+          invoice_number?: string | null
+          invoice_series?: string | null
+          invoice_total?: number | null
           notes?: string | null
           order_id: string
           received_at?: string | null
@@ -2109,9 +2119,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          checked_at?: string | null
+          checked_by?: string | null
           company_id?: string
           created_at?: string
           id?: string
+          invoice_number?: string | null
+          invoice_series?: string | null
+          invoice_total?: number | null
           notes?: string | null
           order_id?: string
           received_at?: string | null
@@ -3171,6 +3186,30 @@ export type Database = {
           p_notes?: string
           p_order_id: string
           p_received_at: string
+        }
+        Returns: Json
+      }
+      rpc_post_draft_receipt: {
+        Args: {
+          p_company_id: string
+          p_invoice_number?: string
+          p_invoice_series?: string
+          p_invoice_total?: number
+          p_items: Json
+          p_notes?: string
+          p_receipt_id: string
+        }
+        Returns: Json
+      }
+      rpc_register_order_arrival: {
+        Args: {
+          p_company_id: string
+          p_invoice_number?: string
+          p_invoice_series?: string
+          p_invoice_total?: number
+          p_notes?: string
+          p_order_id: string
+          p_received_at?: string
         }
         Returns: Json
       }

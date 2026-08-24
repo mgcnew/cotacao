@@ -261,14 +261,17 @@ export async function listOrders(
     query = query.eq("status", filters.situacao);
   }
 
-  if (filters.fornecedorId) query = query.eq("supplier_id", filters.fornecedorId);
+  if (filters.fornecedorId)
+    query = query.eq("supplier_id", filters.fornecedorId);
   if (filters.numero) query = query.eq("order_number", filters.numero);
   if (filters.de) query = query.gte("created_at", `${filters.de}T00:00:00`);
   if (filters.ate) query = query.lte("created_at", `${filters.ate}T23:59:59`);
 
   // As duas saem juntas: a de atrasos não depende mais do resultado da lista.
   const [{ data, error }, atraso] = await Promise.all([
-    query.order("order_number", { ascending: false }).limit(ORDERS_PAGE_SIZE + 1),
+    query
+      .order("order_number", { ascending: false })
+      .limit(ORDERS_PAGE_SIZE + 1),
     readOverdue(supabase, companyId),
   ]);
 
@@ -604,7 +607,9 @@ export async function listOrderReceipts(companyId: string, orderId: string) {
 
   const { data, error } = await supabase
     .from("receipts")
-    .select("id, status, received_at, notes, receipt_items ( id )")
+    .select(
+      "id, status, received_at, checked_at, invoice_number, invoice_total, notes, receipt_items ( id )",
+    )
     .eq("company_id", companyId)
     .eq("order_id", orderId)
     .order("received_at", { ascending: false });
@@ -615,6 +620,9 @@ export async function listOrderReceipts(companyId: string, orderId: string) {
     id: r.id,
     status: r.status,
     receivedAt: r.received_at,
+    checkedAt: r.checked_at,
+    invoiceNumber: r.invoice_number,
+    invoiceTotal: r.invoice_total === null ? null : Number(r.invoice_total),
     notes: r.notes,
     itemCount: r.receipt_items?.length ?? 0,
   }));
