@@ -213,3 +213,145 @@ export function RoundRow({
     </TableRow>
   );
 }
+
+/**
+ * A tabela é eficiente no desktop, mas três colunas ainda disputam espaço em
+ * 320–430 px. No celular a mesma rodada vira um cartão; acima de `sm`, a página
+ * continua usando `RoundRow` sem nenhuma mudança visual.
+ */
+export function RoundMobileCard({
+  round,
+  passo,
+  podeAgir,
+  podeEditar,
+}: {
+  round: RoundRowData;
+  passo: RoundNextStep;
+  podeAgir: boolean;
+  podeEditar: boolean;
+}) {
+  const [state, formAction] = useActionState<RoundFormState, FormData>(
+    updateRound,
+    { error: null },
+  );
+  const [editando, setEditando] = useFechaAoSalvar(state.savedAt);
+
+  if (editando) {
+    return (
+      <form
+        action={formAction}
+        className="border-border bg-surface flex flex-col gap-3 rounded-xl border p-4 shadow-xs"
+      >
+        <input type="hidden" name="roundId" value={round.id} />
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor={`titulo-mobile-${round.id}`}
+            className="text-fg text-xs font-medium"
+          >
+            Título
+          </label>
+          <Input
+            id={`titulo-mobile-${round.id}`}
+            name="title"
+            required
+            autoFocus
+            maxLength={120}
+            defaultValue={round.title}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor={`obs-mobile-${round.id}`}
+            className="text-fg text-xs font-medium"
+          >
+            Observações{" "}
+            <span className="text-fg-subtle font-normal">(opcional)</span>
+          </label>
+          <Input
+            id={`obs-mobile-${round.id}`}
+            name="notes"
+            maxLength={500}
+            defaultValue={round.notes ?? ""}
+          />
+        </div>
+        <ErrorLine error={state.error} />
+        <div className="flex items-center gap-2">
+          <Salvar />
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setEditando(false)}
+          >
+            Cancelar
+          </Button>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <article className="border-border bg-surface rounded-xl border p-4 shadow-xs">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <span className="flex min-w-0 items-start gap-1">
+            <IntentPrefetchLink
+              href={`/compras/${round.id}`}
+              className="text-fg hover:text-primary min-w-0 font-medium break-words underline-offset-4 hover:underline"
+            >
+              {round.title}
+            </IntentPrefetchLink>
+            {podeEditar ? (
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost"
+                className="text-fg-subtle shrink-0"
+                aria-label={`Editar ${round.title}`}
+                onClick={() => setEditando(true)}
+              >
+                <Pencil className="size-3" aria-hidden />
+              </Button>
+            ) : null}
+          </span>
+          <p className="text-fg-subtle mt-1 text-xs">Criada {round.criadaEm}</p>
+        </div>
+        <Badge className="shrink-0" variant={roundStatusTone(round.status)}>
+          {ROUND_STATUS_LABEL[round.status] ?? round.status}
+        </Badge>
+      </div>
+
+      <dl className="border-border mt-3 grid grid-cols-3 gap-2 border-y py-3 text-center">
+        <div>
+          <dt className="text-fg-subtle text-[11px]">Produtos</dt>
+          <dd className="text-fg mt-0.5 font-medium tabular-nums">
+            {round.totalItems}
+          </dd>
+        </div>
+        <div className="border-border border-x px-1">
+          <dt className="text-fg-subtle text-[11px]">Responderam</dt>
+          <dd className="text-fg mt-0.5 font-medium tabular-nums">
+            {round.suppliersCompleted}/{round.totalSuppliers}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-fg-subtle text-[11px]">Pedidos</dt>
+          <dd className="text-fg mt-0.5 font-medium tabular-nums">
+            {round.ordersCreated}
+          </dd>
+        </div>
+      </dl>
+
+      <Button
+        asChild
+        size="sm"
+        className="mt-3 w-full"
+        variant={passo.pending && podeAgir ? "default" : "outline"}
+      >
+        <IntentPrefetchLink href={`/compras/${round.id}${passo.path}`}>
+          {podeAgir ? passo.label : "Abrir rodada"}
+        </IntentPrefetchLink>
+      </Button>
+    </article>
+  );
+}

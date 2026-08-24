@@ -13,7 +13,7 @@ import {
 import { FilterDialog } from "@/components/layout/filter-dialog";
 import { NewRoundDialog } from "@/components/rounds/round-dialogs";
 import { RoundFilterFields } from "@/components/rounds/round-filter-bar";
-import { RoundRow } from "@/components/rounds/round-row";
+import { RoundMobileCard, RoundRow } from "@/components/rounds/round-row";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
@@ -131,6 +131,33 @@ async function ListaDeRodadas({
   const resumo = summarizeRounds(rounds);
   const pagination = parseListPagination(paginationParams, rounds.length);
   const visibleRounds = rounds.slice(pagination.start, pagination.end);
+  const presentedRounds = visibleRounds.map((round) => {
+    const id = round.purchase_round_id ?? "";
+    const status = round.status ?? "";
+    const passo = roundNextStep(status, {
+      suppliersPending: Number(round.suppliers_pending ?? 0),
+      ordersCreated: Number(round.orders_created ?? 0),
+    });
+    return {
+      round: {
+        id,
+        title: round.title ?? "",
+        notes: round.notes,
+        criadaEm: round.created_at
+          ? DATA.format(new Date(round.created_at))
+          : "—",
+        totalItems: Number(round.total_items ?? 0),
+        suppliersCompleted: Number(round.suppliers_completed ?? 0),
+        totalSuppliers: Number(round.total_suppliers ?? 0),
+        ordersCreated: Number(round.orders_created ?? 0),
+        status,
+      },
+      passo,
+      podeAgir: passo.permission === null || permissions.has(passo.permission),
+      podeEditar:
+        podeEditarRodada && status !== "completed" && status !== "cancelled",
+    };
+  });
 
   return (
     <>
@@ -184,77 +211,54 @@ async function ListaDeRodadas({
           }
         />
       ) : (
-        <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
-              {/* No celular sobram Rodada, Situação e a ação. O que some da
+        <>
+          <div className="flex flex-col gap-3 sm:hidden">
+            {presentedRounds.map((item) => (
+              <RoundMobileCard key={item.round.id} {...item} />
+            ))}
+          </div>
+          <div className="border-border bg-surface hidden overflow-hidden rounded-xl border shadow-xs sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
+                  {/* No celular sobram Rodada, Situação e a ação. O que some da
                   linha reaparece embaixo do título, para a tabela não rolar de
                   lado e levar o botão para fora da tela. */}
-              <TableHead>Rodada</TableHead>
-              <TableHead className="hidden lg:table-cell">Criada</TableHead>
-              <TableHead className="hidden text-right sm:table-cell">
-                Produtos
-              </TableHead>
-              <TableHead className="hidden md:table-cell">
-                Responderam
-              </TableHead>
-              <TableHead className="hidden text-right lg:table-cell">
-                Pedidos
-              </TableHead>
-              <TableHead>Situação</TableHead>
-              <TableHead className="text-right">Próximo passo</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visibleRounds.map((round) => {
-              const id = round.purchase_round_id ?? "";
-              const status = round.status ?? "";
-              const passo = roundNextStep(status, {
-                suppliersPending: Number(round.suppliers_pending ?? 0),
-                ordersCreated: Number(round.orders_created ?? 0),
-              });
-              // Sem a permissão o passo existe, mas não é desta pessoa: o botão
-              // vira apenas a porta de entrada da rodada.
-              const podeAgir =
-                passo.permission === null || permissions.has(passo.permission);
-
-              return (
-                <RoundRow
-                  key={id}
-                  round={{
-                    id,
-                    title: round.title ?? "",
-                    notes: round.notes,
-                    criadaEm: round.created_at
-                      ? DATA.format(new Date(round.created_at))
-                      : "—",
-                    totalItems: Number(round.total_items ?? 0),
-                    suppliersCompleted: Number(round.suppliers_completed ?? 0),
-                    totalSuppliers: Number(round.total_suppliers ?? 0),
-                    ordersCreated: Number(round.orders_created ?? 0),
-                    status,
-                  }}
-                  passo={passo}
-                  podeAgir={podeAgir}
-                  // Rodada encerrada não se renomeia: concluída ou cancelada,
-                  // ela é registro do que aconteceu.
-                  podeEditar={
-                    podeEditarRodada &&
-                    status !== "completed" &&
-                    status !== "cancelled"
-                  }
-                />
-              );
-            })}
-          </TableBody>
-        </Table>
-        <DataTablePagination
-          page={pagination.page}
-          pageSize={pagination.pageSize}
-          total={rounds.length}
-        />
-        </div>
+                  <TableHead>Rodada</TableHead>
+                  <TableHead className="hidden lg:table-cell">Criada</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">
+                    Produtos
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Responderam
+                  </TableHead>
+                  <TableHead className="hidden text-right lg:table-cell">
+                    Pedidos
+                  </TableHead>
+                  <TableHead>Situação</TableHead>
+                  <TableHead className="text-right">Próximo passo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {presentedRounds.map((item) => (
+                  <RoundRow key={item.round.id} {...item} />
+                ))}
+              </TableBody>
+            </Table>
+            <DataTablePagination
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              total={rounds.length}
+            />
+          </div>
+          <div className="sm:hidden">
+            <DataTablePagination
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              total={rounds.length}
+            />
+          </div>
+        </>
       )}
     </>
   );
