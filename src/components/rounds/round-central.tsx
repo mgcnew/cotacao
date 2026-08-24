@@ -18,6 +18,7 @@ import {
 import {
   GroupForm,
   ItemForm,
+  ShoppingListImportForm,
   StartRoundPanel,
   SupplierPickerForm,
 } from "@/components/rounds/round-forms";
@@ -147,6 +148,7 @@ export function CorpoDaRodada({ dados }: { dados: DadosDaRodada }) {
           items={dados.items}
           itensAtivos={dados.itensAtivos.length}
           products={dados.products}
+          shoppingItems={dados.shoppingItems}
           roundSuppliers={dados.roundSuppliers}
           selectableSuppliers={dados.selectableSuppliers}
           contatos={dados.contatos}
@@ -222,6 +224,7 @@ function Montagem({
   items,
   itensAtivos,
   products,
+  shoppingItems,
   roundSuppliers,
   selectableSuppliers,
   contatos,
@@ -234,6 +237,7 @@ function Montagem({
   items: Item[];
   itensAtivos: number;
   products: Produto[];
+  shoppingItems: DadosDaRodada["shoppingItems"];
   roundSuppliers: RoundSupplier[];
   selectableSuppliers: DadosDaRodada["selectableSuppliers"];
   contatos: Contatos;
@@ -291,7 +295,7 @@ function Montagem({
                 ) : null}
 
                 {podeMontar && produtosAtivos.length > 0 ? (
-                  <div className="mb-4">
+                  <div className="mb-4 flex flex-col gap-3">
                     <ItemForm
                       roundId={roundId}
                       groups={groups}
@@ -300,6 +304,13 @@ function Montagem({
                         name: p.name,
                       }))}
                     />
+                    {shoppingItems.length > 0 ? (
+                      <ShoppingListImportForm
+                        roundId={roundId}
+                        groups={groups}
+                        items={shoppingItems}
+                      />
+                    ) : null}
                   </div>
                 ) : null}
 

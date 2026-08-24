@@ -9,7 +9,12 @@ import {
   NovaCategoriaDialog,
   NovaUnidadeDialog,
 } from "@/components/products/catalog-dialogs";
+import {
+  useFechaModalAoConcluir,
+  useModalDeRota,
+} from "@/components/layout/route-modal";
 import { Button } from "@/components/ui/button";
+import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { createProduct, type ProductFormState } from "@/features/products/actions";
 import { PRODUCT_PURPOSES } from "@/features/products/purposes";
@@ -73,8 +78,9 @@ function SubmitButton() {
 }
 
 export function ProductForm({ categories, units, attributes }: Props) {
+  const modal = useModalDeRota();
   const [state, formAction] = useActionState<ProductFormState, FormData>(
-    createProduct,
+    useFechaModalAoConcluir(createProduct),
     { error: null },
   );
   const [categoryId, setCategoryId] = React.useState("");
@@ -83,8 +89,8 @@ export function ProductForm({ categories, units, attributes }: Props) {
   // quando relevantes" quer dizer na prática.
   const visibleAttributes = attributes.filter((a) => a.categoryId === categoryId);
 
-  return (
-    <form key={state.savedAt} action={formAction} className="flex flex-col gap-6">
+  const conteudo = (
+    <>
       <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Nome" htmlFor="name">
@@ -274,6 +280,19 @@ export function ProductForm({ categories, units, attributes }: Props) {
         >
           <Input id="description" name="description" maxLength={500} />
         </Field>
+        <Field
+          label="Código de barras"
+          htmlFor="barcode"
+          hint="Opcional. Pode ser lido pelo leitor ou digitado."
+        >
+          <Input
+            id="barcode"
+            name="barcode"
+            maxLength={64}
+            autoComplete="off"
+            placeholder="Bipe ou digite o código"
+          />
+        </Field>
       </section>
 
       {state.error ? (
@@ -296,6 +315,23 @@ export function ProductForm({ categories, units, attributes }: Props) {
         </p>
       ) : null}
 
+    </>
+  );
+
+  if (modal) {
+    return (
+      <form key={state.savedAt} action={formAction} className="contents">
+        <DialogBody className="flex flex-col gap-6">{conteudo}</DialogBody>
+        <DialogFooter className="justify-end">
+          <SubmitButton />
+        </DialogFooter>
+      </form>
+    );
+  }
+
+  return (
+    <form key={state.savedAt} action={formAction} className="flex flex-col gap-6">
+      {conteudo}
       <div className="flex justify-end">
         <SubmitButton />
       </div>

@@ -1,6 +1,7 @@
 import {
   BarChart3,
   ClipboardList,
+  ListChecks,
   LayoutGrid,
   Package,
   MessageCircle,
@@ -33,6 +34,12 @@ export const OPERATION_NAV: NavItem[] = [
     label: "Pedidos",
     icon: ClipboardList,
     permission: "order.view",
+  },
+  {
+    href: "/lista-compras",
+    label: "Lista de compras",
+    icon: ListChecks,
+    permission: "product.view",
   },
   {
     href: "/whatsapp",

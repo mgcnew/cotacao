@@ -23,6 +23,15 @@ import {
 export type DirectOrderOptions = {
   suppliers: { id: string; name: string }[];
   products: OrderableProduct[];
+  shoppingItems?: {
+    id: string;
+    productId: string;
+    productName: string;
+    quantity: string;
+    purchaseUnit: string;
+    notes: string;
+    isActive: boolean;
+  }[];
 };
 
 /**
@@ -34,6 +43,7 @@ export type DirectOrderOptions = {
 export function CamposDoPedidoDireto({
   suppliers,
   products,
+  shoppingItems,
   idPrefixo = "",
 }: DirectOrderOptions & { idPrefixo?: string }) {
   const idFornecedor = `${idPrefixo}supplierId`;
@@ -77,6 +87,7 @@ export function CamposDoPedidoDireto({
 
       <OrderItemRows
         products={products}
+        shoppingItems={shoppingItems}
         seeds={[{ productId: "", quantity: "", price: "", notes: "" }]}
       />
     </>
@@ -133,7 +144,7 @@ export function FaltaCadastro({ suppliers, products }: DirectOrderOptions) {
  * O resto — campos, validação, action, mensagem de erro — é literalmente o
  * mesmo código nos dois casos.
  */
-export function DirectOrderForm({ suppliers, products }: DirectOrderOptions) {
+export function DirectOrderForm({ suppliers, products, shoppingItems }: DirectOrderOptions) {
   const modal = useModalDeRota();
   const [state, formAction] = useActionState<OrderActionState, FormData>(
     useFechaModalAoConcluir(createDirectOrder),
@@ -144,6 +155,7 @@ export function DirectOrderForm({ suppliers, products }: DirectOrderOptions) {
     <CamposDoPedidoDireto
       suppliers={suppliers}
       products={products}
+      shoppingItems={shoppingItems}
       idPrefixo={modal ? "modal-" : ""}
     />
   );

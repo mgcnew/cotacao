@@ -53,17 +53,16 @@ async function Conteudo() {
     );
   }
 
-  const { suppliers, products } = await listDirectOrderOptions(
-    company.companyId,
-  );
+  const options = await listDirectOrderOptions(company.companyId);
+  const { suppliers, products } = options;
 
   if (suppliers.length === 0 || products.length === 0) {
     return (
       <DialogBody>
-        <FaltaCadastro suppliers={suppliers} products={products} />
+        <FaltaCadastro {...options} />
       </DialogBody>
     );
   }
 
-  return <DirectOrderForm suppliers={suppliers} products={products} />;
+  return <DirectOrderForm {...options} />;
 }

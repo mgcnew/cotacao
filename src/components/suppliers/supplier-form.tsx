@@ -4,7 +4,12 @@ import { AlertCircle } from "lucide-react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import {
+  useFechaModalAoConcluir,
+  useModalDeRota,
+} from "@/components/layout/route-modal";
 import { Button } from "@/components/ui/button";
+import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   createSupplier,
@@ -21,13 +26,14 @@ function SubmitButton() {
 }
 
 export function SupplierForm() {
+  const modal = useModalDeRota();
   const [state, formAction] = useActionState<SupplierFormState, FormData>(
-    createSupplier,
+    useFechaModalAoConcluir(createSupplier),
     { error: null },
   );
 
-  return (
-    <form action={formAction} className="flex flex-col gap-6">
+  const conteudo = (
+    <>
       <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="flex flex-col gap-1.5">
@@ -227,13 +233,41 @@ export function SupplierForm() {
         </p>
       ) : null}
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-fg-subtle text-xs">
-          Fornecedor e contato são gravados juntos: ou os dois, ou nenhum.
-          Categorias atendidas e agenda de compras ficam na ficha, depois.
-        </p>
-        <SubmitButton />
-      </div>
+    </>
+  );
+
+  const rodape = (
+    <>
+      <p className="text-fg-subtle min-w-0 flex-1 text-xs">
+        Fornecedor e contato são gravados juntos: ou os dois, ou nenhum.
+        Categorias atendidas e agenda de compras ficam na ficha, depois.
+      </p>
+      <SubmitButton />
+    </>
+  );
+
+  if (modal) {
+    return (
+      <form
+        key={state.respondidoEm}
+        action={formAction}
+        className="contents"
+      >
+        <input type="hidden" name="apos" value="fechar" />
+        <DialogBody className="flex flex-col gap-6">{conteudo}</DialogBody>
+        <DialogFooter>{rodape}</DialogFooter>
+      </form>
+    );
+  }
+
+  return (
+    <form
+      key={state.respondidoEm}
+      action={formAction}
+      className="flex flex-col gap-6"
+    >
+      {conteudo}
+      <div className="flex items-center justify-between gap-3">{rodape}</div>
     </form>
   );
 }

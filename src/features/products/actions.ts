@@ -7,6 +7,7 @@ import {
   ATTRIBUTE_DATA_TYPE_VALUES,
   toAttributeKey,
 } from "@/features/products/attributes";
+import { normalizeBarcode } from "@/features/products/barcodes";
 import { PRODUCT_PURPOSE_VALUES } from "@/features/products/purposes";
 import { UNIT_KIND_VALUES } from "@/features/products/units";
 import { requireActiveCompany } from "@/lib/auth/dal";
@@ -256,6 +257,15 @@ const productSchema = z.object({
     .max(500, { error: "Observações muito longas" })
     .optional()
     .transform((v) => (v ? v : null)),
+  barcode: z
+    .string()
+    .trim()
+    .max(64, { error: "Código de barras muito longo" })
+    .optional()
+    .transform((v) => (v ? normalizeBarcode(v) : null))
+    .refine((v) => v === null || v.length >= 3, {
+      error: "Código de barras muito curto",
+    }),
 });
 
 /**
@@ -284,6 +294,7 @@ export async function createProduct(
     pricingUnitId: formData.get("pricingUnitId"),
     comparisonUnitId: formData.get("comparisonUnitId"),
     description: formData.get("description"),
+    barcode: formData.get("barcode"),
   });
 
   if (!parsed.success) {
@@ -291,6 +302,22 @@ export async function createProduct(
   }
 
   const supabase = await createServerSupabaseClient();
+
+  if (parsed.data.barcode) {
+    const { data: barcodeInUse, error: barcodeReadError } = await supabase
+      .from("product_barcodes")
+      .select("id")
+      .eq("company_id", company.companyId)
+      .eq("code", parsed.data.barcode)
+      .maybeSingle();
+
+    if (barcodeReadError) {
+      return { error: `Falha ao verificar o código: ${barcodeReadError.message}` };
+    }
+    if (barcodeInUse) {
+      return { error: "Este código de barras já pertence a outro produto." };
+    }
+  }
 
   // Os atributos da categoria são lidos do banco, não do formulário: o que o
   // cliente manda é só o valor digitado. Assim um campo forjado no HTML não
@@ -395,6 +422,21 @@ export async function createProduct(
     if (valuesError) {
       return {
         error: `Produto "${parsed.data.name}" foi criado, mas os atributos não: ${valuesError.message}. Edite o produto para completar.`,
+      };
+    }
+  }
+
+  if (parsed.data.barcode) {
+    const { error: barcodeError } = await supabase.from("product_barcodes").insert({
+      company_id: company.companyId,
+      product_id: created.id,
+      code: parsed.data.barcode,
+      is_primary: true,
+    });
+
+    if (barcodeError) {
+      return {
+        error: `Produto "${parsed.data.name}" foi criado, mas o código de barras não: ${barcodeError.message}.`,
       };
     }
   }

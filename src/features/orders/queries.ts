@@ -3,6 +3,7 @@ import "server-only";
 import { formatCnpj } from "@/features/company/cnpj";
 import type { OrderFilters } from "@/features/orders/filters";
 import type { OrderMessageContext } from "@/features/orders/message";
+import { listPendingShoppingItems } from "@/features/shopping-list/queries";
 import { PEDIDO_EM_ANDAMENTO } from "@/features/orders/lifecycle";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -98,7 +99,7 @@ export function orderNextStep(status: string): OrderNextStep {
 export async function listDirectOrderOptions(companyId: string) {
   const supabase = await createServerSupabaseClient();
 
-  const [suppliers, products] = await Promise.all([
+  const [suppliers, products, shoppingItems] = await Promise.all([
     supabase
       .from("suppliers")
       .select("id, name")
@@ -118,6 +119,7 @@ export async function listDirectOrderOptions(companyId: string) {
       .eq("company_id", companyId)
       .eq("is_active", true)
       .order("name"),
+    listPendingShoppingItems(companyId),
   ]);
 
   if (suppliers.error) {
@@ -135,6 +137,7 @@ export async function listDirectOrderOptions(companyId: string) {
       purchaseUnit: p.purchase_unit?.symbol ?? "",
       pricingUnit: p.pricing_unit?.symbol ?? "",
     })),
+    shoppingItems,
   };
 }
 

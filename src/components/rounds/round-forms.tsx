@@ -1,6 +1,6 @@
 "use client";
 
-import { Play } from "lucide-react";
+import { ListChecks, Play } from "lucide-react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -9,6 +9,10 @@ import { useFechaModalAoConcluir } from "@/components/layout/route-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import {
+  importShoppingItemsToRound,
+  type ShoppingListState,
+} from "@/features/shopping-list/actions";
 import {
   activateRound,
   addQuotationItem,
@@ -252,6 +256,81 @@ export function ItemForm({
         <Submit label="Adicionar produto" />
       </div>
     </form>
+  );
+}
+
+export function ShoppingListImportForm({
+  roundId,
+  groups,
+  items,
+}: {
+  roundId: string;
+  groups: Option[];
+  items: {
+    id: string;
+    productName: string;
+    quantity: string;
+    purchaseUnit: string;
+    notes: string;
+    isActive: boolean;
+  }[];
+}) {
+  const [state, action] = useActionState<ShoppingListState, FormData>(
+    importShoppingItemsToRound,
+    { error: null },
+  );
+
+  return (
+    <details
+      key={state.savedAt}
+      className="border-border bg-surface rounded-xl border"
+    >
+      <summary className="text-fg flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-medium">
+        <ListChecks className="text-primary size-4" aria-hidden />
+        Adicionar da lista de compras
+        <span className="text-fg-subtle font-normal">({items.length} pendentes)</span>
+      </summary>
+      <form action={action} className="border-border flex flex-col gap-3 border-t p-4">
+        <input type="hidden" name="roundId" value={roundId} />
+        {groups.length > 1 ? (
+          <div className="flex max-w-xs flex-col gap-1.5">
+            <label htmlFor="shopping-group" className="text-fg text-sm font-medium">
+              Inserir no grupo
+            </label>
+            <select id="shopping-group" name="groupId" className={selectClass}>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>{group.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {items.map((item) => (
+            <label
+              key={item.id}
+              className="border-border hover:bg-surface-muted flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2"
+            >
+              <input
+                type="checkbox"
+                name="shoppingItemId"
+                value={item.id}
+                disabled={!item.isActive}
+                className="mt-0.5 size-4 accent-primary"
+              />
+              <span className="min-w-0 text-sm">
+                <span className="text-fg block font-medium">{item.productName}</span>
+                <span className="text-fg-muted block text-xs">
+                  {item.quantity} {item.purchaseUnit}
+                  {item.notes ? ` · ${item.notes}` : ""}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <ErrorLine error={state.error} />
+        <div className="flex justify-end"><Submit label="Adicionar selecionados" /></div>
+      </form>
+    </details>
   );
 }
 

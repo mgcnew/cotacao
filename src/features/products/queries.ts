@@ -19,6 +19,7 @@ export async function listProducts(companyId: string) {
       name,
       purpose,
       is_active,
+      product_barcodes ( code, is_primary, is_active ),
       categories:categories!products_company_id_category_id_fkey ( name ),
       purchase_unit:units!products_company_id_purchase_unit_id_fkey ( code, symbol ),
       pricing_unit:units!products_company_id_pricing_unit_id_fkey ( code, symbol ),

@@ -46,6 +46,7 @@ type ItemRow = {
   itemId: string;
   productId: string;
   allocationId: string;
+  shoppingItemId: string;
   quantity: string;
   price: string;
   notes: string;
@@ -80,6 +81,7 @@ function readItemRows(formData: FormData): ItemRow[] {
   const itemIds = formData.getAll("itemId").map(String);
   const productIds = formData.getAll("productId").map(String);
   const allocationIds = formData.getAll("allocationId").map(String);
+  const shoppingItemIds = formData.getAll("shoppingItemId").map(String);
   const quantities = formData.getAll("quantity").map(String);
   const prices = formData.getAll("price").map(String);
   const notes = formData.getAll("itemNotes").map(String);
@@ -89,6 +91,7 @@ function readItemRows(formData: FormData): ItemRow[] {
       itemId: (itemIds[index] ?? "").trim(),
       productId: productId.trim(),
       allocationId: (allocationIds[index] ?? "").trim(),
+      shoppingItemId: (shoppingItemIds[index] ?? "").trim(),
       quantity: toDecimal(quantities[index]),
       price: toDecimal(prices[index]),
       notes: (notes[index] ?? "").trim(),
@@ -208,19 +211,25 @@ export async function createDirectOrder(
   const deliveryDueDate =
     String(formData.get("deliveryDueDate") ?? "").trim() || null;
 
-  const built = await buildOrderItems(
-    company.companyId,
-    readItemRows(formData),
-    { keepItemId: false },
-  );
+  const rows = readItemRows(formData);
+  const built = await buildOrderItems(company.companyId, rows, {
+    keepItemId: false,
+  });
   if (!built.ok) return { error: built.error };
 
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.rpc("rpc_create_direct_order", {
+  const shoppingItemIds = rows
+    .map((row) => row.shoppingItemId)
+    .filter(Boolean);
+  const rpc = shoppingItemIds.length
+    ? "rpc_create_direct_order_from_shopping_list"
+    : "rpc_create_direct_order";
+  const { data, error } = await supabase.rpc(rpc, {
     p_company_id: company.companyId,
     p_supplier_id: supplierId,
     p_items: built.items,
     p_delivery_due_date: deliveryDueDate ?? undefined,
+    ...(shoppingItemIds.length ? { p_shopping_item_ids: shoppingItemIds } : {}),
   });
 
   if (error) {
@@ -239,6 +248,7 @@ export async function createDirectOrder(
   }
 
   revalidatePath("/pedidos");
+  revalidatePath("/lista-compras");
 
   // Para onde ir depois é de quem chamou, não da action — mesma razão do
   // `createRound`: pela página `/pedidos/novo` o certo é abrir o pedido, porque

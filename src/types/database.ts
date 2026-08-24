@@ -1357,6 +1357,50 @@ export type Database = {
           },
         ]
       }
+      product_barcodes: {
+        Row: {
+          code: string
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          is_primary: boolean
+          label: string | null
+          product_id: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          label?: string | null
+          product_id: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          label?: string | null
+          product_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_barcodes_company_id_product_id_fkey"
+            columns: ["company_id", "product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["company_id", "id"]
+          },
+        ]
+      }
       products: {
         Row: {
           category_id: string
@@ -2339,6 +2383,117 @@ export type Database = {
           },
         ]
       }
+      shopping_list_items: {
+        Row: {
+          added_by: string | null
+          company_id: string
+          created_at: string
+          id: string
+          imported_at: string | null
+          imported_to_id: string | null
+          imported_to_type: string | null
+          notes: string | null
+          product_id: string
+          purchase_unit_id: string
+          requested_quantity: number
+          shopping_list_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          added_by?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          imported_at?: string | null
+          imported_to_id?: string | null
+          imported_to_type?: string | null
+          notes?: string | null
+          product_id: string
+          purchase_unit_id: string
+          requested_quantity: number
+          shopping_list_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          added_by?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          imported_at?: string | null
+          imported_to_id?: string | null
+          imported_to_type?: string | null
+          notes?: string | null
+          product_id?: string
+          purchase_unit_id?: string
+          requested_quantity?: number
+          shopping_list_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_list_items_company_id_product_id_fkey"
+            columns: ["company_id", "product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "shopping_list_items_company_id_purchase_unit_id_fkey"
+            columns: ["company_id", "purchase_unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "shopping_list_items_company_id_shopping_list_id_fkey"
+            columns: ["company_id", "shopping_list_id"]
+            isOneToOne: false
+            referencedRelation: "shopping_lists"
+            referencedColumns: ["company_id", "id"]
+          },
+        ]
+      }
+      shopping_lists: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_lists_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_categories: {
         Row: {
           category_id: string
@@ -2858,6 +3013,16 @@ export type Database = {
       }
     }
     Functions: {
+      rpc_create_direct_order_from_shopping_list: {
+        Args: {
+          p_company_id: string
+          p_delivery_due_date?: string
+          p_items: Json
+          p_shopping_item_ids: string[]
+          p_supplier_id: string
+        }
+        Returns: Json
+      }
       rpc_activate_round: {
         Args: { p_company_id: string; p_purchase_round_id: string }
         Returns: Json
@@ -2919,6 +3084,15 @@ export type Database = {
           p_supplier_id: string
         }
         Returns: Json
+      }
+      rpc_import_shopping_items_to_round: {
+        Args: {
+          p_company_id: string
+          p_group_id: string | null
+          p_round_id: string
+          p_shopping_item_ids: string[]
+        }
+        Returns: number
       }
       rpc_create_supplier_with_contact: {
         Args: {

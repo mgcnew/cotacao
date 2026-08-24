@@ -82,6 +82,7 @@ export function RouteModal({
   descricao,
   size = "lg",
   alturaEstavel = false,
+  impedirFechamentoAcidental = false,
   children,
 }: {
   /** Pode ser um `<Suspense>`: o modal abre antes de o nome chegar. */
@@ -90,6 +91,8 @@ export function RouteModal({
   size?: "sm" | "md" | "lg" | "xl";
   /** Altura fixa — para o modal que troca de conteúdo sem trocar de caixa. */
   alturaEstavel?: boolean;
+  /** Impede que Esc ou um clique fora descartem um formulário em andamento. */
+  impedirFechamentoAcidental?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -108,7 +111,11 @@ export function RouteModal({
           if (!proximo) fechar();
         }}
       >
-        <DialogContent size={size} alturaEstavel={alturaEstavel}>
+        <DialogContent
+          size={size}
+          alturaEstavel={alturaEstavel}
+          impedirFechamentoAcidental={impedirFechamentoAcidental}
+        >
           <DialogHeader>
             <DialogTitle>{titulo}</DialogTitle>
             {descricao ? (

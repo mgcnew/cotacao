@@ -29,6 +29,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  */
 export type SupplierFormState = {
   error: string | null;
+  savedId?: string;
   valores?: Record<string, string>;
   /**
    * Muda a cada resposta, mesmo quando o erro é o mesmo de antes.
@@ -205,6 +206,9 @@ export async function createSupplier(
   }
 
   revalidatePath("/fornecedores");
+  if (formData.get("apos") === "fechar") {
+    return { error: null, savedId: data };
+  }
   redirect(`/fornecedores/${data}`);
 }
 

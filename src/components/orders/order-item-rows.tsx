@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { ListChecks, Plus, Trash2 } from "lucide-react";
 import * as React from "react";
 import { useFormStatus } from "react-dom";
 
@@ -25,6 +25,8 @@ export type ItemSeed = {
   itemId?: string;
   /** Alocação que originou o item; viaja junto para não se perder na revisão. */
   allocationId?: string | null;
+  /** Item da lista que originou a linha; consumido só quando o pedido nascer. */
+  shoppingItemId?: string | null;
   productId: string;
   productName?: string;
   quantity: string;
@@ -66,19 +68,108 @@ type Row = ItemSeed & { key: number };
 export function OrderItemRows({
   products,
   seeds,
+  shoppingItems = [],
 }: {
   products: OrderableProduct[];
   seeds: ItemSeed[];
+  shoppingItems?: {
+    id: string;
+    productId: string;
+    productName: string;
+    quantity: string;
+    purchaseUnit: string;
+    notes: string;
+    isActive: boolean;
+  }[];
 }) {
   const proximaChave = React.useRef(seeds.length);
   const [rows, setRows] = React.useState<Row[]>(() =>
     seeds.map((seed, index) => ({ ...seed, key: index })),
   );
+  const [selectedShopping, setSelectedShopping] = React.useState<string[]>([]);
 
   const unidadesDe = (row: Row) => products.find((p) => p.id === row.productId);
 
   return (
     <div className="flex flex-col gap-3">
+      {shoppingItems.length > 0 ? (
+        <details className="border-border rounded-lg border">
+          <summary className="text-fg flex cursor-pointer items-center gap-2 px-3 py-2 text-sm font-medium">
+            <ListChecks className="text-primary size-4" aria-hidden />
+            Puxar da lista de compras
+            <span className="text-fg-subtle font-normal">
+              ({shoppingItems.length})
+            </span>
+          </summary>
+          <div className="border-border flex flex-col gap-3 border-t p-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {shoppingItems.map((item) => (
+                <label
+                  key={item.id}
+                  className="flex cursor-pointer items-start gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedShopping.includes(item.id)}
+                    disabled={
+                      !item.isActive ||
+                      rows.some((row) => row.shoppingItemId === item.id)
+                    }
+                    onChange={(event) =>
+                      setSelectedShopping((current) =>
+                        event.target.checked
+                          ? [...current, item.id]
+                          : current.filter((id) => id !== item.id),
+                      )
+                    }
+                    className="mt-0.5 size-4 accent-primary"
+                  />
+                  <span>
+                    <span className="text-fg block font-medium">
+                      {item.productName}
+                    </span>
+                    <span className="text-fg-muted block text-xs">
+                      {item.quantity} {item.purchaseUnit}
+                      {item.notes ? ` · ${item.notes}` : ""}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={selectedShopping.length === 0}
+                onClick={() => {
+                  const additions = shoppingItems
+                    .filter((item) => selectedShopping.includes(item.id))
+                    .map((item) => ({
+                      key: proximaChave.current++,
+                      shoppingItemId: item.id,
+                      productId: item.productId,
+                      productName: item.productName,
+                      quantity: item.quantity,
+                      price: "",
+                      notes: item.notes,
+                    }));
+                  setRows((current) => [
+                    ...current.filter(
+                      (row) =>
+                        row.productId || row.quantity || row.price || row.notes,
+                    ),
+                    ...additions,
+                  ]);
+                  setSelectedShopping([]);
+                }}
+              >
+                Adicionar selecionados
+              </Button>
+            </div>
+          </div>
+        </details>
+      ) : null}
       {rows.map((row) => {
         const unidades = unidadesDe(row);
         return (
@@ -97,6 +188,11 @@ export function OrderItemRows({
               type="hidden"
               name="allocationId"
               value={row.allocationId ?? ""}
+            />
+            <input
+              type="hidden"
+              name="shoppingItemId"
+              value={row.shoppingItemId ?? ""}
             />
 
             <div className="grid gap-2 sm:grid-cols-[1fr_7rem_7rem]">
@@ -213,6 +309,7 @@ export function OrderItemRows({
               ...prev,
               {
                 key: proximaChave.current++,
+                shoppingItemId: "",
                 productId: "",
                 quantity: "",
                 price: "",
