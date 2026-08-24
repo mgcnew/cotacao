@@ -6,11 +6,26 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
+import { BarcodeCameraDialog } from "@/components/shopping-list/barcode-camera-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { addShoppingListItem, type ShoppingListState } from "@/features/shopping-list/actions";
+import {
+  addShoppingListItem,
+  type ShoppingListState,
+} from "@/features/shopping-list/actions";
 import type { ShoppingProduct } from "@/features/shopping-list/queries";
 import { normalizeListSearch } from "@/lib/list-pagination";
+
+function findProductByBarcode(products: ShoppingProduct[], code: string) {
+  const candidates = new Set([code]);
+  // Alguns leitores devolvem UPC-A (12 dígitos) como EAN-13 com zero à
+  // esquerda. As duas representações identificam o mesmo código comercial.
+  if (/^0\d{12}$/.test(code)) candidates.add(code.slice(1));
+  if (/^\d{12}$/.test(code)) candidates.add(`0${code}`);
+  return products.find((product) =>
+    product.barcodes.some((barcode) => candidates.has(barcode)),
+  );
+}
 
 function Submit() {
   const { pending } = useFormStatus();
@@ -22,7 +37,11 @@ function Submit() {
   );
 }
 
-export function ShoppingListQuickAdd({ products }: { products: ShoppingProduct[] }) {
+export function ShoppingListQuickAdd({
+  products,
+}: {
+  products: ShoppingProduct[];
+}) {
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState<ShoppingProduct | null>(null);
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -30,8 +49,8 @@ export function ShoppingListQuickAdd({ products }: { products: ShoppingProduct[]
     async (previous: ShoppingListState, formData: FormData) => {
       const result = await addShoppingListItem(previous, formData);
       if (!result.error) {
-      setQuery("");
-      setSelected(null);
+        setQuery("");
+        setSelected(null);
         window.setTimeout(
           () =>
             formRef.current
@@ -53,7 +72,9 @@ export function ShoppingListQuickAdd({ products }: { products: ShoppingProduct[]
   const suggestions = query
     ? products
         .filter((product) =>
-          normalizeListSearch(`${product.name} ${product.barcodes.join(" ")}`).includes(needle),
+          normalizeListSearch(
+            `${product.name} ${product.barcodes.join(" ")}`,
+          ).includes(needle),
         )
         .slice(0, 6)
     : [];
@@ -61,6 +82,16 @@ export function ShoppingListQuickAdd({ products }: { products: ShoppingProduct[]
   function choose(product: ShoppingProduct) {
     setSelected(product);
     setQuery(product.name);
+  }
+
+  function handleCameraCode(code: string) {
+    const product = findProductByBarcode(products, code);
+    if (!product) {
+      return `O código ${code} não está vinculado a nenhum produto cadastrado.`;
+    }
+    choose(product);
+    window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+    return null;
   }
 
   return (
@@ -72,35 +103,47 @@ export function ShoppingListQuickAdd({ products }: { products: ShoppingProduct[]
       <input type="hidden" name="productId" value={selected?.id ?? ""} />
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(10rem,0.7fr)_auto] sm:items-end">
         <div className="relative flex flex-col gap-1.5">
-          <label htmlFor="shopping-product" className="text-fg text-sm font-medium">
+          <label
+            htmlFor="shopping-product"
+            className="text-fg text-sm font-medium"
+          >
             Produto
           </label>
-          <div className="relative">
-            <Barcode className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4" aria-hidden />
-            <Input
-              id="shopping-product"
-              autoFocus
-              autoComplete="off"
-              value={query}
-              onChange={(event) => {
-                const value = event.target.value;
-                setQuery(value);
-                setSelected(null);
-                const normalized = value.trim().replace(/\s+/g, "").toUpperCase();
-                const exact = products.find((product) => product.barcodes.includes(normalized));
-                if (exact) setSelected(exact);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                const product = selected ?? suggestions[0];
-                if (!product) return;
-                choose(product);
-                window.setTimeout(() => formRef.current?.requestSubmit(), 0);
-              }}
-              placeholder="Digite o nome ou bipe o código"
-              className="pl-8"
-            />
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Barcode
+                className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4"
+                aria-hidden
+              />
+              <Input
+                id="shopping-product"
+                autoFocus
+                autoComplete="off"
+                value={query}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setQuery(value);
+                  setSelected(null);
+                  const normalized = value
+                    .trim()
+                    .replace(/\s+/g, "")
+                    .toUpperCase();
+                  const exact = findProductByBarcode(products, normalized);
+                  if (exact) setSelected(exact);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  const product = selected ?? suggestions[0];
+                  if (!product) return;
+                  choose(product);
+                  window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+                }}
+                placeholder="Digite o nome ou bipe o código"
+                className="pl-8"
+              />
+            </div>
+            <BarcodeCameraDialog onDetected={handleCameraCode} />
           </div>
           {suggestions.length > 0 && !selected ? (
             <div className="border-border bg-surface absolute top-full z-20 mt-1 w-full overflow-hidden rounded-lg border shadow-lg">
@@ -112,29 +155,50 @@ export function ShoppingListQuickAdd({ products }: { products: ShoppingProduct[]
                   className="hover:bg-surface-muted flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm"
                 >
                   <span>{product.name}</span>
-                  <span className="text-fg-subtle text-xs">{product.purchaseUnit}</span>
+                  <span className="text-fg-subtle text-xs">
+                    {product.purchaseUnit}
+                  </span>
                 </button>
               ))}
             </div>
           ) : null}
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="shopping-quantity" className="text-fg text-sm font-medium">
+          <label
+            htmlFor="shopping-quantity"
+            className="text-fg text-sm font-medium"
+          >
             Quantidade
           </label>
-          <Input id="shopping-quantity" name="quantity" required defaultValue="1" inputMode="decimal" />
+          <Input
+            id="shopping-quantity"
+            name="quantity"
+            required
+            defaultValue="1"
+            inputMode="decimal"
+          />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="shopping-notes" className="text-fg text-sm font-medium">
-            Observação <span className="text-fg-subtle font-normal">(opcional)</span>
+          <label
+            htmlFor="shopping-notes"
+            className="text-fg text-sm font-medium"
+          >
+            Observação{" "}
+            <span className="text-fg-subtle font-normal">(opcional)</span>
           </label>
-          <Input id="shopping-notes" name="notes" maxLength={300} placeholder="Estoque crítico, para sexta…" />
+          <Input
+            id="shopping-notes"
+            name="notes"
+            maxLength={300}
+            placeholder="Estoque crítico, para sexta…"
+          />
         </div>
         <Submit />
       </div>
       <ErrorLine error={state.error} />
       <p className="text-fg-subtle text-xs">
-        Ao bipar, o leitor envia Enter e o produto entra sem tirar o foco deste campo.
+        Use o botão da câmera no celular ou bipe com um leitor físico. Ao
+        reconhecer o código, o produto entra automaticamente.
       </p>
     </form>
   );
