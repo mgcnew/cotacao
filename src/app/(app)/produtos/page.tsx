@@ -1,8 +1,9 @@
-import { Package, Search } from "lucide-react";
+import { Package } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
+import { FilterDialog } from "@/components/layout/filter-dialog";
 import { PageHeader } from "@/components/layout/page-header";
 import { TableSkeleton } from "@/components/layout/page-skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,74 @@ import { getCatalogCounts, listProducts } from "@/features/products/queries";
 import { PRODUCT_PURPOSE_LABEL } from "@/features/products/purposes";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { normalizeListSearch, parseListPagination } from "@/lib/list-pagination";
+
+const selectClass =
+  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
+
+function ProductFilterFields({
+  busca,
+  status,
+  categoria,
+  categories,
+  pageSize,
+}: {
+  busca: string;
+  status: string;
+  categoria: string | null;
+  categories: { id: string; name: string }[];
+  pageSize: number;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <label htmlFor="product-search" className="text-fg-muted text-xs">
+          Nome do produto
+        </label>
+        <Input
+          id="product-search"
+          name="busca"
+          defaultValue={busca}
+          placeholder="Buscar produto"
+          className="h-8"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="product-status" className="text-fg-muted text-xs">
+          Situação
+        </label>
+        <select
+          id="product-status"
+          name="status"
+          defaultValue={status === "todos" ? "" : status}
+          className={selectClass}
+        >
+          <option value="">Todas</option>
+          <option value="ativos">Somente ativos</option>
+          <option value="inativos">Somente inativos</option>
+        </select>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="product-category" className="text-fg-muted text-xs">
+          Categoria
+        </label>
+        <select
+          id="product-category"
+          name="categoria"
+          defaultValue={categoria ?? ""}
+          className={selectClass}
+        >
+          <option value="">Todas</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <input type="hidden" name="por_pagina" value={pageSize} />
+    </div>
+  );
+}
 
 export default function ProdutosPage({
   searchParams,
@@ -76,8 +145,24 @@ async function ProdutosContent({
     ? parametros.status[0]
     : parametros.status;
   const status = ["ativos", "inativos"].includes(statusBruto ?? "")
-    ? statusBruto
+    ? (statusBruto ?? "todos")
     : "todos";
+  const categoryMap = new Map<string, string>();
+  for (const product of products) {
+    categoryMap.set(
+      product.category_id,
+      product.categories?.name ?? "Categoria sem nome",
+    );
+  }
+  const categories = [...categoryMap]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const categoriaBruta = Array.isArray(parametros.categoria)
+    ? parametros.categoria[0]
+    : parametros.categoria;
+  const categoria = categories.some((item) => item.id === categoriaBruta)
+    ? (categoriaBruta ?? null)
+    : null;
 
   const filtrados = products.filter((product) => {
     if (
@@ -88,11 +173,16 @@ async function ProdutosContent({
     }
     if (status === "ativos" && !product.is_active) return false;
     if (status === "inativos" && product.is_active) return false;
+    if (categoria && product.category_id !== categoria) return false;
     return true;
   });
   const pagination = parseListPagination(parametros, filtrados.length);
   const visiveis = filtrados.slice(pagination.start, pagination.end);
-  const temFiltro = Boolean(busca) || status !== "todos";
+  const filtrosAtivos =
+    Number(Boolean(busca)) +
+    Number(status !== "todos") +
+    Number(Boolean(categoria));
+  const temFiltro = filtrosAtivos > 0;
 
   const podeCriar = permissions.has("product.create");
   const podeEditar = permissions.has("product.update");
@@ -100,43 +190,24 @@ async function ProdutosContent({
   return (
     <>
       {products.length > 0 ? (
-        <form className="border-border bg-surface mb-4 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1 sm:max-w-md">
-            <Search className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4" aria-hidden />
-            <Input
-              name="busca"
-              defaultValue={busca}
-              placeholder="Buscar produto pelo nome"
-              className="pl-8"
+        <div className="mb-4 flex items-center">
+          <FilterDialog basePath="/produtos" ativos={filtrosAtivos}>
+            <ProductFilterFields
+              busca={busca}
+              status={status}
+              categoria={categoria}
+              categories={categories}
+              pageSize={pagination.pageSize}
             />
-          </div>
-          <select
-            name="status"
-            defaultValue={status}
-            className="border-input bg-background text-fg h-8 rounded-lg border px-2.5 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/30"
-            aria-label="Filtrar produtos por situação"
-          >
-            <option value="todos">Todas as situações</option>
-            <option value="ativos">Somente ativos</option>
-            <option value="inativos">Somente inativos</option>
-          </select>
-          <input type="hidden" name="por_pagina" value={pagination.pageSize} />
-          <Button type="submit" size="sm" variant="outline">
-            Filtrar
-          </Button>
-          {temFiltro ? (
-            <Button asChild size="sm" variant="ghost">
-              <Link href="/produtos">Limpar</Link>
-            </Button>
-          ) : null}
-        </form>
+          </FilterDialog>
+        </div>
       ) : null}
 
       {filtrados.length === 0 && temFiltro ? (
         <EmptyState
           icon={Package}
           title="Nenhum produto neste filtro"
-          description="Ajuste a busca ou a situação para encontrar outros itens do catálogo."
+          description="Ajuste a busca, a situação ou a categoria para encontrar outros itens do catálogo."
           action={
             <Button asChild size="sm" variant="outline">
               <Link href="/produtos">Ver o catálogo inteiro</Link>

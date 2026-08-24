@@ -8,6 +8,7 @@ import { ErrorLine } from "@/components/layout/form-feedback";
 import { useFechaModalAoConcluir } from "@/components/layout/route-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@/lib/utils";
 import {
   importShoppingItemsToRound,
@@ -202,14 +203,14 @@ export function ItemForm({
           <label htmlFor="productId" className="text-fg text-sm font-medium">
             Produto
           </label>
-          <select id="productId" name="productId" required className={selectClass}>
-            <option value="">Selecione…</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            id="productId"
+            name="productId"
+            options={products}
+            placeholder="Digite o nome do produto…"
+            emptyMessage="Nenhum produto encontrado."
+            required
+          />
         </div>
 
         {perguntarGrupo ? (
@@ -288,18 +289,28 @@ export function ShoppingListImportForm({
       <summary className="text-fg flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-medium">
         <ListChecks className="text-primary size-4" aria-hidden />
         Adicionar da lista de compras
-        <span className="text-fg-subtle font-normal">({items.length} pendentes)</span>
+        <span className="text-fg-subtle font-normal">
+          ({items.length} pendentes)
+        </span>
       </summary>
-      <form action={action} className="border-border flex flex-col gap-3 border-t p-4">
+      <form
+        action={action}
+        className="border-border flex flex-col gap-3 border-t p-4"
+      >
         <input type="hidden" name="roundId" value={roundId} />
         {groups.length > 1 ? (
           <div className="flex max-w-xs flex-col gap-1.5">
-            <label htmlFor="shopping-group" className="text-fg text-sm font-medium">
+            <label
+              htmlFor="shopping-group"
+              className="text-fg text-sm font-medium"
+            >
               Inserir no grupo
             </label>
             <select id="shopping-group" name="groupId" className={selectClass}>
               {groups.map((group) => (
-                <option key={group.id} value={group.id}>{group.name}</option>
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
               ))}
             </select>
           </div>
@@ -318,7 +329,9 @@ export function ShoppingListImportForm({
                 className="mt-0.5 size-4 accent-primary"
               />
               <span className="min-w-0 text-sm">
-                <span className="text-fg block font-medium">{item.productName}</span>
+                <span className="text-fg block font-medium">
+                  {item.productName}
+                </span>
                 <span className="text-fg-muted block text-xs">
                   {item.quantity} {item.purchaseUnit}
                   {item.notes ? ` · ${item.notes}` : ""}
@@ -328,7 +341,9 @@ export function ShoppingListImportForm({
           ))}
         </div>
         <ErrorLine error={state.error} />
-        <div className="flex justify-end"><Submit label="Adicionar selecionados" /></div>
+        <div className="flex justify-end">
+          <Submit label="Adicionar selecionados" />
+        </div>
       </form>
     </details>
   );
@@ -358,14 +373,14 @@ export function SupplierPickerForm({
         <label htmlFor="supplierId" className="text-fg text-sm font-medium">
           Convidar fornecedor
         </label>
-        <select id="supplierId" name="supplierId" required className={selectClass}>
-          <option value="">Selecione…</option>
-          {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          id="supplierId"
+          name="supplierId"
+          options={suppliers}
+          placeholder="Digite o nome do fornecedor…"
+          emptyMessage="Nenhum fornecedor encontrado."
+          required
+        />
         <p className="text-fg-subtle text-xs">
           Ele entra já com todos os itens da rodada, e o link vai para o contato
           principal.
@@ -469,7 +484,12 @@ export function StartRoundPanel({
 function SubmitIniciar({ habilitado }: { habilitado: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" className="gap-1.5" disabled={!habilitado || pending}>
+    <Button
+      type="submit"
+      size="sm"
+      className="gap-1.5"
+      disabled={!habilitado || pending}
+    >
       <Play className="size-3.5" aria-hidden />
       {pending ? "Iniciando…" : "Iniciar rodada"}
     </Button>

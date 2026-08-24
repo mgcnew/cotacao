@@ -81,7 +81,12 @@ export function FilterDialog({
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
       <DialogTrigger asChild>
-        <Button size="sm" variant={ativos > 0 ? "default" : "outline"} className="gap-1.5">
+        <Button
+          type="button"
+          size="sm"
+          variant={ativos > 0 ? "default" : "outline"}
+          className="gap-1.5"
+        >
           <SlidersHorizontal className="size-3.5" aria-hidden />
           Filtros
           {ativos > 0 ? (

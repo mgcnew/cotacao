@@ -17,6 +17,7 @@ export async function listProducts(companyId: string) {
       `
       id,
       name,
+      category_id,
       purpose,
       is_active,
       product_barcodes ( code, is_primary, is_active ),

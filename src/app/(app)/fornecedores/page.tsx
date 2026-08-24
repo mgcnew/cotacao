@@ -1,8 +1,9 @@
-import { Search, Truck } from "lucide-react";
+import { Truck } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
+import { FilterDialog } from "@/components/layout/filter-dialog";
 import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
 import { PageHeader } from "@/components/layout/page-header";
 import { TableSkeleton } from "@/components/layout/page-skeleton";
@@ -28,6 +29,75 @@ const STATUS_LABEL: Record<string, string> = {
   inactive: "Inativo",
   blocked: "Bloqueado",
 };
+
+const selectClass =
+  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
+
+function SupplierFilterFields({
+  busca,
+  status,
+  categoria,
+  categories,
+  pageSize,
+}: {
+  busca: string;
+  status: string;
+  categoria: string | null;
+  categories: { id: string; name: string }[];
+  pageSize: number;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <label htmlFor="supplier-search" className="text-fg-muted text-xs">
+          Nome, CNPJ ou contato
+        </label>
+        <Input
+          id="supplier-search"
+          name="busca"
+          defaultValue={busca}
+          placeholder="Buscar fornecedor"
+          className="h-8"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="supplier-status" className="text-fg-muted text-xs">
+          Situação
+        </label>
+        <select
+          id="supplier-status"
+          name="status"
+          defaultValue={status === "todos" ? "" : status}
+          className={selectClass}
+        >
+          <option value="">Todas</option>
+          <option value="active">Ativos</option>
+          <option value="inactive">Inativos</option>
+          <option value="blocked">Bloqueados</option>
+        </select>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="supplier-category" className="text-fg-muted text-xs">
+          Categoria atendida
+        </label>
+        <select
+          id="supplier-category"
+          name="categoria"
+          defaultValue={categoria ?? ""}
+          className={selectClass}
+        >
+          <option value="">Todas</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <input type="hidden" name="por_pagina" value={pageSize} />
+    </div>
+  );
+}
 
 export default function FornecedoresPage({
   searchParams,
@@ -83,11 +153,37 @@ async function FornecedoresContent({
     ? params.status[0]
     : params.status;
   const status = ["active", "inactive", "blocked"].includes(statusBruto ?? "")
-    ? statusBruto
+    ? (statusBruto ?? "todos")
     : "todos";
+  const categoryMap = new Map<string, string>();
+  for (const supplier of suppliers) {
+    for (const link of supplier.supplier_categories ?? []) {
+      categoryMap.set(
+        link.category_id,
+        link.categories?.name ?? "Categoria sem nome",
+      );
+    }
+  }
+  const categories = [...categoryMap]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const categoriaBruta = Array.isArray(params.categoria)
+    ? params.categoria[0]
+    : params.categoria;
+  const categoria = categories.some((item) => item.id === categoriaBruta)
+    ? (categoriaBruta ?? null)
+    : null;
   const needle = normalizeListSearch(busca);
   const filtrados = suppliers.filter((supplier) => {
     if (status !== "todos" && supplier.status !== status) return false;
+    if (
+      categoria &&
+      !supplier.supplier_categories?.some(
+        (link) => link.category_id === categoria,
+      )
+    ) {
+      return false;
+    }
     if (!needle) return true;
     const contacts = supplier.supplier_contacts
       ?.map(
@@ -101,7 +197,10 @@ async function FornecedoresContent({
   });
   const pagination = parseListPagination(params, filtrados.length);
   const visiveis = filtrados.slice(pagination.start, pagination.end);
-  const temFiltro = Boolean(busca) || status !== "todos";
+  const filtrosAtivos =
+    Number(Boolean(busca)) +
+    Number(status !== "todos") +
+    Number(Boolean(categoria));
   const counts = {
     total: suppliers.length,
     ativos: suppliers.filter((supplier) => supplier.status === "active").length,
@@ -117,40 +216,20 @@ async function FornecedoresContent({
   return (
     <>
       {suppliers.length > 0 ? (
-        <form className="border-border bg-surface mb-4 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1 sm:max-w-md">
-            <Search className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4" aria-hidden />
-            <Input
-              name="busca"
-              defaultValue={busca}
-              placeholder="Buscar nome, CNPJ ou contato"
-              className="pl-8"
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <FilterDialog basePath="/fornecedores" ativos={filtrosAtivos}>
+            <SupplierFilterFields
+              busca={busca}
+              status={status}
+              categoria={categoria}
+              categories={categories}
+              pageSize={pagination.pageSize}
             />
-          </div>
-          <select
-            name="status"
-            defaultValue={status}
-            className="border-input bg-background text-fg h-8 rounded-lg border px-2.5 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/30"
-            aria-label="Filtrar fornecedores por situação"
-          >
-            <option value="todos">Todas as situações</option>
-            <option value="active">Ativos</option>
-            <option value="inactive">Inativos</option>
-            <option value="blocked">Bloqueados</option>
-          </select>
-          <input type="hidden" name="por_pagina" value={pagination.pageSize} />
-          <Button type="submit" size="sm" variant="outline">
-            Filtrar
-          </Button>
-          {temFiltro ? (
-            <Button asChild size="sm" variant="ghost">
-              <Link href="/fornecedores">Limpar</Link>
-            </Button>
-          ) : null}
+          </FilterDialog>
           <span className="text-fg-subtle text-xs sm:ml-auto">
             {counts.ativos} de {counts.total} ativos · {counts.contatos} contatos
           </span>
-        </form>
+        </div>
       ) : null}
 
       {suppliers.length === 0 ? (
@@ -170,7 +249,7 @@ async function FornecedoresContent({
         <EmptyState
           icon={Truck}
           title="Nenhum fornecedor neste filtro"
-          description="Ajuste a busca ou a situação para encontrar outros fornecedores."
+          description="Ajuste a busca, a situação ou a categoria para encontrar outros fornecedores."
           action={
             <Button asChild size="sm" variant="outline">
               <Link href="/fornecedores">Limpar filtros</Link>

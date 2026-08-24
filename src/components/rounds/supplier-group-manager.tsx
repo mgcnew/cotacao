@@ -9,6 +9,7 @@ import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   removeRoundSupplier,
   upsertRoundSupplierGroups,
@@ -82,7 +83,8 @@ function GroupChecks({
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((group) => {
           const checked = selected.has(group.id);
-          const encerrado = group.status === "closed" || group.status === "cancelled";
+          const encerrado =
+            group.status === "closed" || group.status === "cancelled";
           return (
             <label
               key={group.id}
@@ -104,7 +106,8 @@ function GroupChecks({
                   {group.name}
                 </span>
                 <span className="text-fg-muted block text-xs">
-                  {group.itemCount} {group.itemCount === 1 ? "produto" : "produtos"}
+                  {group.itemCount}{" "}
+                  {group.itemCount === 1 ? "produto" : "produtos"}
                   {encerrado ? " · encerrado" : ""}
                 </span>
               </span>
@@ -129,10 +132,10 @@ function ParticipantEditor({
     upsertRoundSupplierGroups,
     { error: null },
   );
-  const [removalState, removalAction] = useActionState<RoundFormState, FormData>(
-    removeRoundSupplier,
-    { error: null },
-  );
+  const [removalState, removalAction] = useActionState<
+    RoundFormState,
+    FormData
+  >(removeRoundSupplier, { error: null });
   const [confirmingRemoval, setConfirmingRemoval] = React.useState(false);
 
   return (
@@ -141,10 +144,13 @@ function ParticipantEditor({
         <div>
           <p className="text-fg text-sm font-semibold">{participant.name}</p>
           <p className="text-fg-muted text-xs">
-            {participant.groupIds.length} {participant.groupIds.length === 1 ? "grupo" : "grupos"}
+            {participant.groupIds.length}{" "}
+            {participant.groupIds.length === 1 ? "grupo" : "grupos"}
           </p>
         </div>
-        {participant.firstSentAt ? <Badge variant="secondary">Já enviado</Badge> : null}
+        {participant.firstSentAt ? (
+          <Badge variant="secondary">Já enviado</Badge>
+        ) : null}
       </div>
 
       <form action={action} className="flex flex-col gap-3">
@@ -167,7 +173,8 @@ function ParticipantEditor({
           >
             {participant.contacts.map((contact) => (
               <option key={contact.id} value={contact.id}>
-                {contact.name}{contact.role ? ` · ${contact.role}` : ""}
+                {contact.name}
+                {contact.role ? ` · ${contact.role}` : ""}
               </option>
             ))}
           </select>
@@ -176,7 +183,9 @@ function ParticipantEditor({
         <GroupChecks groups={groups} selected={new Set(participant.groupIds)} />
 
         <ErrorLine error={state.error} />
-        <SuccessLine message={state.savedAt ? "Distribuição atualizada." : null} />
+        <SuccessLine
+          message={state.savedAt ? "Distribuição atualizada." : null}
+        />
 
         <div className="flex flex-wrap items-center gap-2">
           <SaveButton />
@@ -218,7 +227,8 @@ function ParticipantEditor({
             placeholder="Ex.: fornecedor não atende estes produtos"
           />
           <p className="text-fg-muted text-xs">
-            O link será revogado. Respostas e preços já recebidos permanecem no histórico.
+            O link será revogado. Respostas e preços já recebidos permanecem no
+            histórico.
           </p>
           <ErrorLine error={removalState.error} />
           <div className="flex flex-wrap items-center gap-2">
@@ -251,10 +261,10 @@ function AddSupplierEditor({
     upsertRoundSupplierGroups,
     { error: null },
   );
-  const [supplierId, setSupplierId] = React.useState(suppliers[0]?.id ?? "");
-  const supplier = suppliers.find((item) => item.id === supplierId) ?? suppliers[0];
+  const [supplierId, setSupplierId] = React.useState("");
+  const supplier = suppliers.find((item) => item.id === supplierId) ?? null;
 
-  if (!supplier) {
+  if (suppliers.length === 0) {
     return (
       <p className="text-fg-muted rounded-lg border border-dashed px-3 py-4 text-sm">
         Todos os fornecedores com contato ativo já participam desta rodada.
@@ -263,7 +273,10 @@ function AddSupplierEditor({
   }
 
   return (
-    <form action={action} className="border-border bg-surface-sunken flex flex-col gap-3 rounded-xl border p-3">
+    <form
+      action={action}
+      className="border-border bg-surface-sunken flex flex-col gap-3 rounded-xl border p-3"
+    >
       <div className="flex items-center gap-2">
         <Plus className="text-fg-subtle size-4" aria-hidden />
         <h3 className="text-fg text-sm font-semibold">Adicionar fornecedor</h3>
@@ -272,49 +285,75 @@ function AddSupplierEditor({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label htmlFor="manager-new-supplier" className="text-fg mb-1 block text-xs font-medium">
+          <label
+            htmlFor="manager-new-supplier"
+            className="text-fg mb-1 block text-xs font-medium"
+          >
             Fornecedor
           </label>
-          <select
+          <SearchableSelect
             id="manager-new-supplier"
             name="supplierId"
-            value={supplier.id}
-            onChange={(event) => setSupplierId(event.target.value)}
-            className={selectClass}
-          >
-            {suppliers.map((option) => (
-              <option key={option.id} value={option.id}>{option.name}</option>
-            ))}
-          </select>
+            value={supplierId}
+            onValueChange={setSupplierId}
+            options={suppliers.map((option) => ({
+              id: option.id,
+              name: option.name,
+              description:
+                option.contacts[0]?.name ?? "Nenhum contato disponível",
+            }))}
+            placeholder="Digite o fornecedor…"
+            emptyMessage="Nenhum fornecedor encontrado."
+            required
+          />
         </div>
         <div>
-          <label htmlFor="manager-new-contact" className="text-fg mb-1 block text-xs font-medium">
+          <label
+            htmlFor="manager-new-contact"
+            className="text-fg mb-1 block text-xs font-medium"
+          >
             Contato
           </label>
           <select
-            key={supplier.id}
+            key={supplier?.id ?? "empty"}
             id="manager-new-contact"
             name="contactId"
-            defaultValue={supplier.contacts[0]?.id}
+            defaultValue={supplier?.contacts[0]?.id}
             required
+            disabled={!supplier}
             className={selectClass}
           >
-            {supplier.contacts.map((contact) => (
-              <option key={contact.id} value={contact.id}>
-                {contact.name}{contact.role ? ` · ${contact.role}` : ""}
-              </option>
-            ))}
+            {!supplier ? (
+              <option value="">Escolha o fornecedor primeiro</option>
+            ) : (
+              supplier.contacts.map((contact) => (
+                <option key={contact.id} value={contact.id}>
+                  {contact.name}
+                  {contact.role ? ` · ${contact.role}` : ""}
+                </option>
+              ))
+            )}
           </select>
         </div>
       </div>
 
       <GroupChecks
         groups={groups}
-        selected={new Set(groups.filter((group) => group.status === "draft" || group.status === "open").map((group) => group.id))}
+        selected={
+          new Set(
+            groups
+              .filter(
+                (group) => group.status === "draft" || group.status === "open",
+              )
+              .map((group) => group.id),
+          )
+        }
       />
       <ErrorLine error={state.error} />
       <SuccessLine message={state.savedAt ? "Fornecedor adicionado." : null} />
-      <div><SaveButton label="Adicionar fornecedor" /></div>
+      <div>
+        <SaveButton label="Adicionar fornecedor" />
+      </div>
     </form>
   );
 }
@@ -334,8 +373,12 @@ export function SupplierGroupManager({
   presentation?: "trigger" | "page";
 }) {
   const [open, setOpen] = React.useState(presentation === "page");
-  const participantIds = new Set(participants.map((participant) => participant.supplierId));
-  const available = suppliers.filter((supplier) => !participantIds.has(supplier.id));
+  const participantIds = new Set(
+    participants.map((participant) => participant.supplierId),
+  );
+  const available = suppliers.filter(
+    (supplier) => !participantIds.has(supplier.id),
+  );
 
   return (
     <div className="mb-4">
@@ -349,16 +392,24 @@ export function SupplierGroupManager({
           onClick={() => setOpen((current) => !current)}
         >
           <Settings2 className="size-3.5" aria-hidden /> Gerenciar fornecedores
-          <ChevronDown className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
+          <ChevronDown
+            className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+            aria-hidden
+          />
         </Button>
       ) : null}
 
       {open ? (
-        <div className={`border-border bg-surface flex flex-col gap-3 rounded-xl border p-3 ${presentation === "trigger" ? "mt-3" : ""}`}>
+        <div
+          className={`border-border bg-surface flex flex-col gap-3 rounded-xl border p-3 ${presentation === "trigger" ? "mt-3" : ""}`}
+        >
           <div>
-            <h3 className="text-fg text-sm font-semibold">Distribuição por grupo</h3>
+            <h3 className="text-fg text-sm font-semibold">
+              Distribuição por grupo
+            </h3>
             <p className="text-fg-muted text-xs">
-              Marque somente os grupos que fazem sentido para cada fornecedor. O link continua sendo único.
+              Marque somente os grupos que fazem sentido para cada fornecedor. O
+              link continua sendo único.
             </p>
           </div>
 
@@ -371,7 +422,12 @@ export function SupplierGroupManager({
             />
           ))}
 
-          <AddSupplierEditor roundId={roundId} suppliers={available} groups={groups} />
+          <AddSupplierEditor
+            key={available.map((supplier) => supplier.id).join(":")}
+            roundId={roundId}
+            suppliers={available}
+            groups={groups}
+          />
         </div>
       ) : null}
     </div>

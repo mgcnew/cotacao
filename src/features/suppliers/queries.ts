@@ -15,7 +15,11 @@ export async function listSuppliers(companyId: string) {
       document_number,
       status,
       purchase_limit,
-      supplier_contacts ( id, name, phone, whatsapp, is_primary, is_active )
+      supplier_contacts ( id, name, phone, whatsapp, is_primary, is_active ),
+      supplier_categories (
+        category_id,
+        categories!supplier_categories_company_id_category_id_fkey ( name )
+      )
     `,
     )
     .eq("company_id", companyId)
