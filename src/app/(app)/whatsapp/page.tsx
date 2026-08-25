@@ -22,6 +22,7 @@ import { WhatsAppMetricsPanel } from "@/components/whatsapp/metrics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   linkWhatsAppConversationAction,
   sendWhatsAppMessageAction,
@@ -181,11 +182,20 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
             </div>
             {canSend && contacts.length ? (
               <form action={startWhatsAppConversationAction} className="flex gap-1.5">
-                <select name="contact_id" required defaultValue="" className="border-input bg-background text-fg min-w-0 flex-1 rounded-lg border px-2 text-xs">
-                  <option value="" disabled>Iniciar com fornecedor…</option>
-                  {contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.suppliers?.name} · {contact.name}</option>)}
-                </select>
-                <Button type="submit" size="icon-sm" title="Iniciar conversa"><MessageCircle aria-hidden /></Button>
+                <SearchableSelect
+                  id="whatsapp-start-contact"
+                  name="contact_id"
+                  required
+                  className="min-w-0 flex-1"
+                  options={contacts.map((contact) => ({
+                    id: contact.id,
+                    name: `${contact.suppliers?.name ?? "Fornecedor"} · ${contact.name}`,
+                    description: contact.whatsapp ?? contact.phone ?? undefined,
+                  }))}
+                  placeholder="Digite fornecedor ou contato…"
+                  emptyMessage="Nenhum contato encontrado."
+                />
+                <Button type="submit" size="icon" title="Iniciar conversa"><MessageCircle aria-hidden /></Button>
               </form>
             ) : null}
           </div>
