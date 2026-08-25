@@ -9,6 +9,11 @@
  * precisa saber do que se trata antes de decidir clicar em coisa nenhuma.
  */
 
+import {
+  DEFAULT_WHATSAPP_TEMPLATES,
+  renderWhatsAppTemplate,
+} from "@/features/whatsapp/message-templates";
+
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -41,39 +46,27 @@ function dia(iso: string): string {
 export function buildOrderMessage(
   ctx: OrderMessageContext,
   url: string | null,
+  template = DEFAULT_WHATSAPP_TEMPLATES.order_confirmation,
 ): string {
   const total = ctx.items.reduce(
     (sum, i) => sum + i.requestedQuantity * i.agreedPrice,
     0,
   );
 
-  const linhas = [
-    `*Pedido #${ctx.orderNumber}${ctx.revisionNumber > 1 ? ` — revisão ${ctx.revisionNumber}` : ""}*`,
-    ctx.companyName + (ctx.companyDocument ? ` · CNPJ ${ctx.companyDocument}` : ""),
-    "",
-    `Olá, ${ctx.supplierName}! Segue nosso pedido:`,
-    "",
-    ...ctx.items.map(
+  return renderWhatsAppTemplate(template, {
+    numero_pedido: String(ctx.orderNumber),
+    revisao: ctx.revisionNumber > 1 ? ` — revisão ${ctx.revisionNumber}` : "",
+    empresa: ctx.companyName,
+    documento_empresa: ctx.companyDocument ? ` · CNPJ ${ctx.companyDocument}` : "",
+    fornecedor: ctx.supplierName,
+    itens: ctx.items.map(
       (i) =>
         `• ${i.productName} — ${QTY.format(i.requestedQuantity)} ${i.purchaseUnit} × ${MONEY.format(i.agreedPrice)}/${i.pricingUnit}`,
-    ),
-    "",
-    `*Total: ${MONEY.format(total)}*`,
-  ];
-
-  if (ctx.deliveryDueDate) {
-    linhas.push(`Entrega prevista: ${dia(ctx.deliveryDueDate)}`);
-  }
-
-  if (url) {
-    linhas.push(
-      "",
-      "Confirme o pedido ou aponte alguma divergência por aqui:",
-      url,
-    );
-  }
-
-  return linhas.join("\n");
+    ).join("\n"),
+    total: MONEY.format(total),
+    prazo_entrega: ctx.deliveryDueDate ? `Entrega prevista: ${dia(ctx.deliveryDueDate)}` : "",
+    link: url ?? "[link individual de confirmação]",
+  });
 }
 
 /**

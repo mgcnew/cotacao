@@ -119,7 +119,7 @@ export async function saveWhatsAppTemplateAction(
   const body = parsed.data.body;
   if (body.length < 20) return { error: "Escreva uma mensagem com ao menos 20 caracteres." };
   if (!body.includes("{link}")) return { error: "Inclua a variável {link} para o acesso individual à cotação." };
-  const unsupported = findUnsupportedTemplateVariables(body);
+  const unsupported = findUnsupportedTemplateVariables(body, parsed.data.kind);
   if (unsupported.length > 0) {
     return { error: `Variáveis não reconhecidas: ${unsupported.map((name) => `{${name}}`).join(", ")}.` };
   }

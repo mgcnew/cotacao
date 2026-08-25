@@ -14,7 +14,7 @@ import {
 import {
   WHATSAPP_TEMPLATE_KINDS,
   WHATSAPP_TEMPLATE_META,
-  WHATSAPP_TEMPLATE_VARIABLES,
+  WHATSAPP_TEMPLATE_VARIABLES_BY_KIND,
   type WhatsAppTemplateKind,
 } from "@/features/whatsapp/message-templates";
 
@@ -77,7 +77,7 @@ function TemplateForm({
               <Variable className="size-3.5" aria-hidden /> Variáveis disponíveis
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {WHATSAPP_TEMPLATE_VARIABLES.map((variable) => (
+              {WHATSAPP_TEMPLATE_VARIABLES_BY_KIND[kind].map((variable) => (
                 <code key={variable} className="bg-surface-sunken border-border text-fg-muted rounded-md border px-2 py-1 text-xs">
                   {`{${variable}}`}
                 </code>

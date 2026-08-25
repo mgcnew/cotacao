@@ -251,6 +251,7 @@ export function SendOrderControls({
           name="channel"
           value={contacts.length > 0 ? "whatsapp" : "other"}
         />
+        <input type="hidden" name="messageBody" value={message} />
 
         <ErrorLine error={sentState.error} />
 

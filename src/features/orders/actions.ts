@@ -18,6 +18,7 @@ import {
   sendWhatsAppText,
 } from "@/lib/evolution/client";
 import { getWhatsAppConnection } from "@/features/whatsapp/queries";
+import { getCompanyWhatsAppTemplates } from "@/features/whatsapp/templates";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 
@@ -466,7 +467,10 @@ async function issueOrderLink(
     return { ok: false, error: "Revisão não encontrada neste pedido." };
   }
 
-  const context = await getOrderMessageContext(companyId, orderId, revisionId);
+  const [context, templates] = await Promise.all([
+    getOrderMessageContext(companyId, orderId, revisionId),
+    getCompanyWhatsAppTemplates(companyId),
+  ]);
 
   let service: ReturnType<typeof createServiceRoleClient>;
   try {
@@ -506,7 +510,7 @@ async function issueOrderLink(
     supplierId: revision.orders.supplier_id,
     // A mensagem é montada aqui, e não no cliente, porque só o servidor conhece
     // o link recém-criado.
-    message: context ? buildOrderMessage(context, url) : null,
+    message: context ? buildOrderMessage(context, url, templates.order_confirmation) : null,
   };
 }
 
@@ -574,10 +578,11 @@ export async function loadOrderSendPanel(
       };
     }
 
-    const [contacts, context, whatsapp] = await Promise.all([
+    const [contacts, context, whatsapp, templates] = await Promise.all([
       listOrderSendContacts(company.companyId, order.suppliers.id),
       getOrderMessageContext(company.companyId, orderId, draft.id),
       getWhatsAppConnection(company.companyId),
+      getCompanyWhatsAppTemplates(company.companyId),
     ]);
 
     return {
@@ -586,7 +591,7 @@ export async function loadOrderSendPanel(
       supplierName: order.suppliers.name,
       revisionId: draft.id,
       contacts,
-      previewMessage: context ? buildOrderMessage(context, null) : "",
+      previewMessage: context ? buildOrderMessage(context, null, templates.order_confirmation) : "",
       evolutionReady: isEvolutionConfigured() && whatsapp?.status === "connected",
     };
   } catch (cause) {
@@ -644,6 +649,7 @@ async function logCommunication(params: {
   status: string;
   externalMessageId?: string;
   errorMessage?: string;
+  messageBody?: string;
 }): Promise<string | null> {
   try {
     const service = createServiceRoleClient();
@@ -659,6 +665,19 @@ async function logCommunication(params: {
       p_error_message: params.errorMessage,
     });
     if (error) throw new Error(error.message);
+    if (data) {
+      const { error: classifyError } = await service
+        .from("communication_logs")
+        .update({
+          message_kind: "order_confirmation",
+          message_body: params.messageBody ?? null,
+        })
+        .eq("company_id", params.companyId)
+        .eq("id", data);
+      if (classifyError) {
+        console.error("[logCommunication] não foi possível classificar o registro:", classifyError);
+      }
+    }
     return data;
   } catch (cause) {
     console.error("[logCommunication] não foi possível registrar:", cause);
@@ -712,6 +731,7 @@ export async function markOrderSent(
   const revisionId = String(formData.get("revisionId") ?? "");
   const contactId = String(formData.get("contactId") ?? "").trim() || null;
   const channel = String(formData.get("channel") ?? "whatsapp");
+  const messageBody = String(formData.get("messageBody") ?? "").slice(0, 10000) || undefined;
 
   const supabase = await createServerSupabaseClient();
   const { data: revision, error: readError } = await supabase
@@ -726,6 +746,17 @@ export async function markOrderSent(
 
   if (readError || !revision) {
     return { error: "Revisão não encontrada neste pedido." };
+  }
+  if (contactId) {
+    const { data: contact } = await supabase
+      .from("supplier_contacts")
+      .select("id")
+      .eq("company_id", company.companyId)
+      .eq("id", contactId)
+      .eq("supplier_id", revision.orders.supplier_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!contact) return { error: "O contato escolhido não pertence ao fornecedor deste pedido." };
   }
 
   const { error } = await supabase.rpc("rpc_mark_order_revision_sent", {
@@ -753,6 +784,7 @@ export async function markOrderSent(
     // Evolution mandou sozinha — os dois viram linha na mesma tabela.
     provider: "manual",
     status: "sent",
+    messageBody,
   });
 
   revalidatePath(`/pedidos/${orderId}`);
@@ -824,7 +856,7 @@ export async function sendOrderWhatsApp(
 
   const { data: whatsapp } = await supabase
     .from("whatsapp_connections")
-    .select("instance_name, status")
+    .select("id, instance_name, status")
     .eq("company_id", company.companyId)
     .limit(1)
     .maybeSingle();
@@ -839,6 +871,36 @@ export async function sendOrderWhatsApp(
   if (!link.message) {
     return { error: "Não foi possível montar a mensagem deste pedido." };
   }
+  if (contact.supplier_id !== link.supplierId) {
+    return { error: "O contato escolhido não pertence ao fornecedor deste pedido." };
+  }
+
+  const remoteJid = `${phone}@s.whatsapp.net`;
+  const { data: conversation } = await supabase
+    .from("whatsapp_conversations")
+    .select("id")
+    .eq("connection_id", whatsapp.id)
+    .eq("remote_jid", remoteJid)
+    .maybeSingle();
+  if (conversation) {
+    await supabase.from("whatsapp_conversations").update({
+      supplier_id: contact.supplier_id,
+      supplier_contact_id: contact.id,
+      order_id: orderId,
+      display_name: contact.name,
+    }).eq("id", conversation.id);
+  } else {
+    await supabase.from("whatsapp_conversations").insert({
+      company_id: company.companyId,
+      connection_id: whatsapp.id,
+      supplier_id: contact.supplier_id,
+      supplier_contact_id: contact.id,
+      order_id: orderId,
+      remote_jid: remoteJid,
+      normalized_phone: phone,
+      display_name: contact.name,
+    });
+  }
 
   const logId = await logCommunication({
     companyId: company.companyId,
@@ -848,6 +910,7 @@ export async function sendOrderWhatsApp(
     channel: "whatsapp",
     provider: "evolution",
     status: "queued",
+    messageBody: link.message,
   });
 
   const envio = await sendWhatsAppText(phone, link.message, whatsapp.instance_name);
