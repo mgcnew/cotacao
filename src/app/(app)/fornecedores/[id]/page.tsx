@@ -91,6 +91,11 @@ export default async function FornecedorPage({
             <Button asChild size="sm" variant="ghost">
               <Link href="/fornecedores">Voltar</Link>
             </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/fornecedores/${id}/historico`}>
+                Histórico comercial
+              </Link>
+            </Button>
             {podeEditar ? (
               <form
                 action={setSupplierStatus.bind(

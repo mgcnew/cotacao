@@ -34,6 +34,31 @@ export async function listProducts(companyId: string) {
   return data ?? [];
 }
 
+export async function getProduct(companyId: string, productId: string) {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select(
+      `
+      id,
+      name,
+      purpose,
+      is_active,
+      categories:categories!products_company_id_category_id_fkey ( name ),
+      purchase_unit:units!products_company_id_purchase_unit_id_fkey ( symbol ),
+      pricing_unit:units!products_company_id_pricing_unit_id_fkey ( symbol ),
+      comparison_unit:units!products_company_id_comparison_unit_id_fkey ( symbol ),
+      product_barcodes ( code, is_primary, is_active )
+    `,
+    )
+    .eq("company_id", companyId)
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Falha ao carregar produto: ${error.message}`);
+  return data;
+}
+
 export async function getCatalogCounts(companyId: string) {
   const supabase = await createServerSupabaseClient();
 

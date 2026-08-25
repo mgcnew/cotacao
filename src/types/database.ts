@@ -3054,6 +3054,45 @@ export type Database = {
           },
         ]
       }
+      v_quotation_history: {
+        Row: {
+          commercial_status: string | null
+          company_id: string | null
+          current_price: number | null
+          decided_at: string | null
+          does_not_supply: boolean | null
+          first_sent_at: string | null
+          is_available: boolean | null
+          last_negotiated_at: string | null
+          order_id: string | null
+          order_number: number | null
+          order_status: string | null
+          outcome: string | null
+          practiced_price: number | null
+          pricing_unit_symbol: string | null
+          product_id: string | null
+          product_name: string | null
+          purchase_round_id: string | null
+          purchase_unit_symbol: string | null
+          quotation_item_id: string | null
+          quotation_response_item_id: string | null
+          quoted_price: number | null
+          received_at: string | null
+          requested_quantity: number | null
+          response_notes: string | null
+          round_created_at: string | null
+          round_finished_at: string | null
+          round_status: string | null
+          round_supplier_id: string | null
+          round_title: string | null
+          selected_price: number | null
+          submitted_at: string | null
+          supplier_id: string | null
+          supplier_name: string | null
+          won_quantity: number | null
+        }
+        Relationships: []
+      }
       v_realized_savings: {
         Row: {
           agreed_price: number | null
@@ -3112,6 +3151,28 @@ export type Database = {
       }
     }
     Functions: {
+      rpc_quotation_history_summary: {
+        Args: {
+          p_company_id: string
+          p_from?: string
+          p_product_id?: string
+          p_supplier_id?: string
+          p_to?: string
+        }
+        Returns: {
+          average_price: number
+          last_price: number
+          losses: number
+          max_price: number
+          min_price: number
+          no_responses: number
+          opportunities: number
+          orders: number
+          responses: number
+          rounds: number
+          wins: number
+        }[]
+      }
       rpc_create_direct_order_from_shopping_list: {
         Args: {
           p_company_id: string

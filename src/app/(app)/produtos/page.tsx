@@ -261,7 +261,12 @@ async function ProdutosContent({
             {visiveis.map((product) => (
               <TableRow key={product.id}>
                 <TableCell className="font-medium">
-                  {product.name}
+                  <Link
+                    href={`/produtos/${product.id}`}
+                    className="hover:text-primary hover:underline"
+                  >
+                    {product.name}
+                  </Link>
                   <span className="text-fg-muted block max-w-40 text-xs font-normal whitespace-normal md:hidden">
                     {product.categories?.name} ·{" "}
                     <span className="font-mono">

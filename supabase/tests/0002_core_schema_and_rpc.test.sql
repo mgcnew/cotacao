@@ -5,7 +5,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(35);
+select plan(37);
 
 -- Tabelas principais
 select has_table('public','suppliers','suppliers');
@@ -32,6 +32,7 @@ select has_view('public','v_order_delivery_status','view atraso pedido');
 select has_view('public','v_conversion_history','view conversões');
 select has_view('public','v_realized_savings','view economia realizada');
 select has_view('public','v_supplier_product_stats','view fornecedor x produto');
+select has_view('public','v_quotation_history','view histórico de cotações');
 
 -- RPCs internas
 select has_function('public','rpc_record_negotiation',
@@ -58,6 +59,9 @@ select has_function('public','rpc_remove_round_supplier',
 select has_function('private','retire_closed_round_supplier_groups',
   array[]::text[],
   'retire_closed_round_supplier_groups');
+select has_function('public','rpc_quotation_history_summary',
+  array['uuid','uuid','uuid','date','date'],
+  'rpc_quotation_history_summary');
 
 -- RPCs públicas
 select has_function('public','rpc_public_get_quotation',
