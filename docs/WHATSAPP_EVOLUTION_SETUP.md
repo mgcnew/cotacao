@@ -13,8 +13,11 @@ Aplique no SQL Editor do Supabase, na ordem das migrations existentes:
 
 `supabase/migrations/0047_whatsapp_connection_per_company.sql`
 
+`supabase/migrations/0048_whatsapp_message_kinds.sql`
+
 Elas criam as quatro tabelas, RLS, índices de idempotência, publicação Realtime
-e garantem uma conexão por empresa.
+e garantem uma conexão por empresa. A última também classifica convites e
+cobranças para impedir lembretes repetidos em intervalo curto.
 
 ## 2. Ambiente da aplicação
 

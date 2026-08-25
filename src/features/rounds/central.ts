@@ -6,6 +6,7 @@ import { listProducts } from "@/features/products/queries";
 import { listPendingShoppingItems } from "@/features/shopping-list/queries";
 import {
   getRound,
+  listLatestRoundReminders,
   listRoundGroups,
   listRoundItems,
   listRoundSupplierContacts,
@@ -65,7 +66,7 @@ export const carregarRodada = cache(async (roundId: string) => {
   // etapa seguinte, com token e reenvio. Aqui a montagem se encerra.
   const podeMontar = podeEditar && emPreparacao;
 
-  const [products, shoppingItems, selectableSuppliers, contatos, supplierGroups] =
+  const [products, shoppingItems, selectableSuppliers, contatos, supplierGroups, latestReminders] =
     await Promise.all([
       podeMontar ? listProducts(company.companyId) : Promise.resolve([]),
       podeMontar
@@ -83,6 +84,10 @@ export const carregarRodada = cache(async (roundId: string) => {
           )
         : Promise.resolve(new Map()),
       listRoundSupplierGroups(
+        company.companyId,
+        roundSuppliers.map((rs) => rs.id),
+      ),
+      listLatestRoundReminders(
         company.companyId,
         roundSuppliers.map((rs) => rs.id),
       ),
@@ -107,6 +112,7 @@ export const carregarRodada = cache(async (roundId: string) => {
     selectableSuppliers,
     contatos,
     supplierGroups,
+    latestReminders,
     podeEditar,
     podeEnviar,
     podeMontar,

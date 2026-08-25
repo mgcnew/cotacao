@@ -2,6 +2,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { publicEnv } from "@/lib/env";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
@@ -26,6 +27,14 @@ export type SendState = {
   url?: string;
   savedAt?: number;
   sent?: boolean;
+};
+
+export type ReminderState = {
+  error: string | null;
+  sent: number;
+  skipped: number;
+  failed: number;
+  savedAt?: number;
 };
 
 /** Token bruto: 32 bytes de aleatoriedade criptográfica, em base64url. */
@@ -89,11 +98,30 @@ function buildQuotationMessage(params: {
   ].join("\n");
 }
 
+function buildReminderMessage(params: {
+  contactName: string;
+  companyName: string;
+  roundTitle: string;
+  url: string;
+}) {
+  return [
+    `Olá, ${params.contactName}!`,
+    "",
+    `Passando para lembrar que ainda aguardamos sua resposta para a cotação “${params.roundTitle}” da ${params.companyName}.`,
+    "",
+    `Você pode responder por este link: ${params.url}`,
+    "",
+    "Se já estiver providenciando, pode desconsiderar este lembrete.",
+  ].join("\n");
+}
+
 async function writeCommunicationLog(params: {
   companyId: string;
   supplierId: string;
   contactId: string;
   roundSupplierId: string;
+  messageKind: "quotation_invitation" | "quotation_reminder";
+  messageBody: string;
 }) {
   try {
     const service = createServiceRoleClient();
@@ -107,6 +135,8 @@ async function writeCommunicationLog(params: {
         channel: "whatsapp",
         provider: "evolution",
         status: "queued",
+        message_kind: params.messageKind,
+        message_body: params.messageBody,
       })
       .select("id")
       .single();
@@ -324,6 +354,8 @@ export async function sendQuotationWhatsApp(
     supplierId: roundSupplier.supplier_id,
     contactId: contact.id,
     roundSupplierId: roundSupplier.id,
+    messageKind: "quotation_invitation",
+    messageBody: message,
   });
   const result = await sendWhatsAppText(phone, message, connection.instance_name);
   await finishCommunicationLog(company.companyId, logId, result);
@@ -349,6 +381,157 @@ export async function sendQuotationWhatsApp(
     };
   }
   return { error: null, sent: true, savedAt: Date.now() };
+}
+
+const reminderSchema = z.object({
+  roundId: z.string().uuid(),
+  roundSupplierIds: z.array(z.string().uuid()).min(1).max(20),
+});
+
+/** Envia cobranças somente aos selecionados elegíveis e respeita intervalo de 2h. */
+export async function sendQuotationReminders(
+  _prev: ReminderState,
+  formData: FormData,
+): Promise<ReminderState> {
+  const parsed = reminderSchema.safeParse({
+    roundId: formData.get("roundId"),
+    roundSupplierIds: formData.getAll("roundSupplierIds"),
+  });
+  if (!parsed.success) {
+    return { error: "Selecione de 1 a 20 fornecedores pendentes.", sent: 0, skipped: 0, failed: 0 };
+  }
+
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("purchase_round.send")) {
+    return { error: "Seu papel não permite cobrar respostas.", sent: 0, skipped: 0, failed: 0 };
+  }
+  const supabase = await createServerSupabaseClient();
+  const { data: connection } = await supabase
+    .from("whatsapp_connections")
+    .select("id, instance_name, status")
+    .eq("company_id", company.companyId)
+    .limit(1)
+    .maybeSingle();
+  if (!connection || connection.status !== "connected") {
+    return { error: "O WhatsApp da empresa não está conectado.", sent: 0, skipped: 0, failed: 0 };
+  }
+
+  const { data: suppliers, error: suppliersError } = await supabase
+    .from("round_suppliers")
+    .select(`
+      id,
+      supplier_id,
+      supplier_contact_id,
+      purchase_round_id,
+      first_sent_at,
+      completed_at,
+      removed_at,
+      supplier_contacts ( id, name, whatsapp ),
+      purchase_rounds!inner ( title, status )
+    `)
+    .eq("company_id", company.companyId)
+    .eq("purchase_round_id", parsed.data.roundId)
+    .in("id", parsed.data.roundSupplierIds);
+  if (suppliersError) {
+    return { error: `Não foi possível carregar os pendentes: ${suppliersError.message}`, sent: 0, skipped: 0, failed: 0 };
+  }
+
+  const recentSince = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { data: recentLogs, error: logsError } = await supabase
+    .from("communication_logs")
+    .select("round_supplier_id")
+    .eq("company_id", company.companyId)
+    .eq("message_kind", "quotation_reminder")
+    .in("status", ["queued", "sent", "delivered"])
+    .gte("created_at", recentSince)
+    .in("round_supplier_id", parsed.data.roundSupplierIds);
+  if (logsError) {
+    return { error: `Não foi possível conferir cobranças recentes: ${logsError.message}`, sent: 0, skipped: 0, failed: 0 };
+  }
+  const recentlyReminded = new Set((recentLogs ?? []).map((row) => row.round_supplier_id));
+  const eligible = (suppliers ?? []).filter((supplier) =>
+    supplier.purchase_rounds.status === "active" &&
+    !supplier.removed_at &&
+    !supplier.completed_at &&
+    Boolean(supplier.first_sent_at) &&
+    !recentlyReminded.has(supplier.id) &&
+    Boolean(normalizeWhatsAppPhone(supplier.supplier_contacts?.whatsapp)),
+  );
+  const skipped = parsed.data.roundSupplierIds.length - eligible.length;
+  let sent = 0;
+  let failed = 0;
+
+  for (let offset = 0; offset < eligible.length; offset += 3) {
+    const batch = eligible.slice(offset, offset + 3);
+    await Promise.all(batch.map(async (supplier) => {
+      const contact = supplier.supplier_contacts!;
+      const phone = normalizeWhatsAppPhone(contact.whatsapp)!;
+      const link = await issueQuotationLink({
+        companyId: company.companyId,
+        supplierId: supplier.supplier_id,
+        roundSupplierId: supplier.id,
+      });
+      if (!link.ok) {
+        failed += 1;
+        return;
+      }
+      const message = buildReminderMessage({
+        contactName: contact.name,
+        companyName: company.companyName,
+        roundTitle: supplier.purchase_rounds.title,
+        url: link.url,
+      });
+      const remoteJid = `${phone}@s.whatsapp.net`;
+      const { data: conversation } = await supabase
+        .from("whatsapp_conversations")
+        .select("id")
+        .eq("connection_id", connection.id)
+        .eq("remote_jid", remoteJid)
+        .maybeSingle();
+      if (conversation) {
+        await supabase.from("whatsapp_conversations").update({
+          supplier_id: supplier.supplier_id,
+          supplier_contact_id: contact.id,
+          purchase_round_id: supplier.purchase_round_id,
+          display_name: contact.name,
+        }).eq("id", conversation.id);
+      } else {
+        await supabase.from("whatsapp_conversations").insert({
+          company_id: company.companyId,
+          connection_id: connection.id,
+          supplier_id: supplier.supplier_id,
+          supplier_contact_id: contact.id,
+          purchase_round_id: supplier.purchase_round_id,
+          remote_jid: remoteJid,
+          normalized_phone: phone,
+          display_name: contact.name,
+        });
+      }
+      const logId = await writeCommunicationLog({
+        companyId: company.companyId,
+        supplierId: supplier.supplier_id,
+        contactId: contact.id,
+        roundSupplierId: supplier.id,
+        messageKind: "quotation_reminder",
+        messageBody: message,
+      });
+      const result = await sendWhatsAppText(phone, message, connection.instance_name);
+      await finishCommunicationLog(company.companyId, logId, result);
+      if (result.ok) sent += 1;
+      else failed += 1;
+    }));
+  }
+
+  revalidatePath(`/compras/${parsed.data.roundId}`);
+  revalidatePath("/compras");
+  revalidatePath("/whatsapp");
+  const error = failed > 0
+    ? `${failed} ${failed === 1 ? "cobrança falhou" : "cobranças falharam"}. Tente novamente individualmente.`
+    : sent === 0 && skipped > 0
+      ? "Nenhuma cobrança enviada. Alguns fornecedores foram cobrados há menos de 2 horas ou não estão elegíveis."
+      : null;
+  return { error, sent, skipped, failed, savedAt: Date.now() };
 }
 
 /**

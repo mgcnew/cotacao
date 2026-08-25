@@ -4,14 +4,34 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock3,
+  LoaderCircle,
   MailQuestion,
   MessageCircle,
+  Send,
 } from "lucide-react";
 import * as React from "react";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 
+import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { SendControls } from "@/components/rounds/send-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  sendQuotationReminders,
+  type ReminderState,
+} from "@/features/rounds/send";
 import { startWhatsAppConversationAction } from "@/features/whatsapp/actions";
 import {
   Table,
@@ -34,6 +54,7 @@ export type SupplierResponseRow = {
   sentAt: string | null;
   accessedAt: string | null;
   completedAt: string | null;
+  lastReminderAt: string | null;
 };
 
 type Filter = "pending" | "completed" | "all";
@@ -64,6 +85,16 @@ function status(row: SupplierResponseRow) {
   return { label: "Não enviado", variant: "destructive" as const };
 }
 
+function ReminderSubmit({ count }: { count: number }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Send aria-hidden />}
+      {pending ? "Enviando…" : `Cobrar ${count}`}
+    </Button>
+  );
+}
+
 export function SupplierResponseBoard({
   roundId,
   suppliers,
@@ -88,6 +119,23 @@ export function SupplierResponseBoard({
   const [filter, setFilter] = React.useState<Filter>(
     pending > 0 ? "pending" : "all",
   );
+  const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
+  const [reminderOpen, setReminderOpen] = React.useState(false);
+  const sendAndClose = React.useCallback(
+    async (previous: ReminderState, formData: FormData) => {
+      const next = await sendQuotationReminders(previous, formData);
+      if (next.sent > 0 && next.failed === 0) {
+        setReminderOpen(false);
+        setSelected(new Set());
+      }
+      return next;
+    },
+    [],
+  );
+  const [reminderState, reminderAction] = useActionState<ReminderState, FormData>(
+    sendAndClose,
+    { error: null, sent: 0, skipped: 0, failed: 0 },
+  );
 
   const visible = suppliers
     .filter((supplier) =>
@@ -98,6 +146,19 @@ export function SupplierResponseBoard({
           : !supplier.completedAt,
     )
     .sort((a, b) => urgency(a) - urgency(b) || a.name.localeCompare(b.name));
+  const eligible = visible.filter((supplier) =>
+    Boolean(supplier.sentAt) && !supplier.completedAt && Boolean(supplier.whatsapp),
+  );
+  const selectedRows = suppliers.filter((supplier) => selected.has(supplier.id));
+
+  function toggleSupplier(id: string, checked: boolean) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (checked && (next.size < 20 || next.has(id))) next.add(id);
+      else if (!checked) next.delete(id);
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -176,6 +237,73 @@ export function SupplierResponseBoard({
         ))}
       </div>
 
+      {canSend ? (
+        <div className="border-border flex flex-wrap items-center gap-2 border-t pt-3">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={eligible.length === 0}
+            onClick={() => setSelected(new Set(eligible.slice(0, 20).map((supplier) => supplier.id)))}
+          >
+            Selecionar pendentes ({Math.min(eligible.length, 20)})
+          </Button>
+          {selected.size > 0 ? (
+            <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+              Limpar seleção
+            </Button>
+          ) : null}
+          <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>
+            <DialogTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                disabled={selected.size === 0 || !whatsappReady}
+                title={!whatsappReady ? "Conecte o WhatsApp em Configurações" : undefined}
+              >
+                <Send aria-hidden /> Cobrar selecionados ({selected.size})
+              </Button>
+            </DialogTrigger>
+            <DialogContent size="md">
+              <DialogHeader>
+                <DialogTitle>Cobrar respostas pendentes</DialogTitle>
+                <DialogDescription>
+                  Confira os destinatários. O sistema ignora quem foi cobrado há menos de 2 horas.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogBody>
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                  {selectedRows.map((supplier) => (
+                    <Badge key={supplier.id} variant="secondary">{supplier.name}</Badge>
+                  ))}
+                </div>
+                <div className="bg-surface-sunken border-border rounded-xl border p-4">
+                  <p className="text-fg-muted whitespace-pre-wrap text-sm">
+                    {`Olá, ${selectedRows[0]?.contact ?? "fornecedor"}!\n\nPassando para lembrar que ainda aguardamos sua resposta para a cotação “${roundTitle}” da ${companyName}.\n\nVocê pode responder por este link: [link individual da cotação]\n\nSe já estiver providenciando, pode desconsiderar este lembrete.`}
+                  </p>
+                </div>
+                <ErrorLine error={reminderState.error} />
+              </DialogBody>
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                <form action={reminderAction}>
+                  <input type="hidden" name="roundId" value={roundId} />
+                  {[...selected].map((id) => (
+                    <input key={id} type="hidden" name="roundSupplierIds" value={id} />
+                  ))}
+                  <ReminderSubmit count={selected.size} />
+                </form>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <SuccessLine
+            message={reminderState.sent > 0
+              ? `${reminderState.sent} ${reminderState.sent === 1 ? "cobrança enviada" : "cobranças enviadas"}${reminderState.skipped > 0 ? ` · ${reminderState.skipped} ignoradas` : ""}.`
+              : null}
+          />
+        </div>
+      ) : null}
+
       <div className="border-border overflow-hidden rounded-xl border">
         <Table className="block md:table">
           <TableHeader className="hidden md:table-header-group">
@@ -194,8 +322,10 @@ export function SupplierResponseBoard({
           <TableBody className="block md:table-row-group">
             {visible.map((supplier) => {
               const currentStatus = status(supplier);
-              const latest =
-                supplier.completedAt ?? supplier.accessedAt ?? supplier.sentAt;
+              const latest = [supplier.completedAt, supplier.accessedAt, supplier.lastReminderAt, supplier.sentAt]
+                .filter((value): value is string => Boolean(value))
+                .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+              const canRemind = Boolean(supplier.sentAt) && !supplier.completedAt && Boolean(supplier.whatsapp);
               return (
                 <TableRow
                   key={supplier.id}
@@ -234,9 +364,26 @@ export function SupplierResponseBoard({
                       Última atividade
                     </span>
                     {latest ? dateTime.format(new Date(latest)) : "—"}
+                    {supplier.lastReminderAt ? (
+                      <span className="text-fg-subtle mt-1 block">
+                        Última cobrança: {dateTime.format(new Date(supplier.lastReminderAt))}
+                      </span>
+                    ) : null}
                   </TableCell>
                   {canSend ? (
                     <TableCell className="col-span-2 block space-y-2 border-t p-0 pt-3 md:table-cell md:space-y-1.5 md:border-0 md:p-2">
+                      {canRemind ? (
+                        <label className="text-fg-muted flex cursor-pointer items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            className="accent-primary size-4"
+                            checked={selected.has(supplier.id)}
+                            disabled={!selected.has(supplier.id) && selected.size >= 20}
+                            onChange={(event) => toggleSupplier(supplier.id, event.target.checked)}
+                          />
+                          Selecionar para cobrança
+                        </label>
+                      ) : null}
                       <div className="[&_[data-slot=button]]:w-full md:[&_[data-slot=button]]:w-auto">
                         <SendControls
                           roundSupplierId={supplier.id}

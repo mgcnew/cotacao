@@ -222,6 +222,8 @@ export type Database = {
           error_message: string | null
           external_message_id: string | null
           id: string
+          message_body: string | null
+          message_kind: string
           order_revision_id: string | null
           provider: string
           round_supplier_id: string | null
@@ -239,6 +241,8 @@ export type Database = {
           error_message?: string | null
           external_message_id?: string | null
           id?: string
+          message_body?: string | null
+          message_kind?: string
           order_revision_id?: string | null
           provider: string
           round_supplier_id?: string | null
@@ -256,6 +260,8 @@ export type Database = {
           error_message?: string | null
           external_message_id?: string | null
           id?: string
+          message_body?: string | null
+          message_kind?: string
           order_revision_id?: string | null
           provider?: string
           round_supplier_id?: string | null

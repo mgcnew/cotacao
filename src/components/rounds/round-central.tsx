@@ -165,6 +165,7 @@ export function CorpoDaRodada({ dados }: { dados: DadosDaRodada }) {
           roundSuppliers={dados.roundSuppliers}
           contatos={dados.contatos}
           supplierGroups={dados.supplierGroups}
+          latestReminders={dados.latestReminders}
           selectableSuppliers={dados.selectableSuppliers}
           podeEditar={dados.podeEditar}
           podeEnviar={dados.podeEnviar}
@@ -522,6 +523,7 @@ function Acompanhamento({
   roundSuppliers,
   contatos,
   supplierGroups,
+  latestReminders,
   selectableSuppliers,
   podeEditar,
   podeEnviar,
@@ -539,6 +541,7 @@ function Acompanhamento({
   roundSuppliers: RoundSupplier[];
   contatos: Contatos;
   supplierGroups: Map<string, string[]>;
+  latestReminders: Map<string, string>;
   selectableSuppliers: DadosDaRodada["selectableSuppliers"];
   podeEditar: boolean;
   podeEnviar: boolean;
@@ -713,6 +716,11 @@ function Acompanhamento({
                   {rs.first_sent_at
                     ? DATA_HORA.format(new Date(rs.first_sent_at))
                     : "ainda não"}
+                  {latestReminders.get(rs.id) ? (
+                    <span className="text-fg-subtle mt-0.5 block">
+                      Cobrado {DATA_HORA.format(new Date(latestReminders.get(rs.id)!))}
+                    </span>
+                  ) : null}
                 </TableCell>
                 <TableCell className="text-fg-muted text-xs">
                   {rs.first_accessed_at

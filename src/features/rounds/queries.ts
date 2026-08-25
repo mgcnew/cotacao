@@ -195,6 +195,31 @@ export async function listRoundSupplierGroups(
   return porFornecedor;
 }
 
+/** Última cobrança enviada a cada fornecedor da rodada. */
+export async function listLatestRoundReminders(
+  companyId: string,
+  roundSupplierIds: string[],
+): Promise<Map<string, string>> {
+  if (roundSupplierIds.length === 0) return new Map();
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("communication_logs")
+    .select("round_supplier_id, sent_at, created_at")
+    .eq("company_id", companyId)
+    .eq("message_kind", "quotation_reminder")
+    .in("status", ["sent", "delivered"])
+    .in("round_supplier_id", roundSupplierIds)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`Falha ao carregar cobranças: ${error.message}`);
+
+  const latest = new Map<string, string>();
+  for (const row of data ?? []) {
+    if (!row.round_supplier_id || latest.has(row.round_supplier_id)) continue;
+    latest.set(row.round_supplier_id, row.sent_at ?? row.created_at);
+  }
+  return latest;
+}
+
 /**
  * Fornecedores que podem entrar numa rodada: ativos e com contato ativo.
  *

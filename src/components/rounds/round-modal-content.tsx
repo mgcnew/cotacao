@@ -53,6 +53,7 @@ function Responses({ dados }: { dados: DadosDaRodada }) {
           sentAt: supplier.first_sent_at,
           accessedAt: supplier.first_accessed_at,
           completedAt: supplier.completed_at,
+          lastReminderAt: dados.latestReminders.get(supplier.id) ?? null,
         }))}
       />
     </section>
