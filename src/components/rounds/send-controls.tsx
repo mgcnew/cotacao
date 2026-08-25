@@ -24,6 +24,10 @@ import {
   sendQuotationWhatsApp,
   type SendState,
 } from "@/features/rounds/send";
+import {
+  itemCountLabel,
+  renderWhatsAppTemplate,
+} from "@/features/whatsapp/message-templates";
 
 function GenerateButton({
   hasLink,
@@ -111,6 +115,7 @@ export function SendControls({
   whatsappReady,
   companyName,
   roundTitle,
+  invitationTemplate,
   showSummary = true,
 }: {
   roundSupplierId: string;
@@ -124,6 +129,7 @@ export function SendControls({
   whatsappReady: boolean;
   companyName: string;
   roundTitle: string;
+  invitationTemplate: string;
   showSummary?: boolean;
 }) {
   const [linkState, generateAction] = useActionState<SendState, FormData>(
@@ -156,15 +162,13 @@ export function SendControls({
         ? "O contato escolhido não possui WhatsApp"
         : undefined;
   const displayedUrl = whatsappState.url ?? linkState.url;
-  const preview = [
-    `Olá, ${contactName ?? "fornecedor"}!`,
-    "",
-    `${companyName} convida você para responder à cotação “${roundTitle}”, com ${itemCount} ${itemCount === 1 ? "produto" : "produtos"}.`,
-    "",
-    "Acesse o link para informar preços e condições: [link individual da cotação]",
-    "",
-    "Se precisar, pode responder por aqui.",
-  ].join("\n");
+  const preview = renderWhatsAppTemplate(invitationTemplate, {
+    contato: contactName ?? "fornecedor",
+    empresa: companyName,
+    cotacao: roundTitle,
+    quantidade_itens: itemCountLabel(itemCount),
+    link: "[link individual da cotação]",
+  });
 
   return (
     <div className="flex flex-col items-end gap-2">

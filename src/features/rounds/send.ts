@@ -7,6 +7,11 @@ import { z } from "zod";
 import { publicEnv } from "@/lib/env";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { normalizeWhatsAppPhone } from "@/features/whatsapp/normalize";
+import {
+  itemCountLabel,
+  renderWhatsAppTemplate,
+} from "@/features/whatsapp/message-templates";
+import { getCompanyWhatsAppTemplates } from "@/features/whatsapp/templates";
 import { sendWhatsAppText } from "@/lib/evolution/client";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
@@ -77,42 +82,6 @@ async function issueQuotationLink(params: {
     ok: true as const,
     url: `${publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/q/${rawToken}`,
   };
-}
-
-function buildQuotationMessage(params: {
-  contactName: string;
-  companyName: string;
-  roundTitle: string;
-  itemCount: number;
-  url: string;
-}) {
-  const items = `${params.itemCount} ${params.itemCount === 1 ? "produto" : "produtos"}`;
-  return [
-    `Olá, ${params.contactName}!`,
-    "",
-    `${params.companyName} convida você para responder à cotação “${params.roundTitle}”, com ${items}.`,
-    "",
-    `Acesse o link para informar preços e condições: ${params.url}`,
-    "",
-    "Se precisar, pode responder por aqui.",
-  ].join("\n");
-}
-
-function buildReminderMessage(params: {
-  contactName: string;
-  companyName: string;
-  roundTitle: string;
-  url: string;
-}) {
-  return [
-    `Olá, ${params.contactName}!`,
-    "",
-    `Passando para lembrar que ainda aguardamos sua resposta para a cotação “${params.roundTitle}” da ${params.companyName}.`,
-    "",
-    `Você pode responder por este link: ${params.url}`,
-    "",
-    "Se já estiver providenciando, pode desconsiderar este lembrete.",
-  ].join("\n");
 }
 
 async function writeCommunicationLog(params: {
@@ -260,6 +229,7 @@ export async function sendQuotationWhatsApp(
   if (!permissions.has("purchase_round.send")) {
     return { error: "Seu papel não permite enviar cotações." };
   }
+  const templates = await getCompanyWhatsAppTemplates(company.companyId);
 
   const roundSupplierId = String(formData.get("roundSupplierId") ?? "");
   if (!roundSupplierId) return { error: "Fornecedor inválido." };
@@ -315,12 +285,12 @@ export async function sendQuotationWhatsApp(
   });
   if (!link.ok) return { error: link.error };
 
-  const message = buildQuotationMessage({
-    contactName: contact.name,
-    companyName: company.companyName,
-    roundTitle: roundSupplier.purchase_rounds.title,
-    itemCount,
-    url: link.url,
+  const message = renderWhatsAppTemplate(templates.quotation_invitation, {
+    contato: contact.name,
+    empresa: company.companyName,
+    cotacao: roundSupplier.purchase_rounds.title,
+    quantidade_itens: itemCountLabel(itemCount),
+    link: link.url,
   });
   const remoteJid = `${phone}@s.whatsapp.net`;
   const { data: conversation } = await supabase
@@ -406,6 +376,7 @@ export async function sendQuotationReminders(
   if (!permissions.has("purchase_round.send")) {
     return { error: "Seu papel não permite cobrar respostas.", sent: 0, skipped: 0, failed: 0 };
   }
+  const templates = await getCompanyWhatsAppTemplates(company.companyId);
   const supabase = await createServerSupabaseClient();
   const { data: connection } = await supabase
     .from("whatsapp_connections")
@@ -428,7 +399,8 @@ export async function sendQuotationReminders(
       completed_at,
       removed_at,
       supplier_contacts ( id, name, whatsapp ),
-      purchase_rounds!inner ( title, status )
+      purchase_rounds!inner ( title, status ),
+      supplier_quotation_items ( id, removed_at )
     `)
     .eq("company_id", company.companyId)
     .eq("purchase_round_id", parsed.data.roundId)
@@ -476,11 +448,15 @@ export async function sendQuotationReminders(
         failed += 1;
         return;
       }
-      const message = buildReminderMessage({
-        contactName: contact.name,
-        companyName: company.companyName,
-        roundTitle: supplier.purchase_rounds.title,
-        url: link.url,
+      const activeItemCount = supplier.supplier_quotation_items?.filter(
+        (item) => item.removed_at === null,
+      ).length ?? 0;
+      const message = renderWhatsAppTemplate(templates.quotation_reminder, {
+        contato: contact.name,
+        empresa: company.companyName,
+        cotacao: supplier.purchase_rounds.title,
+        quantidade_itens: itemCountLabel(activeItemCount),
+        link: link.url,
       });
       const remoteJid = `${phone}@s.whatsapp.net`;
       const { data: conversation } = await supabase

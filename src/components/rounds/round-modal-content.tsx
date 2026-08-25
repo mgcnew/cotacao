@@ -39,6 +39,8 @@ function Responses({ dados }: { dados: DadosDaRodada }) {
         whatsappReady={dados.whatsappReady}
         companyName={dados.companyName}
         roundTitle={dados.round.title}
+        invitationTemplate={dados.whatsappTemplates.quotation_invitation}
+        reminderTemplate={dados.whatsappTemplates.quotation_reminder}
         suppliers={dados.roundSuppliers.map((supplier) => ({
           id: supplier.id,
           name: supplier.suppliers?.name ?? "Fornecedor",

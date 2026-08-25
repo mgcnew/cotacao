@@ -34,6 +34,10 @@ import {
 } from "@/features/rounds/send";
 import { startWhatsAppConversationAction } from "@/features/whatsapp/actions";
 import {
+  itemCountLabel,
+  renderWhatsAppTemplate,
+} from "@/features/whatsapp/message-templates";
+import {
   Table,
   TableBody,
   TableCell,
@@ -102,6 +106,8 @@ export function SupplierResponseBoard({
   whatsappReady,
   companyName,
   roundTitle,
+  invitationTemplate,
+  reminderTemplate,
 }: {
   roundId: string;
   suppliers: SupplierResponseRow[];
@@ -109,6 +115,8 @@ export function SupplierResponseBoard({
   whatsappReady: boolean;
   companyName: string;
   roundTitle: string;
+  invitationTemplate: string;
+  reminderTemplate: string;
 }) {
   const completed = suppliers.filter((supplier) => supplier.completedAt).length;
   const notOpened = suppliers.filter(
@@ -150,6 +158,14 @@ export function SupplierResponseBoard({
     Boolean(supplier.sentAt) && !supplier.completedAt && Boolean(supplier.whatsapp),
   );
   const selectedRows = suppliers.filter((supplier) => selected.has(supplier.id));
+  const previewSupplier = selectedRows[0];
+  const reminderPreview = renderWhatsAppTemplate(reminderTemplate, {
+    contato: previewSupplier?.contact ?? "fornecedor",
+    empresa: companyName,
+    cotacao: roundTitle,
+    quantidade_itens: itemCountLabel(previewSupplier?.itemCount ?? 0),
+    link: "[link individual da cotação]",
+  });
 
   function toggleSupplier(id: string, checked: boolean) {
     setSelected((current) => {
@@ -279,7 +295,7 @@ export function SupplierResponseBoard({
                 </div>
                 <div className="bg-surface-sunken border-border rounded-xl border p-4">
                   <p className="text-fg-muted whitespace-pre-wrap text-sm">
-                    {`Olá, ${selectedRows[0]?.contact ?? "fornecedor"}!\n\nPassando para lembrar que ainda aguardamos sua resposta para a cotação “${roundTitle}” da ${companyName}.\n\nVocê pode responder por este link: [link individual da cotação]\n\nSe já estiver providenciando, pode desconsiderar este lembrete.`}
+                    {reminderPreview}
                   </p>
                 </div>
                 <ErrorLine error={reminderState.error} />
@@ -397,6 +413,7 @@ export function SupplierResponseBoard({
                           whatsappReady={whatsappReady}
                           companyName={companyName}
                           roundTitle={roundTitle}
+                          invitationTemplate={invitationTemplate}
                           showSummary={false}
                         />
                       </div>

@@ -3,6 +3,7 @@ import { Check, Minus } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { ThemeControls } from "@/components/theme-controls";
 import { WhatsAppConnectionSettings } from "@/components/whatsapp/connection-settings";
+import { WhatsAppTemplateSettings } from "@/components/whatsapp/template-settings";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -31,6 +32,7 @@ import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { getWhatsAppConnection } from "@/features/whatsapp/queries";
 import { isEvolutionProvisioningConfigured } from "@/lib/evolution/client";
 import type { WhatsAppSetupState } from "@/features/whatsapp/connection-state";
+import { getCompanyWhatsAppTemplates } from "@/features/whatsapp/templates";
 
 function formatCnpj(value: string | null) {
   if (!value) return "—";
@@ -59,13 +61,14 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function ConfiguracoesPage({ searchParams }: { searchParams: SearchParams }) {
   const company = await requireActiveCompany();
-  const [dados, roles, members, catalog, minhasPermissoes, whatsapp, params] = await Promise.all([
+  const [dados, roles, members, catalog, minhasPermissoes, whatsapp, templates, params] = await Promise.all([
     getCompany(company.companyId),
     listRoles(company.companyId),
     listMembers(company.companyId),
     listPermissionCatalog(),
     getPermissions(company.companyId),
     getWhatsAppConnection(company.companyId),
+    getCompanyWhatsAppTemplates(company.companyId),
     searchParams,
   ]);
   const requestedTab = typeof params.aba === "string" ? params.aba : "";
@@ -189,6 +192,10 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
         <TabsContent value="whatsapp" className="mt-4">
           <WhatsAppConnectionSettings
             initialState={whatsappState}
+            canManage={minhasPermissoes.has("role.manage")}
+          />
+          <WhatsAppTemplateSettings
+            templates={templates}
             canManage={minhasPermissoes.has("role.manage")}
           />
         </TabsContent>

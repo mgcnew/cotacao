@@ -170,6 +170,7 @@ export function CorpoDaRodada({ dados }: { dados: DadosDaRodada }) {
           podeEditar={dados.podeEditar}
           podeEnviar={dados.podeEnviar}
           whatsappReady={dados.whatsappReady}
+          invitationTemplate={dados.whatsappTemplates.quotation_invitation}
           podeFechar={dados.podeFechar && dados.emAndamento}
           podeCancelarGrupo={dados.podeCancelar && dados.emAndamento}
           encerrada={dados.encerrada}
@@ -528,6 +529,7 @@ function Acompanhamento({
   podeEditar,
   podeEnviar,
   whatsappReady,
+  invitationTemplate,
   podeFechar,
   podeCancelarGrupo,
   encerrada,
@@ -546,6 +548,7 @@ function Acompanhamento({
   podeEditar: boolean;
   podeEnviar: boolean;
   whatsappReady: boolean;
+  invitationTemplate: string;
   podeFechar: boolean;
   podeCancelarGrupo: boolean;
   encerrada: boolean;
@@ -779,6 +782,7 @@ function Acompanhamento({
                       whatsappReady={whatsappReady}
                       companyName={companyName}
                       roundTitle={roundTitle}
+                      invitationTemplate={invitationTemplate}
                     />
                   </TableCell>
                 ) : null}

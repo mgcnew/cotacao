@@ -19,6 +19,10 @@ import { getPermissions, requireActiveCompany, requireUser } from "@/lib/auth/da
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { publicEnv } from "@/lib/env";
 import type { WhatsAppSetupState } from "@/features/whatsapp/connection-state";
+import {
+  findUnsupportedTemplateVariables,
+  WHATSAPP_TEMPLATE_KINDS,
+} from "@/features/whatsapp/message-templates";
 
 function whatsappUrl(params: Record<string, string>) {
   const query = new URLSearchParams(params);
@@ -72,6 +76,63 @@ async function requireWhatsAppManager() {
     return { company, allowed: false as const };
   }
   return { company, allowed: true as const };
+}
+
+export type WhatsAppTemplateState = {
+  error: string | null;
+  savedAt?: number;
+  reset?: boolean;
+};
+
+const templateSchema = z.object({
+  kind: z.enum(WHATSAPP_TEMPLATE_KINDS),
+  intent: z.enum(["save", "reset"]),
+  body: z.string().trim().max(4000),
+});
+
+export async function saveWhatsAppTemplateAction(
+  _previous: WhatsAppTemplateState,
+  formData: FormData,
+): Promise<WhatsAppTemplateState> {
+  const access = await requireWhatsAppManager();
+  if (!access.allowed) return { error: "Somente um administrador pode alterar os modelos." };
+
+  const parsed = templateSchema.safeParse({
+    kind: formData.get("kind"),
+    intent: formData.get("intent"),
+    body: formData.get("body"),
+  });
+  if (!parsed.success) return { error: "O modelo informado é inválido." };
+
+  const supabase = await createServerSupabaseClient();
+  if (parsed.data.intent === "reset") {
+    const { error } = await supabase
+      .from("whatsapp_message_templates")
+      .delete()
+      .eq("company_id", access.company.companyId)
+      .eq("kind", parsed.data.kind);
+    if (error) return { error: `Não foi possível restaurar o modelo: ${error.message}` };
+    revalidatePath("/configuracoes");
+    return { error: null, reset: true, savedAt: Date.now() };
+  }
+
+  const body = parsed.data.body;
+  if (body.length < 20) return { error: "Escreva uma mensagem com ao menos 20 caracteres." };
+  if (!body.includes("{link}")) return { error: "Inclua a variável {link} para o acesso individual à cotação." };
+  const unsupported = findUnsupportedTemplateVariables(body);
+  if (unsupported.length > 0) {
+    return { error: `Variáveis não reconhecidas: ${unsupported.map((name) => `{${name}}`).join(", ")}.` };
+  }
+
+  const { error } = await supabase.from("whatsapp_message_templates").upsert({
+    company_id: access.company.companyId,
+    kind: parsed.data.kind,
+    body,
+  }, { onConflict: "company_id,kind" });
+  if (error) return { error: `Não foi possível salvar o modelo: ${error.message}` };
+  revalidatePath("/configuracoes");
+  revalidatePath("/compras");
+  return { error: null, reset: false, savedAt: Date.now() };
 }
 
 async function updateConnectionState(
