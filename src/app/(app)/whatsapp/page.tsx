@@ -18,6 +18,7 @@ import { redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { ScrollMessagesToBottom, WhatsAppLiveUpdates } from "@/components/whatsapp/live-updates";
+import { WhatsAppMetricsPanel } from "@/components/whatsapp/metrics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ import {
   getWhatsAppConnection,
   getWhatsAppContext,
   getWhatsAppConversation,
+  getWhatsAppMetrics,
   listWhatsAppContacts,
   listWhatsAppConversations,
   listWhatsAppMessages,
@@ -74,6 +76,8 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
   const filter = param(params.filtro) || "open";
   const search = param(params.busca);
   const errorMessage = param(params.erro);
+  const requestedPeriod = Number(param(params.periodo));
+  const metricsDays = requestedPeriod === 7 || requestedPeriod === 90 ? requestedPeriod : 30;
   const canSend = permissions.has("purchase_round.send");
   const canManage = permissions.has("role.manage");
   const connection = await getWhatsAppConnection(company.companyId);
@@ -101,10 +105,11 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
     );
   }
 
-  const [conversations, contacts, selected] = await Promise.all([
+  const [conversations, contacts, selected, metrics] = await Promise.all([
     listWhatsAppConversations(company.companyId, filter, search),
     canSend ? listWhatsAppContacts(company.companyId) : Promise.resolve([]),
     selectedId ? getWhatsAppConversation(company.companyId, selectedId) : Promise.resolve(null),
+    getWhatsAppMetrics(company.companyId, metricsDays),
   ]);
   const [messages, context] = selected
     ? await Promise.all([
@@ -142,7 +147,26 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
         </div>
       ) : null}
 
-      <div className="border-border bg-surface grid h-[calc(100dvh-10.5rem)] min-h-125 overflow-hidden rounded-2xl border shadow-sm lg:grid-cols-[19rem_minmax(0,1fr)_18rem]">
+      <WhatsAppMetricsPanel
+        metrics={metrics}
+        days={metricsDays}
+        className={selected ? "hidden lg:block" : undefined}
+        hrefForPeriod={Object.fromEntries(
+          ([7, 30, 90] as const).map((period) => {
+            const next = new URLSearchParams();
+            next.set("periodo", String(period));
+            if (selectedId) next.set("conversa", selectedId);
+            if (filter !== "open") next.set("filtro", filter);
+            if (search) next.set("busca", search);
+            return [period, `/whatsapp?${next.toString()}`];
+          }),
+        ) as Record<7 | 30 | 90, string>}
+      />
+
+      <div className={cn(
+        "border-border bg-surface grid min-h-125 overflow-hidden rounded-2xl border shadow-sm lg:h-[calc(100dvh-20rem)] lg:grid-cols-[19rem_minmax(0,1fr)_18rem]",
+        selected ? "h-[calc(100dvh-10.5rem)]" : "h-[calc(100dvh-22rem)]",
+      )}>
         <aside className={cn("border-border min-h-0 flex-col border-r", selected ? "hidden lg:flex" : "flex")}>
           <div className="border-border space-y-3 border-b p-3">
             <form className="relative">

@@ -17,6 +17,33 @@ export async function getWhatsAppConnection(companyId: string) {
   return data;
 }
 
+export type WhatsAppMetrics = {
+  sent: number;
+  delivered: number;
+  responseOpportunities: number;
+  responded: number;
+  averageResponseSeconds: number | null;
+};
+
+export async function getWhatsAppMetrics(companyId: string, days: number): Promise<WhatsAppMetrics> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("rpc_whatsapp_metrics", {
+    p_company_id: companyId,
+    p_days: days,
+  });
+  if (error) throw new Error(`Falha ao carregar indicadores do WhatsApp: ${error.message}`);
+  const raw = (data ?? {}) as Record<string, unknown>;
+  return {
+    sent: Number(raw.sent ?? 0),
+    delivered: Number(raw.delivered ?? 0),
+    responseOpportunities: Number(raw.responseOpportunities ?? 0),
+    responded: Number(raw.responded ?? 0),
+    averageResponseSeconds: raw.averageResponseSeconds === null || raw.averageResponseSeconds === undefined
+      ? null
+      : Number(raw.averageResponseSeconds),
+  };
+}
+
 export async function listWhatsAppConversations(
   companyId: string,
   filter = "open",

@@ -3353,6 +3353,10 @@ export type Database = {
         Args: { p_company_id: string; p_order_revision_id: string }
         Returns: Json
       }
+      rpc_whatsapp_metrics: {
+        Args: { p_company_id: string; p_days: number }
+        Returns: Json
+      }
       rpc_mark_round_supplier_sent: {
         Args: { p_company_id: string; p_round_supplier_id: string }
         Returns: Json
