@@ -60,6 +60,11 @@ export async function listWhatsAppConversations(
 
   const needle = search.trim().toLocaleLowerCase("pt-BR");
   return (data ?? []).filter((conversation) => {
+    if (filter === "promotions") {
+      if (conversation.inbox_category !== "promotion") return false;
+    } else if (conversation.inbox_category === "promotion") {
+      return false;
+    }
     if (filter === "unread" && conversation.unread_count === 0) return false;
     if (filter === "waiting_supplier" && conversation.awaiting_side !== "supplier") return false;
     if (filter === "waiting_buyer" && conversation.awaiting_side !== "buyer") return false;

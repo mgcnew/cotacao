@@ -1,5 +1,7 @@
 import {
   AlertCircle,
+  BellOff,
+  BellRing,
   Check,
   CheckCheck,
   Clock3,
@@ -14,6 +16,7 @@ import {
   Volume2,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -26,6 +29,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   linkWhatsAppConversationAction,
   sendWhatsAppMessageAction,
+  setWhatsAppConversationCategoryAction,
   setWhatsAppConversationStateAction,
   startWhatsAppConversationAction,
   verifyWhatsAppConnectionAction,
@@ -176,7 +180,7 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
               <input type="hidden" name="filtro" value={filter} />
             </form>
             <div className="flex gap-1 overflow-x-auto pb-0.5 text-xs">
-              {[["open", "Abertas"], ["unread", "Não lidas"], ["waiting_supplier", "Fornecedor"], ["waiting_buyer", "Comprador"]].map(([value, label]) => (
+              {[["open", "Abertas"], ["unread", "Não lidas"], ["waiting_supplier", "Fornecedor"], ["waiting_buyer", "Comprador"], ["promotions", "Promoções"]].map(([value, label]) => (
                 <Link key={value} href={`/whatsapp?filtro=${value}`} className={cn("rounded-full px-2.5 py-1 whitespace-nowrap", filter === value ? "bg-primary text-primary-fg" : "bg-surface-muted text-fg-muted hover:text-fg")}>{label}</Link>
               ))}
             </div>
@@ -233,7 +237,23 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
                   <strong className="text-fg block truncate text-sm">{selected.suppliers?.name ?? selected.display_name ?? "Número desconhecido"}</strong>
                   <span className="text-fg-subtle block truncate text-xs">{selected.supplier_contacts?.name ?? selected.normalized_phone ?? selected.remote_jid}</span>
                 </span>
+                {selected.inbox_category === "promotion" ? <Badge variant="outline" className="hidden sm:inline-flex">Promoções</Badge> : null}
                 {selected.unread_count ? <Badge variant="secondary">{selected.unread_count} não lidas</Badge> : null}
+                {canSend ? (
+                  <form action={setWhatsAppConversationCategoryAction}>
+                    <input type="hidden" name="conversation_id" value={selected.id} />
+                    <input type="hidden" name="category" value={selected.inbox_category === "promotion" ? "operational" : "promotion"} />
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="sm"
+                      title={selected.inbox_category === "promotion" ? "Reativar conversa" : "Mover para promoções"}
+                    >
+                      {selected.inbox_category === "promotion" ? <BellRing aria-hidden /> : <BellOff aria-hidden />}
+                      <span className="hidden sm:inline">{selected.inbox_category === "promotion" ? "Reativar" : "Promoções"}</span>
+                    </Button>
+                  </form>
+                ) : null}
               </header>
 
               <div className="wa-chat-bg min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5">
@@ -256,6 +276,25 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
                           >
                             Seu navegador não consegue reproduzir este áudio.
                           </audio>
+                        ) : null}
+                        {message.message_type === "image" && message.media_path ? (
+                          <a
+                            href={`/api/whatsapp/media/${message.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="my-1 block overflow-hidden rounded-lg"
+                            title="Abrir imagem"
+                          >
+                            <Image
+                              src={`/api/whatsapp/media/${message.id}`}
+                              alt="Imagem recebida pelo WhatsApp"
+                              width={720}
+                              height={720}
+                              sizes="(max-width: 640px) 80vw, 32rem"
+                              unoptimized
+                              className="max-h-96 h-auto w-auto max-w-full object-contain"
+                            />
+                          </a>
                         ) : null}
                         {message.body ? <p className="whitespace-pre-wrap wrap-break-word">{message.body}</p> : null}
                         <footer className="text-fg-subtle mt-1 flex items-center justify-end gap-1 text-[10px]">
@@ -289,6 +328,7 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
             <div className="space-y-5">
               <section><p className="text-fg-subtle text-[10px] font-semibold tracking-wider uppercase">Fornecedor</p><h3 className="text-fg mt-2 font-medium">{selected.suppliers?.name ?? "Não identificado"}</h3><p className="text-fg-muted mt-1 flex items-center gap-1.5 text-xs"><Phone className="size-3" />{selected.normalized_phone ?? selected.remote_jid}</p>{selected.supplier_id ? <Link href={`/fornecedores/${selected.supplier_id}`} className="text-primary mt-2 inline-block text-xs hover:underline">Abrir cadastro</Link> : <><p className="text-warning mt-2 text-xs">Vincule este número antes de usar dados recebidos na compra.</p>{canSend ? <form action={linkWhatsAppConversationAction} className="mt-3 grid gap-2"><input type="hidden" name="conversation_id" value={selected.id} /><select name="contact_id" required defaultValue="" className="border-input bg-background text-fg h-8 min-w-0 rounded-lg border px-2 text-xs"><option value="" disabled>Escolher contato…</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.suppliers?.name} · {contact.name}</option>)}</select><Button type="submit" size="sm" variant="outline">Vincular fornecedor</Button></form> : null}</>}</section>
               <section className="border-border border-t pt-4"><p className="text-fg-subtle text-[10px] font-semibold tracking-wider uppercase">Andamento</p><p className="text-fg-muted mt-2 text-xs">{selected.awaiting_side === "supplier" ? "Aguardando resposta do fornecedor" : selected.awaiting_side === "buyer" ? "Aguardando ação do comprador" : "Sem pendência definida"}</p>{canSend ? <div className="mt-3 grid gap-2"><form action={setWhatsAppConversationStateAction}><input type="hidden" name="conversation_id" value={selected.id} /><input type="hidden" name="awaiting_side" value="supplier" /><Button type="submit" variant="outline" size="sm" className="w-full">Aguardar fornecedor</Button></form><form action={setWhatsAppConversationStateAction}><input type="hidden" name="conversation_id" value={selected.id} /><input type="hidden" name="awaiting_side" value="buyer" /><Button type="submit" variant="outline" size="sm" className="w-full">Aguardar comprador</Button></form></div> : null}</section>
+              <section className="border-border border-t pt-4"><p className="text-fg-subtle text-[10px] font-semibold tracking-wider uppercase">Organização da caixa</p><p className="text-fg-muted mt-2 text-xs">{selected.inbox_category === "promotion" ? "As mensagens continuam guardadas, mas não geram pendências na caixa principal." : "Se este contato envia ofertas frequentes, mova a conversa para Promoções pelo botão no cabeçalho."}</p></section>
               <section className="border-border border-t pt-4"><p className="text-fg-subtle text-[10px] font-semibold tracking-wider uppercase">Contexto da compra</p>{context.round ? <Link href={`/compras/${context.round.id}`} className="bg-surface-muted mt-2 block rounded-lg p-3 text-xs"><strong className="text-fg block">{context.round.title}</strong><span className="text-fg-muted">Cotação · {context.round.status}</span></Link> : <p className="text-fg-muted mt-2 text-xs">Nenhuma cotação vinculada.</p>}{context.order ? <Link href={`/pedidos/${context.order.id}`} className="bg-surface-muted mt-2 block rounded-lg p-3 text-xs"><strong className="text-fg block">Pedido</strong><span className="text-fg-muted">{context.order.status}</span></Link> : null}</section>
               <section className="border-border border-t pt-4"><p className="text-fg-subtle text-[10px] font-semibold tracking-wider uppercase">Atalhos produtivos</p><div className="text-fg-muted mt-2 space-y-2 text-xs"><p>Registrar observação, preço ou negociação a partir da mensagem entra na próxima evolução, depois de validar o recebimento real.</p></div></section>
             </div>

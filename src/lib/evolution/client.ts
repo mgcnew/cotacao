@@ -326,7 +326,7 @@ export async function getEvolutionMedia(
 
   const found = findBase64Media(result.data, fallbackMimeType);
   if (!found) {
-    return { ok: false, error: "A Evolution não devolveu o conteúdo do áudio." };
+    return { ok: false, error: "A Evolution não devolveu o conteúdo da mídia." };
   }
   const dataUrl = found.base64.match(/^data:([^;,]+)?;base64,([\s\S]+)$/);
   const encoded = dataUrl?.[2] ?? found.base64;
@@ -334,16 +334,16 @@ export async function getEvolutionMedia(
     .split(";")[0]
     .trim()
     .toLowerCase();
-  if (!mimeType.startsWith("audio/")) {
+  if (!mimeType.startsWith("audio/") && !mimeType.startsWith("image/")) {
     return { ok: false, error: `Tipo de mídia inesperado: ${mimeType}.` };
   }
   if (encoded.length > Math.ceil(MAX_MEDIA_BYTES * 4 / 3) + 16) {
-    return { ok: false, error: "O áudio ultrapassa o limite de 20 MB." };
+    return { ok: false, error: "A mídia ultrapassa o limite de 20 MB." };
   }
 
   const bytes = Buffer.from(encoded, "base64");
   if (bytes.length === 0 || bytes.length > MAX_MEDIA_BYTES) {
-    return { ok: false, error: bytes.length === 0 ? "O áudio recebido está vazio." : "O áudio ultrapassa o limite de 20 MB." };
+    return { ok: false, error: bytes.length === 0 ? "A mídia recebida está vazia." : "A mídia ultrapassa o limite de 20 MB." };
   }
   return { ok: true, bytes, mimeType };
 }

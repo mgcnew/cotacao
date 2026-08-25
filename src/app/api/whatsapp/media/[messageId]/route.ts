@@ -24,8 +24,8 @@ export async function GET(request: Request, { params }: RouteContext) {
     .eq("company_id", company.companyId)
     .eq("id", parsed.data)
     .maybeSingle();
-  if (error || !message || message.message_type !== "audio" || !message.media_path) {
-    return new Response("Áudio não encontrado.", { status: 404 });
+  if (error || !message || !["audio", "image"].includes(message.message_type) || !message.media_path) {
+    return new Response("Mídia não encontrada.", { status: 404 });
   }
 
   const service = createServiceRoleClient();
@@ -35,8 +35,11 @@ export async function GET(request: Request, { params }: RouteContext) {
   if (downloadError || !file) return new Response("Áudio indisponível.", { status: 404 });
 
   const mimeType = message.media_mime_type?.startsWith("audio/")
-    ? message.media_mime_type
-    : "audio/ogg";
+    || message.media_mime_type?.startsWith("image/")
+      ? message.media_mime_type
+      : message.message_type === "image"
+        ? "image/jpeg"
+        : "audio/ogg";
   const range = request.headers.get("range")?.match(/^bytes=(\d+)-(\d*)$/);
   const start = range ? Number(range[1]) : 0;
   const requestedEnd = range?.[2] ? Number(range[2]) : file.size - 1;

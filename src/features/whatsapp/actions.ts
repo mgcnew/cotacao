@@ -442,12 +442,14 @@ export async function startWhatsAppConversationAction(formData: FormData) {
     .eq("remote_jid", remoteJid)
     .maybeSingle();
   if (existing) {
-    if (roundId.data) {
-      await supabase
-        .from("whatsapp_conversations")
-        .update({ purchase_round_id: roundId.data })
-        .eq("id", existing.id);
-    }
+    await supabase
+      .from("whatsapp_conversations")
+      .update({
+        inbox_category: "operational",
+        categorized_at: new Date().toISOString(),
+        ...(roundId.data ? { purchase_round_id: roundId.data } : {}),
+      })
+      .eq("id", existing.id);
     redirect(whatsappUrl({ conversa: existing.id }));
   }
 
@@ -532,6 +534,8 @@ export async function sendWhatsAppMessageAction(formData: FormData) {
     last_message_preview: parsed.data.message.slice(0, 180),
     last_direction: "outbound",
     awaiting_side: "supplier",
+    inbox_category: "operational",
+    categorized_at: now,
   }).eq("id", conversation.id);
 
   if (conversation.supplier_id) {
@@ -574,6 +578,34 @@ export async function setWhatsAppConversationStateAction(formData: FormData) {
   if (!parsed.success) fail("Estado inválido.");
   const supabase = await createServerSupabaseClient();
   await supabase.from("whatsapp_conversations").update({ awaiting_side: parsed.data.awaiting_side }).eq("company_id", company.companyId).eq("id", parsed.data.conversation_id);
+  revalidatePath("/whatsapp");
+}
+
+export async function setWhatsAppConversationCategoryAction(formData: FormData) {
+  const company = await requireActiveCompany();
+  await requireSendPermission(company.companyId);
+  const parsed = z.object({
+    conversation_id: z.string().uuid(),
+    category: z.enum(["operational", "promotion"]),
+  }).safeParse({
+    conversation_id: formData.get("conversation_id"),
+    category: formData.get("category"),
+  });
+  if (!parsed.success) fail("Categoria inválida.");
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("whatsapp_conversations")
+    .update({
+      inbox_category: parsed.data.category,
+      categorized_at: new Date().toISOString(),
+      ...(parsed.data.category === "promotion"
+        ? { unread_count: 0, awaiting_side: null }
+        : {}),
+    })
+    .eq("company_id", company.companyId)
+    .eq("id", parsed.data.conversation_id);
+  if (error) fail(error.message, parsed.data.conversation_id);
   revalidatePath("/whatsapp");
 }
 

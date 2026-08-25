@@ -116,8 +116,16 @@ de uma integração que envia, mas deixou de receber.
 
 ## Limites desta primeira entrega
 
-Texto e áudio recebido estão completos. Áudios de até 20 MB são buscados na
-Evolution, armazenados no bucket privado `whatsapp-media` e reproduzidos por uma
-rota que valida a empresa e o usuário antes de entregar o arquivo. Imagem,
-documento e vídeo ainda são classificados na linha do tempo, mas o download e o
-envio desses anexos continuam pendentes de homologação.
+Texto, áudio e imagem recebidos estão completos. Arquivos de até 20 MB são
+buscados na Evolution, armazenados no bucket privado `whatsapp-media` e exibidos
+por uma rota que valida a empresa e o usuário antes de entregar o conteúdo.
+Documento e vídeo ainda são classificados na linha do tempo, mas o download e
+o envio desses anexos continuam pendentes de homologação.
+
+## 6. Caixa operacional e promoções
+
+Uma conversa que envia ofertas frequentes pode ser movida para **Promoções** no
+cabeçalho do atendimento. O histórico e as novas mensagens continuam salvos,
+mas não geram contagem de não lidas nem aparecem nas filas operacionais. A aba
+**Promoções** permite consultar e reativar o contato a qualquer momento. Iniciar
+uma nova conversa ou enviar uma mensagem pelo sistema também reativa o contato.

@@ -401,6 +401,8 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          inbox_category: string
+          categorized_at: string | null
           last_direction: string | null
           last_message_at: string | null
           last_message_preview: string | null
@@ -422,6 +424,8 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          inbox_category?: string
+          categorized_at?: string | null
           last_direction?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
@@ -443,6 +447,8 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          inbox_category?: string
+          categorized_at?: string | null
           last_direction?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null

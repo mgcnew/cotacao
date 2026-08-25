@@ -91,7 +91,12 @@ function preview(type: string, body: string | null) {
 
 const MEDIA_BUCKET = "whatsapp-media";
 
-function audioExtension(mimeType: string) {
+function mediaExtension(mimeType: string) {
+  if (mimeType.includes("jpeg")) return "jpg";
+  if (mimeType.includes("png")) return "png";
+  if (mimeType.includes("webp")) return "webp";
+  if (mimeType.includes("gif")) return "gif";
+  if (mimeType.includes("avif")) return "avif";
   if (mimeType.includes("mpeg")) return "mp3";
   if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a";
   if (mimeType.includes("aac")) return "aac";
@@ -106,14 +111,14 @@ async function ensureMediaBucket(client: ServiceClient) {
   const { error: createError } = await client.storage.createBucket(MEDIA_BUCKET, {
     public: false,
     fileSizeLimit: 20 * 1024 * 1024,
-    allowedMimeTypes: ["audio/*"],
+    allowedMimeTypes: ["audio/*", "image/*"],
   });
   if (createError && !/already exists|duplicate/i.test(createError.message)) {
     throw createError;
   }
 }
 
-async function attachAudio(
+async function attachMedia(
   client: ServiceClient,
   connection: Connection,
   messageId: string,
@@ -131,7 +136,7 @@ async function attachAudio(
 
     await ensureMediaBucket(client);
     const digest = createHash("sha256").update(externalId).digest("hex");
-    const path = `${connection.company_id}/${connection.id}/${digest}.${audioExtension(media.mimeType)}`;
+    const path = `${connection.company_id}/${connection.id}/${digest}.${mediaExtension(media.mimeType)}`;
     const { error: uploadError } = await client.storage
       .from(MEDIA_BUCKET)
       .upload(path, media.bytes, {
@@ -153,11 +158,12 @@ async function attachAudio(
       .eq("company_id", connection.company_id)
       .eq("id", messageId);
   } catch (cause) {
-    const reason = cause instanceof Error ? cause.message : "Falha ao buscar o áudio.";
+    const reason = cause instanceof Error ? cause.message : "Falha ao buscar a mídia.";
+    const label = fallbackMimeType?.startsWith("image/") ? "Imagem" : "Áudio";
     await client
       .from("whatsapp_messages")
       .update({
-        error_message: `Áudio recebido, mas o arquivo não pôde ser carregado: ${reason}`.slice(0, 500),
+        error_message: `${label} recebida, mas o arquivo não pôde ser carregado: ${reason}`.slice(0, 500),
       })
       .eq("company_id", connection.company_id)
       .eq("id", messageId);
@@ -209,8 +215,8 @@ async function ingestMessage(
     .eq("external_message_id", externalId)
     .maybeSingle();
   if (existingMessage) {
-    if (content.type === "audio" && !existingMessage.media_path) {
-      await attachAudio(
+    if (["audio", "image"].includes(content.type) && !existingMessage.media_path) {
+      await attachMedia(
         client,
         connection,
         existingMessage.id,
@@ -224,7 +230,7 @@ async function ingestMessage(
 
   const { data: existingConversation, error: conversationReadError } = await client
     .from("whatsapp_conversations")
-    .select("id, unread_count, supplier_id, supplier_contact_id")
+    .select("id, unread_count, supplier_id, supplier_contact_id, inbox_category")
     .eq("connection_id", connection.id)
     .eq("remote_jid", remoteJid)
     .maybeSingle();
@@ -240,7 +246,10 @@ async function ingestMessage(
     last_message_preview: preview(content.type, content.body),
     last_direction: direction,
     awaiting_side: fromMe ? "supplier" : "buyer",
-    unread_count: fromMe ? (existingConversation?.unread_count ?? 0) : (existingConversation?.unread_count ?? 0) + 1,
+    unread_count:
+      fromMe || existingConversation?.inbox_category === "promotion"
+        ? (existingConversation?.unread_count ?? 0)
+        : (existingConversation?.unread_count ?? 0) + 1,
   };
 
   let conversationId = existingConversation?.id;
@@ -284,8 +293,8 @@ async function ingestMessage(
   }).select("id").single();
   if (messageError && messageError.code !== "23505") throw messageError;
 
-  if (createdMessage && content.type === "audio") {
-    await attachAudio(
+  if (createdMessage && ["audio", "image"].includes(content.type)) {
+    await attachMedia(
       client,
       connection,
       createdMessage.id,
