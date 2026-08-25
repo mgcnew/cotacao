@@ -88,18 +88,20 @@ function readItemRows(formData: FormData): ItemRow[] {
   const prices = formData.getAll("price").map(String);
   const notes = formData.getAll("itemNotes").map(String);
 
-  return productIds
-    .map((productId, index) => ({
-      itemId: (itemIds[index] ?? "").trim(),
-      productId: productId.trim(),
-      allocationId: (allocationIds[index] ?? "").trim(),
-      shoppingItemId: (shoppingItemIds[index] ?? "").trim(),
-      quantity: toDecimal(quantities[index]),
-      price: toDecimal(prices[index]),
-      notes: (notes[index] ?? "").trim(),
-    }))
-    // Linha em branco é linha que a pessoa abriu e não usou.
-    .filter((row) => row.productId || row.quantity || row.price);
+  return (
+    productIds
+      .map((productId, index) => ({
+        itemId: (itemIds[index] ?? "").trim(),
+        productId: productId.trim(),
+        allocationId: (allocationIds[index] ?? "").trim(),
+        shoppingItemId: (shoppingItemIds[index] ?? "").trim(),
+        quantity: toDecimal(quantities[index]),
+        price: toDecimal(prices[index]),
+        notes: (notes[index] ?? "").trim(),
+      }))
+      // Linha em branco é linha que a pessoa abriu e não usou.
+      .filter((row) => row.productId || row.quantity || row.price)
+  );
 }
 
 /**
@@ -137,7 +139,10 @@ async function buildOrderItems(
     .in("id", rows.map((row) => row.productId).filter(Boolean));
 
   if (error) {
-    return { ok: false, error: `Falha ao carregar os produtos: ${error.message}` };
+    return {
+      ok: false,
+      error: `Falha ao carregar os produtos: ${error.message}`,
+    };
   }
 
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
@@ -220,9 +225,7 @@ export async function createDirectOrder(
   if (!built.ok) return { error: built.error };
 
   const supabase = await createServerSupabaseClient();
-  const shoppingItemIds = rows
-    .map((row) => row.shoppingItemId)
-    .filter(Boolean);
+  const shoppingItemIds = rows.map((row) => row.shoppingItemId).filter(Boolean);
   const rpc = shoppingItemIds.length
     ? "rpc_create_direct_order_from_shopping_list"
     : "rpc_create_direct_order";
@@ -461,7 +464,10 @@ async function issueOrderLink(
     .maybeSingle();
 
   if (readError) {
-    return { ok: false, error: `Falha ao carregar a revisão: ${readError.message}` };
+    return {
+      ok: false,
+      error: `Falha ao carregar a revisão: ${readError.message}`,
+    };
   }
   if (!revision) {
     return { ok: false, error: "Revisão não encontrada neste pedido." };
@@ -499,7 +505,10 @@ async function issueOrderLink(
   });
 
   if (error) {
-    return { ok: false, error: `Não foi possível gerar o link: ${error.message}` };
+    return {
+      ok: false,
+      error: `Não foi possível gerar o link: ${error.message}`,
+    };
   }
 
   const url = `${publicEnv.NEXT_PUBLIC_APP_URL}/o/${rawToken}`;
@@ -510,7 +519,9 @@ async function issueOrderLink(
     supplierId: revision.orders.supplier_id,
     // A mensagem é montada aqui, e não no cliente, porque só o servidor conhece
     // o link recém-criado.
-    message: context ? buildOrderMessage(context, url, templates.order_confirmation) : null,
+    message: context
+      ? buildOrderMessage(context, url, templates.order_confirmation)
+      : null,
   };
 }
 
@@ -591,8 +602,11 @@ export async function loadOrderSendPanel(
       supplierName: order.suppliers.name,
       revisionId: draft.id,
       contacts,
-      previewMessage: context ? buildOrderMessage(context, null, templates.order_confirmation) : "",
-      evolutionReady: isEvolutionConfigured() && whatsapp?.status === "connected",
+      previewMessage: context
+        ? buildOrderMessage(context, null, templates.order_confirmation)
+        : "",
+      evolutionReady:
+        isEvolutionConfigured() && whatsapp?.status === "connected",
     };
   } catch (cause) {
     return {
@@ -675,7 +689,10 @@ async function logCommunication(params: {
         .eq("company_id", params.companyId)
         .eq("id", data);
       if (classifyError) {
-        console.error("[logCommunication] não foi possível classificar o registro:", classifyError);
+        console.error(
+          "[logCommunication] não foi possível classificar o registro:",
+          classifyError,
+        );
       }
     }
     return data;
@@ -697,16 +714,22 @@ async function updateCommunicationLog(
 ): Promise<void> {
   try {
     const service = createServiceRoleClient();
-    const { error } = await service.rpc("rpc_service_update_communication_log", {
-      p_company_id: companyId,
-      p_communication_log_id: logId,
-      p_status: patch.status,
-      p_external_message_id: patch.externalMessageId ?? undefined,
-      p_error_message: patch.errorMessage ?? undefined,
-    });
+    const { error } = await service.rpc(
+      "rpc_service_update_communication_log",
+      {
+        p_company_id: companyId,
+        p_communication_log_id: logId,
+        p_status: patch.status,
+        p_external_message_id: patch.externalMessageId ?? undefined,
+        p_error_message: patch.errorMessage ?? undefined,
+      },
+    );
     if (error) throw new Error(error.message);
   } catch (cause) {
-    console.error("[updateCommunicationLog] não foi possível atualizar:", cause);
+    console.error(
+      "[updateCommunicationLog] não foi possível atualizar:",
+      cause,
+    );
   }
 }
 
@@ -731,7 +754,8 @@ export async function markOrderSent(
   const revisionId = String(formData.get("revisionId") ?? "");
   const contactId = String(formData.get("contactId") ?? "").trim() || null;
   const channel = String(formData.get("channel") ?? "whatsapp");
-  const messageBody = String(formData.get("messageBody") ?? "").slice(0, 10000) || undefined;
+  const messageBody =
+    String(formData.get("messageBody") ?? "").slice(0, 10000) || undefined;
 
   const supabase = await createServerSupabaseClient();
   const { data: revision, error: readError } = await supabase
@@ -756,7 +780,10 @@ export async function markOrderSent(
       .eq("supplier_id", revision.orders.supplier_id)
       .eq("is_active", true)
       .maybeSingle();
-    if (!contact) return { error: "O contato escolhido não pertence ao fornecedor deste pedido." };
+    if (!contact)
+      return {
+        error: "O contato escolhido não pertence ao fornecedor deste pedido.",
+      };
   }
 
   const { error } = await supabase.rpc("rpc_mark_order_revision_sent", {
@@ -789,6 +816,68 @@ export async function markOrderSent(
 
   revalidatePath(`/pedidos/${orderId}`);
   revalidatePath("/pedidos");
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Registra o aceite recebido diretamente pelo comprador.
+ *
+ * Não reutiliza o token público: isso faria o histórico afirmar que o
+ * fornecedor abriu o link. A RPC guarda origem, canal, usuário e horário e
+ * libera o mesmo fluxo de recebimento da confirmação pública.
+ */
+export async function confirmOrderManually(
+  _prev: OrderActionState,
+  formData: FormData,
+): Promise<OrderActionState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("order.send")) {
+    return {
+      error: "Seu papel não permite registrar a confirmação do pedido.",
+    };
+  }
+
+  const orderId = String(formData.get("orderId") ?? "");
+  const revisionId = String(formData.get("revisionId") ?? "");
+  const channel = String(formData.get("channel") ?? "");
+  const notes = String(formData.get("notes") ?? "").trim();
+  const allowedChannels = new Set([
+    "phone",
+    "whatsapp",
+    "email",
+    "in_person",
+    "other",
+  ]);
+
+  if (!orderId || !revisionId) return { error: "Pedido ou revisão inválida." };
+  if (!allowedChannels.has(channel)) {
+    return { error: "Escolha como a confirmação foi recebida." };
+  }
+  if (notes.length > 500) {
+    return { error: "A observação deve ter no máximo 500 caracteres." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_confirm_order_manually", {
+    p_company_id: company.companyId,
+    p_order_id: orderId,
+    p_order_revision_id: revisionId,
+    p_channel: channel,
+    p_notes: notes || undefined,
+  });
+
+  if (error) {
+    if (error.code === "42501" || error.message.includes("Permissão")) {
+      return { error: "Seu papel não permite registrar esta confirmação." };
+    }
+    return { error: `Não foi possível confirmar: ${error.message}` };
+  }
+
+  revalidatePath(`/pedidos/${orderId}`);
+  revalidatePath("/pedidos");
+  revalidatePath("/recebimentos");
+  revalidatePath("/dashboard");
   return { error: null, savedAt: Date.now() };
 }
 
@@ -862,7 +951,8 @@ export async function sendOrderWhatsApp(
     .maybeSingle();
   if (!whatsapp || whatsapp.status !== "connected") {
     return {
-      error: "O WhatsApp da empresa não está conectado. Reconecte em Configurações antes de enviar.",
+      error:
+        "O WhatsApp da empresa não está conectado. Reconecte em Configurações antes de enviar.",
     };
   }
 
@@ -872,7 +962,9 @@ export async function sendOrderWhatsApp(
     return { error: "Não foi possível montar a mensagem deste pedido." };
   }
   if (contact.supplier_id !== link.supplierId) {
-    return { error: "O contato escolhido não pertence ao fornecedor deste pedido." };
+    return {
+      error: "O contato escolhido não pertence ao fornecedor deste pedido.",
+    };
   }
 
   const remoteJid = `${phone}@s.whatsapp.net`;
@@ -883,12 +975,15 @@ export async function sendOrderWhatsApp(
     .eq("remote_jid", remoteJid)
     .maybeSingle();
   if (conversation) {
-    await supabase.from("whatsapp_conversations").update({
-      supplier_id: contact.supplier_id,
-      supplier_contact_id: contact.id,
-      order_id: orderId,
-      display_name: contact.name,
-    }).eq("id", conversation.id);
+    await supabase
+      .from("whatsapp_conversations")
+      .update({
+        supplier_id: contact.supplier_id,
+        supplier_contact_id: contact.id,
+        order_id: orderId,
+        display_name: contact.name,
+      })
+      .eq("id", conversation.id);
   } else {
     await supabase.from("whatsapp_conversations").insert({
       company_id: company.companyId,
@@ -913,7 +1008,11 @@ export async function sendOrderWhatsApp(
     messageBody: link.message,
   });
 
-  const envio = await sendWhatsAppText(phone, link.message, whatsapp.instance_name);
+  const envio = await sendWhatsAppText(
+    phone,
+    link.message,
+    whatsapp.instance_name,
+  );
 
   if (logId) {
     await updateCommunicationLog(company.companyId, logId, {
@@ -1021,7 +1120,9 @@ export async function postReceipt(
   const { error } = await supabase.rpc("rpc_post_receipt", {
     p_company_id: company.companyId,
     p_order_id: orderId,
-    p_received_at: receivedAt ? new Date(receivedAt).toISOString() : new Date().toISOString(),
+    p_received_at: receivedAt
+      ? new Date(receivedAt).toISOString()
+      : new Date().toISOString(),
     p_items: items,
     p_notes: notes || undefined,
   });

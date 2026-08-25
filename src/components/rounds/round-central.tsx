@@ -157,6 +157,7 @@ export function CorpoDaRodada({ dados }: { dados: DadosDaRodada }) {
       ) : (
         <Acompanhamento
           roundId={id}
+          roundStatus={dados.round.status}
           companyName={dados.companyName}
           roundTitle={dados.round.title}
           items={dados.items}
@@ -181,7 +182,10 @@ export function CorpoDaRodada({ dados }: { dados: DadosDaRodada }) {
           tela, tomada depois de olhar o que está nela. No cabeçalho, o painel
           de confirmação — que é largo — espremia o título em três linhas. */}
       {!dados.encerrada && (dados.podeFechar || dados.podeCancelar) ? (
-        <section className="border-border mt-6 border-t pt-4">
+        <section
+          id="encerrar-rodada"
+          className="border-border mt-6 scroll-mt-6 border-t pt-4"
+        >
           <h2 className="text-fg mb-1 text-sm font-semibold">
             Encerrar a rodada
           </h2>
@@ -516,6 +520,7 @@ function Montagem({
 /** A rodada já iniciada: quem recebeu, quem abriu, quem respondeu. */
 function Acompanhamento({
   roundId,
+  roundStatus,
   companyName,
   roundTitle,
   items,
@@ -535,6 +540,7 @@ function Acompanhamento({
   encerrada,
 }: {
   roundId: string;
+  roundStatus: string;
   companyName: string;
   roundTitle: string;
   items: Item[];
@@ -561,6 +567,7 @@ function Acompanhamento({
       <Suspense fallback={<MetricsSkeleton />}>
         <IndicadoresDaRodada
           roundId={roundId}
+          status={roundStatus}
           fornecedores={roundSuppliers.map((rs) => ({
             supplierId: rs.supplier_id,
             nome: rs.suppliers?.name ?? "Fornecedor",

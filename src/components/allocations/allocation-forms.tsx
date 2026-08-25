@@ -222,8 +222,9 @@ export function ConfirmOrdersForm({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-fg-subtle text-xs">
           Gerar não envia. Os pedidos nascem em rascunho — o envio ao fornecedor
-          é um passo separado, em cada pedido. As decisões, essas sim, não podem
-          mais ser alteradas.
+          é um passo separado, em cada pedido. Se esta for a última decisão, a
+          rodada será concluída automaticamente; se houver algo em aberto, a
+          tela mostrará exatamente o que falta.
         </p>
         <Submit label="Confirmar e gerar" busy="Gerando…" />
       </div>

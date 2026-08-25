@@ -99,35 +99,36 @@ export function orderNextStep(status: string): OrderNextStep {
 export async function listDirectOrderOptions(companyId: string) {
   const supabase = await createServerSupabaseClient();
 
-  const [suppliers, products, shoppingItems, supplierNotices] = await Promise.all([
-    supabase
-      .from("suppliers")
-      .select("id, name")
-      .eq("company_id", companyId)
-      .eq("status", "active")
-      .order("name"),
-    supabase
-      .from("products")
-      .select(
-        `
+  const [suppliers, products, shoppingItems, supplierNotices] =
+    await Promise.all([
+      supabase
+        .from("suppliers")
+        .select("id, name")
+        .eq("company_id", companyId)
+        .eq("status", "active")
+        .order("name"),
+      supabase
+        .from("products")
+        .select(
+          `
         id,
         name,
         purchase_unit:units!products_company_id_purchase_unit_id_fkey ( symbol ),
         pricing_unit:units!products_company_id_pricing_unit_id_fkey ( symbol )
       `,
-      )
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .order("name"),
-    listPendingShoppingItems(companyId),
-    supabase
-      .from("supplier_notices")
-      .select("id, supplier_id, kind, title, amount, due_date, priority")
-      .eq("company_id", companyId)
-      .eq("status", "open")
-      .order("priority")
-      .order("created_at", { ascending: false }),
-  ]);
+        )
+        .eq("company_id", companyId)
+        .eq("is_active", true)
+        .order("name"),
+      listPendingShoppingItems(companyId),
+      supabase
+        .from("supplier_notices")
+        .select("id, supplier_id, kind, title, amount, due_date, priority")
+        .eq("company_id", companyId)
+        .eq("status", "open")
+        .order("priority")
+        .order("created_at", { ascending: false }),
+    ]);
 
   if (suppliers.error) {
     throw new Error(`Falha ao listar fornecedores: ${suppliers.error.message}`);
@@ -389,6 +390,9 @@ const REVISION_SELECT = `
   delivery_due_date,
   sent_at,
   confirmed_at,
+  confirmation_source,
+  confirmation_channel,
+  confirmation_notes,
   order_revision_items (
     id, product_id, purchase_allocation_id, product_name_snapshot,
     requested_quantity, agreed_price, notes,
@@ -405,6 +409,9 @@ type RevisionRow = {
   delivery_due_date: string | null;
   sent_at: string | null;
   confirmed_at: string | null;
+  confirmation_source: string | null;
+  confirmation_channel: string | null;
+  confirmation_notes: string | null;
   order_revision_items: {
     id: string;
     product_id: string;
@@ -427,6 +434,9 @@ function mapRevision(data: RevisionRow) {
     deliveryDueDate: data.delivery_due_date,
     sentAt: data.sent_at,
     confirmedAt: data.confirmed_at,
+    confirmationSource: data.confirmation_source,
+    confirmationChannel: data.confirmation_channel,
+    confirmationNotes: data.confirmation_notes,
     items: (data.order_revision_items ?? []).map((item) => {
       // Um item pode ser recebido em várias remessas; o saldo é o que sobra.
       const recebido = (item.receipt_items ?? []).reduce(
@@ -509,6 +519,7 @@ export async function listOrderRevisions(companyId: string, orderId: string) {
     .select(
       `
       id, revision_number, status, delivery_due_date, sent_at, confirmed_at,
+      confirmation_source, confirmation_channel, confirmation_notes,
       order_revision_items ( requested_quantity, agreed_price )
     `,
     )
@@ -525,6 +536,9 @@ export async function listOrderRevisions(companyId: string, orderId: string) {
     deliveryDueDate: r.delivery_due_date,
     sentAt: r.sent_at,
     confirmedAt: r.confirmed_at,
+    confirmationSource: r.confirmation_source,
+    confirmationChannel: r.confirmation_channel,
+    confirmationNotes: r.confirmation_notes,
     itemCount: r.order_revision_items?.length ?? 0,
     total: (r.order_revision_items ?? []).reduce(
       (sum, i) => sum + Number(i.requested_quantity) * Number(i.agreed_price),

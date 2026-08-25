@@ -319,8 +319,32 @@ export async function confirmAllocations(
     return { error: `Não foi possível gerar os pedidos: ${error.message}` };
   }
 
+  // Gerar o último pedido encerra a rodada automaticamente. Se ainda houver
+  // quantidade sem decisão, a RPC mantém a rodada ativa e a tela mostra o que
+  // falta. A regra fica no banco para que duas abas não decidam estados
+  // diferentes ao mesmo tempo.
+  const { error: finalizeError } = await supabase.rpc(
+    "rpc_finalize_round_if_resolved",
+    {
+      p_company_id: company.companyId,
+      p_purchase_round_id: roundId,
+    },
+  );
+
+  if (finalizeError) {
+    // Os pedidos já foram criados na transação anterior. Não devolvemos um
+    // erro que incentive a pessoa a tentar gerar tudo outra vez; a rodada
+    // permanece visível e pode ser concluída pela Central.
+    console.error(
+      "[confirmAllocations] pedidos gerados, mas a rodada não foi finalizada:",
+      finalizeError,
+    );
+  }
+
   revalidatePath(`/compras/${roundId}/alocacao`);
   revalidatePath(`/compras/${roundId}`);
   revalidatePath("/compras");
+  revalidatePath("/pedidos");
+  revalidatePath("/dashboard");
   return { error: null, savedAt: Date.now() };
 }

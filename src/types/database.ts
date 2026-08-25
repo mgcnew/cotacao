@@ -1104,7 +1104,11 @@ export type Database = {
       order_revisions: {
         Row: {
           company_id: string
+          confirmation_channel: string | null
+          confirmation_notes: string | null
+          confirmation_source: string | null
           confirmed_at: string | null
+          confirmed_by: string | null
           created_at: string
           created_by: string | null
           delivery_due_date: string | null
@@ -1116,7 +1120,11 @@ export type Database = {
         }
         Insert: {
           company_id: string
+          confirmation_channel?: string | null
+          confirmation_notes?: string | null
+          confirmation_source?: string | null
           confirmed_at?: string | null
+          confirmed_by?: string | null
           created_at?: string
           created_by?: string | null
           delivery_due_date?: string | null
@@ -1128,7 +1136,11 @@ export type Database = {
         }
         Update: {
           company_id?: string
+          confirmation_channel?: string | null
+          confirmation_notes?: string | null
+          confirmation_source?: string | null
           confirmed_at?: string | null
+          confirmed_by?: string | null
           created_at?: string
           created_by?: string | null
           delivery_due_date?: string | null
@@ -3558,6 +3570,20 @@ export type Database = {
       }
       rpc_mark_order_revision_sent: {
         Args: { p_company_id: string; p_order_revision_id: string }
+        Returns: Json
+      }
+      rpc_confirm_order_manually: {
+        Args: {
+          p_channel: string
+          p_company_id: string
+          p_notes?: string
+          p_order_id: string
+          p_order_revision_id: string
+        }
+        Returns: Json
+      }
+      rpc_finalize_round_if_resolved: {
+        Args: { p_company_id: string; p_purchase_round_id: string }
         Returns: Json
       }
       rpc_whatsapp_metrics: {

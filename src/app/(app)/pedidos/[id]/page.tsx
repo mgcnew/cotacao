@@ -12,6 +12,7 @@ import {
   NewRevisionForm,
   type EditableItem,
 } from "@/components/orders/order-crud-forms";
+import { ManualOrderConfirmationDialog } from "@/components/orders/manual-order-confirmation-dialog";
 import { SendOrderControls } from "@/components/orders/send-order-controls";
 import { ArrivalDialog } from "@/components/receipts/arrival-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,27 @@ const DATA_HORA = new Intl.DateTimeFormat("pt-BR", {
   minute: "2-digit",
 });
 const DATA = new Intl.DateTimeFormat("pt-BR");
+const CONFIRMATION_CHANNEL_LABEL: Record<string, string> = {
+  phone: "por telefone",
+  whatsapp: "pelo WhatsApp",
+  email: "por e-mail",
+  in_person: "pessoalmente",
+  other: "por outro canal",
+};
+
+function confirmationDescription(revision: {
+  confirmedAt: string | null;
+  confirmationSource: string | null;
+  confirmationChannel: string | null;
+}) {
+  if (!revision.confirmedAt) return "";
+  const date = DATA_HORA.format(new Date(revision.confirmedAt));
+  if (revision.confirmationSource !== "manual") return ` · confirmada ${date}`;
+  const channel = revision.confirmationChannel
+    ? ` ${CONFIRMATION_CHANNEL_LABEL[revision.confirmationChannel] ?? "manualmente"}`
+    : " manualmente";
+  return ` · confirmada${channel} ${date}`;
+}
 
 /** Data ISO do banco vira dd/mm/aaaa sem passar por fuso — é dia, não instante. */
 function formatarDia(iso: string): string {
@@ -147,8 +169,11 @@ export default async function PedidoPage({
           ]);
           return {
             contacts,
-            previewMessage: context ? buildOrderMessage(context, null, templates.order_confirmation) : "",
-            evolutionReady: isEvolutionConfigured() && whatsapp?.status === "connected",
+            previewMessage: context
+              ? buildOrderMessage(context, null, templates.order_confirmation)
+              : "",
+            evolutionReady:
+              isEvolutionConfigured() && whatsapp?.status === "connected",
           };
         })()
       : null;
@@ -197,13 +222,17 @@ export default async function PedidoPage({
                 {revision.sentAt
                   ? `enviada ${DATA_HORA.format(new Date(revision.sentAt))}`
                   : "ainda não enviada"}
-                {revision.confirmedAt
-                  ? ` · confirmada ${DATA_HORA.format(new Date(revision.confirmedAt))}`
-                  : ""}
+                {confirmationDescription(revision)}
                 {revision.deliveryDueDate
                   ? ` · entrega ${formatarDia(revision.deliveryDueDate)}`
                   : ""}
               </p>
+              {revision.confirmationSource === "manual" &&
+              revision.confirmationNotes ? (
+                <p className="text-fg-muted mt-1 max-w-2xl text-xs">
+                  Registro da confirmação: {revision.confirmationNotes}
+                </p>
+              ) : null}
             </div>
             <span className="text-fg font-medium tabular-nums">
               {MONEY.format(total)}
@@ -321,10 +350,25 @@ export default async function PedidoPage({
       ) : null}
 
       {order.status === "awaiting_confirmation" ? (
-        <p className="border-border bg-surface-sunken text-fg-muted mb-6 rounded-xl border px-4 py-3 text-sm">
-          Aguardando o fornecedor confirmar pelo link. O recebimento libera
-          depois disso.
-        </p>
+        <div className="border-border bg-surface-sunken mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
+          <div>
+            <p className="text-fg text-sm font-medium">
+              Aguardando confirmação
+            </p>
+            <p className="text-fg-muted text-sm">
+              O fornecedor pode confirmar pelo link ou você pode registrar um
+              aceite recebido diretamente.
+            </p>
+          </div>
+          {podeEnviar && revision ? (
+            <ManualOrderConfirmationDialog
+              orderId={id}
+              revisionId={revision.id}
+              orderNumber={order.order_number}
+              supplierName={order.suppliers.name}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {podeCriarRevisao && revision ? (
@@ -529,9 +573,7 @@ export default async function PedidoPage({
                     {r.sentAt
                       ? `enviada ${DATA_HORA.format(new Date(r.sentAt))}`
                       : "nunca enviada"}
-                    {r.confirmedAt
-                      ? ` · confirmada ${DATA_HORA.format(new Date(r.confirmedAt))}`
-                      : ""}
+                    {confirmationDescription(r)}
                     {r.deliveryDueDate
                       ? ` · entrega ${formatarDia(r.deliveryDueDate)}`
                       : ""}

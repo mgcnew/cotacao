@@ -155,6 +155,8 @@ export function pendenciasDaRodada(
       texto: "Tudo decidido e os pedidos saíram",
       detalhe:
         "Concluir tira a rodada do dia a dia e encerra os links dos fornecedores.",
+      href: `/compras/${roundId}#encerrar-rodada`,
+      acao: "Concluir agora",
       travando: false,
     });
   }

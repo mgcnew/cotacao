@@ -89,10 +89,45 @@ export function AlocacaoConteudo({ dados }: { dados: DadosDaAlocacao }) {
     return sum + (highest - item.winner.price) * item.row.requestedQuantity;
   }, 0);
   const attentionCount = partial.length + withoutPrice.length;
+  const remainingCount = attentionCount + recommendations.length;
 
   return (
     <>
-      {round.status !== "active" ? <p className="border-border bg-surface-sunken text-fg-muted mb-5 rounded-xl border px-4 py-3 text-sm">Esta rodada está em <strong>{round.status}</strong>. Pedidos só podem ser gerados com a rodada em andamento.</p> : null}
+      {round.status === "draft" || round.status === "cancelled" ? <p className="border-border bg-surface-sunken text-fg-muted mb-5 rounded-xl border px-4 py-3 text-sm">Esta rodada está <strong>{round.status === "draft" ? "em preparação" : "cancelada"}</strong>. Pedidos só podem ser gerados com a rodada em andamento.</p> : null}
+
+      {orders.length > 0 && round.status === "completed" ? (
+        <div className="border-success/30 bg-success-soft text-success mb-5 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <div>
+            <p className="font-semibold">Pedidos gerados e rodada concluída</p>
+            <p className="mt-0.5">
+              Nenhum produto ficou pendente. Agora falta apenas enviar e acompanhar
+              os pedidos listados abaixo.
+            </p>
+          </div>
+        </div>
+      ) : orders.length > 0 && round.status === "active" ? (
+        <div className="border-warning/30 bg-warning/5 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm">
+          <span className="flex min-w-0 items-start gap-3">
+            <AlertTriangle className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>
+              <strong className="text-fg block">Os pedidos saíram, mas a rodada continua aberta</strong>
+              <span className="text-fg-muted block">
+                {rascunhos.length > 0
+                  ? `${rascunhos.length} ${rascunhos.length === 1 ? "decisão ainda está" : "decisões ainda estão"} em rascunho.`
+                  : remainingCount > 0
+                    ? `${remainingCount} ${remainingCount === 1 ? "produto ainda precisa" : "produtos ainda precisam"} de decisão ou encerramento sem compra.`
+                    : "Não há decisão pendente. Conclua a rodada para tirá-la do trabalho em aberto."}
+              </span>
+            </span>
+          </span>
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/compras/${round.id}#encerrar-rodada`}>
+              Ver o que falta
+            </Link>
+          </Button>
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <EmptyState icon={PackageCheck} title="Nada para decidir" description="A decisão de compra aparece quando a rodada tem itens e respostas de fornecedores." />

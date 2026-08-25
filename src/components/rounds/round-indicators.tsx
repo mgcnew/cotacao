@@ -31,10 +31,12 @@ const MONEY = new Intl.NumberFormat("pt-BR", {
 export async function IndicadoresDaRodada({
   roundId,
   fornecedores,
+  status,
 }: {
   roundId: string;
   /** Nome por id — a tabela de fornecedores já os tem em mãos. */
   fornecedores: { supplierId: string; nome: string }[];
+  status: string;
 }) {
   const [i, resumo] = await Promise.all([
     carregarIndicadoresDaRodada(roundId),
@@ -96,7 +98,20 @@ export async function IndicadoresDaRodada({
           Na ordem do fluxo: a primeira linha é a próxima coisa a fazer.
         </p>
 
-        {pendencias.length === 0 ? (
+        {status === "completed" ? (
+          <p className="border-success/30 bg-success-soft text-success flex items-start gap-2 rounded-xl border px-4 py-3 text-sm">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>
+              <strong className="block">Rodada concluída</strong>
+              Os pedidos gerados seguem normalmente em Pedidos; não ficou nada
+              pendente nesta cotação.
+            </span>
+          </p>
+        ) : status === "cancelled" ? (
+          <p className="border-border bg-surface-sunken text-fg-muted rounded-xl border px-4 py-3 text-sm">
+            Esta rodada foi cancelada e não possui próximos passos.
+          </p>
+        ) : pendencias.length === 0 ? (
           <p className="border-border text-fg-muted flex items-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm">
             <CheckCircle2 className="text-success size-4 shrink-0" aria-hidden />
             Nada pendente nesta rodada.
