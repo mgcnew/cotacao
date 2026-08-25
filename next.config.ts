@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
+    serverActions: {
+      bodySizeLimit: "5mb",
+    },
     /**
      * O App Router deixou de reutilizar segmentos dinâmicos por padrão no
      * Next 15. Como todas as telas autenticadas são dinâmicas, voltar para uma

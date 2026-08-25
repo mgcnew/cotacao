@@ -23,7 +23,10 @@ import { setProductActive } from "@/features/products/actions";
 import { getCatalogCounts, listProducts } from "@/features/products/queries";
 import { PRODUCT_PURPOSE_LABEL } from "@/features/products/purposes";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
-import { normalizeListSearch, parseListPagination } from "@/lib/list-pagination";
+import {
+  normalizeListSearch,
+  parseListPagination,
+} from "@/lib/list-pagination";
 
 const selectClass =
   "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
@@ -93,9 +96,7 @@ function ProductFilterFields({
   );
 }
 
-export default function ProdutosPage({
-  searchParams,
-}: PageProps<"/produtos">) {
+export default function ProdutosPage({ searchParams }: PageProps<"/produtos">) {
   return (
     <div className="w-full">
       <PageHeader
@@ -120,9 +121,14 @@ async function NovoProdutoAction() {
   const permissions = await getPermissions(company.companyId);
 
   return permissions.has("product.create") ? (
-    <Button asChild size="sm">
-      <Link href="/produtos/novo">Novo produto</Link>
-    </Button>
+    <>
+      <Button asChild size="sm" variant="outline">
+        <Link href="/produtos/importacoes">Importar planilha</Link>
+      </Button>
+      <Button asChild size="sm">
+        <Link href="/produtos/novo">Novo produto</Link>
+      </Button>
+    </>
   ) : null;
 }
 
@@ -240,84 +246,94 @@ async function ProdutosContent({
                 visiveis.length === pagination.pageSize ? "h-full" : undefined
               }
             >
-          <TableHeader>
-            <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
-              {/* Sete colunas não cabem num celular: a tabela rolaria de lado
+              <TableHeader>
+                <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
+                  {/* Sete colunas não cabem num celular: a tabela rolaria de lado
                   e levaria o botão de ação para fora da tela. O que some da
                   linha reaparece embaixo do nome do produto. */}
-              <TableHead>Produto</TableHead>
-              <TableHead className="hidden md:table-cell">Categoria</TableHead>
-              <TableHead className="hidden lg:table-cell">Finalidade</TableHead>
-              <TableHead className="hidden sm:table-cell">Compra</TableHead>
-              <TableHead className="hidden lg:table-cell">
-                Precificação
-              </TableHead>
-              <TableHead className="hidden lg:table-cell">Comparação</TableHead>
-              <TableHead>Situação</TableHead>
-              {podeEditar ? <TableHead className="w-0" /> : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visiveis.map((product) => (
-              <TableRow key={product.id}>
-                <TableCell className="font-medium">
-                  <Link
-                    href={`/produtos/${product.id}`}
-                    className="hover:text-primary hover:underline"
-                  >
-                    {product.name}
-                  </Link>
-                  <span className="text-fg-muted block max-w-40 text-xs font-normal whitespace-normal md:hidden">
-                    {product.categories?.name} ·{" "}
-                    <span className="font-mono">
-                      {product.purchase_unit?.code}
-                    </span>
-                  </span>
-                </TableCell>
-                <TableCell className="text-fg-muted hidden md:table-cell">
-                  {product.categories?.name}
-                </TableCell>
-                <TableCell className="text-fg-muted hidden lg:table-cell">
-                  {PRODUCT_PURPOSE_LABEL[product.purpose] ?? product.purpose}
-                </TableCell>
-                <TableCell className="text-fg-muted hidden font-mono text-xs sm:table-cell">
-                  {product.purchase_unit?.code}
-                </TableCell>
-                <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
-                  {product.pricing_unit?.code}
-                </TableCell>
-                <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
-                  {/* Sem unidade própria, quem compara é a de precificação. */}
-                  {product.comparison_unit?.code ?? product.pricing_unit?.code}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={product.is_active ? "default" : "secondary"}>
-                    {product.is_active ? "Ativo" : "Inativo"}
-                  </Badge>
-                </TableCell>
-                {podeEditar ? (
-                  <TableCell>
-                    <form
-                      action={setProductActive.bind(
-                        null,
-                        product.id,
-                        !product.is_active,
-                      )}
-                    >
-                      <Button
-                        type="submit"
-                        size="sm"
-                        variant="ghost"
-                        className="text-fg-muted whitespace-nowrap"
+                  <TableHead>Produto</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Categoria
+                  </TableHead>
+                  <TableHead className="hidden lg:table-cell">
+                    Finalidade
+                  </TableHead>
+                  <TableHead className="hidden sm:table-cell">Compra</TableHead>
+                  <TableHead className="hidden lg:table-cell">
+                    Precificação
+                  </TableHead>
+                  <TableHead className="hidden lg:table-cell">
+                    Comparação
+                  </TableHead>
+                  <TableHead>Situação</TableHead>
+                  {podeEditar ? <TableHead className="w-0" /> : null}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visiveis.map((product) => (
+                  <TableRow key={product.id}>
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/produtos/${product.id}`}
+                        className="hover:text-primary hover:underline"
                       >
-                        {product.is_active ? "Desativar" : "Reativar"}
-                      </Button>
-                    </form>
-                  </TableCell>
-                ) : null}
-              </TableRow>
-            ))}
-          </TableBody>
+                        {product.name}
+                      </Link>
+                      <span className="text-fg-muted block max-w-40 text-xs font-normal whitespace-normal md:hidden">
+                        {product.categories?.name} ·{" "}
+                        <span className="font-mono">
+                          {product.purchase_unit?.code}
+                        </span>
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-fg-muted hidden md:table-cell">
+                      {product.categories?.name}
+                    </TableCell>
+                    <TableCell className="text-fg-muted hidden lg:table-cell">
+                      {PRODUCT_PURPOSE_LABEL[product.purpose] ??
+                        product.purpose}
+                    </TableCell>
+                    <TableCell className="text-fg-muted hidden font-mono text-xs sm:table-cell">
+                      {product.purchase_unit?.code}
+                    </TableCell>
+                    <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
+                      {product.pricing_unit?.code}
+                    </TableCell>
+                    <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
+                      {/* Sem unidade própria, quem compara é a de precificação. */}
+                      {product.comparison_unit?.code ??
+                        product.pricing_unit?.code}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={product.is_active ? "default" : "secondary"}
+                      >
+                        {product.is_active ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </TableCell>
+                    {podeEditar ? (
+                      <TableCell>
+                        <form
+                          action={setProductActive.bind(
+                            null,
+                            product.id,
+                            !product.is_active,
+                          )}
+                        >
+                          <Button
+                            type="submit"
+                            size="sm"
+                            variant="ghost"
+                            className="text-fg-muted whitespace-nowrap"
+                          >
+                            {product.is_active ? "Desativar" : "Reativar"}
+                          </Button>
+                        </form>
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                ))}
+              </TableBody>
             </Table>
             <DataTablePagination
               page={pagination.page}
@@ -375,9 +391,6 @@ async function CatalogMaintenanceWithCounts({
 }) {
   const counts = await getCatalogCounts(companyId);
   return (
-    <CatalogMaintenance
-      categories={counts.categories}
-      units={counts.units}
-    />
+    <CatalogMaintenance categories={counts.categories} units={counts.units} />
   );
 }

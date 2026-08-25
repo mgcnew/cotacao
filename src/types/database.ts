@@ -1448,6 +1448,207 @@ export type Database = {
           },
         ]
       }
+      product_import_batches: {
+        Row: {
+          company_id: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          file_name: string
+          id: string
+          sheet_name: string | null
+          status: string
+          total_rows: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_name: string
+          id?: string
+          sheet_name?: string | null
+          status?: string
+          total_rows?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_name?: string
+          id?: string
+          sheet_name?: string | null
+          status?: string
+          total_rows?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_import_batches_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_import_items: {
+        Row: {
+          barcode: string | null
+          batch_id: string
+          category_id: string | null
+          company_id: string
+          comparison_unit_id: string | null
+          created_at: string
+          duplicate_product_id: string | null
+          error_message: string | null
+          id: string
+          imported_product_id: string | null
+          issues: string[]
+          normalized_name: string
+          pricing_unit_id: string | null
+          proposed_name: string
+          purchase_unit_id: string | null
+          purpose: string
+          raw_barcode: string | null
+          raw_name: string
+          source_category: string
+          source_code: string | null
+          source_row: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          barcode?: string | null
+          batch_id: string
+          category_id?: string | null
+          company_id: string
+          comparison_unit_id?: string | null
+          created_at?: string
+          duplicate_product_id?: string | null
+          error_message?: string | null
+          id?: string
+          imported_product_id?: string | null
+          issues?: string[]
+          normalized_name?: never
+          pricing_unit_id?: string | null
+          proposed_name: string
+          purchase_unit_id?: string | null
+          purpose?: string
+          raw_barcode?: string | null
+          raw_name: string
+          source_category: string
+          source_code?: string | null
+          source_row: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string | null
+          batch_id?: string
+          category_id?: string | null
+          company_id?: string
+          comparison_unit_id?: string | null
+          created_at?: string
+          duplicate_product_id?: string | null
+          error_message?: string | null
+          id?: string
+          imported_product_id?: string | null
+          issues?: string[]
+          normalized_name?: never
+          pricing_unit_id?: string | null
+          proposed_name?: string
+          purchase_unit_id?: string | null
+          purpose?: string
+          raw_barcode?: string | null
+          raw_name?: string
+          source_category?: string
+          source_code?: string | null
+          source_row?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_import_items_company_id_batch_id_fkey"
+            columns: ["company_id", "batch_id"]
+            isOneToOne: false
+            referencedRelation: "product_import_batches"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "product_import_items_company_id_category_id_fkey"
+            columns: ["company_id", "category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "product_import_items_company_id_duplicate_product_id_fkey"
+            columns: ["company_id", "duplicate_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["company_id", "id"]
+          },
+          {
+            foreignKeyName: "product_import_items_company_id_imported_product_id_fkey"
+            columns: ["company_id", "imported_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["company_id", "id"]
+          },
+        ]
+      }
+      product_import_mappings: {
+        Row: {
+          batch_id: string
+          category_id: string | null
+          company_id: string
+          comparison_unit_id: string | null
+          created_at: string
+          id: string
+          pricing_unit_id: string | null
+          purchase_unit_id: string | null
+          source_category: string
+          updated_at: string
+        }
+        Insert: {
+          batch_id: string
+          category_id?: string | null
+          company_id: string
+          comparison_unit_id?: string | null
+          created_at?: string
+          id?: string
+          pricing_unit_id?: string | null
+          purchase_unit_id?: string | null
+          source_category: string
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string
+          category_id?: string | null
+          company_id?: string
+          comparison_unit_id?: string | null
+          created_at?: string
+          id?: string
+          pricing_unit_id?: string | null
+          purchase_unit_id?: string | null
+          source_category?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_import_mappings_company_id_batch_id_fkey"
+            columns: ["company_id", "batch_id"]
+            isOneToOne: false
+            referencedRelation: "product_import_batches"
+            referencedColumns: ["company_id", "id"]
+          },
+        ]
+      }
       products: {
         Row: {
           category_id: string
@@ -3397,6 +3598,14 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_publish_product_import_items: {
+        Args: {
+          p_batch_id: string
+          p_company_id: string
+          p_item_ids: string[]
+        }
+        Returns: number
+      }
       rpc_register_order_arrival: {
         Args: {
           p_company_id: string
@@ -3589,12 +3798,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3616,13 +3825,12 @@ export type Tables<
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3641,13 +3849,12 @@ export type TablesInsert<
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3666,13 +3873,12 @@ export type TablesUpdate<
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3685,11 +3891,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
