@@ -14,6 +14,7 @@ import { FilterDialog } from "@/components/layout/filter-dialog";
 import { NewRoundDialog } from "@/components/rounds/round-dialogs";
 import { RoundFilterFields } from "@/components/rounds/round-filter-bar";
 import { RoundMobileCard, RoundRow } from "@/components/rounds/round-row";
+import { AdaptivePageSize } from "@/components/ui/adaptive-page-size";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
@@ -129,7 +130,9 @@ async function ListaDeRodadas({
   const podeEditarRodada = permissions.has("purchase_round.update");
   const rounds = await listRoundsWithProgress(companyId, filters);
   const resumo = summarizeRounds(rounds);
-  const pagination = parseListPagination(paginationParams, rounds.length);
+  const pagination = parseListPagination(paginationParams, rounds.length, {
+    pageSizeRange: { min: 1, max: 100, default: 10 },
+  });
   const visibleRounds = rounds.slice(pagination.start, pagination.end);
   const presentedRounds = visibleRounds.map((round) => {
     const id = round.purchase_round_id ?? "";
@@ -212,13 +215,24 @@ async function ListaDeRodadas({
         />
       ) : (
         <>
-          <div className="flex flex-col gap-3 sm:hidden">
-            {presentedRounds.map((item) => (
-              <RoundMobileCard key={item.round.id} {...item} />
-            ))}
+          <div className="sm:hidden">
+            <AdaptivePageSize current={pagination.pageSize} minRows={1} />
+            <div className="flex flex-col gap-3">
+              {presentedRounds.map((item) => (
+                <RoundMobileCard key={item.round.id} {...item} />
+              ))}
+              <DataTablePagination
+                page={pagination.page}
+                pageSize={pagination.pageSize}
+                total={rounds.length}
+                allowPageSize={false}
+              />
+            </div>
           </div>
-          <div className="border-border bg-surface hidden overflow-hidden rounded-xl border shadow-xs sm:block">
-            <Table>
+          <div className="hidden sm:contents">
+            <AdaptivePageSize current={pagination.pageSize} />
+            <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
+              <Table>
               <TableHeader>
                 <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
                   {/* No celular sobram Rodada, Situação e a ação. O que some da
@@ -244,19 +258,14 @@ async function ListaDeRodadas({
                   <RoundRow key={item.round.id} {...item} />
                 ))}
               </TableBody>
-            </Table>
-            <DataTablePagination
-              page={pagination.page}
-              pageSize={pagination.pageSize}
-              total={rounds.length}
-            />
-          </div>
-          <div className="sm:hidden">
-            <DataTablePagination
-              page={pagination.page}
-              pageSize={pagination.pageSize}
-              total={rounds.length}
-            />
+              </Table>
+              <DataTablePagination
+                page={pagination.page}
+                pageSize={pagination.pageSize}
+                total={rounds.length}
+                allowPageSize={false}
+              />
+            </div>
           </div>
         </>
       )}

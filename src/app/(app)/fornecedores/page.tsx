@@ -197,7 +197,7 @@ async function FornecedoresContent({
     ).includes(needle);
   });
   const pagination = parseListPagination(params, filtrados.length, {
-    pageSizeRange: { min: 6, max: 15, default: 10 },
+    pageSizeRange: { min: 1, max: 100, default: 10 },
   });
   const visiveis = filtrados.slice(pagination.start, pagination.end);
   const filtrosAtivos =

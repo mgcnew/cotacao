@@ -239,6 +239,7 @@ export function RoundMobileCard({
   if (editando) {
     return (
       <form
+        data-slot="adaptive-row"
         action={formAction}
         className="border-border bg-surface flex flex-col gap-3 rounded-xl border p-4 shadow-xs"
       >
@@ -291,7 +292,10 @@ export function RoundMobileCard({
   }
 
   return (
-    <article className="border-border bg-surface rounded-xl border p-4 shadow-xs">
+    <article
+      data-slot="adaptive-row"
+      className="border-border bg-surface rounded-xl border p-4 shadow-xs"
+    >
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="flex min-w-0 items-start gap-1">

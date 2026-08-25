@@ -3,7 +3,9 @@ import { ClipboardCheck, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { ShoppingListQuickAdd } from "@/components/shopping-list/quick-add";
+import { AdaptivePageSize } from "@/components/ui/adaptive-page-size";
 import { Button } from "@/components/ui/button";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Input } from "@/components/ui/input";
 import {
   removeShoppingListItem,
@@ -14,18 +16,26 @@ import {
   listShoppingProducts,
 } from "@/features/shopping-list/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { parseListPagination } from "@/lib/list-pagination";
 
-export default async function ShoppingListPage() {
+export default async function ShoppingListPage({
+  searchParams,
+}: PageProps<"/lista-compras">) {
   const company = await requireActiveCompany();
-  const [products, data, permissions] = await Promise.all([
+  const [products, data, permissions, params] = await Promise.all([
     listShoppingProducts(company.companyId),
     getOpenShoppingList(company.companyId),
     getPermissions(company.companyId),
+    searchParams,
   ]);
   const canManage =
     permissions.has("product.update") ||
     permissions.has("purchase_round.create") ||
     permissions.has("order.create");
+  const pagination = parseListPagination(params, data.items.length, {
+    pageSizeRange: { min: 1, max: 100, default: 6 },
+  });
+  const visibleItems = data.items.slice(pagination.start, pagination.end);
 
   return (
     <div className="w-full">
@@ -44,10 +54,13 @@ export default async function ShoppingListPage() {
             description="Digite o nome de um produto ou bipe seu código de barras para começar a lista."
           />
         ) : (
-          <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
-            {data.items.map((item) => (
+          <>
+          <AdaptivePageSize current={pagination.pageSize} minRows={1} />
+          <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
+            {visibleItems.map((item) => (
               <form
                 key={item.id}
+                data-slot="adaptive-row"
                 action={updateShoppingListItem}
                 className="border-border grid gap-3 border-b p-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(10rem,0.8fr)_auto] sm:items-end"
               >
@@ -100,7 +113,14 @@ export default async function ShoppingListPage() {
                 ) : null}
               </form>
             ))}
+            <DataTablePagination
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              total={data.items.length}
+              allowPageSize={false}
+            />
           </div>
+          </>
         )}
       </div>
     </div>

@@ -15,6 +15,7 @@ import {
 } from "@/components/layout/page-skeleton";
 import { SendOrderDialog } from "@/components/orders/order-dialogs";
 import { OrderFilterFields } from "@/components/orders/order-filter-bar";
+import { AdaptivePageSize } from "@/components/ui/adaptive-page-size";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
@@ -173,7 +174,9 @@ async function ListaDePedidos({
   const filtrando = hasAnyOrderFilter(filters);
   const { rows: orders, truncated } = await listOrders(companyId, filters);
   const resumo = summarizeOrders(orders);
-  const pagination = parseListPagination(paginationParams, orders.length);
+  const pagination = parseListPagination(paginationParams, orders.length, {
+    pageSizeRange: { min: 1, max: 100, default: 10 },
+  });
   const visibleOrders = orders.slice(pagination.start, pagination.end);
 
   return (
@@ -226,7 +229,9 @@ async function ListaDePedidos({
           }
         />
       ) : (
-        <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
+        <>
+        <AdaptivePageSize current={pagination.pageSize} />
+        <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
           <Table>
             <TableHeader>
               <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
@@ -370,15 +375,20 @@ async function ListaDePedidos({
             page={pagination.page}
             pageSize={pagination.pageSize}
             total={orders.length}
+            allowPageSize={false}
           />
 
           {truncated ? (
-            <p className="text-fg-subtle border-border border-t px-3 py-2 text-xs">
+            <p
+              data-slot="table-extra-footer"
+              className="text-fg-subtle border-border border-t px-3 py-2 text-xs"
+            >
               Mostrando os {ORDERS_PAGE_SIZE} pedidos mais recentes. Use os
               filtros para chegar aos mais antigos.
             </p>
           ) : null}
         </div>
+        </>
       )}
     </>
   );
