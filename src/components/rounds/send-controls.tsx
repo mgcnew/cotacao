@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, LoaderCircle, MessageCircle } from "lucide-react";
 import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
@@ -8,8 +8,20 @@ import { useFormStatus } from "react-dom";
 import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   generateQuotationLink,
   markSupplierSent,
+  sendQuotationWhatsApp,
   type SendState,
 } from "@/features/rounds/send";
 
@@ -33,6 +45,16 @@ function SentButton() {
   return (
     <Button type="submit" size="sm" variant="outline" disabled={pending}>
       {pending ? "Registrando…" : "Marquei como enviado"}
+    </Button>
+  );
+}
+
+function WhatsAppSubmit({ alreadySent }: { alreadySent: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? <LoaderCircle className="animate-spin" aria-hidden /> : <MessageCircle aria-hidden />}
+      {pending ? "Enviando…" : alreadySent ? "Reenviar agora" : "Enviar agora"}
     </Button>
   );
 }
@@ -84,6 +106,11 @@ export function SendControls({
   alreadySent,
   groupSummary,
   itemCount,
+  contactName,
+  contactWhatsapp,
+  whatsappReady,
+  companyName,
+  roundTitle,
   showSummary = true,
 }: {
   roundSupplierId: string;
@@ -92,6 +119,11 @@ export function SendControls({
   alreadySent: boolean;
   groupSummary: string[];
   itemCount: number;
+  contactName: string | null;
+  contactWhatsapp: string | null;
+  whatsappReady: boolean;
+  companyName: string;
+  roundTitle: string;
   showSummary?: boolean;
 }) {
   const [linkState, generateAction] = useActionState<SendState, FormData>(
@@ -102,6 +134,37 @@ export function SendControls({
     markSupplierSent,
     { error: null },
   );
+  const [whatsappOpen, setWhatsappOpen] = React.useState(false);
+  const sendAndClose = React.useCallback(
+    async (previous: SendState, formData: FormData) => {
+      const next = await sendQuotationWhatsApp(previous, formData);
+      if (next.sent) setWhatsappOpen(false);
+      return next;
+    },
+    [],
+  );
+  const [whatsappState, whatsappAction] = useActionState<SendState, FormData>(
+    sendAndClose,
+    { error: null },
+  );
+  const directDisabled = itemCount === 0 || !whatsappReady || !contactWhatsapp;
+  const directDisabledReason = itemCount === 0
+    ? "Escolha ao menos um grupo com produtos"
+    : !whatsappReady
+      ? "Conecte o WhatsApp da empresa em Configurações"
+      : !contactWhatsapp
+        ? "O contato escolhido não possui WhatsApp"
+        : undefined;
+  const displayedUrl = whatsappState.url ?? linkState.url;
+  const preview = [
+    `Olá, ${contactName ?? "fornecedor"}!`,
+    "",
+    `${companyName} convida você para responder à cotação “${roundTitle}”, com ${itemCount} ${itemCount === 1 ? "produto" : "produtos"}.`,
+    "",
+    "Acesse o link para informar preços e condições: [link individual da cotação]",
+    "",
+    "Se precisar, pode responder por aqui.",
+  ].join("\n");
 
   return (
     <div className="flex flex-col items-end gap-2">
@@ -111,6 +174,55 @@ export function SendControls({
           {itemCount} {itemCount === 1 ? "produto" : "produtos"}
         </span>
       ) : null}
+      <Dialog open={whatsappOpen} onOpenChange={setWhatsappOpen}>
+        <DialogTrigger asChild>
+          <Button type="button" size="sm" disabled={directDisabled} title={directDisabledReason}>
+            <MessageCircle aria-hidden />
+            {alreadySent ? "Reenviar no WhatsApp" : "Enviar no WhatsApp"}
+          </Button>
+        </DialogTrigger>
+        <DialogContent size="md">
+          <DialogHeader>
+            <DialogTitle>{alreadySent ? "Reenviar cotação" : "Enviar cotação"}</DialogTitle>
+            <DialogDescription>
+              Confira a mensagem que será enviada para {contactName ?? supplierName}
+              {contactWhatsapp ? ` · ${contactWhatsapp}` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <div className="bg-surface-sunken border-border rounded-xl border p-4">
+              <p className="text-fg-muted whitespace-pre-wrap text-sm">{preview}</p>
+            </div>
+            {alreadySent ? (
+              <p className="text-warning mt-3 text-xs">
+                O fornecedor já recebeu esta cotação. O reenvio criará um novo link válido.
+              </p>
+            ) : null}
+            <ErrorLine error={whatsappState.error} />
+            {whatsappState.url ? (
+              <div className="bg-surface-sunken border-border mt-3 rounded-lg border p-3">
+                <p className="text-fg-muted mb-2 text-xs">
+                  Você ainda pode copiar o link e enviar manualmente:
+                </p>
+                <CopyButton url={whatsappState.url} />
+              </div>
+            ) : null}
+          </DialogBody>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+            <form action={whatsappAction}>
+              <input type="hidden" name="roundSupplierId" value={roundSupplierId} />
+              <WhatsAppSubmit alreadySent={alreadySent} />
+            </form>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {whatsappState.sent ? <ErrorLine error={whatsappState.error} /> : null}
+      <SuccessLine
+        message={whatsappState.sent ? `Cotação enviada para ${contactName ?? supplierName}.` : null}
+      />
+
       <form action={generateAction}>
         <input type="hidden" name="roundSupplierId" value={roundSupplierId} />
         <input type="hidden" name="roundId" value={roundId} />
@@ -121,13 +233,13 @@ export function SendControls({
 
       <ErrorLine error={linkState.error} />
 
-      {linkState.url ? (
+      {displayedUrl ? (
         <div className="border-border bg-surface-sunken flex w-full max-w-md flex-col gap-2 rounded-lg border p-2">
           <code className="text-fg-muted block overflow-x-auto text-xs whitespace-nowrap">
-            {linkState.url}
+            {displayedUrl}
           </code>
           <div className="flex items-center gap-2">
-            <CopyButton url={linkState.url} />
+            <CopyButton url={displayedUrl} />
             <span className="text-fg-subtle text-xs">
               Mostrado só desta vez.
             </span>

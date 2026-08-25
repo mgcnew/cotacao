@@ -157,6 +157,8 @@ export function CorpoDaRodada({ dados }: { dados: DadosDaRodada }) {
       ) : (
         <Acompanhamento
           roundId={id}
+          companyName={dados.companyName}
+          roundTitle={dados.round.title}
           items={dados.items}
           groups={dados.groups}
           groupName={dados.groupName}
@@ -166,6 +168,7 @@ export function CorpoDaRodada({ dados }: { dados: DadosDaRodada }) {
           selectableSuppliers={dados.selectableSuppliers}
           podeEditar={dados.podeEditar}
           podeEnviar={dados.podeEnviar}
+          whatsappReady={dados.whatsappReady}
           podeFechar={dados.podeFechar && dados.emAndamento}
           podeCancelarGrupo={dados.podeCancelar && dados.emAndamento}
           encerrada={dados.encerrada}
@@ -511,6 +514,8 @@ function Montagem({
 /** A rodada já iniciada: quem recebeu, quem abriu, quem respondeu. */
 function Acompanhamento({
   roundId,
+  companyName,
+  roundTitle,
   items,
   groups,
   groupName,
@@ -520,11 +525,14 @@ function Acompanhamento({
   selectableSuppliers,
   podeEditar,
   podeEnviar,
+  whatsappReady,
   podeFechar,
   podeCancelarGrupo,
   encerrada,
 }: {
   roundId: string;
+  companyName: string;
+  roundTitle: string;
   items: Item[];
   groups: Grupo[];
   groupName: Map<string, string>;
@@ -534,6 +542,7 @@ function Acompanhamento({
   selectableSuppliers: DadosDaRodada["selectableSuppliers"];
   podeEditar: boolean;
   podeEnviar: boolean;
+  whatsappReady: boolean;
   podeFechar: boolean;
   podeCancelarGrupo: boolean;
   encerrada: boolean;
@@ -757,6 +766,11 @@ function Acompanhamento({
                           (item) => item.removed_at === null,
                         ).length ?? 0
                       }
+                      contactName={rs.supplier_contacts?.name ?? null}
+                      contactWhatsapp={rs.supplier_contacts?.whatsapp ?? null}
+                      whatsappReady={whatsappReady}
+                      companyName={companyName}
+                      roundTitle={roundTitle}
                     />
                   </TableCell>
                 ) : null}

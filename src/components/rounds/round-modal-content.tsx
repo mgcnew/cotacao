@@ -36,6 +36,9 @@ function Responses({ dados }: { dados: DadosDaRodada }) {
       <SupplierResponseBoard
         roundId={dados.round.id}
         canSend={dados.podeEnviar && !dados.encerrada}
+        whatsappReady={dados.whatsappReady}
+        companyName={dados.companyName}
+        roundTitle={dados.round.title}
         suppliers={dados.roundSuppliers.map((supplier) => ({
           id: supplier.id,
           name: supplier.suppliers?.name ?? "Fornecedor",

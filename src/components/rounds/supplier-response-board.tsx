@@ -68,10 +68,16 @@ export function SupplierResponseBoard({
   roundId,
   suppliers,
   canSend,
+  whatsappReady,
+  companyName,
+  roundTitle,
 }: {
   roundId: string;
   suppliers: SupplierResponseRow[];
   canSend: boolean;
+  whatsappReady: boolean;
+  companyName: string;
+  roundTitle: string;
 }) {
   const completed = suppliers.filter((supplier) => supplier.completedAt).length;
   const notOpened = suppliers.filter(
@@ -239,6 +245,11 @@ export function SupplierResponseBoard({
                           alreadySent={Boolean(supplier.sentAt)}
                           groupSummary={supplier.groups}
                           itemCount={supplier.itemCount}
+                          contactName={supplier.contact}
+                          contactWhatsapp={supplier.whatsapp || null}
+                          whatsappReady={whatsappReady}
+                          companyName={companyName}
+                          roundTitle={roundTitle}
                           showSummary={false}
                         />
                       </div>

@@ -14,6 +14,7 @@ import {
   listSelectableSuppliers,
 } from "@/features/rounds/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { getWhatsAppConnection } from "@/features/whatsapp/queries";
 
 /**
  * Tudo o que a Central da Rodada precisa saber, em um lugar só.
@@ -40,12 +41,13 @@ export const carregarRodadaBasica = cache(async (roundId: string) => {
 export const carregarRodada = cache(async (roundId: string) => {
   const company = await requireActiveCompany();
 
-  const [round, groups, items, roundSuppliers, permissions] = await Promise.all([
+  const [round, groups, items, roundSuppliers, permissions, whatsappConnection] = await Promise.all([
     carregarRodadaBasica(roundId),
     listRoundGroups(company.companyId, roundId),
     listRoundItems(company.companyId, roundId),
     listRoundSuppliers(company.companyId, roundId),
     getPermissions(company.companyId),
+    getWhatsAppConnection(company.companyId),
   ]);
 
   if (!round) return null;
@@ -91,6 +93,7 @@ export const carregarRodada = cache(async (roundId: string) => {
   const gruposAbertos = groups.filter((g) => g.status === "open");
 
   return {
+    companyName: company.companyName,
     round,
     groups: groups.map((g) => ({ id: g.id, name: g.name, status: g.status })),
     groupName: new Map(groups.map((g) => [g.id, g.name])),
@@ -120,6 +123,7 @@ export const carregarRodada = cache(async (roundId: string) => {
       emAndamento &&
       gruposAbertos.length > 0 &&
       groups.some((g) => g.status === "closed" || g.status === "cancelled"),
+    whatsappReady: whatsappConnection?.status === "connected",
   };
 });
 
