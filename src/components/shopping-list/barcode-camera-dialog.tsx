@@ -40,9 +40,13 @@ function cameraErrorMessage(error: unknown) {
 
 export function BarcodeCameraDialog({
   onDetected,
+  triggerLabel,
+  triggerClassName,
 }: {
   /** Retorne uma mensagem quando o código não puder ser aceito. */
   onDetected: (code: string) => string | null;
+  triggerLabel?: string;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [starting, setStarting] = React.useState(false);
@@ -179,12 +183,14 @@ export function BarcodeCameraDialog({
       <DialogTrigger asChild>
         <Button
           type="button"
-          size="icon-sm"
+          size={triggerLabel ? "default" : "icon-sm"}
           variant="outline"
+          className={triggerClassName}
           aria-label="Ler código de barras com a câmera"
           title="Ler com a câmera"
         >
           <Camera className="size-4" aria-hidden />
+          {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent size="md">

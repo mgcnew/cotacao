@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   Package,
   PackageCheck,
+  Barcode,
   MessageCircle,
   Settings,
   ShoppingCart,
@@ -18,6 +19,8 @@ export type NavItem = {
   icon: LucideIcon;
   /** Permissão mínima para o item aparecer. A UI esconde; o banco é quem nega. */
   permission?: string;
+  /** Ferramenta de campo que aparece somente na gaveta do celular. */
+  mobileOnly?: boolean;
 };
 
 export const OPERATION_NAV: NavItem[] = [
@@ -47,6 +50,13 @@ export const OPERATION_NAV: NavItem[] = [
     label: "Lista de compras",
     icon: ListChecks,
     permission: "product.view",
+  },
+  {
+    href: "/etiquetas",
+    label: "Código para etiquetas",
+    icon: Barcode,
+    permission: "product.view",
+    mobileOnly: true,
   },
   {
     href: "/whatsapp",

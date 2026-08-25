@@ -64,14 +64,16 @@ export function AppSidebar({ companyName, permissions }: Props) {
             Operação
           </p>
         )}
-        {operation.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            collapsed={collapsed}
-            active={isActive(item.href)}
-          />
-        ))}
+        {operation
+          .filter((item) => !item.mobileOnly)
+          .map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              collapsed={collapsed}
+              active={isActive(item.href)}
+            />
+          ))}
       </nav>
 
       <div className="flex shrink-0 flex-col gap-0.5 px-2 pb-2">

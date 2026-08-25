@@ -14,17 +14,11 @@ import {
   type ShoppingListState,
 } from "@/features/shopping-list/actions";
 import type { ShoppingProduct } from "@/features/shopping-list/queries";
+import { barcodeMatches } from "@/features/products/barcodes";
 import { normalizeListSearch } from "@/lib/list-pagination";
 
 function findProductByBarcode(products: ShoppingProduct[], code: string) {
-  const candidates = new Set([code]);
-  // Alguns leitores devolvem UPC-A (12 dígitos) como EAN-13 com zero à
-  // esquerda. As duas representações identificam o mesmo código comercial.
-  if (/^0\d{12}$/.test(code)) candidates.add(code.slice(1));
-  if (/^\d{12}$/.test(code)) candidates.add(`0${code}`);
-  return products.find((product) =>
-    product.barcodes.some((barcode) => candidates.has(barcode)),
-  );
+  return products.find((product) => barcodeMatches(product.barcodes, code));
 }
 
 function Submit() {
