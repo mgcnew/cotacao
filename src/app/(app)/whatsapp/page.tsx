@@ -11,7 +11,6 @@ import {
   Phone,
   RefreshCw,
   Search,
-  Send,
   UserRound,
   Volume2,
 } from "lucide-react";
@@ -21,6 +20,7 @@ import { redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { ScrollMessagesToBottom, WhatsAppLiveUpdates } from "@/components/whatsapp/live-updates";
+import { WhatsAppMessageComposer } from "@/components/whatsapp/message-composer";
 import { WhatsAppMetricsPanel } from "@/components/whatsapp/metrics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,6 @@ import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   linkWhatsAppConversationAction,
-  sendWhatsAppMessageAction,
   setWhatsAppConversationCategoryAction,
   setWhatsAppConversationStateAction,
   startWhatsAppConversationAction,
@@ -323,11 +322,10 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
                 </div>
               </div>
 
-              <form action={sendWhatsAppMessageAction} className="border-border bg-surface flex shrink-0 items-end gap-2 border-t p-3">
-                <input type="hidden" name="conversation_id" value={selected.id} />
-                <textarea name="message" required maxLength={4000} rows={2} disabled={!canSend || connection.status !== "connected"} placeholder={connection.status === "connected" ? "Escreva uma mensagem…" : "WhatsApp desconectado"} className="border-input bg-background text-fg placeholder:text-fg-subtle min-h-10 min-w-0 flex-1 resize-none rounded-xl border px-3 py-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/30 disabled:opacity-60" />
-                <Button type="submit" size="icon-lg" disabled={!canSend || connection.status !== "connected"} aria-label="Enviar"><Send aria-hidden /></Button>
-              </form>
+              <WhatsAppMessageComposer
+                conversationId={selected.id}
+                enabled={canSend && connection.status === "connected"}
+              />
             </>
           ) : (
             <div className="grid h-full place-items-center p-8 text-center">
