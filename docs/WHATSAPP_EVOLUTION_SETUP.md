@@ -1,7 +1,9 @@
 # WhatsApp Compras — ativação da Evolution
 
-O módulo usa uma única instância da Evolution por empresa. A Evolution nunca é
-chamada pelo navegador: chave e segredo ficam somente no servidor.
+O módulo cria uma instância isolada da Evolution para cada empresa. A Evolution
+nunca é chamada pelo navegador: chave e segredo ficam somente no servidor. O
+administrador da empresa conecta e reconecta o próprio número por QR Code nas
+Configurações, sem acessar o Evolution Manager.
 
 ## 1. Banco
 
@@ -9,7 +11,10 @@ Aplique no SQL Editor do Supabase, na ordem das migrations existentes:
 
 `supabase/migrations/0042_whatsapp_procurement_inbox.sql`
 
-Ela cria as quatro tabelas, RLS, índices de idempotência e publicação Realtime.
+`supabase/migrations/0047_whatsapp_connection_per_company.sql`
+
+Elas criam as quatro tabelas, RLS, índices de idempotência, publicação Realtime
+e garantem uma conexão por empresa.
 
 ## 2. Ambiente da aplicação
 
@@ -18,7 +23,6 @@ Configure no ambiente local e na hospedagem:
 ```dotenv
 EVOLUTION_API_URL=https://evolution.seu-dominio.com
 EVOLUTION_API_KEY=sua-chave
-EVOLUTION_INSTANCE=nome-exato-da-instancia
 EVOLUTION_WEBHOOK_SECRET=um-segredo-aleatorio-com-pelo-menos-24-caracteres
 CRON_SECRET=outro-segredo-aleatorio
 NEXT_PUBLIC_APP_URL=https://app.seu-dominio.com
@@ -37,10 +41,15 @@ alcançar `https://app.seu-dominio.com/api/evolution/webhook`.
 
 Depois do deploy e do SQL:
 
-1. Abra **WhatsApp Compras** no menu.
-2. Clique em **Ativar integração** com um usuário administrador.
-3. O sistema testa o estado da instância, associa-a à empresa e configura o
-   webhook com um header secreto.
+1. Abra **Configurações > WhatsApp** com um usuário administrador.
+2. Clique em **Conectar WhatsApp**.
+3. O servidor cria uma instância exclusiva, configura o webhook com um header
+   secreto e devolve somente a imagem do QR Code para a tela.
+4. No celular, abra **Aparelhos conectados > Conectar um aparelho** e leia o
+   código. A tela verifica automaticamente até confirmar a conexão.
+
+Quando uma sessão expirar, o mesmo administrador usa **Reconectar** e lê um novo
+QR Code. A instância e o histórico do sistema são preservados.
 
 São habilitados somente os eventos necessários:
 
@@ -69,12 +78,14 @@ curl --fail --silent --show-error \
   https://app.seu-dominio.com/api/evolution/reconcile
 ```
 
-O endpoint consulta a janela recente de cada instância e ignora mensagens que
-já existem pelo par `connection_id + external_message_id`.
+O endpoint atualiza primeiro o estado das conexões e, para as conectadas,
+consulta a janela recente de mensagens. Mensagens já existentes são ignoradas
+pelo par `connection_id + external_message_id`.
 
 ## 5. Verificação de aceite
 
-- O indicador da tela mostra **Conectado**.
+- **Configurações > WhatsApp** gera o QR Code sem abrir o Evolution Manager.
+- O indicador da tela mostra **Conectado** e o número conectado.
 - Uma mensagem enviada pelo sistema aparece na mesma conversa do celular.
 - Uma mensagem recebida aparece sem recarregar a página.
 - Entregue e lida atualizam o ícone da mensagem.

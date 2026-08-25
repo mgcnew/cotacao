@@ -40,6 +40,7 @@ import {
 } from "@/features/orders/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { isEvolutionConfigured } from "@/lib/evolution/client";
+import { getWhatsAppConnection } from "@/features/whatsapp/queries";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -137,14 +138,15 @@ export default async function PedidoPage({
   const envio =
     podeEnviar && draft && !encerrado
       ? await (async () => {
-          const [contacts, context] = await Promise.all([
+          const [contacts, context, whatsapp] = await Promise.all([
             listOrderSendContacts(company.companyId, order.suppliers.id),
             getOrderMessageContext(company.companyId, id, draft.id),
+            getWhatsAppConnection(company.companyId),
           ]);
           return {
             contacts,
             previewMessage: context ? buildOrderMessage(context, null) : "",
-            evolutionReady: isEvolutionConfigured(),
+            evolutionReady: isEvolutionConfigured() && whatsapp?.status === "connected",
           };
         })()
       : null;

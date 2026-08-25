@@ -22,7 +22,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  activateWhatsAppAction,
   linkWhatsAppConversationAction,
   sendWhatsAppMessageAction,
   setWhatsAppConversationStateAction,
@@ -89,13 +88,11 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
           </span>
           <h2 className="text-fg text-lg font-semibold">Ativar a caixa de compras</h2>
           <p className="text-fg-muted mx-auto mt-2 max-w-md text-sm">
-            A ativação associa a instância configurada no servidor a esta empresa. Nenhuma chave da Evolution será enviada ao navegador.
+            Conecte o número da empresa por QR Code nas Configurações. Nenhuma chave da Evolution será enviada ao navegador.
           </p>
           {errorMessage ? <p className="text-danger mt-4 text-sm">{errorMessage}</p> : null}
           {canManage ? (
-            <form action={activateWhatsAppAction} className="mt-6">
-              <Button type="submit">Ativar integração</Button>
-            </form>
+            <Button asChild className="mt-6"><Link href="/configuracoes?aba=whatsapp">Configurar WhatsApp</Link></Button>
           ) : (
             <p className="text-fg-subtle mt-5 text-xs">Um administrador precisa realizar a ativação inicial.</p>
           )}
@@ -128,9 +125,12 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
               {connectionLabel(connection.status)}
             </Badge>
             {canManage ? (
-              <form action={verifyWhatsAppConnectionAction}>
-                <Button type="submit" variant="outline" size="sm"><RefreshCw aria-hidden /> Verificar</Button>
-              </form>
+              <div className="flex items-center gap-2">
+                <form action={verifyWhatsAppConnectionAction}>
+                  <Button type="submit" variant="outline" size="sm"><RefreshCw aria-hidden /> Verificar</Button>
+                </form>
+                <Button asChild variant="outline" size="sm"><Link href="/configuracoes?aba=whatsapp">Configurar</Link></Button>
+              </div>
             ) : null}
           </div>
         }

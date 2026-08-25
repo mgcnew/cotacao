@@ -1,18 +1,24 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { normalizeWhatsAppPhone } from "@/features/whatsapp/normalize";
 import {
+  connectEvolutionInstance,
   configureEvolutionWebhook,
+  createEvolutionInstance,
   getEvolutionConnectionState,
+  logoutEvolutionInstance,
   sendWhatsAppText,
 } from "@/lib/evolution/client";
 import { getPermissions, requireActiveCompany, requireUser } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { publicEnv } from "@/lib/env";
+import type { WhatsAppSetupState } from "@/features/whatsapp/connection-state";
 
 function whatsappUrl(params: Record<string, string>) {
   const query = new URLSearchParams(params);
@@ -28,72 +34,236 @@ async function requireSendPermission(companyId: string) {
   if (!permissions.has("purchase_round.send")) fail("Você não tem permissão para enviar mensagens.");
 }
 
-export async function activateWhatsAppAction() {
+function setupState(
+  connection: {
+    status: string;
+    phone_number: string | null;
+    last_connected_at: string | null;
+    last_error: string | null;
+  } | null,
+  overrides: Partial<WhatsAppSetupState> = {},
+): WhatsAppSetupState {
+  return {
+    ok: connection?.status !== "error",
+    configured: true,
+    status: connection
+      ? connection.status as WhatsAppSetupState["status"]
+      : "not_connected",
+    phone: connection?.phone_number ?? null,
+    qrCode: null,
+    message: connection?.last_error ?? null,
+    lastConnectedAt: connection?.last_connected_at ?? null,
+    ...overrides,
+  };
+}
+
+function instanceName(companyId: string) {
+  return `cotacao_${companyId.replace(/-/g, "").slice(0, 12)}_${randomBytes(6).toString("hex")}`;
+}
+
+function missingEvolutionInstance(error: string) {
+  return /does not exist|não existe|not found|404/i.test(error);
+}
+
+async function requireWhatsAppManager() {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
-  if (!permissions.has("role.manage")) fail("Somente um administrador pode ativar a integração.");
+  if (!permissions.has("role.manage")) {
+    return { company, allowed: false as const };
+  }
+  return { company, allowed: true as const };
+}
 
-  // Importação estática é evitada no módulo de ambiente; os valores nunca
-  // deixam esta Server Action.
-  const env = (await import("@/lib/env")).getServerEnv();
-  if (!env.EVOLUTION_INSTANCE || !env.EVOLUTION_API_URL || !env.EVOLUTION_API_KEY || !env.EVOLUTION_WEBHOOK_SECRET) {
-    fail("Preencha URL, chave, instância e segredo de webhook da Evolution no ambiente do servidor.");
+async function updateConnectionState(
+  connection: {
+    id: string;
+    status: string;
+    phone_number: string | null;
+    last_connected_at: string | null;
+    last_error: string | null;
+    instance_name: string;
+  },
+) {
+  const state = await getEvolutionConnectionState(connection.instance_name);
+  const supabase = await createServerSupabaseClient();
+  const now = new Date().toISOString();
+  const update = state.ok
+    ? {
+        status: state.state,
+        phone_number: state.phone ?? connection.phone_number,
+        ...(state.state === "connected" && connection.status !== "connected"
+          ? { last_connected_at: now }
+          : {}),
+        last_error: null,
+      }
+    : { status: "error", last_error: state.error };
+  const { data, error } = await supabase
+    .from("whatsapp_connections")
+    .update(update)
+    .eq("id", connection.id)
+    .select("status, phone_number, last_connected_at, last_error")
+    .single();
+  if (error) return setupState(connection, { ok: false, status: "error", message: error.message });
+  return setupState(data);
+}
+
+export async function connectCompanyWhatsAppAction(): Promise<WhatsAppSetupState> {
+  const access = await requireWhatsAppManager();
+  if (!access.allowed) {
+    return setupState(null, { ok: false, message: "Somente um administrador pode conectar o WhatsApp." });
   }
 
-  const state = await getEvolutionConnectionState(env.EVOLUTION_INSTANCE);
+  const env = (await import("@/lib/env")).getServerEnv();
+  if (!env.EVOLUTION_API_URL || !env.EVOLUTION_API_KEY || !env.EVOLUTION_WEBHOOK_SECRET) {
+    return setupState(null, {
+      ok: false,
+      configured: false,
+      status: "not_configured",
+      message: "Preencha URL, chave e segredo de webhook da Evolution no ambiente do servidor.",
+    });
+  }
+
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.from("whatsapp_connections").upsert({
-    company_id: company.companyId,
-    instance_name: env.EVOLUTION_INSTANCE,
-    status: state.ok ? state.state : "error",
-    phone_number: state.ok ? state.phone : null,
-    last_connected_at: state.ok && state.state === "connected" ? new Date().toISOString() : null,
-    last_error: state.ok ? null : state.error,
-  }, { onConflict: "company_id,instance_name" });
-  if (error) fail(`Não foi possível ativar: ${error.message}`);
+  let { data: connection, error: selectError } = await supabase
+    .from("whatsapp_connections")
+    .select("id, instance_name, status, phone_number, last_connected_at, last_error")
+    .eq("company_id", access.company.companyId)
+    .limit(1)
+    .maybeSingle();
+  if (selectError) return setupState(null, { ok: false, status: "error", message: selectError.message });
+
+  let needsProvisioning = false;
+  if (!connection) {
+    const { data: created, error } = await supabase
+      .from("whatsapp_connections")
+      .insert({
+        company_id: access.company.companyId,
+        instance_name: instanceName(access.company.companyId),
+        provider_mode: "baileys",
+        status: "connecting",
+      })
+      .select("id, instance_name, status, phone_number, last_connected_at, last_error")
+      .single();
+    if (error?.code === "23505") {
+      const retry = await supabase
+        .from("whatsapp_connections")
+        .select("id, instance_name, status, phone_number, last_connected_at, last_error")
+        .eq("company_id", access.company.companyId)
+        .limit(1)
+        .single();
+      connection = retry.data;
+      selectError = retry.error;
+    } else {
+      connection = created;
+      selectError = error;
+      needsProvisioning = Boolean(created);
+    }
+  }
+  if (selectError || !connection) {
+    return setupState(null, { ok: false, status: "error", message: selectError?.message ?? "Não foi possível preparar a conexão." });
+  }
+
+  let currentState = await getEvolutionConnectionState(connection.instance_name);
+  if (!needsProvisioning && !currentState.ok && !missingEvolutionInstance(currentState.error)) {
+    await supabase.from("whatsapp_connections").update({ status: "error", last_error: currentState.error }).eq("id", connection.id);
+    return setupState(connection, { ok: false, status: "error", message: currentState.error });
+  }
+  if (needsProvisioning || !currentState.ok) {
+    const created = await createEvolutionInstance(connection.instance_name);
+    if (!created.ok) {
+      await supabase.from("whatsapp_connections").update({ status: "error", last_error: created.error }).eq("id", connection.id);
+      return setupState(connection, { ok: false, status: "error", message: created.error });
+    }
+    currentState = { ok: true, state: "disconnected", phone: null };
+  }
 
   const webhook = await configureEvolutionWebhook(
-    env.EVOLUTION_INSTANCE,
+    connection.instance_name,
     `${publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/api/evolution/webhook`,
     env.EVOLUTION_WEBHOOK_SECRET,
   );
   if (!webhook.ok) {
     await supabase
       .from("whatsapp_connections")
-      .update({ last_error: `Webhook: ${webhook.error}` })
-      .eq("company_id", company.companyId)
-      .eq("instance_name", env.EVOLUTION_INSTANCE);
-    fail(`A instância foi associada, mas o webhook não foi configurado: ${webhook.error}`);
+      .update({ status: "error", last_error: `Webhook: ${webhook.error}` })
+      .eq("id", connection.id);
+    return setupState(connection, { ok: false, status: "error", message: `O webhook não foi configurado: ${webhook.error}` });
   }
+
+  if (currentState.ok && currentState.state === "connected") {
+    const refreshed = await updateConnectionState(connection);
+    revalidatePath("/configuracoes");
+    revalidatePath("/whatsapp");
+    return { ...refreshed, message: "WhatsApp conectado." };
+  }
+
+  const result = await connectEvolutionInstance(connection.instance_name);
+  if (!result.ok) {
+    await supabase.from("whatsapp_connections").update({ status: "error", last_error: result.error }).eq("id", connection.id);
+    return setupState(connection, { ok: false, status: "error", message: result.error });
+  }
+  await supabase.from("whatsapp_connections").update({ status: "connecting", last_error: null }).eq("id", connection.id);
+  revalidatePath("/configuracoes");
   revalidatePath("/whatsapp");
-  redirect("/whatsapp");
+  return setupState(connection, {
+    ok: true,
+    status: "connecting",
+    qrCode: result.qrCode,
+    message: result.qrCode
+      ? "Leia o QR Code com o WhatsApp da empresa."
+      : "A conexão foi iniciada. Aguarde alguns segundos e tente gerar o QR Code novamente.",
+  });
 }
 
-export async function verifyWhatsAppConnectionAction() {
-  const company = await requireActiveCompany();
-  const permissions = await getPermissions(company.companyId);
-  if (!permissions.has("role.manage")) fail("Somente um administrador pode verificar a conexão.");
+export async function checkCompanyWhatsAppAction(): Promise<WhatsAppSetupState> {
+  const access = await requireWhatsAppManager();
+  if (!access.allowed) return setupState(null, { ok: false, message: "Acesso restrito ao administrador." });
   const supabase = await createServerSupabaseClient();
   const { data: connection } = await supabase
     .from("whatsapp_connections")
-    .select("id, instance_name")
-    .eq("company_id", company.companyId)
+    .select("id, instance_name, status, phone_number, last_connected_at, last_error")
+    .eq("company_id", access.company.companyId)
     .limit(1)
     .maybeSingle();
-  if (!connection) fail("Ative a integração primeiro.");
-
-  const state = await getEvolutionConnectionState(connection.instance_name);
-  const { error } = await supabase
-    .from("whatsapp_connections")
-    .update({
-      status: state.ok ? state.state : "error",
-      phone_number: state.ok ? state.phone : null,
-      last_connected_at: state.ok && state.state === "connected" ? new Date().toISOString() : undefined,
-      last_error: state.ok ? null : state.error,
-    })
-    .eq("id", connection.id);
-  if (error) fail(error.message);
+  if (!connection) return setupState(null);
+  const result = await updateConnectionState(connection);
+  revalidatePath("/configuracoes");
   revalidatePath("/whatsapp");
+  return result;
+}
+
+export async function disconnectCompanyWhatsAppAction(): Promise<WhatsAppSetupState> {
+  const access = await requireWhatsAppManager();
+  if (!access.allowed) return setupState(null, { ok: false, message: "Acesso restrito ao administrador." });
+  const supabase = await createServerSupabaseClient();
+  const { data: connection, error } = await supabase
+    .from("whatsapp_connections")
+    .select("id, instance_name, status, phone_number, last_connected_at, last_error")
+    .eq("company_id", access.company.companyId)
+    .limit(1)
+    .maybeSingle();
+  if (error || !connection) return setupState(null, { ok: false, message: error?.message ?? "Conexão não encontrada." });
+  const currentState = await getEvolutionConnectionState(connection.instance_name);
+  if (!currentState.ok && !missingEvolutionInstance(currentState.error)) {
+    return setupState(connection, { ok: false, status: "error", message: currentState.error });
+  }
+  if (currentState.ok && currentState.state !== "disconnected") {
+    const result = await logoutEvolutionInstance(connection.instance_name);
+    if (!result.ok) return setupState(connection, { ok: false, status: "error", message: result.error });
+  }
+  const { error: updateError } = await supabase
+    .from("whatsapp_connections")
+    .update({ status: "disconnected", phone_number: null, last_error: null })
+    .eq("id", connection.id);
+  if (updateError) return setupState(connection, { ok: false, status: "error", message: updateError.message });
+  revalidatePath("/configuracoes");
+  revalidatePath("/whatsapp");
+  return setupState(connection, { ok: true, status: "disconnected", phone: null, message: "WhatsApp desconectado. O histórico foi preservado." });
+}
+
+export async function verifyWhatsAppConnectionAction() {
+  const result = await checkCompanyWhatsAppAction();
+  if (!result.ok) fail(result.message ?? "Não foi possível verificar a conexão.");
 }
 
 export async function startWhatsAppConversationAction(formData: FormData) {

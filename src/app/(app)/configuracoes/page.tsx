@@ -2,6 +2,7 @@ import { Check, Minus } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { ThemeControls } from "@/components/theme-controls";
+import { WhatsAppConnectionSettings } from "@/components/whatsapp/connection-settings";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -27,6 +28,9 @@ import {
   listRoles,
 } from "@/features/company/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { getWhatsAppConnection } from "@/features/whatsapp/queries";
+import { isEvolutionProvisioningConfigured } from "@/lib/evolution/client";
+import type { WhatsAppSetupState } from "@/features/whatsapp/connection-state";
 
 function formatCnpj(value: string | null) {
   if (!value) return "—";
@@ -51,15 +55,49 @@ const MODULE_LABEL: Record<string, string> = {
   supplier: "Fornecedores",
 };
 
-export default async function ConfiguracoesPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function ConfiguracoesPage({ searchParams }: { searchParams: SearchParams }) {
   const company = await requireActiveCompany();
-  const [dados, roles, members, catalog, minhasPermissoes] = await Promise.all([
+  const [dados, roles, members, catalog, minhasPermissoes, whatsapp, params] = await Promise.all([
     getCompany(company.companyId),
     listRoles(company.companyId),
     listMembers(company.companyId),
     listPermissionCatalog(),
     getPermissions(company.companyId),
+    getWhatsAppConnection(company.companyId),
+    searchParams,
   ]);
+  const requestedTab = typeof params.aba === "string" ? params.aba : "";
+  const activeTab = ["aparencia", "empresa", "whatsapp", "papeis", "permissoes"].includes(requestedTab)
+    ? requestedTab
+    : "aparencia";
+  const evolutionConfigured = isEvolutionProvisioningConfigured();
+  const whatsappState: WhatsAppSetupState = whatsapp
+    ? {
+        ok: whatsapp.status !== "error",
+        configured: evolutionConfigured,
+        status: evolutionConfigured
+          ? whatsapp.status as WhatsAppSetupState["status"]
+          : "not_configured",
+        phone: whatsapp.phone_number,
+        qrCode: null,
+        message: evolutionConfigured
+          ? whatsapp.last_error
+          : "A integração ainda não foi configurada no ambiente do servidor.",
+        lastConnectedAt: whatsapp.last_connected_at,
+      }
+    : {
+        ok: evolutionConfigured,
+        configured: evolutionConfigured,
+        status: evolutionConfigured ? "not_connected" : "not_configured",
+        phone: null,
+        qrCode: null,
+        message: evolutionConfigured
+          ? null
+          : "A integração ainda não foi configurada no ambiente do servidor.",
+        lastConnectedAt: null,
+      };
 
   return (
     <div className="w-full">
@@ -68,10 +106,11 @@ export default async function ConfiguracoesPage() {
         description="Aparência, dados da empresa, papéis e suas permissões."
       />
 
-      <Tabs defaultValue="aparencia">
+      <Tabs defaultValue={activeTab}>
         <TabsList>
           <TabsTrigger value="aparencia">Aparência</TabsTrigger>
           <TabsTrigger value="empresa">Empresa</TabsTrigger>
+          <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="papeis">Papéis</TabsTrigger>
           <TabsTrigger value="permissoes">Minhas permissões</TabsTrigger>
         </TabsList>
@@ -145,6 +184,13 @@ export default async function ConfiguracoesPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="whatsapp" className="mt-4">
+          <WhatsAppConnectionSettings
+            initialState={whatsappState}
+            canManage={minhasPermissoes.has("role.manage")}
+          />
         </TabsContent>
 
         <TabsContent value="papeis" className="mt-4">

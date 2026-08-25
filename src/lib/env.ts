@@ -63,7 +63,6 @@ const serverEnvSchema = z.object({
     .min(1, "SUPABASE_SECRET_KEY é obrigatória no servidor"),
   EVOLUTION_API_URL: z.url().optional(),
   EVOLUTION_API_KEY: z.string().optional(),
-  EVOLUTION_INSTANCE: z.string().optional(),
   EVOLUTION_WEBHOOK_SECRET: z.string().min(24).optional(),
   CRON_SECRET: z.string().optional(),
 });
@@ -82,7 +81,6 @@ export function getServerEnv(): ServerEnv {
     SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
     EVOLUTION_API_URL: unset(process.env.EVOLUTION_API_URL),
     EVOLUTION_API_KEY: unset(process.env.EVOLUTION_API_KEY),
-    EVOLUTION_INSTANCE: unset(process.env.EVOLUTION_INSTANCE),
     EVOLUTION_WEBHOOK_SECRET: unset(process.env.EVOLUTION_WEBHOOK_SECRET),
     CRON_SECRET: unset(process.env.CRON_SECRET),
   });

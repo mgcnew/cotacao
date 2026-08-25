@@ -1,4 +1,4 @@
-import { findEvolutionMessages } from "@/lib/evolution/client";
+import { findEvolutionMessages, getEvolutionConnectionState } from "@/lib/evolution/client";
 import { processEvolutionEvent } from "@/features/whatsapp/ingest";
 import { getServerEnv } from "@/lib/env";
 import { createServiceRoleClient } from "@/lib/supabase/service";
@@ -30,6 +30,7 @@ export async function GET(request: Request) {
   const { data: connections, error } = await client
     .from("whatsapp_connections")
     .select("*")
+    .order("last_sync_at", { ascending: true, nullsFirst: true })
     .limit(20);
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
@@ -38,6 +39,29 @@ export async function GET(request: Request) {
   for (let offset = 0; offset < (connections?.length ?? 0); offset += 5) {
     const batch = connections!.slice(offset, offset + 5);
     await Promise.all(batch.map(async (connection) => {
+      const checkedAt = new Date().toISOString();
+      const state = await getEvolutionConnectionState(connection.instance_name);
+      if (!state.ok) {
+        failures += 1;
+        await client.from("whatsapp_connections").update({
+          status: "error",
+          last_error: state.error,
+          last_sync_at: checkedAt,
+        }).eq("id", connection.id);
+        return;
+      }
+      await client.from("whatsapp_connections").update({
+        status: state.state,
+        phone_number: state.phone ?? connection.phone_number,
+        last_connected_at:
+          state.state === "connected" && connection.status !== "connected"
+            ? checkedAt
+            : connection.last_connected_at,
+        last_error: null,
+        last_sync_at: checkedAt,
+      }).eq("id", connection.id);
+      if (state.state !== "connected") return;
+
       // Sem remoteJid: traz a janela recente da instância inteira e também
       // recupera conversas novas cujo webhook tenha se perdido.
       const result = await findEvolutionMessages(connection.instance_name, undefined, 100);
@@ -54,7 +78,6 @@ export async function GET(request: Request) {
           failures += 1;
         }
       }
-      await client.from("whatsapp_connections").update({ last_sync_at: new Date().toISOString() }).eq("id", connection.id);
     }));
   }
 

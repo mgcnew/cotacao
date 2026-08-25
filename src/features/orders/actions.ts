@@ -17,6 +17,7 @@ import {
   isEvolutionConfigured,
   sendWhatsAppText,
 } from "@/lib/evolution/client";
+import { getWhatsAppConnection } from "@/features/whatsapp/queries";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 
@@ -573,9 +574,10 @@ export async function loadOrderSendPanel(
       };
     }
 
-    const [contacts, context] = await Promise.all([
+    const [contacts, context, whatsapp] = await Promise.all([
       listOrderSendContacts(company.companyId, order.suppliers.id),
       getOrderMessageContext(company.companyId, orderId, draft.id),
+      getWhatsAppConnection(company.companyId),
     ]);
 
     return {
@@ -585,7 +587,7 @@ export async function loadOrderSendPanel(
       revisionId: draft.id,
       contacts,
       previewMessage: context ? buildOrderMessage(context, null) : "",
-      evolutionReady: isEvolutionConfigured(),
+      evolutionReady: isEvolutionConfigured() && whatsapp?.status === "connected",
     };
   } catch (cause) {
     return {
@@ -820,6 +822,18 @@ export async function sendOrderWhatsApp(
     };
   }
 
+  const { data: whatsapp } = await supabase
+    .from("whatsapp_connections")
+    .select("instance_name, status")
+    .eq("company_id", company.companyId)
+    .limit(1)
+    .maybeSingle();
+  if (!whatsapp || whatsapp.status !== "connected") {
+    return {
+      error: "O WhatsApp da empresa não está conectado. Reconecte em Configurações antes de enviar.",
+    };
+  }
+
   const link = await issueOrderLink(company.companyId, orderId, revisionId);
   if (!link.ok) return { error: link.error };
   if (!link.message) {
@@ -836,7 +850,7 @@ export async function sendOrderWhatsApp(
     status: "queued",
   });
 
-  const envio = await sendWhatsAppText(phone, link.message);
+  const envio = await sendWhatsAppText(phone, link.message, whatsapp.instance_name);
 
   if (logId) {
     await updateCommunicationLog(company.companyId, logId, {
