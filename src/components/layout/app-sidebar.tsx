@@ -21,7 +21,7 @@ type Props = {
  */
 export function AppSidebar({ companyName, permissions }: Props) {
   const [collapsed, setCollapsed] = React.useState(false);
-  const { operation, footer, isActive } = useVisibleNav(permissions);
+  const { groups, footer, isActive } = useVisibleNav(permissions);
 
   return (
     <aside
@@ -59,21 +59,31 @@ export function AppSidebar({ companyName, permissions }: Props) {
           fora da tela. Numa janela baixa, ou com muitos itens, a lista rola e
           Configurações/Recolher continuam ancorados embaixo. */}
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2">
-        {!collapsed && (
-          <p className="text-fg-subtle px-2.5 pt-2 pb-1.5 text-[10px] font-semibold tracking-wider uppercase">
-            Operação
-          </p>
-        )}
-        {operation
-          .filter((item) => !item.mobileOnly)
-          .map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              collapsed={collapsed}
-              active={isActive(item.href)}
-            />
-          ))}
+        {groups.map((group, index) => {
+          const items = group.items.filter((item) => !item.mobileOnly);
+          if (items.length === 0) return null;
+          return (
+            <section key={group.label} className={cn(index > 0 && "mt-2")}>
+              {!collapsed ? (
+                <p className="text-fg-subtle px-2.5 pt-2 pb-1.5 text-[10px] font-semibold tracking-wider uppercase">
+                  {group.label}
+                </p>
+              ) : index > 0 ? (
+                <div className="border-border mx-2 my-2 border-t" />
+              ) : null}
+              <div className="flex flex-col gap-0.5">
+                {items.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    collapsed={collapsed}
+                    active={isActive(item.href)}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </nav>
 
       <div className="flex shrink-0 flex-col gap-0.5 px-2 pb-2">

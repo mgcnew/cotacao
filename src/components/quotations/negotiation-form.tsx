@@ -7,14 +7,12 @@ import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { NEGOTIATION_CHANNELS } from "@/features/quotations/channels";
 import {
   recordNegotiation,
   type NegotiationState,
 } from "@/features/quotations/negotiation";
-
-const selectClass =
-  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -96,19 +94,17 @@ export function NegotiationForm({
         />
       </div>
 
-      <select
+      <ThemedSelect
+        id={`negotiation-channel-${responseItemId}`}
         name="channel"
         required
         defaultValue="whatsapp"
-        aria-label="Canal da negociação"
-        className={selectClass}
-      >
-        {NEGOTIATION_CHANNELS.map((c) => (
-          <option key={c.value} value={c.value}>
-            {c.label}
-          </option>
-        ))}
-      </select>
+        ariaLabel="Canal da negociação"
+        options={NEGOTIATION_CHANNELS.map((channel) => ({
+          value: channel.value,
+          label: channel.label,
+        }))}
+      />
 
       <Input
         name="notes"

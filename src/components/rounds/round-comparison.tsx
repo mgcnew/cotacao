@@ -10,6 +10,7 @@ import { NegotiationForm } from "@/components/quotations/negotiation-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import type { DadosDaComparacao } from "@/features/rounds/comparacao";
 
 const MONEY = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -79,17 +80,19 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
           <span className="bg-primary/10 rounded-lg p-2"><Store className="text-primary size-4" aria-hidden /></span>
           <div className="min-w-52 flex-1">
             <label htmlFor="comparison-supplier" className="text-fg-muted mb-1 block text-xs font-medium">Fornecedor em análise · {currentIndex + 1} de {suppliers.length}</label>
-            <select
+            <ThemedSelect
               id="comparison-supplier"
               value={supplier.id}
-              onChange={(event) => setSupplierId(event.target.value)}
-              className="border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full max-w-md rounded-lg border px-3 text-sm font-semibold outline-none focus-visible:ring-3"
-            >
-              {suppliers.map((option) => {
+              onValueChange={setSupplierId}
+              className="h-9 max-w-md font-semibold"
+              options={suppliers.map((option) => {
                 const optionStats = supplierStats(option, rows);
-                return <option key={option.id} value={option.id}>{option.suppliers.name} · {optionStats.priced}/{rows.length} preços{option.removed_at ? " · retirado" : ""}</option>;
+                return {
+                  value: option.id,
+                  label: `${option.suppliers.name} · ${optionStats.priced}/${rows.length} preços${option.removed_at ? " · retirado" : ""}`,
+                };
               })}
-            </select>
+            />
           </div>
           <div className="flex items-center gap-1">
             <Button type="button" size="sm" variant="outline" aria-label="Fornecedor anterior" onClick={() => move(-1)}><ChevronLeft className="size-4" aria-hidden /></Button>

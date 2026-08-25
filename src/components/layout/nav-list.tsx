@@ -6,7 +6,7 @@ import * as React from "react";
 
 import {
   FOOTER_NAV,
-  OPERATION_NAV,
+  NAV_GROUPS,
   type NavItem,
 } from "@/components/layout/nav-items";
 import { cn } from "@/lib/utils";
@@ -57,9 +57,12 @@ export function useVisibleNav(permissions: string[]) {
   const pathname = usePathname();
 
   return {
-    operation: OPERATION_NAV.filter(
-      (item) => !item.permission || granted.has(item.permission),
-    ),
+    groups: NAV_GROUPS.map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !item.permission || granted.has(item.permission),
+      ),
+    })).filter((group) => group.items.length > 0),
     footer: FOOTER_NAV,
     isActive: (href: string) =>
       pathname === href || pathname.startsWith(`${href}/`),

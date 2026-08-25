@@ -10,14 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   removeRoundSupplier,
   upsertRoundSupplierGroups,
   type RoundFormState,
 } from "@/features/rounds/actions";
-
-const selectClass =
-  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
 
 type Contact = {
   id: string;
@@ -164,20 +162,16 @@ function ParticipantEditor({
           >
             Contato que recebe a cotação
           </label>
-          <select
+          <ThemedSelect
             id={`manager-contact-${participant.roundSupplierId}`}
             name="contactId"
             defaultValue={participant.contactId ?? participant.contacts[0]?.id}
             required
-            className={selectClass}
-          >
-            {participant.contacts.map((contact) => (
-              <option key={contact.id} value={contact.id}>
-                {contact.name}
-                {contact.role ? ` · ${contact.role}` : ""}
-              </option>
-            ))}
-          </select>
+            options={participant.contacts.map((contact) => ({
+              value: contact.id,
+              label: `${contact.name}${contact.role ? ` · ${contact.role}` : ""}`,
+            }))}
+          />
         </div>
 
         <GroupChecks groups={groups} selected={new Set(participant.groupIds)} />
@@ -314,26 +308,19 @@ function AddSupplierEditor({
           >
             Contato
           </label>
-          <select
+          <ThemedSelect
             key={supplier?.id ?? "empty"}
             id="manager-new-contact"
             name="contactId"
             defaultValue={supplier?.contacts[0]?.id}
             required
             disabled={!supplier}
-            className={selectClass}
-          >
-            {!supplier ? (
-              <option value="">Escolha o fornecedor primeiro</option>
-            ) : (
-              supplier.contacts.map((contact) => (
-                <option key={contact.id} value={contact.id}>
-                  {contact.name}
-                  {contact.role ? ` · ${contact.role}` : ""}
-                </option>
-              ))
-            )}
-          </select>
+            placeholder="Escolha o fornecedor primeiro"
+            options={(supplier?.contacts ?? []).map((contact) => ({
+              value: contact.id,
+              label: `${contact.name}${contact.role ? ` · ${contact.role}` : ""}`,
+            }))}
+          />
         </div>
       </div>
 

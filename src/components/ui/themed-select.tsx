@@ -22,18 +22,20 @@ export function ThemedSelect({
   onValueChange,
   placeholder = "Selecione…",
   emptyOptionLabel,
+  ariaLabel,
   required = false,
   disabled = false,
   className,
 }: {
   id: string;
-  name: string;
+  name?: string;
   options: ThemedSelectOption[];
   value?: string;
   defaultValue?: string;
   onValueChange?: (value: string) => void;
   placeholder?: string;
   emptyOptionLabel?: string;
+  ariaLabel?: string;
   required?: boolean;
   disabled?: boolean;
   className?: string;
@@ -52,9 +54,10 @@ export function ThemedSelect({
         onValueChange?.(actual);
       }}
     >
-      <input type="hidden" name={name} value={current} />
+      {name ? <input type="hidden" name={name} value={current} /> : null}
       <SelectPrimitive.Trigger
         id={id}
+        aria-label={ariaLabel}
         aria-required={required}
         className={cn(
           "border-input bg-transparent text-fg shadow-xs transition-colors",

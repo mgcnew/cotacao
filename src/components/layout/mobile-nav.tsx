@@ -20,7 +20,7 @@ type Props = {
  */
 export function MobileNav({ companyName, permissions }: Props) {
   const [open, setOpen] = React.useState(false);
-  const { operation, footer, isActive } = useVisibleNav(permissions);
+  const { groups, footer, isActive } = useVisibleNav(permissions);
 
   const close = () => setOpen(false);
 
@@ -67,16 +67,25 @@ export function MobileNav({ companyName, permissions }: Props) {
             <GlobalSearch onNavigate={close} />
 
             <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2">
-              <p className="text-fg-subtle px-2.5 pt-2 pb-1.5 text-[10px] font-semibold tracking-wider uppercase">
-                Operação
-              </p>
-              {operation.map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  active={isActive(item.href)}
-                  onNavigate={close}
-                />
+              {groups.map((group, index) => (
+                <section
+                  key={group.label}
+                  className={index > 0 ? "mt-2" : undefined}
+                >
+                  <p className="text-fg-subtle px-2.5 pt-2 pb-1.5 text-[10px] font-semibold tracking-wider uppercase">
+                    {group.label}
+                  </p>
+                  <div className="flex flex-col gap-0.5">
+                    {group.items.map((item) => (
+                      <NavLink
+                        key={item.href}
+                        item={item}
+                        active={isActive(item.href)}
+                        onNavigate={close}
+                      />
+                    ))}
+                  </div>
+                </section>
               ))}
             </nav>
 

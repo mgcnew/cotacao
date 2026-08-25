@@ -7,13 +7,11 @@ import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   correctResponseItem,
   type CorrectionState,
 } from "@/features/quotations/correction";
-
-const selectClass =
-  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -83,16 +81,17 @@ export function CorrectionForm({
         {productName} · {supplierName}
       </p>
 
-      <select
+      <ThemedSelect
+        id={`corr-fornece-${responseItemId}`}
         name="supplies"
         value={fornece ? "sim" : "nao"}
-        onChange={(e) => setFornece(e.target.value === "sim")}
-        aria-label="O fornecedor trabalha com este produto?"
-        className={selectClass}
-      >
-        <option value="sim">Fornece este produto</option>
-        <option value="nao">Não trabalha com este produto</option>
-      </select>
+        onValueChange={(next) => setFornece(next === "sim")}
+        ariaLabel="O fornecedor trabalha com este produto?"
+        options={[
+          { value: "sim", label: "Fornece este produto" },
+          { value: "nao", label: "Não trabalha com este produto" },
+        ]}
+      />
 
       {fornece ? (
         <div className="flex flex-col gap-1.5">

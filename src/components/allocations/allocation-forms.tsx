@@ -8,6 +8,7 @@ import { useFormStatus } from "react-dom";
 import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   allocateItem,
   confirmAllocations,
@@ -15,9 +16,6 @@ import {
   type AllocationState,
   type RecommendationState,
 } from "@/features/allocations/actions";
-
-const selectClass =
-  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
 
 function Submit({ label, busy }: { label: string; busy: string }) {
   const { pending } = useFormStatus();
@@ -89,20 +87,16 @@ export function AllocateForm({
           >
             Fornecedor
           </label>
-          <select
+          <ThemedSelect
             id={`forn-${quotationItemId}`}
             name="supplierId"
             required
             defaultValue={initialSupplierId ?? ""}
-            className={selectClass}
-          >
-            <option value="">Selecione…</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} — {s.price.toFixed(2).replace(".", ",")}
-              </option>
-            ))}
-          </select>
+            options={suppliers.map((supplier) => ({
+              value: supplier.id,
+              label: `${supplier.name} — ${supplier.price.toFixed(2).replace(".", ",")}`,
+            }))}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -175,7 +169,11 @@ export function ApplyRecommendationsForm({
       />
       <ErrorLine error={state.error} />
       <SuccessLine
-        message={state.savedAt ? `${state.createdCount ?? itemCount} decisões adicionadas ao rascunho.` : null}
+        message={
+          state.savedAt
+            ? `${state.createdCount ?? itemCount} decisões adicionadas ao rascunho.`
+            : null
+        }
       />
     </form>
   );
