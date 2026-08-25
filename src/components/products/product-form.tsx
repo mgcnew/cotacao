@@ -16,7 +16,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { createProduct, type ProductFormState } from "@/features/products/actions";
+import { ThemedSelect } from "@/components/ui/themed-select";
+import {
+  createProduct,
+  type ProductFormState,
+} from "@/features/products/actions";
 import { PRODUCT_PURPOSES } from "@/features/products/purposes";
 
 type Option = { id: string; label: string };
@@ -38,7 +42,7 @@ type Props = {
 };
 
 const selectClass =
-  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
+  "border-input bg-transparent text-fg shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full cursor-pointer rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30 dark:disabled:bg-input/80 [&>option]:bg-popover [&>option]:text-popover-foreground";
 
 function Field({
   label,
@@ -87,7 +91,9 @@ export function ProductForm({ categories, units, attributes }: Props) {
 
   // Só os atributos da categoria escolhida — é o que "esses campos só aparecem
   // quando relevantes" quer dizer na prática.
-  const visibleAttributes = attributes.filter((a) => a.categoryId === categoryId);
+  const visibleAttributes = attributes.filter(
+    (a) => a.categoryId === categoryId,
+  );
 
   const conteudo = (
     <>
@@ -109,37 +115,32 @@ export function ProductForm({ categories, units, attributes }: Props) {
             htmlFor="categoryId"
             acao={<NovaCategoriaDialog />}
           >
-            <select
+            <ThemedSelect
               id="categoryId"
               name="categoryId"
               required
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">Selecione…</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+              onValueChange={setCategoryId}
+              options={categories.map((category) => ({
+                value: category.id,
+                label: category.label,
+              }))}
+            />
           </Field>
 
           <Field label="Finalidade" htmlFor="purpose">
-            <select
+            <ThemedSelect
               id="purpose"
               name="purpose"
               required
               defaultValue="resale"
-              className={selectClass}
-            >
-              {PRODUCT_PURPOSES.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.hint ? `${p.label} — ${p.hint}` : p.label}
-                </option>
-              ))}
-            </select>
+              options={PRODUCT_PURPOSES.map((purpose) => ({
+                value: purpose.value,
+                label: purpose.hint
+                  ? `${purpose.label} — ${purpose.hint}`
+                  : purpose.label,
+              }))}
+            />
           </Field>
         </div>
       </section>
@@ -149,9 +150,9 @@ export function ProductForm({ categories, units, attributes }: Props) {
           <div className="min-w-0">
             <h2 className="text-fg text-sm font-semibold">Unidades</h2>
             <p className="text-fg-muted mt-1 text-sm">
-            É o que permite comparar propostas diferentes. Se um fornecedor cota
-            o pacote com 400 e outro o pacote com 500, a comparação só faz
-              sentido numa base comum.
+              É o que permite comparar propostas diferentes. Se um fornecedor
+              cota o pacote com 400 e outro o pacote com 500, a comparação só
+              faz sentido numa base comum.
             </p>
           </div>
           <NovaUnidadeDialog />
@@ -163,19 +164,15 @@ export function ProductForm({ categories, units, attributes }: Props) {
             htmlFor="purchaseUnitId"
             hint="Como você compra"
           >
-            <select
+            <ThemedSelect
               id="purchaseUnitId"
               name="purchaseUnitId"
               required
-              className={selectClass}
-            >
-              <option value="">Selecione…</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.label}
-                </option>
-              ))}
-            </select>
+              options={units.map((unit) => ({
+                value: unit.id,
+                label: unit.label,
+              }))}
+            />
           </Field>
 
           <Field
@@ -183,19 +180,15 @@ export function ProductForm({ categories, units, attributes }: Props) {
             htmlFor="pricingUnitId"
             hint="Como o fornecedor cota"
           >
-            <select
+            <ThemedSelect
               id="pricingUnitId"
               name="pricingUnitId"
               required
-              className={selectClass}
-            >
-              <option value="">Selecione…</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.label}
-                </option>
-              ))}
-            </select>
+              options={units.map((unit) => ({
+                value: unit.id,
+                label: unit.label,
+              }))}
+            />
           </Field>
 
           <Field
@@ -203,14 +196,16 @@ export function ProductForm({ categories, units, attributes }: Props) {
             htmlFor="comparisonUnitId"
             hint="Em branco: usa a de precificação"
           >
-            <select id="comparisonUnitId" name="comparisonUnitId" className={selectClass}>
-              <option value="">—</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.label}
-                </option>
-              ))}
-            </select>
+            <ThemedSelect
+              id="comparisonUnitId"
+              name="comparisonUnitId"
+              placeholder="—"
+              emptyOptionLabel="Usar a unidade de precificação"
+              options={units.map((unit) => ({
+                value: unit.id,
+                label: unit.label,
+              }))}
+            />
           </Field>
         </div>
       </section>
@@ -314,7 +309,6 @@ export function ProductForm({ categories, units, attributes }: Props) {
           {state.savedName} cadastrado. O formulário está limpo para o próximo.
         </p>
       ) : null}
-
     </>
   );
 
@@ -330,7 +324,11 @@ export function ProductForm({ categories, units, attributes }: Props) {
   }
 
   return (
-    <form key={state.savedAt} action={formAction} className="flex flex-col gap-6">
+    <form
+      key={state.savedAt}
+      action={formAction}
+      className="flex flex-col gap-6"
+    >
       {conteudo}
       <div className="flex justify-end">
         <SubmitButton />
