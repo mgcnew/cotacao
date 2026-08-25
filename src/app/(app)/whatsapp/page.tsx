@@ -43,11 +43,9 @@ import {
   listWhatsAppConversations,
   listWhatsAppMessages,
 } from "@/features/whatsapp/queries";
+import { getCompany } from "@/features/company/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
-
-const DATE = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-const TIME = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -85,7 +83,22 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
   const metricsDays = requestedPeriod === 7 || requestedPeriod === 90 ? requestedPeriod : 30;
   const canSend = permissions.has("purchase_round.send");
   const canManage = permissions.has("role.manage");
-  const connection = await getWhatsAppConnection(company.companyId);
+  const [connection, companyDetails] = await Promise.all([
+    getWhatsAppConnection(company.companyId),
+    getCompany(company.companyId),
+  ]);
+  const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: companyDetails.timezone,
+  });
+  const timeFormatter = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: companyDetails.timezone,
+  });
 
   if (!connection) {
     return (
@@ -215,7 +228,7 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
                     <strong className="text-fg truncate text-sm font-medium">{conversation.suppliers?.name ?? conversation.display_name ?? conversation.normalized_phone ?? "Número desconhecido"}</strong>
-                    {conversation.last_message_at ? <time className="text-fg-subtle shrink-0 text-[10px]">{DATE.format(new Date(conversation.last_message_at))}</time> : null}
+                    {conversation.last_message_at ? <time className="text-fg-subtle shrink-0 text-[10px]">{dateFormatter.format(new Date(conversation.last_message_at))}</time> : null}
                   </span>
                   <span className="mt-0.5 flex items-center gap-2">
                     <span className="text-fg-muted flex-1 truncate text-xs">{conversation.last_message_preview ?? "Conversa iniciada"}</span>
@@ -298,7 +311,7 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
                         ) : null}
                         {message.body ? <p className="whitespace-pre-wrap wrap-break-word">{message.body}</p> : null}
                         <footer className="text-fg-subtle mt-1 flex items-center justify-end gap-1 text-[10px]">
-                          <time>{TIME.format(new Date(message.occurred_at))}</time>
+                          <time>{timeFormatter.format(new Date(message.occurred_at))}</time>
                           {message.direction === "outbound" ? <StatusIcon status={message.status} /> : null}
                         </footer>
                         {message.error_message ? <p className="text-danger mt-1 text-[10px]">{message.error_message}</p> : null}
