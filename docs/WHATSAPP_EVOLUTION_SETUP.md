@@ -61,6 +61,10 @@ Depois do deploy e do SQL:
 Quando uma sessão expirar, o mesmo administrador usa **Reconectar** e lê um novo
 QR Code. A instância e o histórico do sistema são preservados.
 
+Se as variáveis ou o domínio público mudarem depois da conexão, use
+**Reconfigurar integração**. O webhook é instalado novamente sem desconectar o
+WhatsApp e, na sequência, o sistema verifica as mensagens recentes.
+
 São habilitados somente os eventos necessários:
 
 - `MESSAGES_UPSERT`
@@ -79,8 +83,9 @@ da VPS usando a tag `latest` sem homologação.
 
 ## 4. Reconciliação de segurança
 
-O webhook é a via rápida. Para recuperar mensagens durante indisponibilidades,
-agende a cada cinco minutos, na VPS ou no provedor de cron:
+O webhook é a via rápida. O `vercel.json` executa uma recuperação diária às
+06:00 UTC, compatível inclusive com o plano Hobby. Como proteção operacional
+mais rápida, agende também a cada cinco minutos na VPS:
 
 ```bash
 curl --fail --silent --show-error \
@@ -91,6 +96,11 @@ curl --fail --silent --show-error \
 O endpoint atualiza primeiro o estado das conexões e, para as conectadas,
 consulta a janela recente de mensagens. Mensagens já existentes são ignoradas
 pelo par `connection_id + external_message_id`.
+
+Também é possível executar a mesma recuperação imediatamente em
+**Configurações > WhatsApp > Sincronizar mensagens**. O painel mostra a data do
+último webhook recebido e da última sincronização, facilitando a identificação
+de uma integração que envia, mas deixou de receber.
 
 ## 5. Verificação de aceite
 
@@ -106,7 +116,8 @@ pelo par `connection_id + external_message_id`.
 
 ## Limites desta primeira entrega
 
-Texto está completo. Imagem, documento, áudio e vídeo recebidos já são
-classificados e aparecem na linha do tempo, mas o download/armazenamento privado
-do arquivo e o envio de anexos devem ser homologados contra a versão real da
-Evolution antes de serem habilitados.
+Texto e áudio recebido estão completos. Áudios de até 20 MB são buscados na
+Evolution, armazenados no bucket privado `whatsapp-media` e reproduzidos por uma
+rota que valida a empresa e o usuário antes de entregar o arquivo. Imagem,
+documento e vídeo ainda são classificados na linha do tempo, mas o download e o
+envio desses anexos continuam pendentes de homologação.

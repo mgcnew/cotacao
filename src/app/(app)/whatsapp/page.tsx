@@ -247,6 +247,16 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
                             {message.media_file_name ?? messageTypeLabel(message.message_type)}
                           </div>
                         ) : null}
+                        {message.message_type === "audio" && message.media_path ? (
+                          <audio
+                            controls
+                            preload="none"
+                            className="my-1 h-10 w-64 max-w-full"
+                            src={`/api/whatsapp/media/${message.id}`}
+                          >
+                            Seu navegador não consegue reproduzir este áudio.
+                          </audio>
+                        ) : null}
                         {message.body ? <p className="whitespace-pre-wrap wrap-break-word">{message.body}</p> : null}
                         <footer className="text-fg-subtle mt-1 flex items-center justify-end gap-1 text-[10px]">
                           <time>{TIME.format(new Date(message.occurred_at))}</time>

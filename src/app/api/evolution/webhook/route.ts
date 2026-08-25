@@ -6,6 +6,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 function secureEqual(left: string, right: string) {
   const a = Buffer.from(left);
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
   }
 
   const eventKey = createHash("sha256").update(rawBody).digest("hex");
-  const { data: event, error: eventError } = await client
+  const { data: insertedEvent, error: eventError } = await client
     .from("whatsapp_webhook_events")
     .insert({
       company_id: connection.company_id,
@@ -75,10 +76,20 @@ export async function POST(request: Request) {
     .select("id")
     .single();
 
+  let event = insertedEvent;
   if (eventError?.code === "23505") {
-    return Response.json({ ok: true, duplicate: true });
+    const { data: existingEvent } = await client
+      .from("whatsapp_webhook_events")
+      .select("id, status")
+      .eq("connection_id", connection.id)
+      .eq("provider_event_key", eventKey)
+      .maybeSingle();
+    if (!existingEvent || !["received", "failed"].includes(existingEvent.status)) {
+      return Response.json({ ok: true, duplicate: true });
+    }
+    event = { id: existingEvent.id };
   }
-  if (eventError || !event) {
+  if ((eventError && eventError.code !== "23505") || !event) {
     return Response.json({ error: eventError?.message ?? "Falha ao registrar evento." }, { status: 500 });
   }
 

@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { normalizeWhatsAppPhone } from "@/features/whatsapp/normalize";
+import { reconcileWhatsAppConnection } from "@/features/whatsapp/reconcile";
 import {
   connectEvolutionInstance,
   configureEvolutionWebhook,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/evolution/client";
 import { getPermissions, requireActiveCompany, requireUser } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import { publicEnv } from "@/lib/env";
 import type { WhatsAppSetupState } from "@/features/whatsapp/connection-state";
 import {
@@ -43,6 +45,8 @@ function setupState(
     status: string;
     phone_number: string | null;
     last_connected_at: string | null;
+    last_event_at: string | null;
+    last_sync_at: string | null;
     last_error: string | null;
   } | null,
   overrides: Partial<WhatsAppSetupState> = {},
@@ -57,6 +61,8 @@ function setupState(
     qrCode: null,
     message: connection?.last_error ?? null,
     lastConnectedAt: connection?.last_connected_at ?? null,
+    lastEventAt: connection?.last_event_at ?? null,
+    lastSyncAt: connection?.last_sync_at ?? null,
     ...overrides,
   };
 }
@@ -141,6 +147,8 @@ async function updateConnectionState(
     status: string;
     phone_number: string | null;
     last_connected_at: string | null;
+    last_event_at: string | null;
+    last_sync_at: string | null;
     last_error: string | null;
     instance_name: string;
   },
@@ -162,7 +170,7 @@ async function updateConnectionState(
     .from("whatsapp_connections")
     .update(update)
     .eq("id", connection.id)
-    .select("status, phone_number, last_connected_at, last_error")
+    .select("status, phone_number, last_connected_at, last_event_at, last_sync_at, last_error")
     .single();
   if (error) return setupState(connection, { ok: false, status: "error", message: error.message });
   return setupState(data);
@@ -187,7 +195,7 @@ export async function connectCompanyWhatsAppAction(): Promise<WhatsAppSetupState
   const supabase = await createServerSupabaseClient();
   let { data: connection, error: selectError } = await supabase
     .from("whatsapp_connections")
-    .select("id, instance_name, status, phone_number, last_connected_at, last_error")
+    .select("id, instance_name, status, phone_number, last_connected_at, last_event_at, last_sync_at, last_error")
     .eq("company_id", access.company.companyId)
     .limit(1)
     .maybeSingle();
@@ -203,12 +211,12 @@ export async function connectCompanyWhatsAppAction(): Promise<WhatsAppSetupState
         provider_mode: "baileys",
         status: "connecting",
       })
-      .select("id, instance_name, status, phone_number, last_connected_at, last_error")
+      .select("id, instance_name, status, phone_number, last_connected_at, last_event_at, last_sync_at, last_error")
       .single();
     if (error?.code === "23505") {
       const retry = await supabase
         .from("whatsapp_connections")
-        .select("id, instance_name, status, phone_number, last_connected_at, last_error")
+        .select("id, instance_name, status, phone_number, last_connected_at, last_event_at, last_sync_at, last_error")
         .eq("company_id", access.company.companyId)
         .limit(1)
         .single();
@@ -282,7 +290,7 @@ export async function checkCompanyWhatsAppAction(): Promise<WhatsAppSetupState> 
   const supabase = await createServerSupabaseClient();
   const { data: connection } = await supabase
     .from("whatsapp_connections")
-    .select("id, instance_name, status, phone_number, last_connected_at, last_error")
+    .select("id, instance_name, status, phone_number, last_connected_at, last_event_at, last_sync_at, last_error")
     .eq("company_id", access.company.companyId)
     .limit(1)
     .maybeSingle();
@@ -293,13 +301,94 @@ export async function checkCompanyWhatsAppAction(): Promise<WhatsAppSetupState> 
   return result;
 }
 
+export async function reconfigureCompanyWhatsAppAction(): Promise<WhatsAppSetupState> {
+  const access = await requireWhatsAppManager();
+  if (!access.allowed) return setupState(null, { ok: false, message: "Acesso restrito ao administrador." });
+  const env = (await import("@/lib/env")).getServerEnv();
+  if (!env.EVOLUTION_API_URL || !env.EVOLUTION_API_KEY || !env.EVOLUTION_WEBHOOK_SECRET) {
+    return setupState(null, {
+      ok: false,
+      configured: false,
+      status: "not_configured",
+      message: "Preencha URL, chave e segredo de webhook da Evolution no ambiente do servidor.",
+    });
+  }
+
+  const service = createServiceRoleClient();
+  const { data: connection, error } = await service
+    .from("whatsapp_connections")
+    .select("*")
+    .eq("company_id", access.company.companyId)
+    .limit(1)
+    .maybeSingle();
+  if (error || !connection) {
+    return setupState(null, { ok: false, message: error?.message ?? "Conexão não encontrada." });
+  }
+
+  const webhook = await configureEvolutionWebhook(
+    connection.instance_name,
+    `${publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/api/evolution/webhook`,
+    env.EVOLUTION_WEBHOOK_SECRET,
+  );
+  if (!webhook.ok) {
+    const message = `Webhook: ${webhook.error}`;
+    await service.from("whatsapp_connections").update({ last_error: message }).eq("id", connection.id);
+    return setupState(connection, { ok: false, message });
+  }
+
+  const reconciliation = await reconcileWhatsAppConnection(service, connection);
+  const { data: refreshed } = await service
+    .from("whatsapp_connections")
+    .select("status, phone_number, last_connected_at, last_event_at, last_sync_at, last_error")
+    .eq("id", connection.id)
+    .single();
+  revalidatePath("/configuracoes");
+  revalidatePath("/whatsapp");
+  return setupState(refreshed ?? connection, {
+    ok: reconciliation.ok,
+    message: reconciliation.ok
+      ? `Integração reconfigurada e ${reconciliation.checked} mensagem(ns) recentes verificadas.`
+      : reconciliation.error,
+  });
+}
+
+export async function syncCompanyWhatsAppAction(): Promise<WhatsAppSetupState> {
+  const access = await requireWhatsAppManager();
+  if (!access.allowed) return setupState(null, { ok: false, message: "Acesso restrito ao administrador." });
+  const service = createServiceRoleClient();
+  const { data: connection, error } = await service
+    .from("whatsapp_connections")
+    .select("*")
+    .eq("company_id", access.company.companyId)
+    .limit(1)
+    .maybeSingle();
+  if (error || !connection) {
+    return setupState(null, { ok: false, message: error?.message ?? "Conexão não encontrada." });
+  }
+
+  const reconciliation = await reconcileWhatsAppConnection(service, connection);
+  const { data: refreshed } = await service
+    .from("whatsapp_connections")
+    .select("status, phone_number, last_connected_at, last_event_at, last_sync_at, last_error")
+    .eq("id", connection.id)
+    .single();
+  revalidatePath("/configuracoes");
+  revalidatePath("/whatsapp");
+  return setupState(refreshed ?? connection, {
+    ok: reconciliation.ok,
+    message: reconciliation.ok
+      ? `${reconciliation.checked} mensagem(ns) recentes verificadas.`
+      : reconciliation.error,
+  });
+}
+
 export async function disconnectCompanyWhatsAppAction(): Promise<WhatsAppSetupState> {
   const access = await requireWhatsAppManager();
   if (!access.allowed) return setupState(null, { ok: false, message: "Acesso restrito ao administrador." });
   const supabase = await createServerSupabaseClient();
   const { data: connection, error } = await supabase
     .from("whatsapp_connections")
-    .select("id, instance_name, status, phone_number, last_connected_at, last_error")
+    .select("id, instance_name, status, phone_number, last_connected_at, last_event_at, last_sync_at, last_error")
     .eq("company_id", access.company.companyId)
     .limit(1)
     .maybeSingle();

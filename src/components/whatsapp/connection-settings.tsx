@@ -21,6 +21,8 @@ import {
   checkCompanyWhatsAppAction,
   connectCompanyWhatsAppAction,
   disconnectCompanyWhatsAppAction,
+  reconfigureCompanyWhatsAppAction,
+  syncCompanyWhatsAppAction,
 } from "@/features/whatsapp/actions";
 import type { WhatsAppSetupState } from "@/features/whatsapp/connection-state";
 
@@ -119,17 +121,37 @@ export function WhatsAppConnectionSettings({
         </CardHeader>
         <CardContent className="space-y-5">
           {connected ? (
-            <div className="border-border bg-surface-muted flex items-center gap-3 rounded-xl border p-4">
-              <span className="bg-success-soft text-success grid size-10 shrink-0 place-items-center rounded-full">
-                <CheckCircle2 className="size-5" aria-hidden />
-              </span>
-              <div className="min-w-0">
-                <p className="text-fg font-medium">{phone(state.phone) ?? "WhatsApp conectado"}</p>
-                <p className="text-fg-muted text-xs">
-                  {state.lastConnectedAt
-                    ? `Conexão confirmada em ${new Date(state.lastConnectedAt).toLocaleString("pt-BR")}`
-                    : "Conexão pronta para enviar e receber mensagens."}
-                </p>
+            <div className="border-border bg-surface-muted rounded-xl border p-4">
+              <div className="flex items-center gap-3">
+                <span className="bg-success-soft text-success grid size-10 shrink-0 place-items-center rounded-full">
+                  <CheckCircle2 className="size-5" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-fg font-medium">{phone(state.phone) ?? "WhatsApp conectado"}</p>
+                  <p className="text-fg-muted text-xs">
+                    {state.lastConnectedAt
+                      ? `Conexão confirmada em ${new Date(state.lastConnectedAt).toLocaleString("pt-BR")}`
+                      : "Conexão pronta para enviar e receber mensagens."}
+                  </p>
+                </div>
+              </div>
+              <div className="border-border mt-4 grid gap-3 border-t pt-3 text-xs sm:grid-cols-2">
+                <div>
+                  <p className="text-fg-subtle font-medium uppercase">Último evento recebido</p>
+                  <p className={state.lastEventAt ? "text-fg-muted mt-1" : "text-warning mt-1"}>
+                    {state.lastEventAt
+                      ? new Date(state.lastEventAt).toLocaleString("pt-BR")
+                      : "Nenhum webhook recebido"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-fg-subtle font-medium uppercase">Última sincronização</p>
+                  <p className={state.lastSyncAt ? "text-fg-muted mt-1" : "text-warning mt-1"}>
+                    {state.lastSyncAt
+                      ? new Date(state.lastSyncAt).toLocaleString("pt-BR")
+                      : "Ainda não executada"}
+                  </p>
+                </div>
               </div>
             </div>
           ) : null}
@@ -197,8 +219,18 @@ export function WhatsAppConnectionSettings({
               )}
               {state.status !== "not_connected" && state.configured ? (
                 <Button type="button" variant="outline" disabled={pending} onClick={() => run(checkCompanyWhatsAppAction)}>
-                  <RefreshCw className={pending ? "animate-spin" : undefined} aria-hidden /> Verificar agora
+                  <RefreshCw className={pending ? "animate-spin" : undefined} aria-hidden /> Verificar conexão
                 </Button>
+              ) : null}
+              {connected ? (
+                <>
+                  <Button type="button" variant="outline" disabled={pending} onClick={() => run(reconfigureCompanyWhatsAppAction)}>
+                    <ShieldCheck aria-hidden /> Reconfigurar integração
+                  </Button>
+                  <Button type="button" variant="outline" disabled={pending} onClick={() => run(syncCompanyWhatsAppAction)}>
+                    <RefreshCw className={pending ? "animate-spin" : undefined} aria-hidden /> Sincronizar mensagens
+                  </Button>
+                </>
               ) : null}
             </div>
           )}

@@ -89,6 +89,8 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
           ? whatsapp.last_error
           : "A integração ainda não foi configurada no ambiente do servidor.",
         lastConnectedAt: whatsapp.last_connected_at,
+        lastEventAt: whatsapp.last_event_at,
+        lastSyncAt: whatsapp.last_sync_at,
       }
     : {
         ok: evolutionConfigured,
@@ -100,6 +102,8 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
           ? null
           : "A integração ainda não foi configurada no ambiente do servidor.",
         lastConnectedAt: null,
+        lastEventAt: null,
+        lastSyncAt: null,
       };
 
   return (

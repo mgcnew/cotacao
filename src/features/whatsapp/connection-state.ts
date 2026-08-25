@@ -6,4 +6,6 @@ export type WhatsAppSetupState = {
   qrCode: string | null;
   message: string | null;
   lastConnectedAt: string | null;
+  lastEventAt: string | null;
+  lastSyncAt: string | null;
 };

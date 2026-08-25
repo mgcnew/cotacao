@@ -1,8 +1,11 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { jidCanBeMatchedToPhone, normalizeWhatsAppPhone, phonesEquivalent } from "@/features/whatsapp/normalize";
+import { getEvolutionMedia } from "@/lib/evolution/client";
 import type { Database, Json } from "@/types/database";
 
 type ServiceClient = SupabaseClient<Database>;
@@ -86,6 +89,81 @@ function preview(type: string, body: string | null) {
   return ({ image: "Imagem", document: "Documento", audio: "Áudio", video: "Vídeo", contact: "Contato", location: "Localização", reaction: "Reação" } as Record<string, string>)[type] ?? "Mensagem";
 }
 
+const MEDIA_BUCKET = "whatsapp-media";
+
+function audioExtension(mimeType: string) {
+  if (mimeType.includes("mpeg")) return "mp3";
+  if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a";
+  if (mimeType.includes("aac")) return "aac";
+  if (mimeType.includes("webm")) return "webm";
+  if (mimeType.includes("opus")) return "opus";
+  return "ogg";
+}
+
+async function ensureMediaBucket(client: ServiceClient) {
+  const { error: readError } = await client.storage.getBucket(MEDIA_BUCKET);
+  if (!readError) return;
+  const { error: createError } = await client.storage.createBucket(MEDIA_BUCKET, {
+    public: false,
+    fileSizeLimit: 20 * 1024 * 1024,
+    allowedMimeTypes: ["audio/*"],
+  });
+  if (createError && !/already exists|duplicate/i.test(createError.message)) {
+    throw createError;
+  }
+}
+
+async function attachAudio(
+  client: ServiceClient,
+  connection: Connection,
+  messageId: string,
+  externalId: string,
+  rawMessage: JsonObject,
+  fallbackMimeType: string | null,
+) {
+  try {
+    const media = await getEvolutionMedia(
+      connection.instance_name,
+      rawMessage,
+      fallbackMimeType,
+    );
+    if (!media.ok) throw new Error(media.error);
+
+    await ensureMediaBucket(client);
+    const digest = createHash("sha256").update(externalId).digest("hex");
+    const path = `${connection.company_id}/${connection.id}/${digest}.${audioExtension(media.mimeType)}`;
+    const { error: uploadError } = await client.storage
+      .from(MEDIA_BUCKET)
+      .upload(path, media.bytes, {
+        contentType: media.mimeType,
+        cacheControl: "3600",
+        upsert: false,
+      });
+    if (uploadError && !/already exists|duplicate/i.test(uploadError.message)) {
+      throw uploadError;
+    }
+
+    await client
+      .from("whatsapp_messages")
+      .update({
+        media_path: path,
+        media_mime_type: media.mimeType,
+        error_message: null,
+      })
+      .eq("company_id", connection.company_id)
+      .eq("id", messageId);
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : "Falha ao buscar o áudio.";
+    await client
+      .from("whatsapp_messages")
+      .update({
+        error_message: `Áudio recebido, mas o arquivo não pôde ser carregado: ${reason}`.slice(0, 500),
+      })
+      .eq("company_id", connection.company_id)
+      .eq("id", messageId);
+  }
+}
+
 async function findContact(client: ServiceClient, companyId: string, remoteJid: string) {
   if (!jidCanBeMatchedToPhone(remoteJid)) return null;
   const phone = normalizeWhatsAppPhone(remoteJid);
@@ -107,7 +185,14 @@ async function ingestMessage(
   const data = object(raw);
   const key = object(data.key);
   const externalId = text(key.id) ?? text(data.messageId);
-  const remoteJid = text(key.remoteJid) ?? text(data.remoteJid);
+  const primaryJid = text(key.remoteJid) ?? text(data.remoteJid);
+  const alternativeJid = text(key.remoteJidAlt) ?? text(data.remoteJidAlt);
+  // No modo multi-device a Evolution pode entregar um identificador @lid no
+  // campo principal e o telefone real em remoteJidAlt. Usar o alternativo
+  // evita abrir outra conversa e permite reconhecer o fornecedor cadastrado.
+  const remoteJid = primaryJid?.endsWith("@lid") && alternativeJid
+    ? alternativeJid
+    : primaryJid;
   if (!externalId || !remoteJid || remoteJid.endsWith("@g.us")) return "ignored";
 
   const fromMe = key.fromMe === true;
@@ -119,11 +204,23 @@ async function ingestMessage(
 
   const { data: existingMessage } = await client
     .from("whatsapp_messages")
-    .select("id")
+    .select("id, media_path, message_type")
     .eq("connection_id", connection.id)
     .eq("external_message_id", externalId)
     .maybeSingle();
-  if (existingMessage) return "duplicate";
+  if (existingMessage) {
+    if (content.type === "audio" && !existingMessage.media_path) {
+      await attachAudio(
+        client,
+        connection,
+        existingMessage.id,
+        externalId,
+        data,
+        content.mime,
+      );
+    }
+    return "duplicate";
+  }
 
   const { data: existingConversation, error: conversationReadError } = await client
     .from("whatsapp_conversations")
@@ -169,7 +266,7 @@ async function ingestMessage(
     conversationId = created.id;
   }
 
-  const { error: messageError } = await client.from("whatsapp_messages").insert({
+  const { data: createdMessage, error: messageError } = await client.from("whatsapp_messages").insert({
     company_id: connection.company_id,
     connection_id: connection.id,
     conversation_id: conversationId,
@@ -184,8 +281,19 @@ async function ingestMessage(
     sent_at: fromMe ? timestamp : null,
     delivered_at: fromMe ? null : timestamp,
     raw_payload: data as Json,
-  });
+  }).select("id").single();
   if (messageError && messageError.code !== "23505") throw messageError;
+
+  if (createdMessage && content.type === "audio") {
+    await attachAudio(
+      client,
+      connection,
+      createdMessage.id,
+      externalId,
+      data,
+      content.mime,
+    );
+  }
 
   if (!fromMe && contact) {
     await client.from("communication_logs").insert({

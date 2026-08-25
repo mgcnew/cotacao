@@ -270,6 +270,84 @@ export async function findEvolutionMessages(
   );
 }
 
+const MAX_MEDIA_BYTES = 20 * 1024 * 1024;
+
+function findBase64Media(
+  value: unknown,
+  fallbackMimeType: string | null,
+  depth = 0,
+): { base64: string; mimeType: string | null } | null {
+  if (depth > 5) return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findBase64Media(item, fallbackMimeType, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  const record = object(value);
+  if (!record) return null;
+  const ownMimeType = typeof record.mimetype === "string"
+    ? record.mimetype
+    : typeof record.mimeType === "string"
+      ? record.mimeType
+      : fallbackMimeType;
+  if (typeof record.base64 === "string" && record.base64.length > 0) {
+    return { base64: record.base64, mimeType: ownMimeType };
+  }
+  for (const child of Object.values(record)) {
+    const found = findBase64Media(child, ownMimeType, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+export type EvolutionMediaResult =
+  | { ok: true; bytes: Uint8Array; mimeType: string }
+  | { ok: false; error: string };
+
+/**
+ * A Evolution entrega somente os metadados no webhook. O arquivo é buscado
+ * no servidor sob demanda, sem repassar a chave da instância ao navegador.
+ */
+export async function getEvolutionMedia(
+  instance: string,
+  message: unknown,
+  fallbackMimeType: string | null,
+): Promise<EvolutionMediaResult> {
+  const result = await evolutionRequest(
+    `/chat/getBase64FromMediaMessage/${encodeURIComponent(instance)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ message, convertToMp4: false }),
+    },
+  );
+  if (!result.ok) return result;
+
+  const found = findBase64Media(result.data, fallbackMimeType);
+  if (!found) {
+    return { ok: false, error: "A Evolution não devolveu o conteúdo do áudio." };
+  }
+  const dataUrl = found.base64.match(/^data:([^;,]+)?;base64,([\s\S]+)$/);
+  const encoded = dataUrl?.[2] ?? found.base64;
+  const mimeType = (dataUrl?.[1] ?? found.mimeType ?? "audio/ogg")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (!mimeType.startsWith("audio/")) {
+    return { ok: false, error: `Tipo de mídia inesperado: ${mimeType}.` };
+  }
+  if (encoded.length > Math.ceil(MAX_MEDIA_BYTES * 4 / 3) + 16) {
+    return { ok: false, error: "O áudio ultrapassa o limite de 20 MB." };
+  }
+
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.length === 0 || bytes.length > MAX_MEDIA_BYTES) {
+    return { ok: false, error: bytes.length === 0 ? "O áudio recebido está vazio." : "O áudio ultrapassa o limite de 20 MB." };
+  }
+  return { ok: true, bytes, mimeType };
+}
+
 export async function configureEvolutionWebhook(
   instance: string,
   url: string,
