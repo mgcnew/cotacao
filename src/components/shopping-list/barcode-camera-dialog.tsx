@@ -53,7 +53,10 @@ export function BarcodeCameraDialog({
   const [error, setError] = React.useState<string | null>(null);
   const [canUseTorch, setCanUseTorch] = React.useState(false);
   const [torchOn, setTorchOn] = React.useState(false);
-  const videoRef = React.useRef<HTMLVideoElement>(null);
+  // O conteúdo do Dialog nasce em um portal. Guardar o elemento em estado faz
+  // a inicialização esperar o portal realmente montar o <video>; com uma ref
+  // simples, o efeito podia rodar antes e ficar eternamente em "Iniciando".
+  const [videoElement, setVideoElement] = React.useState<HTMLVideoElement | null>(null);
   const controlsRef = React.useRef<IScannerControls | null>(null);
   const onDetectedRef = React.useRef(onDetected);
   const lastCodeRef = React.useRef<{ code: string; at: number } | null>(null);
@@ -63,10 +66,11 @@ export function BarcodeCameraDialog({
   }, [onDetected]);
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || !videoElement) return;
 
+    const previewElement = videoElement;
     let disposed = false;
-    const videoElement = videoRef.current;
+    let startTimeout: number | null = null;
     lastCodeRef.current = null;
 
     async function start() {
@@ -81,10 +85,16 @@ export function BarcodeCameraDialog({
         return;
       }
 
+      startTimeout = window.setTimeout(() => {
+        if (disposed) return;
+        setError("A câmera demorou para responder. Feche, confira a permissão do navegador e tente novamente.");
+        setStarting(false);
+      }, 12_000);
+
       try {
         // O leitor só entra no bundle quando a pessoa realmente abre a câmera.
         const { BrowserMultiFormatOneDReader } = await import("@zxing/browser");
-        if (disposed || !videoElement) return;
+        if (disposed) return;
 
         const reader = new BrowserMultiFormatOneDReader(undefined, {
           delayBetweenScanAttempts: 180,
@@ -99,7 +109,7 @@ export function BarcodeCameraDialog({
               height: { ideal: 720 },
             },
           },
-          videoElement,
+          previewElement,
           (result, _scanError, activeControls) => {
             if (!result) return;
             const code = result
@@ -135,26 +145,32 @@ export function BarcodeCameraDialog({
         }
         controlsRef.current = controls;
         setCanUseTorch(Boolean(controls.switchTorch));
+        setError(null);
         setStarting(false);
+        if (startTimeout !== null) window.clearTimeout(startTimeout);
+        startTimeout = null;
       } catch (startError) {
         if (!disposed) {
           setError(cameraErrorMessage(startError));
           setStarting(false);
         }
+        if (startTimeout !== null) window.clearTimeout(startTimeout);
+        startTimeout = null;
       }
     }
 
     void start();
     return () => {
       disposed = true;
+      if (startTimeout !== null) window.clearTimeout(startTimeout);
       controlsRef.current?.stop();
       controlsRef.current = null;
-      const stream = videoElement?.srcObject;
+      const stream = previewElement.srcObject;
       if (stream instanceof MediaStream) {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [open]);
+  }, [open, videoElement]);
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
@@ -204,7 +220,8 @@ export function BarcodeCameraDialog({
         <DialogBody>
           <div className="bg-surface-sunken relative aspect-[4/3] overflow-hidden rounded-xl">
             <video
-              ref={videoRef}
+              ref={setVideoElement}
+              autoPlay
               muted
               playsInline
               className="size-full object-cover"

@@ -1,7 +1,7 @@
 "use client";
 
 import JsBarcode from "jsbarcode";
-import { Barcode, Maximize2, ScanBarcode } from "lucide-react";
+import { Barcode, Maximize2, ScanBarcode, Trash2 } from "lucide-react";
 import * as React from "react";
 
 import { BarcodeCameraDialog } from "@/components/shopping-list/barcode-camera-dialog";
@@ -84,6 +84,24 @@ export function MobileBarcodeDisplay({ products }: { products: ShoppingProduct[]
     }
   }
 
+  function removeCode(item: ScannedProduct) {
+    const next = recent.filter(
+      (recentItem) => !(recentItem.id === item.id && recentItem.code === item.code),
+    );
+    setRecent(next);
+    if (current?.id === item.id && current.code === item.code) {
+      if (document.fullscreenElement) void document.exitFullscreen();
+      setCurrent(next[0] ?? null);
+    }
+  }
+
+  function clearCodes() {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    setCurrent(null);
+    setRecent([]);
+    setFullscreenError(null);
+  }
+
   return (
     <div className="space-y-4">
       <section className="border-border bg-surface rounded-2xl border p-4 shadow-sm">
@@ -116,9 +134,14 @@ export function MobileBarcodeDisplay({ products }: { products: ShoppingProduct[]
               <h2 className="mt-2 truncate text-lg font-semibold">{current.name}</h2>
               <p className="text-fg-muted mt-0.5 font-mono text-sm [&:fullscreen]:text-neutral-700">{current.code}</p>
             </div>
-            <Button type="button" size="icon-sm" variant="outline" onClick={openFullscreen} aria-label="Ampliar código em tela cheia">
-              <Maximize2 aria-hidden />
-            </Button>
+            <div className="flex shrink-0 gap-1">
+              <Button type="button" size="icon-sm" variant="outline" onClick={openFullscreen} aria-label="Ampliar código em tela cheia">
+                <Maximize2 aria-hidden />
+              </Button>
+              <Button type="button" size="icon-sm" variant="ghost" onClick={() => removeCode(current)} aria-label="Apagar este código">
+                <Trash2 aria-hidden />
+              </Button>
+            </div>
           </div>
           <GeneratedBarcode code={current.code} />
           <p className="text-fg-subtle text-center text-xs [&:fullscreen]:text-neutral-600">
@@ -133,20 +156,32 @@ export function MobileBarcodeDisplay({ products }: { products: ShoppingProduct[]
         </section>
       )}
 
-      {recent.length > 1 ? (
+      {recent.length > 0 ? (
         <section>
-          <h2 className="text-fg mb-2 text-sm font-semibold">Lidos nesta sessão</h2>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-fg text-sm font-semibold">Lidos nesta sessão</h2>
+            <Button type="button" size="sm" variant="ghost" onClick={clearCodes}>
+              <Trash2 aria-hidden /> Limpar todos
+            </Button>
+          </div>
           <div className="space-y-2">
             {recent.map((item) => (
-              <button
+              <div
                 key={`${item.id}-${item.code}`}
-                type="button"
-                onClick={() => setCurrent(item)}
-                className="border-border bg-surface hover:bg-surface-muted flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left"
+                className="border-border bg-surface flex w-full items-center gap-2 rounded-xl border p-1.5"
               >
-                <span className="min-w-0 truncate text-sm font-medium">{item.name}</span>
-                <code className="text-fg-muted shrink-0 text-xs">{item.code}</code>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrent(item)}
+                  className="hover:bg-surface-muted flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left"
+                >
+                  <span className="min-w-0 truncate text-sm font-medium">{item.name}</span>
+                  <code className="text-fg-muted shrink-0 text-xs">{item.code}</code>
+                </button>
+                <Button type="button" size="icon-sm" variant="ghost" onClick={() => removeCode(item)} aria-label={`Apagar código de ${item.name}`}>
+                  <Trash2 aria-hidden />
+                </Button>
+              </div>
             ))}
           </div>
         </section>
