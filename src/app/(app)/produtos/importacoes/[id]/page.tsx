@@ -6,14 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   applyProductImportMappingAction,
   publishProductImportItemsAction,
@@ -32,8 +25,6 @@ import {
   parseListPagination,
 } from "@/lib/list-pagination";
 
-const selectClass =
-  "border-input bg-surface text-fg h-8 rounded-lg border px-2 text-xs outline-none";
 const LABEL: Record<string, string> = {
   pending: "Pendente",
   ready: "Pronto",
@@ -51,21 +42,6 @@ const ISSUE: Record<string, string> = {
   duplicate_name_catalog: "Nome já cadastrado",
   duplicate_barcode_catalog: "Código já cadastrado",
 };
-type Option = { id: string; label: string };
-
-function Options({ values, empty }: { values: Option[]; empty: string }) {
-  return (
-    <>
-      <option value="">{empty}</option>
-      {values.map((value) => (
-        <option key={value.id} value={value.id}>
-          {value.label}
-        </option>
-      ))}
-    </>
-  );
-}
-
 export default async function ProductImportDetailPage({
   params,
   searchParams,
@@ -122,7 +98,7 @@ export default async function ProductImportDetailPage({
   const editable = batch.status === "draft";
 
   return (
-    <div className="w-full">
+    <div className="w-full min-w-0">
       <PageHeader
         title={batch.file_name}
         description={`${batch.total_rows.toLocaleString("pt-BR")} produtos · aba ${batch.sheet_name ?? "principal"}`}
@@ -171,7 +147,7 @@ export default async function ProductImportDetailPage({
               <form
                 key={mapping.id}
                 action={applyProductImportMappingAction}
-                className="border-border grid gap-2 rounded-lg border p-3 md:grid-cols-[minmax(10rem,1.2fr)_repeat(4,minmax(8rem,1fr))_auto] md:items-end"
+                className="border-border grid gap-3 rounded-lg border p-3 sm:grid-cols-2 xl:grid-cols-[minmax(10rem,1.2fr)_repeat(4,minmax(8rem,1fr))_auto] xl:items-end"
               >
                 <input type="hidden" name="batchId" value={batch.id} />
                 <input
@@ -179,48 +155,61 @@ export default async function ProductImportDetailPage({
                   name="sourceCategory"
                   value={mapping.source_category}
                 />
-                <strong className="truncate text-sm">
+                <strong className="truncate text-sm sm:col-span-2 xl:col-span-1">
                   {mapping.source_category}
                 </strong>
                 <label className="grid gap-1 text-xs text-fg-muted">
                   Categoria
-                  <select
+                  <ThemedSelect
+                    id={`mapping-category-${mapping.id}`}
                     name="categoryId"
                     defaultValue={mapping.category_id ?? ""}
-                    className={selectClass}
-                  >
-                    <Options values={categories} empty="Escolher" />
-                  </select>
+                    placeholder="Escolher"
+                    options={categories.map((category) => ({
+                      value: category.id,
+                      label: category.label,
+                    }))}
+                  />
                 </label>
                 <label className="grid gap-1 text-xs text-fg-muted">
                   Compra
-                  <select
+                  <ThemedSelect
+                    id={`mapping-purchase-${mapping.id}`}
                     name="purchaseUnitId"
                     defaultValue={mapping.purchase_unit_id ?? ""}
-                    className={selectClass}
-                  >
-                    <Options values={units} empty="Escolher" />
-                  </select>
+                    placeholder="Escolher"
+                    options={units.map((unit) => ({
+                      value: unit.id,
+                      label: unit.label,
+                    }))}
+                  />
                 </label>
                 <label className="grid gap-1 text-xs text-fg-muted">
                   Precificação
-                  <select
+                  <ThemedSelect
+                    id={`mapping-pricing-${mapping.id}`}
                     name="pricingUnitId"
                     defaultValue={mapping.pricing_unit_id ?? ""}
-                    className={selectClass}
-                  >
-                    <Options values={units} empty="Escolher" />
-                  </select>
+                    placeholder="Escolher"
+                    options={units.map((unit) => ({
+                      value: unit.id,
+                      label: unit.label,
+                    }))}
+                  />
                 </label>
                 <label className="grid gap-1 text-xs text-fg-muted">
                   Comparação
-                  <select
+                  <ThemedSelect
+                    id={`mapping-comparison-${mapping.id}`}
                     name="comparisonUnitId"
                     defaultValue={mapping.comparison_unit_id ?? ""}
-                    className={selectClass}
-                  >
-                    <Options values={units} empty="Opcional" />
-                  </select>
+                    placeholder="Opcional"
+                    emptyOptionLabel="Sem unidade própria"
+                    options={units.map((unit) => ({
+                      value: unit.id,
+                      label: unit.label,
+                    }))}
+                  />
                 </label>
                 <Button size="sm" variant="outline">
                   Aplicar
@@ -240,14 +229,17 @@ export default async function ProductImportDetailPage({
           defaultValue={search}
           placeholder="Buscar nome, código ou EAN"
         />
-        <select name="status" defaultValue={status} className={selectClass}>
-          <option value="">Todas as situações</option>
-          {Object.entries(LABEL).map(([key, label]) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </select>
+        <ThemedSelect
+          id="import-status"
+          name="status"
+          defaultValue={status}
+          placeholder="Todas as situações"
+          emptyOptionLabel="Todas as situações"
+          options={Object.entries(LABEL).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
         <Button variant="outline">Filtrar</Button>
       </form>
       {editable ? (
@@ -259,165 +251,162 @@ export default async function ProductImportDetailPage({
         </form>
       ) : null}
       <div className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-8">Sel.</TableHead>
-              <TableHead>Produto</TableHead>
-              <TableHead className="hidden lg:table-cell">
-                EAN / seção
-              </TableHead>
-              <TableHead className="hidden md:table-cell">Categoria</TableHead>
-              <TableHead>Situação</TableHead>
-              <TableHead className="w-0">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => {
-              const formId = `edit-${item.id}`;
-              const locked =
-                !editable || ["imported", "ignored"].includes(item.status);
-              return (
-                <TableRow
-                  key={item.id}
-                  className={
-                    item.status === "ignored" ? "opacity-55" : undefined
-                  }
-                >
-                  <TableCell>
-                    {editable && item.status === "ready" ? (
+        <div className="border-border bg-surface-sunken hidden grid-cols-[1.5rem_minmax(16rem,2fr)_minmax(11rem,0.8fr)_minmax(10rem,0.75fr)_minmax(9rem,0.65fr)_auto] gap-3 border-b px-3 py-2.5 text-xs font-medium xl:grid">
+          <span>Sel.</span>
+          <span>Produto</span>
+          <span>EAN / seção</span>
+          <span>Categoria</span>
+          <span>Situação</span>
+          <span>Ações</span>
+        </div>
+        <div className="divide-border divide-y">
+          {items.map((item) => {
+            const formId = `edit-${item.id}`;
+            const locked =
+              !editable || ["imported", "ignored"].includes(item.status);
+            return (
+              <article
+                key={item.id}
+                className={`grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-3 gap-y-3 p-3 xl:grid-cols-[1.5rem_minmax(16rem,2fr)_minmax(11rem,0.8fr)_minmax(10rem,0.75fr)_minmax(9rem,0.65fr)_auto] xl:items-start ${item.status === "ignored" ? "opacity-55" : ""}`}
+              >
+                <div className="pt-7 xl:pt-2">
+                  {editable && item.status === "ready" ? (
+                    <input
+                      type="checkbox"
+                      form="publish-import-items"
+                      name="itemId"
+                      value={item.id}
+                      aria-label={`Selecionar ${item.proposed_name}`}
+                    />
+                  ) : null}
+                </div>
+
+                <div className="min-w-0">
+                  <label className="text-fg-muted mb-1 block text-[10px] font-medium uppercase xl:hidden">
+                    Produto
+                  </label>
+                  <Input
+                    form={formId}
+                    name="proposedName"
+                    defaultValue={item.proposed_name}
+                    disabled={locked}
+                    className="block h-8 font-medium"
+                  />
+                  <span className="text-fg-muted mt-1 block truncate text-xs">
+                    Linha {item.source_row}
+                    {item.source_code ? ` · cód. ${item.source_code}` : ""}
+                  </span>
+                </div>
+
+                <div className="col-start-2 min-w-0 xl:col-start-auto">
+                  <label className="text-fg-muted mb-1 block text-[10px] font-medium uppercase xl:hidden">
+                    EAN / seção
+                  </label>
+                  <Input
+                    form={formId}
+                    name="barcode"
+                    defaultValue={item.barcode ?? ""}
+                    disabled={locked}
+                    placeholder="EAN (opcional)"
+                    className="block h-8 font-mono text-xs"
+                  />
+                  <span
+                    className="text-fg-muted mt-1 block truncate text-xs"
+                    title={item.source_category}
+                  >
+                    {item.source_category}
+                  </span>
+                </div>
+
+                <div className="col-start-2 min-w-0 xl:col-start-auto">
+                  <label className="text-fg-muted mb-1 block text-[10px] font-medium uppercase xl:hidden">
+                    Categoria
+                  </label>
+                  <ThemedSelect
+                    id={`category-${item.id}`}
+                    form={formId}
+                    name="categoryId"
+                    defaultValue={item.category_id ?? ""}
+                    disabled={locked}
+                    placeholder="Escolher"
+                    options={categories.map((category) => ({
+                      value: category.id,
+                      label: category.label,
+                    }))}
+                  />
+                  <input
+                    form={formId}
+                    type="hidden"
+                    name="purchaseUnitId"
+                    value={item.purchase_unit_id ?? ""}
+                  />
+                  <input
+                    form={formId}
+                    type="hidden"
+                    name="pricingUnitId"
+                    value={item.pricing_unit_id ?? ""}
+                  />
+                  <input
+                    form={formId}
+                    type="hidden"
+                    name="comparisonUnitId"
+                    value={item.comparison_unit_id ?? ""}
+                  />
+                </div>
+
+                <div className="col-start-2 min-w-0 xl:col-start-auto xl:pt-1">
+                  <label className="text-fg-muted mb-1 block text-[10px] font-medium uppercase xl:hidden">
+                    Situação
+                  </label>
+                  <Badge
+                    variant={
+                      item.status === "ready" || item.status === "imported"
+                        ? "default"
+                        : item.status === "blocked" || item.status === "error"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                  >
+                    {LABEL[item.status] ?? item.status}
+                  </Badge>
+                  {item.issues.length ? (
+                    <span className="text-destructive mt-1 block text-xs whitespace-normal">
+                      {item.issues
+                        .map((issue) => ISSUE[issue] ?? issue)
+                        .join("; ")}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="col-start-2 flex flex-wrap gap-1 xl:col-start-auto">
+                  {!locked ? (
+                    <form id={formId} action={updateProductImportItemAction}>
+                      <input type="hidden" name="batchId" value={batch.id} />
+                      <input type="hidden" name="itemId" value={item.id} />
+                      <Button size="sm" variant="outline">
+                        Salvar
+                      </Button>
+                    </form>
+                  ) : null}
+                  {editable && item.status !== "imported" ? (
+                    <form action={toggleProductImportItemAction}>
+                      <input type="hidden" name="batchId" value={batch.id} />
+                      <input type="hidden" name="itemId" value={item.id} />
                       <input
-                        type="checkbox"
-                        form="publish-import-items"
-                        name="itemId"
-                        value={item.id}
-                        aria-label={`Selecionar ${item.proposed_name}`}
+                        type="hidden"
+                        name="ignore"
+                        value={item.status === "ignored" ? "false" : "true"}
                       />
-                    ) : null}
-                  </TableCell>
-                  <TableCell className="min-w-56">
-                    <Input
-                      form={formId}
-                      name="proposedName"
-                      defaultValue={item.proposed_name}
-                      disabled={locked}
-                      className="h-8 font-medium"
-                    />
-                    <Input
-                      form={formId}
-                      name="barcode"
-                      defaultValue={item.barcode ?? ""}
-                      disabled={locked}
-                      placeholder="EAN (opcional)"
-                      className="mt-2 h-8 font-mono text-xs"
-                    />
-                    <span className="text-fg-muted mt-1 block text-xs">
-                      Linha {item.source_row}
-                      {item.source_code ? ` · cód. ${item.source_code}` : ""}
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden min-w-40 lg:table-cell">
-                    <span className="font-mono text-xs">
-                      {item.barcode ?? "Sem EAN"}
-                    </span>
-                    <span className="text-fg-muted mt-1 block max-w-44 truncate text-xs">
-                      {item.source_category}
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <select
-                      form={formId}
-                      name="categoryId"
-                      defaultValue={item.category_id ?? ""}
-                      disabled={locked}
-                      className={`${selectClass} max-w-44`}
-                    >
-                      <Options values={categories} empty="Escolher" />
-                    </select>
-                    <input
-                      form={formId}
-                      type="hidden"
-                      name="purchaseUnitId"
-                      value={item.purchase_unit_id ?? ""}
-                    />
-                    <input
-                      form={formId}
-                      type="hidden"
-                      name="pricingUnitId"
-                      value={item.pricing_unit_id ?? ""}
-                    />
-                    <input
-                      form={formId}
-                      type="hidden"
-                      name="comparisonUnitId"
-                      value={item.comparison_unit_id ?? ""}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        item.status === "ready" || item.status === "imported"
-                          ? "default"
-                          : item.status === "blocked" || item.status === "error"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                    >
-                      {LABEL[item.status] ?? item.status}
-                    </Badge>
-                    {item.issues.length ? (
-                      <span className="text-destructive mt-1 block max-w-52 text-xs whitespace-normal">
-                        {item.issues
-                          .map((issue) => ISSUE[issue] ?? issue)
-                          .join("; ")}
-                      </span>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      {!locked ? (
-                        <form
-                          id={formId}
-                          action={updateProductImportItemAction}
-                        >
-                          <input
-                            type="hidden"
-                            name="batchId"
-                            value={batch.id}
-                          />
-                          <input type="hidden" name="itemId" value={item.id} />
-                          <Button size="sm" variant="ghost">
-                            Salvar
-                          </Button>
-                        </form>
-                      ) : null}
-                      {editable && item.status !== "imported" ? (
-                        <form action={toggleProductImportItemAction}>
-                          <input
-                            type="hidden"
-                            name="batchId"
-                            value={batch.id}
-                          />
-                          <input type="hidden" name="itemId" value={item.id} />
-                          <input
-                            type="hidden"
-                            name="ignore"
-                            value={item.status === "ignored" ? "false" : "true"}
-                          />
-                          <Button size="sm" variant="ghost">
-                            {item.status === "ignored"
-                              ? "Restaurar"
-                              : "Ignorar"}
-                          </Button>
-                        </form>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                      <Button size="sm" variant="ghost">
+                        {item.status === "ignored" ? "Restaurar" : "Ignorar"}
+                      </Button>
+                    </form>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
         <DataTablePagination
           page={pagination.page}
           pageSize={pagination.pageSize}
@@ -426,7 +415,7 @@ export default async function ProductImportDetailPage({
         />
       </div>
       {editable && counts.ready > 0 ? (
-        <div className="bg-background/90 border-border sticky bottom-0 mt-4 flex items-center justify-between gap-3 border-t py-3 backdrop-blur">
+        <div className="border-border bg-surface mt-4 flex items-center justify-between gap-3 rounded-xl border px-3 py-3 shadow-xs">
           <p className="text-fg-muted text-xs">
             Marque até 100 itens prontos desta página.
           </p>

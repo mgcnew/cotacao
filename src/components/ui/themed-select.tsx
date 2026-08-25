@@ -16,6 +16,7 @@ export type ThemedSelectOption = {
 export function ThemedSelect({
   id,
   name,
+  form,
   options,
   value,
   defaultValue = "",
@@ -29,6 +30,7 @@ export function ThemedSelect({
 }: {
   id: string;
   name?: string;
+  form?: string;
   options: ThemedSelectOption[];
   value?: string;
   defaultValue?: string;
@@ -54,7 +56,9 @@ export function ThemedSelect({
         onValueChange?.(actual);
       }}
     >
-      {name ? <input type="hidden" name={name} value={current} /> : null}
+      {name ? (
+        <input type="hidden" name={name} value={current} form={form} />
+      ) : null}
       <SelectPrimitive.Trigger
         id={id}
         aria-label={ariaLabel}
@@ -66,7 +70,10 @@ export function ThemedSelect({
           className,
         )}
       >
-        <SelectPrimitive.Value placeholder={placeholder} />
+        <SelectPrimitive.Value
+          placeholder={placeholder}
+          className="min-w-0 flex-1 truncate text-left"
+        />
         <SelectPrimitive.Icon asChild>
           <ChevronDown className="text-fg-subtle size-4 shrink-0" aria-hidden />
         </SelectPrimitive.Icon>
@@ -78,7 +85,7 @@ export function ThemedSelect({
           sideOffset={4}
           collisionPadding={8}
           className={cn(
-            "border-border bg-popover text-popover-foreground z-[100] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border shadow-lg",
+            "border-border bg-popover text-popover-foreground z-[100] min-w-[var(--radix-select-trigger-width)] max-w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border shadow-lg",
             "data-[state=open]:animate-ds-in",
           )}
         >
@@ -124,7 +131,9 @@ function SelectItem({
           <Check className="size-3.5" aria-hidden />
         </SelectPrimitive.ItemIndicator>
       </span>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      <SelectPrimitive.ItemText className="truncate">
+        {children}
+      </SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
   );
 }
