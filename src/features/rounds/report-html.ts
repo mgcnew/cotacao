@@ -31,10 +31,12 @@ export function renderRoundReportHtml(report: RoundReport) {
   const supplierRows = report.suppliers
     .map(
       (supplier) => `<tr>
-        <td><strong>${escapeHtml(supplier.name)}</strong></td>
-        <td>${supplier.wins}</td><td>${supplier.losses}</td>
-        <td>${supplier.noResponses}</td><td>${supplier.unavailable}</td>
-        <td class="money">${escapeHtml(MONEY.format(supplier.awardedValue))}${supplier.uncalculatedWins > 0 ? `<small>${supplier.uncalculatedWins} sem conversão</small>` : ""}</td>
+        <td data-label="Fornecedor"><strong>${escapeHtml(supplier.name)}</strong></td>
+        <td data-label="Ganhos">${supplier.wins}</td>
+        <td data-label="Perdidos">${supplier.losses}</td>
+        <td data-label="Não respondeu">${supplier.noResponses}</td>
+        <td data-label="Não fornece">${supplier.unavailable}</td>
+        <td data-label="Valor estimado" class="money">${escapeHtml(MONEY.format(supplier.awardedValue))}${supplier.uncalculatedWins > 0 ? `<small>${supplier.uncalculatedWins} sem conversão</small>` : ""}</td>
       </tr>`,
     )
     .join("");
@@ -46,7 +48,7 @@ export function renderRoundReportHtml(report: RoundReport) {
           .map(
             (item) => `<article class="item">
               <header><div><h3>${escapeHtml(item.productName)}</h3><p>${escapeHtml(QTY.format(item.requestedQuantity))} ${escapeHtml(item.purchaseUnit)} · preço por ${escapeHtml(item.pricingUnit)}</p></div></header>
-              <table><thead><tr><th>Fornecedor</th><th>Proposta final</th><th>Resultado</th><th>Quantidade</th><th>Economia negociada</th></tr></thead>
+              <table class="report-table"><thead><tr><th>Fornecedor</th><th>Proposta final</th><th>Resultado</th><th>Quantidade</th><th>Economia negociada</th></tr></thead>
               <tbody>${item.offers
                 .map((offer) => {
                   const result =
@@ -62,11 +64,11 @@ export function renderRoundReportHtml(report: RoundReport) {
                       ? offer.selectedPrice
                       : offer.finalPrice;
                   return `<tr class="${offer.outcome === "won" ? "winner" : ""}">
-                    <td>${escapeHtml(offer.supplierName)}</td>
-                    <td>${price === null ? "—" : `${escapeHtml(MONEY.format(price))} / ${escapeHtml(item.pricingUnit)}`}${offer.quotedPrice !== null && offer.quotedPrice !== price ? `<small>original ${escapeHtml(MONEY.format(offer.quotedPrice))}</small>` : ""}</td>
-                    <td>${result}</td>
-                    <td>${offer.outcome === "won" ? `${escapeHtml(QTY.format(offer.wonQuantity))} ${escapeHtml(item.purchaseUnit)}${offer.estimatedPricingQuantity === null ? "<small>sem conversão para o total</small>" : `<small>estimativa ${escapeHtml(QTY.format(offer.estimatedPricingQuantity))} ${escapeHtml(item.pricingUnit)}</small>`}` : "—"}</td>
-                    <td>${offer.negotiatedSavings === null ? "—" : escapeHtml(MONEY.format(offer.negotiatedSavings))}</td>
+                    <td data-label="Fornecedor">${escapeHtml(offer.supplierName)}</td>
+                    <td data-label="Proposta final">${price === null ? "—" : `${escapeHtml(MONEY.format(price))} / ${escapeHtml(item.pricingUnit)}`}${offer.quotedPrice !== null && offer.quotedPrice !== price ? `<small>original ${escapeHtml(MONEY.format(offer.quotedPrice))}</small>` : ""}</td>
+                    <td data-label="Resultado">${result}</td>
+                    <td data-label="Quantidade">${offer.outcome === "won" ? `${escapeHtml(QTY.format(offer.wonQuantity))} ${escapeHtml(item.purchaseUnit)}${offer.estimatedPricingQuantity === null ? "<small>sem conversão para o total</small>" : `<small>estimativa ${escapeHtml(QTY.format(offer.estimatedPricingQuantity))} ${escapeHtml(item.pricingUnit)}</small>`}` : "—"}</td>
+                    <td data-label="Economia negociada">${offer.negotiatedSavings === null ? "—" : escapeHtml(MONEY.format(offer.negotiatedSavings))}</td>
                   </tr>`;
                 })
                 .join("")}</tbody></table>
@@ -81,7 +83,8 @@ export function renderRoundReportHtml(report: RoundReport) {
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Relatório - ${escapeHtml(report.round.title)}</title>
 <style>
-:root{font-family:Inter,Arial,sans-serif;color:#17202a;background:#fff;font-size:14px}*{box-sizing:border-box}body{margin:0;padding:32px}main{max-width:1180px;margin:auto}h1,h2,h3,p{margin:0}header.top{border-bottom:2px solid #e2e5e9;padding-bottom:18px;margin-bottom:20px}.company{color:#59636e;margin-bottom:4px}.subtitle{color:#59636e;margin-top:5px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}.metric{border:1px solid #dfe3e8;border-radius:10px;padding:12px;min-width:0}.metric span,.metric small,td small{display:block;color:#69737d;font-size:11px}.metric strong{display:block;font-size:19px;margin:5px 0;overflow-wrap:anywhere}.notice{border:1px solid #e4b658;background:#fff9e8;border-radius:10px;padding:11px;margin:15px 0}.section-title{margin:25px 0 9px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;border:1px solid #dfe3e8;padding:8px;vertical-align:top}th{background:#f3f5f7}.money{text-align:right}.group{margin-top:22px;border:1px solid #dfe3e8;border-radius:12px;overflow:hidden}.group>h2{padding:12px 14px;background:#f3f5f7;font-size:15px}.group>h2 small{font-weight:normal;color:#69737d}.item{padding:14px;border-top:1px solid #dfe3e8;break-inside:avoid}.item:first-of-type{border-top:0}.item header{margin-bottom:9px}.item header p{color:#69737d;font-size:12px;margin-top:2px}.winner td{background:#effaf3}.footer{border-top:1px solid #dfe3e8;color:#69737d;font-size:11px;margin-top:24px;padding-top:12px}@media(max-width:720px){body{padding:16px}.metrics{grid-template-columns:repeat(2,1fr)}table{display:block;overflow-x:auto;white-space:nowrap}}@media print{body{padding:0}.metrics{grid-template-columns:repeat(4,1fr)}.group{break-inside:auto}.item{break-inside:avoid}thead{display:table-header-group}}
+:root{font-family:Inter,Arial,sans-serif;color:#17202a;background:#fff;font-size:14px}*{box-sizing:border-box}body{margin:0;padding:32px}main{max-width:1180px;margin:auto;min-width:0}h1,h2,h3,p{margin:0;overflow-wrap:anywhere}header.top{border-bottom:2px solid #e2e5e9;padding-bottom:18px;margin-bottom:20px}.company{color:#59636e;margin-bottom:4px}.subtitle{color:#59636e;margin-top:5px}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0}.metric{border:1px solid #dfe3e8;border-radius:10px;padding:12px;min-width:0}.metric span,.metric small,td small{display:block;color:#69737d;font-size:11px}.metric strong{display:block;font-size:19px;margin:5px 0;overflow-wrap:anywhere}.notice{border:1px solid #e4b658;background:#fff9e8;border-radius:10px;padding:11px;margin:15px 0}.section-title{margin:25px 0 9px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;border:1px solid #dfe3e8;padding:8px;vertical-align:top;overflow-wrap:anywhere}th{background:#f3f5f7}.money{text-align:right}.group{margin-top:22px;border:1px solid #dfe3e8;border-radius:12px;overflow:hidden}.group>h2{padding:12px 14px;background:#f3f5f7;font-size:15px}.group>h2 small{font-weight:normal;color:#69737d}.item{padding:14px;border-top:1px solid #dfe3e8;break-inside:avoid}.item:first-of-type{border-top:0}.item header{margin-bottom:9px}.item header p{color:#69737d;font-size:12px;margin-top:2px}.winner td{background:#effaf3}.footer{border-top:1px solid #dfe3e8;color:#69737d;font-size:11px;margin-top:24px;padding-top:12px}@media screen and (max-width:720px){body{padding:14px}h1{font-size:22px;line-height:1.15}header.top{padding-bottom:14px;margin-bottom:16px}.subtitle{line-height:1.45}.metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}.metric{padding:10px}.metric strong{font-size:16px;line-height:1.2}.notice{line-height:1.45}.section-title{font-size:17px;margin:22px 0 8px}.report-table,.report-table tbody,.report-table tr,.report-table td{display:block;width:100%}.report-table thead{display:none}.report-table tbody{display:grid;gap:8px}.report-table tr{overflow:hidden;border:1px solid #dfe3e8;border-radius:10px;background:#fff}.report-table td{display:grid;grid-template-columns:minmax(7.25rem,40%) minmax(0,1fr);gap:8px;border:0;border-bottom:1px solid #edf0f2;padding:8px 10px;line-height:1.35}.report-table td:last-child{border-bottom:0}.report-table td::before{content:attr(data-label);color:#69737d;font-size:11px;font-weight:600}.report-table .money{text-align:left}.report-table .winner td{background:#effaf3}.group{margin-top:16px}.group>h2{padding:10px 12px}.item{padding:11px}.item header{margin-bottom:8px}.footer{line-height:1.45;margin-top:18px}}
+@media print{body{padding:0}.metrics{grid-template-columns:repeat(4,1fr)}.group{break-inside:auto}.item{break-inside:avoid}thead{display:table-header-group}}
 </style></head><body><main>
 <header class="top"><p class="company">${escapeHtml(report.companyName)}</p><h1>${escapeHtml(report.round.title)}</h1><p class="subtitle">Relatório ${report.round.status === "completed" ? "de conclusão" : "prévio"} da cotação · início ${report.round.startedAt ? escapeHtml(DATE_TIME.format(new Date(report.round.startedAt))) : "não registrado"} · conclusão ${report.round.completedAt ? escapeHtml(DATE_TIME.format(new Date(report.round.completedAt))) : "em andamento"}</p>${report.round.notes ? `<p class="subtitle"><strong>Observações:</strong> ${escapeHtml(report.round.notes)}</p>` : ""}</header>
 <section class="metrics">
@@ -91,7 +94,7 @@ ${metric("Valor adjudicado estimado", MONEY.format(report.summary.estimatedAward
 ${metric("Economia negociada", MONEY.format(report.summary.negotiatedSavings), "original x adjudicado")}
 </section>
 ${report.summary.calculablePurchasedItems < report.summary.purchasedItemCount ? `<p class="notice">Os totais abrangem ${coverage} itens comprados. Itens sem conversão confiável foram excluídos, não considerados como economia zero.</p>` : ""}
-<h2 class="section-title">Resultado por fornecedor</h2><table><thead><tr><th>Fornecedor</th><th>Ganhos</th><th>Perdidos</th><th>Não respondeu</th><th>Não fornece</th><th class="money">Valor estimado</th></tr></thead><tbody>${supplierRows}</tbody></table>
+<h2 class="section-title">Resultado por fornecedor</h2><table class="report-table"><thead><tr><th>Fornecedor</th><th>Ganhos</th><th>Perdidos</th><th>Não respondeu</th><th>Não fornece</th><th class="money">Valor estimado</th></tr></thead><tbody>${supplierRows}</tbody></table>
 <h2 class="section-title">Produtos cotados</h2>${groupSections}
 <p class="footer">Gerado em ${escapeHtml(DATE_TIME.format(new Date(report.generatedAt)))}. Economia negociada considera somente propostas vencedoras calculáveis. A economia realizada será apurada no recebimento.</p>
 </main></body></html>`;
