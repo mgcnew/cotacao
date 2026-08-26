@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, ChevronLeft, ChevronRight, Search, Store } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronLeft, ChevronRight, Search, Store } from "lucide-react";
 import * as React from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import type { DadosDaComparacao } from "@/features/rounds/comparacao";
+import { cn } from "@/lib/utils";
 
 const MONEY = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
@@ -48,6 +49,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
   );
   const [filter, setFilter] = React.useState<Filter>("all");
   const [search, setSearch] = React.useState("");
+  const [supplierPanelOpen, setSupplierPanelOpen] = React.useState(false);
 
   if (rows.length === 0 || suppliers.length === 0) {
     return <EmptyState icon={BarChart3} title="Nada para comparar ainda" description="A comparação aparece quando a rodada tem itens e fornecedores convidados." />;
@@ -71,19 +73,68 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
   const move = (direction: -1 | 1) => {
     const next = (currentIndex + direction + suppliers.length) % suppliers.length;
     setSupplierId(suppliers[next].id);
+    setSupplierPanelOpen(false);
+  };
+
+  const selectSupplier = (nextSupplierId: string) => {
+    setSupplierId(nextSupplierId);
+    setSupplierPanelOpen(false);
   };
 
   return (
     <div className="space-y-4">
       <section className="border-primary/30 bg-surface sticky top-0 z-20 rounded-xl border shadow-sm">
+        <button
+          type="button"
+          aria-expanded={supplierPanelOpen}
+          aria-controls="comparison-supplier-panel"
+          onClick={() => setSupplierPanelOpen((open) => !open)}
+          className={cn(
+            "flex w-full items-center gap-2.5 px-3 py-2.5 text-left md:hidden",
+            supplierPanelOpen && "border-primary/20 border-b",
+          )}
+        >
+          <span className="bg-primary/10 rounded-lg p-2">
+            <Store className="text-primary size-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="text-fg-muted block text-[11px]">
+              Fornecedor em análise · {currentIndex + 1} de {suppliers.length}
+            </span>
+            <strong className="text-fg block truncate text-sm">
+              {supplier.suppliers.name} · {stats.priced}/{rows.length} preços
+            </strong>
+          </span>
+          {stats.missing > 0 ? (
+            <Badge variant="destructive" className="shrink-0">
+              {stats.missing} pendentes
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="shrink-0">
+              completo
+            </Badge>
+          )}
+          <ChevronDown
+            className={cn(
+              "text-fg-subtle size-4 shrink-0 transition-transform",
+              supplierPanelOpen && "rotate-180",
+            )}
+            aria-hidden
+          />
+        </button>
+
+        <div
+          id="comparison-supplier-panel"
+          className={cn(supplierPanelOpen ? "block" : "hidden md:block")}
+        >
         <div className="flex flex-wrap items-center gap-3 p-3">
-          <span className="bg-primary/10 rounded-lg p-2"><Store className="text-primary size-4" aria-hidden /></span>
-          <div className="min-w-52 flex-1">
+          <span className="bg-primary/10 hidden rounded-lg p-2 md:inline-flex"><Store className="text-primary size-4" aria-hidden /></span>
+          <div className="min-w-0 flex-1 md:min-w-52">
             <label htmlFor="comparison-supplier" className="text-fg-muted mb-1 block text-xs font-medium">Fornecedor em análise · {currentIndex + 1} de {suppliers.length}</label>
             <ThemedSelect
               id="comparison-supplier"
               value={supplier.id}
-              onValueChange={setSupplierId}
+              onValueChange={selectSupplier}
               className="h-9 max-w-md font-semibold"
               options={suppliers.map((option) => {
                 const optionStats = supplierStats(option, rows);
@@ -107,6 +158,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
         </div>
         <div className="border-primary/20 bg-primary/[0.035] border-t px-3 py-2">
           <p className="text-fg-muted text-xs">Todas as ações abaixo alteram a resposta de <strong className="text-fg">{supplier.suppliers.name}</strong>.</p>
+        </div>
         </div>
       </section>
 

@@ -21,6 +21,8 @@ export type NavItem = {
   permission?: string;
   /** Ferramenta de campo que aparece somente na gaveta do celular. */
   mobileOnly?: boolean;
+  /** Ferramenta de escritório: continua acessível por URL, mas sai da gaveta mobile. */
+  desktopOnly?: boolean;
 };
 
 export type NavGroup = {
@@ -87,6 +89,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "WhatsApp Compras",
         icon: MessageCircle,
         permission: "purchase_round.view",
+        desktopOnly: true,
       },
     ],
   },

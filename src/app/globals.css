@@ -116,6 +116,17 @@
   background-size: 20px 20px;
 }
 
+/* O WhatsApp já tem seus próprios painéis roláveis. No celular, o `main` não
+   pode competir com a lista de conversas ou com o histórico das mensagens:
+   a página ocupa o espaço disponível e somente o painel interno recebe o
+   gesto de rolagem. `:has()` limita a exceção à rota que optou por ela. */
+@media (max-width: 767px) {
+  [data-slot="app-main"]:has(> [data-mobile-scroll="contained"]) {
+    overflow: hidden;
+    padding: 0;
+  }
+}
+
 .dark {
   /* Carvão levemente frio: mais profundidade sem cair no preto puro. */
   --bg: #0b0d12;

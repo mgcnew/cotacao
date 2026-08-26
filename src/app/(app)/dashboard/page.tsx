@@ -97,6 +97,7 @@ export default async function DashboardPage() {
                 size="icon-sm"
                 variant="outline"
                 title="WhatsApp Compras"
+                className="hidden md:inline-flex"
               >
                 <Link href="/whatsapp" aria-label="Abrir WhatsApp Compras">
                   <MessageCircle aria-hidden />

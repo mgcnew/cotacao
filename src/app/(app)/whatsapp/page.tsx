@@ -42,6 +42,7 @@ import {
   listWhatsAppConversations,
   listWhatsAppMessages,
 } from "@/features/whatsapp/queries";
+import { normalizeWhatsAppPhone } from "@/features/whatsapp/normalize";
 import { getCompany } from "@/features/company/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
@@ -134,13 +135,30 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
         getWhatsAppContext(company.companyId, selected.purchase_round_id, selected.order_id),
       ])
     : [[], { round: null, order: null }];
+  const nativeWhatsAppPhone = selected
+    ? normalizeWhatsAppPhone(
+        selected.normalized_phone ?? selected.supplier_contacts?.whatsapp,
+      )
+    : null;
 
   return (
-    <div className="flex min-h-0 w-full flex-col">
-      <PageHeader
-        title="WhatsApp Compras"
-        description="Só fornecedores e assuntos que ajudam a compra a avançar."
-        action={
+    <div
+      data-mobile-scroll="contained"
+      className={cn(
+        "flex min-h-0 w-full flex-col max-md:h-full",
+        selected && "md:max-lg:-mx-6 md:max-lg:-my-6 md:max-lg:h-[calc(100dvh-3.5rem)] md:max-lg:w-[calc(100%+3rem)]",
+      )}
+    >
+      <div
+        className={cn(
+          "max-md:px-4 max-md:pt-6",
+          selected && "max-lg:hidden",
+        )}
+      >
+        <PageHeader
+          title="WhatsApp Compras"
+          description="Só fornecedores e assuntos que ajudam a compra a avançar."
+          action={
           <div className="flex items-center gap-2">
             <Badge variant={connection.status === "connected" ? "default" : "destructive"}>
               <span className={cn("size-1.5 rounded-full bg-current", connection.status === "connected" && "animate-pulse")} />
@@ -155,11 +173,12 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
               </div>
             ) : null}
           </div>
-        }
-      />
+          }
+        />
+      </div>
 
       {errorMessage ? (
-        <div className="border-danger/30 bg-danger/10 text-danger mb-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+        <div className="border-danger/30 bg-danger/10 text-danger mb-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm max-md:mx-4">
           <AlertCircle className="size-4" aria-hidden />{errorMessage}
         </div>
       ) : null}
@@ -167,7 +186,7 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
       <WhatsAppMetricsPanel
         metrics={metrics}
         days={metricsDays}
-        className={selected ? "hidden lg:block" : undefined}
+        className="hidden lg:block"
         hrefForPeriod={Object.fromEntries(
           ([7, 30, 90] as const).map((period) => {
             const next = new URLSearchParams();
@@ -181,23 +200,25 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
       />
 
       <div className={cn(
-        "border-border bg-surface grid min-h-125 overflow-hidden rounded-2xl border shadow-sm lg:h-[calc(100dvh-20rem)] lg:grid-cols-[19rem_minmax(0,1fr)_18rem]",
-        selected ? "h-[calc(100dvh-10.5rem)]" : "h-[calc(100dvh-22rem)]",
+        "border-border bg-surface grid min-h-96 min-w-0 max-w-full overflow-hidden rounded-2xl border shadow-sm lg:h-[calc(100dvh-20rem)] lg:min-h-125 lg:grid-cols-[19rem_minmax(0,1fr)_18rem]",
+        selected
+          ? "min-h-0 flex-1 max-lg:rounded-none max-lg:border-0 max-lg:shadow-none"
+          : "h-[calc(100dvh-12rem)] max-md:h-auto max-md:min-h-0 max-md:flex-1 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:shadow-none",
       )}>
-        <aside className={cn("border-border min-h-0 flex-col border-r", selected ? "hidden lg:flex" : "flex")}>
-          <div className="border-border space-y-3 border-b p-3">
-            <form className="relative">
+        <aside className={cn("border-border min-h-0 min-w-0 max-w-full flex-col overflow-hidden border-r", selected ? "hidden lg:flex" : "flex")}>
+          <div className="border-border min-w-0 max-w-full space-y-3 border-b p-3">
+            <form className="relative min-w-0 max-w-full">
               <Search className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4" aria-hidden />
               <Input name="busca" defaultValue={search} placeholder="Buscar conversa" className="pl-8" />
               <input type="hidden" name="filtro" value={filter} />
             </form>
-            <div className="flex gap-1 overflow-x-auto pb-0.5 text-xs">
+            <div className="flex max-w-full gap-1 overflow-x-auto pb-0.5 text-xs">
               {[["open", "Abertas"], ["unread", "Não lidas"], ["waiting_supplier", "Fornecedor"], ["waiting_buyer", "Comprador"], ["promotions", "Promoções"]].map(([value, label]) => (
                 <Link key={value} href={`/whatsapp?filtro=${value}`} className={cn("rounded-full px-2.5 py-1 whitespace-nowrap", filter === value ? "bg-primary text-primary-fg" : "bg-surface-muted text-fg-muted hover:text-fg")}>{label}</Link>
               ))}
             </div>
             {canSend && contacts.length ? (
-              <form action={startWhatsAppConversationAction} className="flex gap-1.5">
+              <form action={startWhatsAppConversationAction} className="flex min-w-0 max-w-full gap-1.5">
                 <SearchableSelect
                   id="whatsapp-start-contact"
                   name="contact_id"
@@ -211,26 +232,26 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
                   placeholder="Digite fornecedor ou contato…"
                   emptyMessage="Nenhum contato encontrado."
                 />
-                <Button type="submit" size="icon" title="Iniciar conversa"><MessageCircle aria-hidden /></Button>
+                <Button type="submit" size="icon" className="shrink-0" title="Iniciar conversa"><MessageCircle aria-hidden /></Button>
               </form>
             ) : null}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overscroll-contain">
             {conversations.length ? conversations.map((conversation) => (
               <Link
                 key={conversation.id}
                 href={`/whatsapp?conversa=${conversation.id}&filtro=${filter}${search ? `&busca=${encodeURIComponent(search)}` : ""}`}
-                className={cn("border-border hover:bg-surface-muted flex gap-3 border-b p-3 transition-colors", selected?.id === conversation.id && "bg-primary/8")}
+                className={cn("border-border hover:bg-surface-muted flex w-full min-w-0 max-w-full gap-3 overflow-hidden border-b p-3 transition-colors", selected?.id === conversation.id && "bg-primary/8")}
               >
                 <span className="bg-surface-muted text-fg-muted grid size-9 shrink-0 place-items-center rounded-full"><UserRound className="size-4" aria-hidden /></span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline justify-between gap-2">
-                    <strong className="text-fg truncate text-sm font-medium">{conversation.suppliers?.name ?? conversation.display_name ?? conversation.normalized_phone ?? "Número desconhecido"}</strong>
+                <span className="min-w-0 flex-1 overflow-hidden">
+                  <span className="flex min-w-0 items-baseline justify-between gap-2">
+                    <strong className="text-fg min-w-0 flex-1 truncate text-sm font-medium">{conversation.suppliers?.name ?? conversation.display_name ?? conversation.normalized_phone ?? "Número desconhecido"}</strong>
                     {conversation.last_message_at ? <time className="text-fg-subtle shrink-0 text-[10px]">{dateFormatter.format(new Date(conversation.last_message_at))}</time> : null}
                   </span>
-                  <span className="mt-0.5 flex items-center gap-2">
-                    <span className="text-fg-muted flex-1 truncate text-xs">{conversation.last_message_preview ?? "Conversa iniciada"}</span>
+                  <span className="mt-0.5 flex min-w-0 items-start gap-2">
+                    <span className="text-fg-muted line-clamp-2 min-w-0 flex-1 wrap-anywhere text-xs">{conversation.last_message_preview ?? "Conversa iniciada"}</span>
                     {conversation.unread_count ? <span className="bg-primary text-primary-fg grid min-w-5 place-items-center rounded-full px-1.5 text-[10px] leading-5">{conversation.unread_count}</span> : null}
                   </span>
                   <span className="text-fg-subtle mt-1 block text-[10px]">{conversation.awaiting_side === "supplier" ? "Aguardando fornecedor" : conversation.awaiting_side === "buyer" ? "Aguardando comprador" : "Sem pendência"}</span>
@@ -243,12 +264,25 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
         <main className={cn("min-h-0 min-w-0 flex-col", selected ? "flex" : "hidden lg:flex")}>
           {selected ? (
             <>
-              <header className="border-border flex h-14 shrink-0 items-center gap-3 border-b px-3 sm:px-4">
+              <header className="border-border flex h-14 shrink-0 items-center gap-2 border-b px-2 sm:gap-3 sm:px-4">
                 <Button asChild variant="ghost" size="sm" className="lg:hidden"><Link href="/whatsapp">Voltar</Link></Button>
                 <span className="min-w-0 flex-1">
                   <strong className="text-fg block truncate text-sm">{selected.suppliers?.name ?? selected.display_name ?? "Número desconhecido"}</strong>
                   <span className="text-fg-subtle block truncate text-xs">{selected.supplier_contacts?.name ?? selected.normalized_phone ?? selected.remote_jid}</span>
                 </span>
+                {nativeWhatsAppPhone ? (
+                  <Button asChild variant="outline" size="sm" className="lg:hidden">
+                    <a
+                      href={`https://wa.me/${nativeWhatsAppPhone}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="Abrir conversa no WhatsApp"
+                    >
+                      <MessageCircle aria-hidden />
+                      <span className="hidden sm:inline">Abrir no WhatsApp</span>
+                    </a>
+                  </Button>
+                ) : null}
                 {selected.inbox_category === "promotion" ? <Badge variant="outline" className="hidden sm:inline-flex">Promoções</Badge> : null}
                 {selected.unread_count ? <Badge variant="secondary">{selected.unread_count} não lidas</Badge> : null}
                 {canSend ? (
@@ -268,7 +302,30 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
                 ) : null}
               </header>
 
-              <div className="wa-chat-bg min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5">
+              {selected.supplier_id || context.round || context.order ? (
+                <nav
+                  className="border-border bg-surface flex shrink-0 gap-2 overflow-x-auto border-b px-3 py-2 lg:hidden"
+                  aria-label="Contexto da conversa"
+                >
+                  {selected.supplier_id ? (
+                    <Button asChild size="sm" variant="outline" className="shrink-0">
+                      <Link href={`/fornecedores/${selected.supplier_id}`}>Fornecedor</Link>
+                    </Button>
+                  ) : null}
+                  {context.round ? (
+                    <Button asChild size="sm" variant="outline" className="shrink-0">
+                      <Link href={`/compras/${context.round.id}`}>Cotação</Link>
+                    </Button>
+                  ) : null}
+                  {context.order ? (
+                    <Button asChild size="sm" variant="outline" className="shrink-0">
+                      <Link href={`/pedidos/${context.order.id}`}>Pedido</Link>
+                    </Button>
+                  ) : null}
+                </nav>
+              ) : null}
+
+              <div className="wa-chat-bg min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5">
                 <div className="mx-auto flex max-w-3xl flex-col gap-2">
                   {messages.length ? messages.map((message) => (
                     <article key={message.id} className={cn("flex", message.direction === "outbound" ? "justify-end" : "justify-start")}>

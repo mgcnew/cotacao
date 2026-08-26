@@ -21,6 +21,12 @@ type Props = {
 export function MobileNav({ companyName, permissions }: Props) {
   const [open, setOpen] = React.useState(false);
   const { groups, footer, isActive } = useVisibleNav(permissions);
+  const mobileGroups = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.desktopOnly),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const close = () => setOpen(false);
 
@@ -67,7 +73,7 @@ export function MobileNav({ companyName, permissions }: Props) {
             <GlobalSearch onNavigate={close} />
 
             <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2">
-              {groups.map((group, index) => (
+              {mobileGroups.map((group, index) => (
                 <section
                   key={group.label}
                   className={index > 0 ? "mt-2" : undefined}
