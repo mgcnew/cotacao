@@ -36,7 +36,7 @@ async function Conteudo({ id }: { id: string }) {
     <DialogBody>
       <NavegacaoDaRodada roundId={id} atual="alocacao" />
       {dados ? (
-        <AlocacaoConteudo dados={dados} />
+        <AlocacaoConteudo dados={dados} showReportAction={false} />
       ) : (
         <p className="border-border text-fg-muted rounded-xl border border-dashed px-4 py-6 text-center text-sm">
           Esta rodada não existe mais.

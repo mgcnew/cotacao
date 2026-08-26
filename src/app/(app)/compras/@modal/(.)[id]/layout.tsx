@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { RouteModal } from "@/components/layout/route-modal";
 import { descreverRodada } from "@/components/rounds/round-central";
+import { RoundModalHeaderAction } from "@/components/rounds/round-modal-header-action";
 import { RoundModalNav } from "@/components/rounds/round-modal-nav";
 import { carregarRodada, carregarRodadaBasica } from "@/features/rounds/central";
 
@@ -47,6 +48,11 @@ export default async function LayoutDoModalDaRodada({
       // altura fixa a caixa pula de tamanho a cada troca, e o pulo desfaz a
       // ilusão de continuar no mesmo lugar.
       alturaEstavel
+      acao={
+        <Suspense fallback={<div className="h-7 w-20" />}>
+          <AcaoDoCabecalho id={id} />
+        </Suspense>
+      }
       titulo={
         <Suspense
           fallback={
@@ -72,6 +78,12 @@ export default async function LayoutDoModalDaRodada({
       {children}
     </RouteModal>
   );
+}
+
+async function AcaoDoCabecalho({ id }: { id: string }) {
+  const round = await carregarRodadaBasica(id);
+  if (!round || round.status !== "completed") return null;
+  return <RoundModalHeaderAction roundId={id} />;
 }
 
 async function Navigation({ id }: { id: string }) {

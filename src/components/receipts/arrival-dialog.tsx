@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Dialog,
   DialogBody,
@@ -74,10 +75,10 @@ export function ArrivalDialog({
                 >
                   Data e hora
                 </label>
-                <Input
+                <DateTimePicker
                   id={`arrival-${orderId}`}
                   name="receivedAt"
-                  type="datetime-local"
+                  placeholder="Escolher data e hora"
                 />
                 <p className="text-fg-subtle text-xs">
                   Em branco: usa o horário atual.

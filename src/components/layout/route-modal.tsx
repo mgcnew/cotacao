@@ -80,6 +80,7 @@ export function useFechaModalAoConcluir<E extends { error: string | null }>(
 export function RouteModal({
   titulo,
   descricao,
+  acao,
   size = "lg",
   alturaEstavel = false,
   impedirFechamentoAcidental = false,
@@ -88,6 +89,8 @@ export function RouteModal({
   /** Pode ser um `<Suspense>`: o modal abre antes de o nome chegar. */
   titulo: React.ReactNode;
   descricao?: React.ReactNode;
+  /** Ação contextual do conteúdo, posicionada antes do botão de fechar. */
+  acao?: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
   /** Altura fixa — para o modal que troca de conteúdo sem trocar de caixa. */
   alturaEstavel?: boolean;
@@ -116,16 +119,19 @@ export function RouteModal({
           alturaEstavel={alturaEstavel}
           impedirFechamentoAcidental={impedirFechamentoAcidental}
         >
-          <DialogHeader>
-            <DialogTitle>{titulo}</DialogTitle>
-            {descricao ? (
-              <DialogDescription>{descricao}</DialogDescription>
-            ) : (
-              // O Radix exige a descrição para não anunciar um modal só pelo
-              // título. Quando ela ainda está a caminho, o elemento existe
-              // vazio — o `aria-describedby` aponta para algo desde o início.
-              <DialogDescription />
-            )}
+          <DialogHeader className={acao ? "flex flex-row items-start gap-3" : undefined}>
+            <div className="min-w-0 flex-1">
+              <DialogTitle>{titulo}</DialogTitle>
+              {descricao ? (
+                <DialogDescription>{descricao}</DialogDescription>
+              ) : (
+                // O Radix exige a descrição para não anunciar um modal só pelo
+                // título. Quando ela ainda está a caminho, o elemento existe
+                // vazio — o `aria-describedby` aponta para algo desde o início.
+                <DialogDescription />
+              )}
+            </div>
+            {acao ? <div className="shrink-0">{acao}</div> : null}
           </DialogHeader>
           {children}
         </DialogContent>

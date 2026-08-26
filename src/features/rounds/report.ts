@@ -16,7 +16,7 @@ export type RoundReportOffer = {
   estimatedPricingQuantity: number | null;
   selectedPrice: number | null;
   negotiatedSavings: number | null;
-  outcome: "won" | "lost" | "unavailable" | "no_price";
+  outcome: "won" | "lost" | "unavailable" | "no_response";
 };
 
 export type RoundReportItem = {
@@ -35,7 +35,7 @@ export type RoundReportSupplier = {
   name: string;
   wins: number;
   losses: number;
-  noPrice: number;
+  noResponses: number;
   unavailable: number;
   awardedValue: number;
   uncalculatedWins: number;
@@ -68,7 +68,7 @@ export type RoundReport = {
   };
 };
 
-function isRoundReport(value: unknown): value is RoundReport {
+function hasRoundReportShape(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
   return (
@@ -80,6 +80,54 @@ function isRoundReport(value: unknown): value is RoundReport {
     Boolean(candidate.round && typeof candidate.round === "object") &&
     Boolean(candidate.summary && typeof candidate.summary === "object")
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function normalizeReportOffer(value: unknown) {
+  if (!isRecord(value)) return value;
+  return value.outcome === "no_price"
+    ? { ...value, outcome: "no_response" }
+    : value;
+}
+
+function normalizeReportItem(value: unknown) {
+  if (!isRecord(value) || !Array.isArray(value.offers)) return value;
+  return { ...value, offers: value.offers.map(normalizeReportOffer) };
+}
+
+/**
+ * Snapshots comerciais são imutáveis. Esta adaptação mantém compatibilidade
+ * com documentos antigos, que chamavam uma ausência de resposta de
+ * `no_price`, sem reescrever o histórico já congelado.
+ */
+function normalizeRoundReport(value: unknown): RoundReport | null {
+  if (!hasRoundReportShape(value)) return null;
+  const report = value as Record<string, unknown>;
+  return {
+    ...report,
+    items: (report.items as unknown[]).map(normalizeReportItem),
+    groups: (report.groups as unknown[]).map((group) =>
+      isRecord(group) && Array.isArray(group.items)
+        ? { ...group, items: group.items.map(normalizeReportItem) }
+        : group,
+    ),
+    suppliers: (report.suppliers as unknown[]).map((supplier) => {
+      if (!isRecord(supplier)) return supplier;
+      const legacyCount = supplier.noPrice;
+      return {
+        ...supplier,
+        noResponses:
+          typeof supplier.noResponses === "number"
+            ? supplier.noResponses
+            : typeof legacyCount === "number"
+              ? legacyCount
+              : 0,
+      };
+    }),
+  } as RoundReport;
 }
 
 /**
@@ -98,7 +146,10 @@ export const getRoundReport = cache(
       p_company_id: company.companyId,
       p_purchase_round_id: roundId,
     });
-    if (!snapshot.error && isRoundReport(snapshot.data)) return snapshot.data;
+    if (!snapshot.error) {
+      const report = normalizeRoundReport(snapshot.data);
+      if (report) return report;
+    }
 
     const dados = await carregarAlocacao(roundId);
     if (!dados || !dados.podeVer) return null;
@@ -178,7 +229,7 @@ export const getRoundReport = cache(
                 ? "unavailable"
                 : hasPrice
                   ? "lost"
-                  : "no_price",
+                  : "no_response",
         };
         });
 
@@ -206,7 +257,9 @@ export const getRoundReport = cache(
           name: supplier.suppliers.name,
           wins: offers.filter((offer) => offer.outcome === "won").length,
           losses: offers.filter((offer) => offer.outcome === "lost").length,
-          noPrice: offers.filter((offer) => offer.outcome === "no_price").length,
+          noResponses: offers.filter(
+            (offer) => offer.outcome === "no_response",
+          ).length,
           unavailable: offers.filter(
             (offer) => offer.outcome === "unavailable",
           ).length,

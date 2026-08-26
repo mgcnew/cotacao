@@ -5,7 +5,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(40);
+select plan(41);
 
 -- Tabelas principais
 select has_table('public','suppliers','suppliers');
@@ -68,6 +68,9 @@ select has_function('public','rpc_quotation_history_summary',
 select has_function('public','rpc_get_purchase_round_report',
   array['uuid','uuid'],
   'rpc_get_purchase_round_report');
+select has_function('private','normalize_purchase_round_report_response_labels',
+  array['jsonb'],
+  'relatório distingue ausência de resposta de recusa explícita');
 
 -- RPCs públicas
 select has_function('public','rpc_public_get_quotation',

@@ -125,7 +125,7 @@ export function RoundReportContent({ report }: { report: RoundReport }) {
               </div>
               <div className="text-fg-muted mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
                 <span>{supplier.losses} perdidos</span>
-                <span>{supplier.noPrice} sem preço</span>
+                <span>{supplier.noResponses} sem resposta</span>
                 {supplier.unavailable > 0 ? (
                   <span>{supplier.unavailable} não fornece</span>
                 ) : null}
@@ -284,7 +284,7 @@ function ReportOffer({
       ) : offer.outcome === "unavailable" ? (
         <p className="text-fg-subtle mt-1 text-xs">Não fornece</p>
       ) : (
-        <p className="text-fg-subtle mt-1 text-xs">Sem preço informado</p>
+        <p className="text-fg-subtle mt-1 text-xs">Não respondeu</p>
       )}
     </div>
   );

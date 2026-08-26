@@ -33,7 +33,7 @@ export function renderRoundReportHtml(report: RoundReport) {
       (supplier) => `<tr>
         <td><strong>${escapeHtml(supplier.name)}</strong></td>
         <td>${supplier.wins}</td><td>${supplier.losses}</td>
-        <td>${supplier.noPrice}</td><td>${supplier.unavailable}</td>
+        <td>${supplier.noResponses}</td><td>${supplier.unavailable}</td>
         <td class="money">${escapeHtml(MONEY.format(supplier.awardedValue))}${supplier.uncalculatedWins > 0 ? `<small>${supplier.uncalculatedWins} sem conversão</small>` : ""}</td>
       </tr>`,
     )
@@ -56,7 +56,7 @@ export function renderRoundReportHtml(report: RoundReport) {
                         ? "Não selecionado"
                         : offer.outcome === "unavailable"
                           ? "Não fornece"
-                          : "Sem preço";
+                          : "Não respondeu";
                   const price =
                     offer.outcome === "won"
                       ? offer.selectedPrice
@@ -91,7 +91,7 @@ ${metric("Valor adjudicado estimado", MONEY.format(report.summary.estimatedAward
 ${metric("Economia negociada", MONEY.format(report.summary.negotiatedSavings), "original x adjudicado")}
 </section>
 ${report.summary.calculablePurchasedItems < report.summary.purchasedItemCount ? `<p class="notice">Os totais abrangem ${coverage} itens comprados. Itens sem conversão confiável foram excluídos, não considerados como economia zero.</p>` : ""}
-<h2 class="section-title">Resultado por fornecedor</h2><table><thead><tr><th>Fornecedor</th><th>Ganhos</th><th>Perdidos</th><th>Sem preço</th><th>Não fornece</th><th class="money">Valor estimado</th></tr></thead><tbody>${supplierRows}</tbody></table>
+<h2 class="section-title">Resultado por fornecedor</h2><table><thead><tr><th>Fornecedor</th><th>Ganhos</th><th>Perdidos</th><th>Não respondeu</th><th>Não fornece</th><th class="money">Valor estimado</th></tr></thead><tbody>${supplierRows}</tbody></table>
 <h2 class="section-title">Produtos cotados</h2>${groupSections}
 <p class="footer">Gerado em ${escapeHtml(DATE_TIME.format(new Date(report.generatedAt)))}. Economia negociada considera somente propostas vencedoras calculáveis. A economia realizada será apurada no recebimento.</p>
 </main></body></html>`;

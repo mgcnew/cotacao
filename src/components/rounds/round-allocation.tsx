@@ -74,7 +74,13 @@ function candidatesFor(row: Row, dados: DadosDaAlocacao): Candidate[] {
 }
 
 /** A proposta é automática, mas só vira rascunho depois de uma ação explícita. */
-export function AlocacaoConteudo({ dados }: { dados: DadosDaAlocacao }) {
+export function AlocacaoConteudo({
+  dados,
+  showReportAction = true,
+}: {
+  dados: DadosDaAlocacao;
+  showReportAction?: boolean;
+}) {
   const { round, rows, allocationsByItem, orders, rascunhos, fornecedoresNoRascunho, supplierName, podeVer, podeDecidir, podeConfirmar } = dados;
 
   if (!podeVer) {
@@ -227,7 +233,10 @@ export function AlocacaoConteudo({ dados }: { dados: DadosDaAlocacao }) {
           ) : null}
 
           {round.status === "completed" ? (
-            <CompletedSummary dados={dados} />
+            <CompletedSummary
+              dados={dados}
+              showReportAction={showReportAction}
+            />
           ) : (
           <section className="mb-5">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
@@ -548,7 +557,13 @@ function CompletedItemResult({ row, dados }: { row: Row; dados: DadosDaAlocacao 
   );
 }
 
-function CompletedSummary({ dados }: { dados: DadosDaAlocacao }) {
+function CompletedSummary({
+  dados,
+  showReportAction,
+}: {
+  dados: DadosDaAlocacao;
+  showReportAction: boolean;
+}) {
   const confirmed = dados.rows.flatMap((row) =>
     (dados.allocationsByItem.get(row.itemId) ?? [])
       .filter((allocation) => allocation.status === "confirmed")
@@ -593,11 +608,13 @@ function CompletedSummary({ dados }: { dados: DadosDaAlocacao }) {
             são estimados quando compra e precificação usam unidades diferentes.
           </p>
         </div>
-        <Button asChild size="sm" variant="outline">
-          <Link href={`/compras/${dados.round.id}/relatorio`}>
-            Abrir relatório gerencial
-          </Link>
-        </Button>
+        {showReportAction ? (
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/compras/${dados.round.id}/relatorio`}>
+              Abrir relatório gerencial
+            </Link>
+          </Button>
+        ) : null}
       </div>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Summary label="Itens cotados" value={String(dados.rows.length)} detail={withoutPurchase > 0 ? `${withoutPurchase} encerrados sem compra` : "escopo concluído"} />

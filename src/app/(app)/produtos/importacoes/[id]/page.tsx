@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { ProductImportItemActions } from "@/components/products/import-item-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
@@ -10,8 +11,6 @@ import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   applyProductImportMappingAction,
   publishProductImportItemsAction,
-  toggleProductImportItemAction,
-  updateProductImportItemAction,
 } from "@/features/products/import-actions";
 import {
   countProductImportItems,
@@ -379,29 +378,14 @@ export default async function ProductImportDetailPage({
                 </div>
 
                 <div className="col-start-2 flex flex-wrap gap-1 xl:col-start-auto">
-                  {!locked ? (
-                    <form id={formId} action={updateProductImportItemAction}>
-                      <input type="hidden" name="batchId" value={batch.id} />
-                      <input type="hidden" name="itemId" value={item.id} />
-                      <Button size="sm" variant="outline">
-                        Salvar
-                      </Button>
-                    </form>
-                  ) : null}
-                  {editable && item.status !== "imported" ? (
-                    <form action={toggleProductImportItemAction}>
-                      <input type="hidden" name="batchId" value={batch.id} />
-                      <input type="hidden" name="itemId" value={item.id} />
-                      <input
-                        type="hidden"
-                        name="ignore"
-                        value={item.status === "ignored" ? "false" : "true"}
-                      />
-                      <Button size="sm" variant="ghost">
-                        {item.status === "ignored" ? "Restaurar" : "Ignorar"}
-                      </Button>
-                    </form>
-                  ) : null}
+                  <ProductImportItemActions
+                    formId={formId}
+                    batchId={batch.id}
+                    itemId={item.id}
+                    canSave={!locked}
+                    canToggle={editable && item.status !== "imported"}
+                    ignored={item.status === "ignored"}
+                  />
                 </div>
               </article>
             );

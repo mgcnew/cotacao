@@ -20,6 +20,11 @@ import { normalizeEntityName } from "@/lib/entity-name";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type ProductImportUploadState = { error: string | null };
+export type ProductImportItemActionState = {
+  error: string | null;
+  message: string | null;
+  savedAt?: number;
+};
 
 function chunks<T>(items: T[], size = 200) {
   return Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
@@ -299,7 +304,10 @@ export async function applyProductImportMappingAction(formData: FormData) {
   revalidatePath(`/produtos/importacoes/${batchId}`);
 }
 
-export async function updateProductImportItemAction(formData: FormData) {
+export async function updateProductImportItemAction(
+  _previousState: ProductImportItemActionState,
+  formData: FormData,
+): Promise<ProductImportItemActionState> {
   const company = await requireImportPermission();
   const batchId = String(formData.get("batchId") ?? "");
   const itemId = String(formData.get("itemId") ?? "");
@@ -382,28 +390,42 @@ export async function updateProductImportItemAction(formData: FormData) {
     .eq("batch_id", batchId)
     .eq("id", itemId)
     .in("status", ["pending", "ready", "blocked"]);
-  if (error)
-    redirect(
-      `/produtos/importacoes/${batchId}?erro=${encodeURIComponent(error.message)}`,
-    );
+  if (error) return { error: error.message, message: null, savedAt: Date.now() };
   revalidatePath(`/produtos/importacoes/${batchId}`);
+  return {
+    error: null,
+    message: issues.length
+      ? "Alterações salvas. Revise as pendências indicadas."
+      : "Produto salvo no rascunho.",
+    savedAt: Date.now(),
+  };
 }
 
-export async function toggleProductImportItemAction(formData: FormData) {
+export async function toggleProductImportItemAction(
+  _previousState: ProductImportItemActionState,
+  formData: FormData,
+): Promise<ProductImportItemActionState> {
   const company = await requireImportPermission();
   const batchId = String(formData.get("batchId") ?? "");
   const itemId = String(formData.get("itemId") ?? "");
   const ignore = formData.get("ignore") === "true";
   const supabase = await createServerSupabaseClient();
-  const { data: item } = await supabase
+  const { data: item, error: readError } = await supabase
     .from("product_import_items")
     .select("issues,category_id,purchase_unit_id,pricing_unit_id")
     .eq("company_id", company.companyId)
     .eq("batch_id", batchId)
     .eq("id", itemId)
     .single();
-  if (item)
-    await supabase
+  if (readError)
+    return { error: readError.message, message: null, savedAt: Date.now() };
+  if (!item)
+    return {
+      error: "Produto do rascunho não encontrado.",
+      message: null,
+      savedAt: Date.now(),
+    };
+  const { error: updateError } = await supabase
       .from("product_import_items")
       .update({
         status: ignore
@@ -416,7 +438,16 @@ export async function toggleProductImportItemAction(formData: FormData) {
       })
       .eq("company_id", company.companyId)
       .eq("id", itemId);
+  if (updateError)
+    return { error: updateError.message, message: null, savedAt: Date.now() };
   revalidatePath(`/produtos/importacoes/${batchId}`);
+  return {
+    error: null,
+    message: ignore
+      ? "Produto ignorado nesta importação."
+      : "Produto restaurado para o rascunho.",
+    savedAt: Date.now(),
+  };
 }
 
 export async function publishProductImportItemsAction(formData: FormData) {

@@ -36,6 +36,7 @@ const tabs = [
 export function RoundModalNav({ roundId }: { roundId: string }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  if (pathname.endsWith("/relatorio")) return null;
   const inDecision =
     pathname.endsWith("/comparacao") || pathname.endsWith("/alocacao");
   const requested = searchParams.get("view");
