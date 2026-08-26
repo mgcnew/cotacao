@@ -7,6 +7,7 @@ import { AdaptivePageSize } from "@/components/ui/adaptive-page-size";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Input } from "@/components/ui/input";
+import { getCompany } from "@/features/company/queries";
 import {
   removeShoppingListItem,
   updateShoppingListItem,
@@ -22,12 +23,18 @@ export default async function ShoppingListPage({
   searchParams,
 }: PageProps<"/lista-compras">) {
   const company = await requireActiveCompany();
-  const [products, data, permissions, params] = await Promise.all([
+  const [products, data, permissions, params, companyDetails] = await Promise.all([
     listShoppingProducts(company.companyId),
     getOpenShoppingList(company.companyId),
     getPermissions(company.companyId),
     searchParams,
+    getCompany(company.companyId),
   ]);
+  const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: companyDetails.timezone,
+  });
   const canManage =
     permissions.has("product.update") ||
     permissions.has("purchase_round.create") ||
@@ -68,7 +75,7 @@ export default async function ShoppingListPage({
                 <div className="min-w-0">
                   <p className="text-fg truncate text-sm font-medium">{item.products.name}</p>
                   <p className="text-fg-subtle mt-1 text-xs">
-                    Adicionado em {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.created_at))}
+                    Adicionado em {dateTimeFormatter.format(new Date(item.created_at))}
                   </p>
                 </div>
                 <div className="flex flex-col gap-1">
