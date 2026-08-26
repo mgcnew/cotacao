@@ -1,19 +1,21 @@
 /**
- * Quantos fornecedores já responderam ao menos um item, em número e barra.
+ * Quantos fornecedores deram algum retorno e quantos concluíram o escopo.
  *
  * A barra existe porque "3 de 8" exige uma conta mental que a lista faz o
  * tempo todo; a proporção se vê sem pensar. Mas o número fica: barra sozinha
- * não diz quantos ainda não deram nenhum retorno, e é isso que se vai cobrar.
+ * não distingue quem começou de quem efetivamente terminou todos os itens.
  *
  * `role="progressbar"` com os três `aria-value*` é o que faz o leitor de tela
  * anunciar "3 de 8" em vez de ignorar uma `div` colorida. O `aria-label`
  * nomeia o que está progredindo, já que a linha tem várias colunas de números.
  */
 export function ResponseProgress({
-  completed,
+  responded,
+  finalized,
   total,
 }: {
-  completed: number;
+  responded: number;
+  finalized: number;
   total: number;
 }) {
   if (total === 0) {
@@ -22,8 +24,8 @@ export function ResponseProgress({
     );
   }
 
-  const proporcao = completed / total;
-  const completo = completed === total;
+  const proporcao = finalized / total;
+  const completo = finalized === total;
 
   return (
     <div className="flex min-w-24 flex-col gap-1">
@@ -32,12 +34,12 @@ export function ResponseProgress({
           completo ? "text-success font-medium" : "text-fg-muted"
         }`}
       >
-        {completed} de {total}
+        {finalized} concluíram · {responded} com retorno
       </span>
       <div
         role="progressbar"
-        aria-label="Fornecedores que responderam"
-        aria-valuenow={completed}
+        aria-label="Fornecedores que concluíram a resposta"
+        aria-valuenow={finalized}
         aria-valuemin={0}
         aria-valuemax={total}
         className="bg-surface-muted h-1 w-full overflow-hidden rounded-full"

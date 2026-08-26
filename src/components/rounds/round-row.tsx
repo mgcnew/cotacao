@@ -46,7 +46,8 @@ export type RoundRowData = {
   /** Já formatada no servidor — data montada aqui divergiria na hidratação. */
   criadaEm: string;
   totalItems: number;
-  suppliersCompleted: number;
+  suppliersResponded: number;
+  suppliersFinalized: number;
   totalSuppliers: number;
   ordersCreated: number;
   status: string;
@@ -171,7 +172,7 @@ export function RoundRow({
         </span>
         <span className="text-fg-muted block max-w-36 text-xs whitespace-normal tabular-nums sm:hidden">
           {round.totalItems} {round.totalItems === 1 ? "produto" : "produtos"} ·{" "}
-          {round.suppliersCompleted} de {round.totalSuppliers} responderam
+          {round.suppliersResponded} com retorno · {round.suppliersFinalized} concluíram
         </span>
       </TableCell>
       <TableCell className="text-fg-muted hidden text-xs tabular-nums lg:table-cell">
@@ -182,7 +183,8 @@ export function RoundRow({
       </TableCell>
       <TableCell className="hidden md:table-cell">
         <ResponseProgress
-          completed={round.suppliersCompleted}
+          responded={round.suppliersResponded}
+          finalized={round.suppliersFinalized}
           total={round.totalSuppliers}
         />
       </TableCell>
@@ -333,9 +335,12 @@ export function RoundMobileCard({
           </dd>
         </div>
         <div className="border-border border-x px-1">
-          <dt className="text-fg-subtle text-[11px]">Responderam</dt>
+          <dt className="text-fg-subtle text-[11px]">Retorno / fim</dt>
           <dd className="text-fg mt-0.5 font-medium tabular-nums">
-            {round.suppliersCompleted}/{round.totalSuppliers}
+            {round.suppliersResponded}/{round.totalSuppliers}
+            <span className="text-fg-subtle ml-1 text-[10px] font-normal">
+              · {round.suppliersFinalized} fim
+            </span>
           </dd>
         </div>
         <div>

@@ -30,11 +30,18 @@ function Responses({ dados }: { dados: DadosDaRodada }) {
   return (
     <section>
       <div className="mb-4">
-        <h2 className="text-fg text-base font-semibold">Cobrar respostas</h2>
-        <p className="text-fg-muted text-sm">Veja primeiro quem precisa de ação e envie ou reenvie o link sem sair desta tela.</p>
+        <h2 className="text-fg text-base font-semibold">
+          {dados.encerrada ? "Resultado das respostas" : "Cobrar respostas"}
+        </h2>
+        <p className="text-fg-muted text-sm">
+          {dados.encerrada
+            ? "Veja quem concluiu, quem respondeu parcialmente e quais fornecedores ficaram sem resposta."
+            : "Veja primeiro quem precisa de ação e envie ou reenvie o link sem sair desta tela."}
+        </p>
       </div>
       <SupplierResponseBoard
         roundId={dados.round.id}
+        roundStatus={dados.round.status}
         canSend={dados.podeEnviar && !dados.encerrada}
         whatsappReady={dados.whatsappReady}
         companyName={dados.companyName}
@@ -52,6 +59,10 @@ function Responses({ dados }: { dados: DadosDaRodada }) {
             .filter((name): name is string => Boolean(name)),
           itemCount: supplier.supplier_quotation_items?.filter((item) => item.removed_at === null).length ?? 0,
           answeredCount: supplier.quotation_responses?.[0]?.quotation_response_items?.length ?? 0,
+          unavailableCount:
+            supplier.quotation_responses?.[0]?.quotation_response_items?.filter(
+              (item) => item.does_not_supply,
+            ).length ?? 0,
           sentAt: supplier.first_sent_at,
           accessedAt: supplier.first_accessed_at,
           completedAt: supplier.completed_at,

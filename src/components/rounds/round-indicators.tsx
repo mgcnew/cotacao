@@ -31,11 +31,13 @@ const MONEY = new Intl.NumberFormat("pt-BR", {
 export async function IndicadoresDaRodada({
   roundId,
   fornecedores,
+  fornecedoresConcluidos,
   status,
 }: {
   roundId: string;
   /** Nome por id — a tabela de fornecedores já os tem em mãos. */
   fornecedores: { supplierId: string; nome: string }[];
+  fornecedoresConcluidos: number;
   status: string;
 }) {
   const [i, resumo] = await Promise.all([
@@ -44,7 +46,11 @@ export async function IndicadoresDaRodada({
   ]);
   if (!i) return null;
 
-  const pendencias = pendenciasDaRodada(i, roundId);
+  const pendencias = pendenciasDaRodada(
+    i,
+    roundId,
+    fornecedoresConcluidos,
+  );
   const comEscolha = fornecedores
     .map((f) => ({ ...f, resumo: resumo.get(f.supplierId) }))
     .filter((f) => f.resumo)
@@ -54,15 +60,13 @@ export async function IndicadoresDaRodada({
     <>
       <section className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric
-          label="Responderam"
+          label="Com algum retorno"
           value={`${i.fornecedoresResponderam} de ${i.fornecedores}`}
           hint={
-            i.fornecedoresEnviados < i.fornecedores
-              ? `${i.fornecedores - i.fornecedoresEnviados} sem receber o link`
-              : "todos receberam o link"
+            `${fornecedoresConcluidos} ${fornecedoresConcluidos === 1 ? "concluiu" : "concluíram"} todos os itens`
           }
           tone={
-            i.fornecedores > 0 && i.fornecedoresResponderam === i.fornecedores
+            i.fornecedores > 0 && fornecedoresConcluidos === i.fornecedores
               ? "good"
               : "neutral"
           }

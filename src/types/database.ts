@@ -3343,6 +3343,7 @@ export type Database = {
           purchase_round_id: string | null
           status: string | null
           suppliers_completed: number | null
+          suppliers_finalized: number | null
           suppliers_pending: number | null
           title: string | null
           total_items: number | null

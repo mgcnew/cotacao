@@ -107,7 +107,7 @@ export function roundNextStep(
         path: "/alocacao",
       };
     }
-    // Todos responderam e o pedido saiu: o que falta é dizer que acabou. Sem
+    // Todos concluíram a resposta e o pedido saiu: o que falta é dizer que acabou. Sem
     // este passo a rodada ficava em "Em andamento" para sempre, e a lista de
     // compras juntava o trabalho de três meses atrás com o de hoje.
     return {

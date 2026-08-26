@@ -55,6 +55,7 @@ export type SupplierResponseRow = {
   groups: string[];
   itemCount: number;
   answeredCount: number;
+  unavailableCount: number;
   sentAt: string | null;
   accessedAt: string | null;
   completedAt: string | null;
@@ -78,9 +79,13 @@ function urgency(row: SupplierResponseRow) {
   return 4;
 }
 
-function status(row: SupplierResponseRow) {
+function status(row: SupplierResponseRow, closed: boolean) {
   if (row.completedAt)
     return { label: "Concluiu", variant: "default" as const };
+  if (closed && row.answeredCount > 0)
+    return { label: "Parcial encerrada", variant: "secondary" as const };
+  if (closed)
+    return { label: "Sem resposta", variant: "outline" as const };
   if (row.answeredCount > 0)
     return { label: "Resposta parcial", variant: "secondary" as const };
   if (row.accessedAt)
@@ -101,6 +106,7 @@ function ReminderSubmit({ count }: { count: number }) {
 
 export function SupplierResponseBoard({
   roundId,
+  roundStatus,
   suppliers,
   canSend,
   whatsappReady,
@@ -110,6 +116,7 @@ export function SupplierResponseBoard({
   reminderTemplate,
 }: {
   roundId: string;
+  roundStatus: string;
   suppliers: SupplierResponseRow[];
   canSend: boolean;
   whatsappReady: boolean;
@@ -118,7 +125,14 @@ export function SupplierResponseBoard({
   invitationTemplate: string;
   reminderTemplate: string;
 }) {
+  const closed = roundStatus === "completed" || roundStatus === "cancelled";
   const completed = suppliers.filter((supplier) => supplier.completedAt).length;
+  const partial = suppliers.filter(
+    (supplier) => !supplier.completedAt && supplier.answeredCount > 0,
+  ).length;
+  const noResponse = suppliers.filter(
+    (supplier) => supplier.answeredCount === 0,
+  ).length;
   const notOpened = suppliers.filter(
     (supplier) => supplier.sentAt && !supplier.accessedAt,
   ).length;
@@ -192,23 +206,35 @@ export function SupplierResponseBoard({
         </div>
         <div className="border-border rounded-xl border p-3">
           <p className="text-fg-muted flex flex-col items-start gap-1 text-xs sm:flex-row sm:items-center sm:gap-1.5">
-            <Clock3 className="size-3.5" aria-hidden /> Pendentes
+            <Clock3 className="size-3.5" aria-hidden /> {closed ? "Parciais" : "Pendentes"}
           </p>
           <p className="text-fg mt-1 text-xl font-semibold tabular-nums">
-            {pending}
+            {closed ? partial : pending}
           </p>
         </div>
         <div className="border-border rounded-xl border p-3">
           <p className="text-fg-muted flex flex-col items-start gap-1 text-xs sm:flex-row sm:items-center sm:gap-1.5">
-            <MailQuestion className="size-3.5" aria-hidden /> Sem abrir
+            <MailQuestion className="size-3.5" aria-hidden /> {closed ? "Sem resposta" : "Sem abrir"}
           </p>
           <p className="text-fg mt-1 text-xl font-semibold tabular-nums">
-            {notOpened}
+            {closed ? noResponse : notOpened}
           </p>
         </div>
       </div>
 
-      {pending > 0 ? (
+      {closed && pending > 0 ? (
+        <div className="border-border bg-surface-sunken flex items-start gap-2 rounded-xl border px-3 py-2.5">
+          <AlertCircle
+            className="text-fg-muted mt-0.5 size-4 shrink-0"
+            aria-hidden
+          />
+          <p className="text-fg-muted text-sm">
+            A cotação está encerrada. {partial > 0 ? `${partial} ${partial === 1 ? "fornecedor respondeu parcialmente" : "fornecedores responderam parcialmente"}` : "Nenhum fornecedor respondeu parcialmente"}
+            {noResponse > 0 ? ` e ${noResponse} ${noResponse === 1 ? "ficou sem resposta" : "ficaram sem resposta"}` : ""}.
+            Esses registros são resultado histórico, não pendências da compra.
+          </p>
+        </div>
+      ) : !closed && pending > 0 ? (
         <div className="border-border bg-surface-sunken flex items-start gap-2 rounded-xl border px-3 py-2.5">
           <AlertCircle
             className="text-fg-muted mt-0.5 size-4 shrink-0"
@@ -237,16 +263,16 @@ export function SupplierResponseBoard({
           >
             <span className="sm:hidden">
               {value === "pending"
-                ? "Pendentes"
+                ? closed ? "Incompletas" : "Pendentes"
                 : value === "completed"
-                  ? "Concluídos"
+                  ? "Concluídas"
                   : "Todos"}
             </span>
             <span className="hidden sm:inline">
               {value === "pending"
-                ? `Pendentes (${pending})`
+                ? `${closed ? "Incompletas" : "Pendentes"} (${pending})`
                 : value === "completed"
-                  ? `Concluídos (${completed})`
+                  ? `Concluídas (${completed})`
                   : `Todos (${suppliers.length})`}
             </span>
           </Button>
@@ -337,7 +363,15 @@ export function SupplierResponseBoard({
           </TableHeader>
           <TableBody className="block md:table-row-group">
             {visible.map((supplier) => {
-              const currentStatus = status(supplier);
+              const currentStatus = status(supplier, closed);
+              const withoutAnswer = Math.max(
+                0,
+                supplier.itemCount - supplier.answeredCount,
+              );
+              const withPrice = Math.max(
+                0,
+                supplier.answeredCount - supplier.unavailableCount,
+              );
               const latest = [supplier.completedAt, supplier.accessedAt, supplier.lastReminderAt, supplier.sentAt]
                 .filter((value): value is string => Boolean(value))
                 .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
@@ -371,8 +405,13 @@ export function SupplierResponseBoard({
                       {currentStatus.label}
                     </Badge>
                     <p className="text-fg-subtle mt-1 text-xs tabular-nums">
-                      {supplier.answeredCount} de {supplier.itemCount}{" "}
-                      respondidos
+                      {withPrice} com preço
+                      {supplier.unavailableCount > 0
+                        ? ` · ${supplier.unavailableCount} não fornece`
+                        : ""}
+                      {withoutAnswer > 0
+                        ? ` · ${withoutAnswer} sem resposta`
+                        : ""}
                     </p>
                   </TableCell>
                   <TableCell className="text-fg-muted col-span-2 block p-0 text-xs md:table-cell md:p-2">

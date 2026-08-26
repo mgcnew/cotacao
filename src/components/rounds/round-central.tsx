@@ -180,7 +180,7 @@ export function CorpoDaRodada({ dados }: { dados: DadosDaRodada }) {
           latestReminders={dados.latestReminders}
           selectableSuppliers={dados.selectableSuppliers}
           podeEditar={dados.podeEditar}
-          podeEnviar={dados.podeEnviar}
+          podeEnviar={dados.podeEnviar && !dados.encerrada}
           whatsappReady={dados.whatsappReady}
           invitationTemplate={dados.whatsappTemplates.quotation_invitation}
           podeFechar={dados.podeFechar && dados.emAndamento}
@@ -579,6 +579,9 @@ function Acompanhamento({
         <IndicadoresDaRodada
           roundId={roundId}
           status={roundStatus}
+          fornecedoresConcluidos={
+            roundSuppliers.filter((supplier) => supplier.completed_at).length
+          }
           fornecedores={roundSuppliers.map((rs) => ({
             supplierId: rs.supplier_id,
             nome: rs.suppliers?.name ?? "Fornecedor",
@@ -761,8 +764,20 @@ function Acompanhamento({
                       rs.supplier_quotation_items?.filter(
                         (item) => item.removed_at === null,
                       ).length ?? 0;
+                    const indisponiveis =
+                      rs.quotation_responses?.[0]?.quotation_response_items
+                        ?.filter((item) => item.does_not_supply).length ?? 0;
+                    const comPreco = Math.max(0, respondidos - indisponiveis);
+                    const semResposta = Math.max(
+                      0,
+                      totalAtribuidos - respondidos,
+                    );
                     if (respondidos === 0) {
-                      return <span className="text-fg-subtle">—</span>;
+                      return encerrada ? (
+                        <Badge variant="outline">Sem resposta</Badge>
+                      ) : (
+                        <span className="text-fg-subtle">—</span>
+                      );
                     }
                     return (
                       <>
@@ -771,11 +786,22 @@ function Acompanhamento({
                         >
                           {respondidos} de {totalAtribuidos}
                         </Badge>
-                        {rs.completed_at ? (
-                          <span className="text-fg-subtle mt-0.5 block">
-                            {DATA_HORA.format(new Date(rs.completed_at))}
-                          </span>
-                        ) : null}
+                        <span className="text-fg-subtle mt-0.5 block">
+                          {comPreco} com preço
+                          {indisponiveis > 0
+                            ? ` · ${indisponiveis} não fornece`
+                            : ""}
+                          {semResposta > 0
+                            ? ` · ${semResposta} sem resposta`
+                            : ""}
+                        </span>
+                        <span className="text-fg-subtle mt-0.5 block">
+                          {rs.completed_at
+                            ? `Concluída em ${DATA_HORA.format(new Date(rs.completed_at))}`
+                            : encerrada
+                              ? "Parcial encerrada"
+                              : "Resposta parcial"}
+                        </span>
                       </>
                     );
                   })()}

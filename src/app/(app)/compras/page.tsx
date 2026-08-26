@@ -78,7 +78,7 @@ export default async function ComprasPage({
                 <>
                   &quot;Em aberto&quot; é preparação e andamento juntos.
                   &quot;Aguardando resposta&quot; é rodada ativa com fornecedor
-                  devendo preço.
+                  que ainda não concluiu todos os itens.
                 </>
               }
             >
@@ -150,7 +150,8 @@ async function ListaDeRodadas({
           ? DATA.format(new Date(round.created_at))
           : "—",
         totalItems: Number(round.total_items ?? 0),
-        suppliersCompleted: Number(round.suppliers_completed ?? 0),
+        suppliersResponded: Number(round.suppliers_completed ?? 0),
+        suppliersFinalized: Number(round.suppliers_finalized ?? 0),
         totalSuppliers: Number(round.total_suppliers ?? 0),
         ordersCreated: Number(round.orders_created ?? 0),
         status,
@@ -180,7 +181,7 @@ async function ListaDeRodadas({
           <Metric
             label="Aguardando resposta"
             value={String(resumo.aguardandoResposta)}
-            hint="fornecedores que ainda não responderam"
+            hint="fornecedores que ainda não concluíram"
             href="/compras?situacao=aguardando"
           />
           <Metric
@@ -244,7 +245,7 @@ async function ListaDeRodadas({
                     Produtos
                   </TableHead>
                   <TableHead className="hidden md:table-cell">
-                    Responderam
+                    Retorno / conclusão
                   </TableHead>
                   <TableHead className="hidden text-right lg:table-cell">
                     Pedidos

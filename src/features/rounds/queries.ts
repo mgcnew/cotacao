@@ -34,6 +34,7 @@ export async function listRoundsWithProgress(
       total_items,
       total_suppliers,
       suppliers_completed,
+      suppliers_finalized,
       suppliers_pending,
       items_confirmed,
       orders_created,
@@ -153,7 +154,7 @@ export async function listRoundSuppliers(companyId: string, roundId: string) {
       suppliers!inner ( name ),
       supplier_contacts ( name, whatsapp ),
       supplier_quotation_items ( id, removed_at ),
-      quotation_responses ( status, submitted_at, quotation_response_items ( id ) )
+      quotation_responses ( status, submitted_at, quotation_response_items ( id, does_not_supply ) )
     `,
     )
     .eq("company_id", companyId)

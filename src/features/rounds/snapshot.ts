@@ -83,10 +83,15 @@ export type PendenciaDaRodada = {
 export function pendenciasDaRodada(
   i: IndicadoresDaRodada,
   roundId: string,
+  fornecedoresConcluidos: number,
 ): PendenciaDaRodada[] {
   const pendencias: PendenciaDaRodada[] = [];
   const semEnvio = i.fornecedores - i.fornecedoresEnviados;
   const semResposta = i.fornecedoresEnviados - i.fornecedoresResponderam;
+  const respostasParciais = Math.max(
+    0,
+    i.fornecedoresResponderam - fornecedoresConcluidos,
+  );
   const itensSemResposta = i.itensAtivos - i.itensComResposta;
 
   if (semEnvio > 0) {
@@ -107,6 +112,18 @@ export function pendenciasDaRodada(
         "Dá para cobrar pelo mesmo link, ou lançar o preço no lugar dele na comparação.",
       href: `/compras/${roundId}/comparacao`,
       acao: "Lançar preço",
+      travando: false,
+    });
+  }
+
+  if (respostasParciais > 0) {
+    pendencias.push({
+      chave: "respostas-parciais",
+      texto: `${respostasParciais} ${respostasParciais === 1 ? "fornecedor respondeu parcialmente" : "fornecedores responderam parcialmente"}`,
+      detalhe:
+        "O que ficou em branco ainda é ausência de resposta; marque “não fornece” somente quando isso tiver sido informado.",
+      href: `/compras/${roundId}`,
+      acao: "Ver respostas",
       travando: false,
     });
   }

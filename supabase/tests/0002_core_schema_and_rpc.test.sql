@@ -5,7 +5,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(39);
+select plan(40);
 
 -- Tabelas principais
 select has_table('public','suppliers','suppliers');
@@ -29,6 +29,8 @@ select has_table('public','audit_logs','audit_logs');
 -- Views
 select has_view('public','v_current_response_prices','view preço atual');
 select has_view('public','v_purchase_round_progress','view progresso rodada');
+select has_column('public','v_purchase_round_progress','suppliers_finalized',
+  'progresso distingue retorno de resposta concluída');
 select has_view('public','v_order_delivery_status','view atraso pedido');
 select has_view('public','v_conversion_history','view conversões');
 select has_view('public','v_realized_savings','view economia realizada');
