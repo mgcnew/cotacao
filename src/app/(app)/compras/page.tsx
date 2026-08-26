@@ -96,7 +96,7 @@ export default async function ComprasPage({
         key={JSON.stringify(filters)}
         fallback={
           <>
-            <MetricsSkeleton />
+            <MetricsSkeleton className="mb-4 grid-cols-2 gap-2 sm:mb-6 sm:gap-3" />
             <TableSkeleton rows={6} columns={5} />
           </>
         }
@@ -165,7 +165,7 @@ async function ListaDeRodadas({
   return (
     <>
       {rounds.length > 0 ? (
-        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:mb-6 sm:gap-3 lg:grid-cols-4">
           <Metric
             label={filtrando ? "Rodadas nesta seleção" : "Rodadas"}
             value={String(resumo.quantidade)}

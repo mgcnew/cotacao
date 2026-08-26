@@ -28,7 +28,10 @@ function Barra({ className }: { className?: string }) {
   return (
     <div
       aria-hidden
-      className={cn("bg-surface-muted animate-pulse rounded-md", className)}
+      className={cn(
+        "bg-surface-muted max-w-full animate-pulse rounded-md",
+        className,
+      )}
     />
   );
 }
@@ -68,9 +71,20 @@ export function PageHeaderSkeleton({ action = true }: { action?: boolean }) {
 }
 
 /** A fileira de números. `count` é quantos cartões a tela real tem. */
-export function MetricsSkeleton({ count = 4 }: { count?: number }) {
+export function MetricsSkeleton({
+  count = 4,
+  className,
+}: {
+  count?: number;
+  className?: string;
+}) {
   return (
-    <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div
+      className={cn(
+        "mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4",
+        className,
+      )}
+    >
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
