@@ -27,6 +27,7 @@ type Item = {
   agreedPrice: number;
   purchaseUnit: string;
   pricingUnit: string;
+  sameUnit: boolean;
 };
 
 function numberFromField(value: FormDataEntryValue | null) {
@@ -79,7 +80,9 @@ export function ReceiptConferenceForm({
       items.reduce(
         (sum, item) =>
           sum +
-          numberFromField(data.get(`prec_${item.id}`)) *
+          numberFromField(
+            data.get(`${item.sameUnit ? "log" : "prec"}_${item.id}`),
+          ) *
             numberFromField(data.get(`preco_${item.id}`)),
         0,
       ),
@@ -222,7 +225,9 @@ export function ReceiptConferenceForm({
                 </strong>
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div
+              className={`grid gap-3 ${item.sameUnit ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}
+            >
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor={`log_${item.id}`}
@@ -237,20 +242,22 @@ export function ReceiptConferenceForm({
                   className="h-8"
                 />
               </div>
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor={`prec_${item.id}`}
-                  className="text-fg-muted text-xs"
-                >
-                  Precificação ({item.pricingUnit})
-                </label>
-                <Input
-                  id={`prec_${item.id}`}
-                  name={`prec_${item.id}`}
-                  inputMode="decimal"
-                  className="h-8"
-                />
-              </div>
+              {!item.sameUnit ? (
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor={`prec_${item.id}`}
+                    className="text-fg-muted text-xs"
+                  >
+                    Precificação ({item.pricingUnit})
+                  </label>
+                  <Input
+                    id={`prec_${item.id}`}
+                    name={`prec_${item.id}`}
+                    inputMode="decimal"
+                    className="h-8"
+                  />
+                </div>
+              ) : null}
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor={`preco_${item.id}`}
@@ -267,6 +274,12 @@ export function ReceiptConferenceForm({
                 />
               </div>
             </div>
+            {item.sameUnit ? (
+              <p className="text-fg-subtle mt-2 text-xs">
+                A quantidade usada no valor é a mesma recebida, pois compra e
+                precificação estão em {item.purchaseUnit}.
+              </p>
+            ) : null}
             <Input
               name={`obs_${item.id}`}
               maxLength={200}

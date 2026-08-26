@@ -10,9 +10,9 @@ import { cn } from "@/lib/utils";
 
 function pagesAround(current: number, total: number) {
   const candidates = [1, current - 1, current, current + 1, total];
-  return [...new Set(candidates.filter((page) => page >= 1 && page <= total))].sort(
-    (a, b) => a - b,
-  );
+  return [
+    ...new Set(candidates.filter((page) => page >= 1 && page <= total)),
+  ].sort((a, b) => a - b);
 }
 
 export function DataTablePagination({
@@ -20,11 +20,15 @@ export function DataTablePagination({
   pageSize,
   total,
   allowPageSize = true,
+  pageParam = "pagina",
+  pageSizeParam = "por_pagina",
 }: {
   page: number;
   pageSize: number;
   total: number;
   allowPageSize?: boolean;
+  pageParam?: string;
+  pageSizeParam?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -35,16 +39,16 @@ export function DataTablePagination({
 
   const hrefForPage = (target: number) => {
     const params = new URLSearchParams(currentParams.toString());
-    if (target <= 1) params.delete("pagina");
-    else params.set("pagina", String(target));
+    if (target <= 1) params.delete(pageParam);
+    else params.set(pageParam, String(target));
     const query = params.toString();
     return query ? `${pathname}?${query}` : pathname;
   };
 
   const changeSize = (value: string) => {
     const params = new URLSearchParams(currentParams.toString());
-    params.set("por_pagina", value);
-    params.delete("pagina");
+    params.set(pageSizeParam, value);
+    params.delete(pageParam);
     router.push(`${pathname}?${params.toString()}`);
   };
 

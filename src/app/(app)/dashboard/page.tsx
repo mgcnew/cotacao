@@ -173,9 +173,7 @@ async function Panorama({
     situation.rondasAtivas === 0 &&
     situation.pedidosEmAberto === 0 &&
     attention.length === 0;
-  const steps = starting
-    ? await getFirstSteps(companyId, permissions)
-    : null;
+  const steps = starting ? await getFirstSteps(companyId, permissions) : null;
 
   if (steps?.length) {
     return (
@@ -199,9 +197,7 @@ async function Panorama({
     );
   }
 
-  const critical = attention.filter(
-    (item) => item.severity === "high",
-  ).length;
+  const critical = attention.filter((item) => item.severity === "high").length;
   const responseRate =
     situation.fornecedoresTotal > 0
       ? Math.round(
@@ -409,7 +405,8 @@ async function Financial({ companyId }: { companyId: string }) {
             Resultado de {MONTH.format(new Date(`${financial.de}T12:00:00`))}
           </h2>
           <p className="text-fg-muted mt-0.5 text-xs">
-            Valores realizados a partir das mercadorias recebidas.
+            Planejado ao concluir as cotações e realizado ao conferir as
+            mercadorias.
           </p>
         </div>
         <Button asChild size="sm" variant="outline">
@@ -417,49 +414,105 @@ async function Financial({ companyId }: { companyId: string }) {
         </Button>
       </header>
 
-      {financial.itensRecebidos === 0 ? (
+      {financial.itensRecebidos === 0 && financial.cotacoesConcluidas === 0 ? (
         <div className="flex items-center gap-3 px-5 py-6">
           <WalletCards className="text-fg-subtle size-5" aria-hidden />
           <p className="text-fg-muted text-sm">
-            Os resultados aparecem depois da primeira entrada de mercadoria do
-            mês.
+            Os resultados aparecem ao concluir uma cotação ou conferir a
+            primeira entrada de mercadoria do mês.
           </p>
         </div>
       ) : (
-        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
-          <DashboardMetric
-            icon={WalletCards}
-            label="Total comprado"
-            value={MONEY.format(financial.totalComprado)}
-            hint={`${financial.itensRecebidos} ${financial.itensRecebidos === 1 ? "item recebido" : "itens recebidos"}`}
-          />
-          <DashboardMetric
-            icon={TrendingDown}
-            label="Economia negociada"
-            value={MONEY.format(financial.economiaNegociada)}
-            hint="Diferença entre cotado e combinado"
-            tone={financial.economiaNegociada > 0 ? "good" : "neutral"}
-          />
-          <DashboardMetric
-            icon={BadgeDollarSign}
-            label="Economia realizada"
-            value={MONEY.format(financial.economiaRealizada)}
-            hint="Diferença entre cotado e preço da nota"
-            tone={
-              financial.economiaRealizada > 0
-                ? "good"
-                : financial.economiaRealizada < 0
-                  ? "bad"
-                  : "neutral"
-            }
-          />
-          <DashboardMetric
-            icon={Scale}
-            label="Impacto de divergências"
-            value={MONEY.format(financial.impactoDivergencias)}
-            hint="Valor cobrado além do combinado"
-            tone={financial.impactoDivergencias > 0 ? "bad" : "good"}
-          />
+        <div>
+          <div className="p-4 sm:p-5">
+            <div className="mb-3">
+              <h3 className="text-fg text-sm font-semibold">
+                Cotações concluídas no mês
+              </h3>
+              <p className="text-fg-muted mt-0.5 text-xs">
+                Previsão congelada no encerramento de{" "}
+                {financial.cotacoesConcluidas}{" "}
+                {financial.cotacoesConcluidas === 1 ? "cotação" : "cotações"}.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DashboardMetric
+                icon={TrendingDown}
+                label="Resultado estimado das negociações"
+                value={MONEY.format(financial.economiaEstimada)}
+                hint="Proposta original menos preço final dos pedidos gerados"
+                tone={
+                  financial.economiaEstimada > 0
+                    ? "good"
+                    : financial.economiaEstimada < 0
+                      ? "bad"
+                      : "neutral"
+                }
+              />
+              <DashboardMetric
+                icon={ShoppingCart}
+                label="Valor previsto dos pedidos"
+                value={MONEY.format(financial.valorPrevistoPedidos)}
+                hint="Preço final × quantidade estimada na decisão de compra"
+              />
+            </div>
+          </div>
+
+          <div className="border-border border-t p-4 sm:p-5">
+            <div className="mb-3">
+              <h3 className="text-fg text-sm font-semibold">
+                Recebimentos conferidos no mês
+              </h3>
+              <p className="text-fg-muted mt-0.5 text-xs">
+                Valores efetivos de {financial.itensRecebidos}{" "}
+                {financial.itensRecebidos === 1
+                  ? "item recebido"
+                  : "itens recebidos"}
+                .
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <DashboardMetric
+                icon={WalletCards}
+                label="Valor efetivamente recebido"
+                value={MONEY.format(financial.valorRecebido)}
+                hint="Preço conferido na nota × quantidade recebida"
+              />
+              <DashboardMetric
+                icon={BadgeDollarSign}
+                label="Resultado efetivo vs. cotado"
+                value={MONEY.format(financial.economiaRealizada)}
+                hint="Proposta original menos preço e quantidade conferidos"
+                tone={
+                  financial.economiaRealizada > 0
+                    ? "good"
+                    : financial.economiaRealizada < 0
+                      ? "bad"
+                      : "neutral"
+                }
+              />
+              <DashboardMetric
+                icon={Scale}
+                label="Diferença da nota x pedido"
+                value={MONEY.format(financial.impactoDivergencias)}
+                hint="Nota menos pedido: positivo indica valor pago a mais"
+                tone={
+                  financial.impactoDivergencias > 0
+                    ? "bad"
+                    : financial.impactoDivergencias < 0
+                      ? "good"
+                      : "neutral"
+                }
+              />
+            </div>
+          </div>
+          <div className="border-border text-fg-muted mx-4 mb-4 rounded-xl border border-dashed px-3 py-2.5 text-xs leading-relaxed">
+            <strong className="text-fg">Como ler:</strong> resultado positivo é
+            economia; resultado negativo significa que o preço terminou acima da
+            proposta inicial. A previsão considera as cotações encerradas no
+            mês. O realizado considera apenas o que já chegou. Pedidos diretos
+            entram no valor recebido, mas não geram economia contra cotação.
+          </div>
         </div>
       )}
     </section>

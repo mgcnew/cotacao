@@ -88,9 +88,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizeReportOffer(value: unknown) {
   if (!isRecord(value)) return value;
-  return value.outcome === "no_price"
-    ? { ...value, outcome: "no_response" }
-    : value;
+  const outcome = value.outcome === "no_price" ? "no_response" : value.outcome;
+  const quoted = value.quotedPrice;
+  const selected = value.selectedPrice;
+  const quantity = value.estimatedPricingQuantity;
+  const negotiatedSavings =
+    outcome === "won" &&
+    typeof quoted === "number" &&
+    typeof selected === "number" &&
+    typeof quantity === "number"
+      ? (quoted - selected) * quantity
+      : null;
+
+  return { ...value, outcome, negotiatedSavings };
 }
 
 function normalizeReportItem(value: unknown) {
@@ -106,9 +116,22 @@ function normalizeReportItem(value: unknown) {
 function normalizeRoundReport(value: unknown): RoundReport | null {
   if (!hasRoundReportShape(value)) return null;
   const report = value as Record<string, unknown>;
+  const items = (report.items as unknown[]).map(normalizeReportItem);
+  const summary = isRecord(report.summary) ? report.summary : {};
+  const negotiatedSavings = items.reduce((total, rawItem) => {
+    if (!isRecord(rawItem) || !Array.isArray(rawItem.offers)) return total;
+    return (
+      total +
+      rawItem.offers.reduce((offerTotal, rawOffer) => {
+        if (!isRecord(rawOffer)) return offerTotal;
+        return offerTotal + Number(rawOffer.negotiatedSavings ?? 0);
+      }, 0)
+    );
+  }, 0);
+
   return {
     ...report,
-    items: (report.items as unknown[]).map(normalizeReportItem),
+    items,
     groups: (report.groups as unknown[]).map((group) =>
       isRecord(group) && Array.isArray(group.items)
         ? { ...group, items: group.items.map(normalizeReportItem) }
@@ -127,6 +150,7 @@ function normalizeRoundReport(value: unknown): RoundReport | null {
               : 0,
       };
     }),
+    summary: { ...summary, negotiatedSavings },
   } as RoundReport;
 }
 
@@ -166,71 +190,72 @@ export const getRoundReport = cache(
             row.cells.has(supplier.id),
         )
         .map((supplier): RoundReportOffer => {
-        const cell = row.cells.get(supplier.id);
-        const wins = decisions.filter(
-          (allocation) => allocation.supplierId === supplier.supplier_id,
-        );
-        const wonQuantity = wins.reduce(
-          (sum, allocation) => sum + allocation.allocatedQuantity,
-          0,
-        );
-        const estimatedParts = wins.map(
-          (allocation) => allocation.estimatedPricingQuantity,
-        );
-        const calculable =
-          wins.length > 0 && estimatedParts.every((quantity) => quantity !== null);
-        const estimatedPricingQuantity = calculable
-          ? estimatedParts.reduce<number>(
-              (sum, quantity) => sum + Number(quantity),
-              0,
-            )
-          : null;
-        const selectedPrice =
-          wins.length === 0
-            ? null
-            : calculable && estimatedPricingQuantity !== null
-              ? wins.reduce(
-                  (sum, allocation) =>
-                    sum +
-                    allocation.selectedPrice *
-                      (allocation.estimatedPricingQuantity ?? 0),
-                  0,
-                ) / estimatedPricingQuantity
-              : wins.reduce(
+          const cell = row.cells.get(supplier.id);
+          const wins = decisions.filter(
+            (allocation) => allocation.supplierId === supplier.supplier_id,
+          );
+          const wonQuantity = wins.reduce(
+            (sum, allocation) => sum + allocation.allocatedQuantity,
+            0,
+          );
+          const estimatedParts = wins.map(
+            (allocation) => allocation.estimatedPricingQuantity,
+          );
+          const calculable =
+            wins.length > 0 &&
+            estimatedParts.every((quantity) => quantity !== null);
+          const estimatedPricingQuantity = calculable
+            ? estimatedParts.reduce<number>(
+                (sum, quantity) => sum + Number(quantity),
+                0,
+              )
+            : null;
+          const selectedPrice =
+            wins.length === 0
+              ? null
+              : calculable && estimatedPricingQuantity !== null
+                ? wins.reduce(
                     (sum, allocation) =>
-                      sum + allocation.selectedPrice * allocation.allocatedQuantity,
+                      sum +
+                      allocation.selectedPrice *
+                        (allocation.estimatedPricingQuantity ?? 0),
+                    0,
+                  ) / estimatedPricingQuantity
+                : wins.reduce(
+                    (sum, allocation) =>
+                      sum +
+                      allocation.selectedPrice * allocation.allocatedQuantity,
                     0,
                   ) / wonQuantity;
-        const negotiatedSavings =
-          selectedPrice !== null &&
-          cell?.quotedPrice !== null &&
-          cell?.quotedPrice !== undefined &&
-          estimatedPricingQuantity !== null
-            ? Math.max(0, cell.quotedPrice - selectedPrice) *
-              estimatedPricingQuantity
-            : null;
-        const hasPrice =
-          cell?.currentPrice !== null && cell?.currentPrice !== undefined;
+          const negotiatedSavings =
+            selectedPrice !== null &&
+            cell?.quotedPrice !== null &&
+            cell?.quotedPrice !== undefined &&
+            estimatedPricingQuantity !== null
+              ? (cell.quotedPrice - selectedPrice) * estimatedPricingQuantity
+              : null;
+          const hasPrice =
+            cell?.currentPrice !== null && cell?.currentPrice !== undefined;
 
-        return {
-          supplierId: supplier.supplier_id,
-          supplierName: supplier.suppliers.name,
-          quotedPrice: cell?.quotedPrice ?? null,
-          finalPrice: cell?.currentPrice ?? null,
-          doesNotSupply: cell?.doesNotSupply ?? false,
-          wonQuantity,
-          estimatedPricingQuantity,
-          selectedPrice,
-          negotiatedSavings,
-          outcome:
-            wins.length > 0
-              ? "won"
-              : cell?.doesNotSupply
-                ? "unavailable"
-                : hasPrice
-                  ? "lost"
-                  : "no_response",
-        };
+          return {
+            supplierId: supplier.supplier_id,
+            supplierName: supplier.suppliers.name,
+            quotedPrice: cell?.quotedPrice ?? null,
+            finalPrice: cell?.currentPrice ?? null,
+            doesNotSupply: cell?.doesNotSupply ?? false,
+            wonQuantity,
+            estimatedPricingQuantity,
+            selectedPrice,
+            negotiatedSavings,
+            outcome:
+              wins.length > 0
+                ? "won"
+                : cell?.doesNotSupply
+                  ? "unavailable"
+                  : hasPrice
+                    ? "lost"
+                    : "no_response",
+          };
         });
 
       return {
@@ -257,12 +282,10 @@ export const getRoundReport = cache(
           name: supplier.suppliers.name,
           wins: offers.filter((offer) => offer.outcome === "won").length,
           losses: offers.filter((offer) => offer.outcome === "lost").length,
-          noResponses: offers.filter(
-            (offer) => offer.outcome === "no_response",
-          ).length,
-          unavailable: offers.filter(
-            (offer) => offer.outcome === "unavailable",
-          ).length,
+          noResponses: offers.filter((offer) => offer.outcome === "no_response")
+            .length,
+          unavailable: offers.filter((offer) => offer.outcome === "unavailable")
+            .length,
           awardedValue: offers.reduce(
             (sum, offer) =>
               sum +
@@ -334,8 +357,7 @@ export const getRoundReport = cache(
           (sum, item) =>
             sum +
             item.offers.reduce(
-              (offerSum, offer) =>
-                offerSum + (offer.negotiatedSavings ?? 0),
+              (offerSum, offer) => offerSum + (offer.negotiatedSavings ?? 0),
               0,
             ),
           0,

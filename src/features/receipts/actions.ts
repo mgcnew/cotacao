@@ -85,6 +85,27 @@ export async function postDraftReceipt(
   const receiptId = String(formData.get("receiptId") ?? "");
   const orderId = String(formData.get("orderId") ?? "");
   const itemIds = [...new Set(formData.getAll("itemId").map(String))];
+  if (itemIds.length === 0) {
+    return { error: "Este recebimento não possui produtos para conferir." };
+  }
+  const supabase = await createServerSupabaseClient();
+  const revisionItems = await supabase
+    .from("order_revision_items")
+    .select("id, purchase_unit_id, pricing_unit_id")
+    .eq("company_id", company.companyId)
+    .in("id", itemIds);
+
+  if (revisionItems.error) {
+    return {
+      error: `Não foi possível validar as unidades: ${revisionItems.error.message}`,
+    };
+  }
+
+  const sameUnitIds = new Set(
+    (revisionItems.data ?? [])
+      .filter((item) => item.purchase_unit_id === item.pricing_unit_id)
+      .map((item) => item.id),
+  );
   const items: {
     order_revision_item_id: string;
     logistic_quantity_received: string;
@@ -95,7 +116,9 @@ export async function postDraftReceipt(
 
   for (const id of itemIds) {
     const logistic = decimal(formData.get(`log_${id}`));
-    const pricing = decimal(formData.get(`prec_${id}`));
+    const pricing = sameUnitIds.has(id)
+      ? logistic
+      : decimal(formData.get(`prec_${id}`));
     const price = decimal(formData.get(`preco_${id}`));
     const name = String(formData.get(`nome_${id}`) ?? "este item");
     if (!logistic && !pricing) continue;
@@ -133,7 +156,6 @@ export async function postDraftReceipt(
     return { error: "Valor total da nota inválido." };
   }
 
-  const supabase = await createServerSupabaseClient();
   const { error } = await supabase.rpc("rpc_post_draft_receipt", {
     p_company_id: company.companyId,
     p_receipt_id: receiptId,

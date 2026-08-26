@@ -19,6 +19,7 @@ export function SearchableSelect({
   placeholder = "Digite para buscar…",
   emptyMessage = "Nenhum resultado encontrado.",
   value,
+  defaultValue = "",
   onValueChange,
   required = false,
   className,
@@ -29,12 +30,13 @@ export function SearchableSelect({
   placeholder?: string;
   emptyMessage?: string;
   value?: string;
+  defaultValue?: string;
   onValueChange?: (value: string) => void;
   required?: boolean;
   className?: string;
 }) {
   const controlled = value !== undefined;
-  const [internalValue, setInternalValue] = React.useState("");
+  const [internalValue, setInternalValue] = React.useState(defaultValue);
   const selectedId = controlled ? value : internalValue;
   const initialOption = options.find((option) => option.id === selectedId);
   const [query, setQuery] = React.useState(initialOption?.name ?? "");

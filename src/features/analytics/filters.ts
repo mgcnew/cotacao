@@ -18,7 +18,28 @@ export type AnalyticsFilters = {
   categoriaId: string | null;
   produtoId: string | null;
   fornecedorId: string | null;
+  resultadoFinanceiro: FinancialResult | null;
+  resultadoCotacao: QuotationResult | null;
 };
+
+export const FINANCIAL_RESULTS = [
+  "economia",
+  "acrescimo",
+  "divergencia",
+  "sem_alteracao",
+  "sem_referencia",
+] as const;
+export type FinancialResult = (typeof FINANCIAL_RESULTS)[number];
+
+export const QUOTATION_RESULTS = [
+  "won",
+  "lost",
+  "no_response",
+  "unavailable",
+  "closed_without_purchase",
+  "in_progress",
+] as const;
+export type QuotationResult = (typeof QUOTATION_RESULTS)[number];
 
 const VAZIO: AnalyticsFilters = {
   de: null,
@@ -26,6 +47,8 @@ const VAZIO: AnalyticsFilters = {
   categoriaId: null,
   produtoId: null,
   fornecedorId: null,
+  resultadoFinanceiro: null,
+  resultadoCotacao: null,
 };
 
 function texto(value: string | string[] | undefined): string | null {
@@ -49,6 +72,14 @@ function id(value: string | string[] | undefined): string | null {
   return UUID.test(raw) ? raw : null;
 }
 
+function enumerado<T extends string>(
+  value: string | string[] | undefined,
+  values: readonly T[],
+): T | null {
+  const raw = texto(value);
+  return raw && values.includes(raw as T) ? (raw as T) : null;
+}
+
 /** Data só é aceita no formato do input nativo; qualquer outra coisa é ignorada. */
 function data(value: string | string[] | undefined): string | null {
   const raw = texto(value);
@@ -66,6 +97,14 @@ export function parseFilters(
     categoriaId: id(searchParams.categoria),
     produtoId: id(searchParams.produto),
     fornecedorId: id(searchParams.fornecedor),
+    resultadoFinanceiro: enumerado(
+      searchParams.resultado_financeiro,
+      FINANCIAL_RESULTS,
+    ),
+    resultadoCotacao: enumerado(
+      searchParams.resultado_cotacao,
+      QUOTATION_RESULTS,
+    ),
   };
 }
 
@@ -80,29 +119,31 @@ export function hasAnyFilter(f: AnalyticsFilters): boolean {
  * vazia, que significa "o recorte não casou com nenhum produto" e deve zerar
  * o resultado em vez de ignorar o filtro.
  */
-const resolveProductIdsCached = cache(async (
-  companyId: string,
-  categoriaId: string | null,
-  produtoId: string | null,
-): Promise<string[] | null> => {
-  if (!categoriaId && !produtoId) return null;
+const resolveProductIdsCached = cache(
+  async (
+    companyId: string,
+    categoriaId: string | null,
+    produtoId: string | null,
+  ): Promise<string[] | null> => {
+    if (!categoriaId && !produtoId) return null;
 
-  if (produtoId && !categoriaId) return [produtoId];
+    if (produtoId && !categoriaId) return [produtoId];
 
-  const supabase = await createServerSupabaseClient();
-  let query = supabase
-    .from("products")
-    .select("id")
-    .eq("company_id", companyId);
+    const supabase = await createServerSupabaseClient();
+    let query = supabase
+      .from("products")
+      .select("id")
+      .eq("company_id", companyId);
 
-  if (categoriaId) query = query.eq("category_id", categoriaId);
-  if (produtoId) query = query.eq("id", produtoId);
+    if (categoriaId) query = query.eq("category_id", categoriaId);
+    if (produtoId) query = query.eq("id", produtoId);
 
-  const { data: rows, error } = await query;
-  if (error) throw new Error(`Falha ao aplicar o filtro: ${error.message}`);
+    const { data: rows, error } = await query;
+    if (error) throw new Error(`Falha ao aplicar o filtro: ${error.message}`);
 
-  return (rows ?? []).map((r) => r.id);
-});
+    return (rows ?? []).map((r) => r.id);
+  },
+);
 
 export function resolveProductIds(
   companyId: string,

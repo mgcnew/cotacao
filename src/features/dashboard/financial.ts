@@ -20,12 +20,59 @@ export type MonthFinancials = {
   /** Primeiro e último dia do mês, no fuso da empresa. */
   de: string;
   ate: string;
-  totalComprado: number;
+  valorRecebido: number;
   itensRecebidos: number;
-  economiaNegociada: number;
+  cotacoesConcluidas: number;
+  valorPrevistoPedidos: number;
+  economiaEstimada: number;
   economiaRealizada: number;
   impactoDivergencias: number;
 };
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Lê o documento congelado ao concluir a cotação. A economia é líquida:
+ * reduções de preço somam e aumentos subtraem, sem esconder uma negociação
+ * que terminou acima da primeira proposta.
+ */
+function summarizeCompletedRound(reportData: unknown) {
+  const report = record(reportData);
+  const summary = record(report?.summary);
+  const items = Array.isArray(report?.items) ? report.items : [];
+
+  let economiaEstimada = 0;
+  for (const rawItem of items) {
+    const item = record(rawItem);
+    const offers = Array.isArray(item?.offers) ? item.offers : [];
+    for (const rawOffer of offers) {
+      const offer = record(rawOffer);
+      if (offer?.outcome !== "won") continue;
+      const quoted = finiteNumber(offer.quotedPrice);
+      const selected = finiteNumber(offer.selectedPrice);
+      const quantity = finiteNumber(offer.estimatedPricingQuantity);
+      if (quoted !== null && selected !== null && quantity !== null) {
+        economiaEstimada += (quoted - selected) * quantity;
+      }
+    }
+  }
+
+  const awarded = finiteNumber(summary?.estimatedAwardedValue);
+  return {
+    economiaEstimada,
+    valorPrevistoPedidos: awarded ?? 0,
+  };
+}
 
 /**
  * O mês corrente no fuso da empresa.
@@ -56,13 +103,15 @@ export async function getMonthFinancials(
   const { de, ate } = mesCorrente(timezone);
   const supabase = await createServerSupabaseClient();
 
-  const [savings, comprado] = await Promise.all([
+  const [savings, comprado, snapshots] = await Promise.all([
     getSavingsSummary(companyId, {
       de,
       ate,
       categoriaId: null,
       produtoId: null,
       fornecedorId: null,
+      resultadoFinanceiro: null,
+      resultadoCotacao: null,
     }),
     // Total comprado sai de `receipt_items`, e não de `v_realized_savings`:
     // aquela view parte da alocação, então pedido direto ficaria de fora — e
@@ -76,24 +125,46 @@ export async function getMonthFinancials(
       .eq("receipts.status", "posted")
       .gte("receipts.received_at", `${de}T00:00:00`)
       .lte("receipts.received_at", `${ate}T23:59:59`),
+    supabase
+      .from("purchase_round_report_snapshots")
+      .select("report_data, purchase_rounds!inner ( completed_at )")
+      .eq("company_id", companyId)
+      .gte("purchase_rounds.completed_at", `${de}T00:00:00`)
+      .lte("purchase_rounds.completed_at", `${ate}T23:59:59`),
   ]);
 
   if (comprado.error) {
     throw new Error(`Falha ao somar compras: ${comprado.error.message}`);
   }
+  if (snapshots.error) {
+    throw new Error(
+      `Falha ao somar cotações concluídas: ${snapshots.error.message}`,
+    );
+  }
 
   const itens = comprado.data ?? [];
+  const cotacoes = (snapshots.data ?? []).map((snapshot) =>
+    summarizeCompletedRound(snapshot.report_data),
+  );
 
   return {
     de,
     ate,
-    totalComprado: itens.reduce(
+    valorRecebido: itens.reduce(
       (sum, i) =>
         sum + Number(i.practiced_price) * Number(i.pricing_quantity_received),
       0,
     ),
     itensRecebidos: itens.length,
-    economiaNegociada: savings.negotiated,
+    cotacoesConcluidas: cotacoes.length,
+    valorPrevistoPedidos: cotacoes.reduce(
+      (sum, item) => sum + item.valorPrevistoPedidos,
+      0,
+    ),
+    economiaEstimada: cotacoes.reduce(
+      (sum, item) => sum + item.economiaEstimada,
+      0,
+    ),
     economiaRealizada: savings.realized,
     impactoDivergencias: savings.divergenceImpact,
   };
