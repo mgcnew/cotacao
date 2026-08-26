@@ -1014,6 +1014,7 @@ export type Database = {
           comparison_unit_id: string | null
           created_at: string
           estimated_pricing_quantity: number | null
+          estimated_pricing_source: string | null
           id: string
           notes: string | null
           order_revision_id: string
@@ -1030,6 +1031,7 @@ export type Database = {
           comparison_unit_id?: string | null
           created_at?: string
           estimated_pricing_quantity?: number | null
+          estimated_pricing_source?: string | null
           id?: string
           notes?: string | null
           order_revision_id: string
@@ -1046,6 +1048,7 @@ export type Database = {
           comparison_unit_id?: string | null
           created_at?: string
           estimated_pricing_quantity?: number | null
+          estimated_pricing_source?: string | null
           id?: string
           notes?: string | null
           order_revision_id?: string
@@ -1849,6 +1852,7 @@ export type Database = {
           decision_notes: string | null
           decision_reason: string | null
           estimated_pricing_quantity: number | null
+          estimated_pricing_source: string | null
           id: string
           purchase_round_id: string
           quotation_item_id: string
@@ -1867,6 +1871,7 @@ export type Database = {
           decision_notes?: string | null
           decision_reason?: string | null
           estimated_pricing_quantity?: number | null
+          estimated_pricing_source?: string | null
           id?: string
           purchase_round_id: string
           quotation_item_id: string
@@ -1885,6 +1890,7 @@ export type Database = {
           decision_notes?: string | null
           decision_reason?: string | null
           estimated_pricing_quantity?: number | null
+          estimated_pricing_source?: string | null
           id?: string
           purchase_round_id?: string
           quotation_item_id?: string
@@ -1984,6 +1990,44 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_purchase_round_progress"
             referencedColumns: ["company_id", "purchase_round_id"]
+          },
+        ]
+      }
+      purchase_round_report_snapshots: {
+        Row: {
+          company_id: string
+          generated_at: string
+          generated_by: string | null
+          id: string
+          purchase_round_id: string
+          report_data: Json
+          schema_version: number
+        }
+        Insert: {
+          company_id: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          purchase_round_id: string
+          report_data: Json
+          schema_version?: number
+        }
+        Update: {
+          company_id?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          purchase_round_id?: string
+          report_data?: Json
+          schema_version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_round_report_snapshots_company_id_purchase_round_id_fkey"
+            columns: ["company_id", "purchase_round_id"]
+            isOneToOne: true
+            referencedRelation: "purchase_rounds"
+            referencedColumns: ["company_id", "id"]
           },
         ]
       }
@@ -3583,6 +3627,10 @@ export type Database = {
         Returns: Json
       }
       rpc_finalize_round_if_resolved: {
+        Args: { p_company_id: string; p_purchase_round_id: string }
+        Returns: Json
+      }
+      rpc_get_purchase_round_report: {
         Args: { p_company_id: string; p_purchase_round_id: string }
         Returns: Json
       }

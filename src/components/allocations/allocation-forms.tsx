@@ -32,6 +32,9 @@ export function AllocateForm({
   quotationItemId,
   productName,
   purchaseUnit,
+  pricingUnit,
+  requiresPricingConversion,
+  estimatedConversionRate,
   suppliers,
   suggestedQuantity,
   initialSupplierId,
@@ -41,6 +44,9 @@ export function AllocateForm({
   quotationItemId: string;
   productName: string;
   purchaseUnit: string;
+  pricingUnit: string;
+  requiresPricingConversion: boolean;
+  estimatedConversionRate: number | null;
   suppliers: { id: string; name: string; price: number }[];
   suggestedQuantity: number;
   initialSupplierId?: string;
@@ -123,6 +129,36 @@ export function AllocateForm({
         placeholder="Motivo da escolha (opcional)"
         className="h-8"
       />
+
+      {requiresPricingConversion ? (
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor={`conversao-${quotationItemId}`}
+            className="text-fg-muted text-xs"
+          >
+            Quantos {pricingUnit} há, em média, em 1 {purchaseUnit}?{
+              " "
+            }
+            <span className="text-fg-subtle">(opcional)</span>
+          </label>
+          <Input
+            id={`conversao-${quotationItemId}`}
+            name="conversionRate"
+            inputMode="decimal"
+            defaultValue={
+              estimatedConversionRate === null
+                ? ""
+                : String(estimatedConversionRate).replace(".", ",")
+            }
+            placeholder={`Ex.: 45 ${pricingUnit} por ${purchaseUnit}`}
+            className="h-8"
+          />
+          <p className="text-fg-subtle text-xs">
+            Usado somente para estimar total e economia. Se o fornecedor já
+            informou um fator específico, o dele tem prioridade.
+          </p>
+        </div>
+      ) : null}
 
       <ErrorLine error={state.error} />
 

@@ -27,9 +27,12 @@ export type ComparisonCell = {
   attributes: { name: string; value: string }[];
   /**
    * Preço na unidade de comparação, quando dá para calcular.
-   * É o preço vigente dividido pelo fator que o fornecedor informou.
+   * Se preço e comparação já usam a mesma unidade, permanece igual; quando a
+   * proposta é uma embalagem, divide pelo fator informado pelo fornecedor.
    */
   normalizedPrice: number | null;
+  /** Quantas unidades de preço/comparação há na apresentação informada. */
+  conversionFactor: number | null;
   /** Quantas correções o comprador já fez neste item de resposta. */
   correctionCount: number;
 };
@@ -41,6 +44,8 @@ export type ComparisonRow = {
   productName: string;
   groupName: string;
   requestedQuantity: number;
+  estimatedConversionRate: number | null;
+  requiresPricingConversion: boolean;
   purchaseUnit: string;
   pricingUnit: string;
   comparisonUnit: string | null;
@@ -62,8 +67,12 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         `
         id,
         requested_quantity,
+        estimated_conversion_rate,
         commercial_status,
         group_id,
+        purchase_unit_id,
+        pricing_unit_id,
+        comparison_unit_id,
         products!inner ( name ),
         purchase_unit:units!quotation_items_company_id_purchase_unit_id_fkey ( symbol ),
         pricing_unit:units!quotation_items_company_id_pricing_unit_id_fkey ( symbol ),
@@ -190,7 +199,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
   const attrsByResponse = new Map<string, { name: string; value: string }[]>();
   // Fator de conversão declarado pelo fornecedor, por item de resposta.
   const factorByResponse = new Map<string, number>();
-  let conversionName: string | null = null;
+  const conversionNameByResponse = new Map<string, string>();
 
   for (const row of attrValues ?? []) {
     const value =
@@ -217,7 +226,10 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         row.quotation_response_item_id,
         Number(row.value_numeric),
       );
-      conversionName = row.product_attribute_definitions.name;
+      conversionNameByResponse.set(
+        row.quotation_response_item_id,
+        row.product_attribute_definitions.name,
+      );
     }
   }
 
@@ -244,6 +256,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
     const linkBySupplier = new Map<string, string>();
     const precos: number[] = [];
     const normalizados: number[] = [];
+    let conversionName: string | null = null;
 
     for (const rs of roundSuppliers) {
       const link = (links ?? []).find(
@@ -269,6 +282,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
           notes: null,
           attributes: [],
           normalizedPrice: null,
+          conversionFactor: null,
           correctionCount: 0,
         });
         continue;
@@ -284,9 +298,17 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       if (!response.does_not_supply && current !== null) precos.push(current);
 
       const factor = factorByResponse.get(response.id);
+      conversionName =
+        conversionName ?? conversionNameByResponse.get(response.id) ?? null;
       const normalized =
-        current !== null && factor && !response.does_not_supply
-          ? current / factor
+        current !== null &&
+        item.comparison_unit_id !== null &&
+        !response.does_not_supply
+          ? item.pricing_unit_id === item.comparison_unit_id
+            ? current
+            : factor
+              ? current / factor
+              : null
           : null;
 
       if (normalized !== null) normalizados.push(normalized);
@@ -301,6 +323,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         notes: response.notes,
         attributes: attrsByResponse.get(response.id) ?? [],
         normalizedPrice: normalized,
+        conversionFactor: factor ?? null,
         correctionCount: correctionsByResponse.get(response.id) ?? 0,
       });
     }
@@ -312,6 +335,12 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       productName: item.products.name,
       groupName: groupName.get(item.group_id) ?? "—",
       requestedQuantity: Number(item.requested_quantity),
+      estimatedConversionRate:
+        item.estimated_conversion_rate === null
+          ? null
+          : Number(item.estimated_conversion_rate),
+      requiresPricingConversion:
+        item.purchase_unit_id !== item.pricing_unit_id,
       purchaseUnit: item.purchase_unit?.symbol ?? "",
       pricingUnit: item.pricing_unit?.symbol ?? "",
       comparisonUnit: item.comparison_unit?.symbol ?? null,

@@ -42,6 +42,16 @@ const schema = z.object({
     .max(200)
     .nullish()
     .transform((v) => (v ? v : null)),
+  conversionRate: z
+    .string()
+    .trim()
+    .nullish()
+    .transform((v) =>
+      v ? Number(v.replace(/\./g, "").replace(",", ".")) : null,
+    )
+    .refine((v) => v === null || (Number.isFinite(v) && v > 0), {
+      error: "A conversão estimada deve ser maior que zero",
+    }),
 });
 
 export async function allocateItem(
@@ -57,6 +67,7 @@ export async function allocateItem(
     supplierId: formData.get("supplierId"),
     quantity: formData.get("quantity"),
     reason: formData.get("reason"),
+    conversionRate: formData.get("conversionRate"),
   });
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -121,6 +132,22 @@ export async function allocateItem(
     selected_price: Number(priceRow.current_price),
     decision_reason: parsed.data.reason,
   };
+
+  if (parsed.data.conversionRate !== null) {
+    const { error: conversionError } = await supabase
+      .from("quotation_items")
+      .update({ estimated_conversion_rate: parsed.data.conversionRate })
+      .eq("company_id", company.companyId)
+      .eq("purchase_round_id", parsed.data.roundId)
+      .eq("id", parsed.data.quotationItemId)
+      .eq("commercial_status", "open");
+
+    if (conversionError) {
+      return {
+        error: `Não foi possível salvar a conversão estimada: ${conversionError.message}`,
+      };
+    }
+  }
 
   const { error } = existing
     ? await supabase
@@ -192,15 +219,37 @@ export async function allocateBestPrices(
   const rows = board.rows.flatMap((row) => {
     if (!openIds.has(row.itemId) || (board.allocationsByItem.get(row.itemId)?.length ?? 0) > 0) return [];
 
-    const candidates = board.suppliers
+    const candidatesWithNormalization = board.suppliers
       .filter((supplier) => supplier.removed_at === null)
       .flatMap((supplier) => {
         const cell = row.cells.get(supplier.id);
         return cell && !cell.doesNotSupply && cell.responseItemId && cell.currentPrice !== null
-          ? [{ supplierId: supplier.supplier_id, responseItemId: cell.responseItemId, price: cell.currentPrice, name: supplier.suppliers.name }]
+          ? [{
+              supplierId: supplier.supplier_id,
+              responseItemId: cell.responseItemId,
+              price: cell.currentPrice,
+              normalizedPrice: cell.normalizedPrice,
+              name: supplier.suppliers.name,
+            }]
           : [];
-      })
-      .sort((a, b) => a.price - b.price || a.name.localeCompare(b.name));
+      });
+    const useNormalized =
+      candidatesWithNormalization.length > 0 &&
+      candidatesWithNormalization.every(
+        (candidate) => candidate.normalizedPrice !== null,
+      );
+    const candidates = candidatesWithNormalization
+      .map(({ normalizedPrice, ...candidate }) => ({
+        ...candidate,
+        comparisonPrice:
+          useNormalized && normalizedPrice !== null
+            ? normalizedPrice
+            : candidate.price,
+      }))
+      .sort(
+        (a, b) =>
+          a.comparisonPrice - b.comparisonPrice || a.name.localeCompare(b.name),
+      );
 
     const best = candidates[0];
     if (!best) return [];

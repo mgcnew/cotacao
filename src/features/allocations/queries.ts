@@ -17,6 +17,9 @@ export type AllocationRow = {
   quotationItemId: string;
   supplierId: string;
   allocatedQuantity: number;
+  /** Quantidade na unidade em que o preço foi informado (kg, un etc.). */
+  estimatedPricingQuantity: number | null;
+  estimatedPricingSource: string | null;
   selectedPrice: number;
   status: string;
 };
@@ -30,7 +33,7 @@ export async function listAllocations(
   const { data, error } = await supabase
     .from("purchase_allocations")
     .select(
-      "id, quotation_item_id, supplier_id, allocated_quantity, selected_price, status",
+      "id, quotation_item_id, supplier_id, allocated_quantity, estimated_pricing_quantity, estimated_pricing_source, selected_price, status",
     )
     .eq("company_id", companyId)
     .eq("purchase_round_id", roundId)
@@ -46,6 +49,11 @@ export async function listAllocations(
     quotationItemId: row.quotation_item_id,
     supplierId: row.supplier_id,
     allocatedQuantity: Number(row.allocated_quantity),
+    estimatedPricingQuantity:
+      row.estimated_pricing_quantity === null
+        ? null
+        : Number(row.estimated_pricing_quantity),
+    estimatedPricingSource: row.estimated_pricing_source,
     selectedPrice: Number(row.selected_price),
     status: row.status,
   }));

@@ -1,4 +1,4 @@
-import { ArrowRight, Package, Users } from "lucide-react";
+import { ArrowRight, FileText, Package, Users } from "lucide-react";
 import Link from "next/link";
 
 import { Suspense } from "react";
@@ -113,8 +113,19 @@ export function AcoesDaRodada({
             <Link href={`/compras/${id}/comparacao`}>Comparar respostas</Link>
           </Button>
           <Button asChild size="sm" variant="outline">
-            <Link href={`/compras/${id}/alocacao`}>Decidir compra</Link>
+            <Link href={`/compras/${id}/alocacao`}>
+              {dados.round.status === "completed"
+                ? "Resultado da compra"
+                : "Decidir compra"}
+            </Link>
           </Button>
+          {dados.round.status === "completed" ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/compras/${id}/relatorio`}>
+                <FileText className="size-3.5" aria-hidden /> Relatório
+              </Link>
+            </Button>
+          ) : null}
         </>
       )}
       <Badge variant={roundStatusTone(dados.round.status)}>

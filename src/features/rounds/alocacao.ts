@@ -35,6 +35,7 @@ export const carregarAlocacao = cache(async (roundId: string) => {
   const rascunhos = board.allocations.filter((a) => a.status === "draft");
 
   return {
+    companyName: company.companyName,
     round,
     rows: board.rows,
     suppliers: board.suppliers,

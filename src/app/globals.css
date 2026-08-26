@@ -456,3 +456,40 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* O relatório usa a mesma página autenticada na tela, mas a impressão é um
+   documento: menu, topbar, rolagens e tema escuro não podem ir para o papel. */
+@media print {
+  body:has([data-slot="quotation-report"]) {
+    --bg: #ffffff;
+    --fg: #17171a;
+    --fg-muted: #5d5d66;
+    --fg-subtle: #73737c;
+    --surface: #ffffff;
+    --surface-muted: #f1f1f3;
+    --surface-elevated: #ffffff;
+    --surface-sunken: #fafafb;
+    --border-color: #dedee3;
+    --success: #12784a;
+    --success-soft: #eef8f2;
+    --warning: #8f6100;
+    color-scheme: light;
+    background: #ffffff;
+  }
+
+  body:has([data-slot="quotation-report"]) [data-slot="app-sidebar"],
+  body:has([data-slot="quotation-report"]) [data-slot="app-header"] {
+    display: none !important;
+  }
+
+  body:has([data-slot="quotation-report"]) [data-slot="app-shell"] {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  body:has([data-slot="quotation-report"]) [data-slot="app-main"] {
+    overflow: visible;
+    padding: 0;
+  }
+}
