@@ -17,7 +17,10 @@ import { Suspense } from "react";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { AttentionList } from "@/components/dashboard/attention-list";
 import { DashboardMetric } from "@/components/dashboard/dashboard-metric";
+import { DetectedPurchasePatterns } from "@/components/dashboard/detected-purchase-patterns";
 import { FirstSteps } from "@/components/dashboard/first-steps";
+import { HistoricalReplenishments } from "@/components/dashboard/historical-replenishments";
+import { RecurringPurchases } from "@/components/dashboard/recurring-purchases";
 import { Button } from "@/components/ui/button";
 import {
   CardSkeleton,
@@ -33,7 +36,10 @@ import {
   getFirstSteps,
   getSituationSummary,
 } from "@/features/dashboard/situation";
+import { listPurchaseSuggestions } from "@/features/shopping-list/suggestions";
+import { listDetectedPurchasePatterns } from "@/features/suppliers/purchase-patterns";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { listPurchaseScheduleAlerts } from "@/features/suppliers/schedules";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -165,14 +171,32 @@ async function Panorama({
 }) {
   const canSeeRounds = permissions.has("purchase_round.view");
   const canSeeOrders = permissions.has("order.view");
-  const [attention, situation] = await Promise.all([
+  const [
+    attention,
+    situation,
+    purchaseAlerts,
+    purchaseSuggestions,
+    detectedPatterns,
+  ] = await Promise.all([
     getAttentionItems(companyId, permissions),
     getSituationSummary(companyId, permissions),
+    canSeeRounds || canSeeOrders
+      ? listPurchaseScheduleAlerts(companyId)
+      : Promise.resolve([]),
+    permissions.has("product.view")
+      ? listPurchaseSuggestions(companyId)
+      : Promise.resolve([]),
+    permissions.has("supplier.update")
+      ? listDetectedPurchasePatterns(companyId)
+      : Promise.resolve([]),
   ]);
   const starting =
     situation.rondasAtivas === 0 &&
     situation.pedidosEmAberto === 0 &&
-    attention.length === 0;
+    attention.length === 0 &&
+    purchaseAlerts.length === 0 &&
+    purchaseSuggestions.length === 0 &&
+    detectedPatterns.length === 0;
   const steps = starting ? await getFirstSteps(companyId, permissions) : null;
 
   if (steps?.length) {
@@ -289,6 +313,19 @@ async function Panorama({
           </div>
         </section>
       ) : null}
+
+      <div id="assistente-compras" className="scroll-mt-20">
+        <RecurringPurchases
+          alerts={purchaseAlerts}
+          canCreateRound={permissions.has("purchase_round.create")}
+          canCreateOrder={permissions.has("order.create")}
+          canManageSchedule={permissions.has("supplier.update")}
+        />
+
+        <HistoricalReplenishments suggestions={purchaseSuggestions} />
+
+        <DetectedPurchasePatterns patterns={detectedPatterns} />
+      </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,.75fr)]">
         <section

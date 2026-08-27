@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { ContactForm } from "@/components/suppliers/contact-form";
+import { SupplierScheduleManager } from "@/components/suppliers/supplier-schedule-manager";
 import { SupplierNoticeDialog } from "@/components/suppliers/supplier-notice-dialog";
 import { SupplierNoticeStatusActions } from "@/components/suppliers/supplier-notice-status";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCnpj } from "@/features/company/cnpj";
+import { getCompany } from "@/features/company/queries";
 import { listCategories } from "@/features/products/queries";
 import {
   setContactActive,
@@ -29,6 +31,11 @@ import {
   listSupplierContacts,
   listSupplierNotices,
 } from "@/features/suppliers/queries";
+import {
+  listSupplierPurchaseSchedules,
+  listSupplierScheduleTemplateItems,
+  listScheduleProductOptions,
+} from "@/features/suppliers/schedules";
 import {
   formatSupplierNoticeDate,
   isSupplierNoticeOverdue,
@@ -60,15 +67,29 @@ export default async function FornecedorPage({
   const { id } = await params;
   const company = await requireActiveCompany();
 
-  const [supplier, contacts, notices, categories, linkedIds, permissions] =
-    await Promise.all([
-      getSupplier(company.companyId, id),
-      listSupplierContacts(company.companyId, id),
-      listSupplierNotices(company.companyId, id),
-      listCategories(company.companyId),
-      listSupplierCategoryIds(company.companyId, id),
-      getPermissions(company.companyId),
-    ]);
+  const [
+    supplier,
+    contacts,
+    notices,
+    categories,
+    linkedIds,
+    schedules,
+    templateItems,
+    products,
+    permissions,
+    companyDetails,
+  ] = await Promise.all([
+    getSupplier(company.companyId, id),
+    listSupplierContacts(company.companyId, id),
+    listSupplierNotices(company.companyId, id),
+    listCategories(company.companyId),
+    listSupplierCategoryIds(company.companyId, id),
+    listSupplierPurchaseSchedules(company.companyId, id),
+    listSupplierScheduleTemplateItems(company.companyId, id),
+    listScheduleProductOptions(company.companyId),
+    getPermissions(company.companyId),
+    getCompany(company.companyId),
+  ]);
 
   if (!supplier) notFound();
 
@@ -77,6 +98,9 @@ export default async function FornecedorPage({
   const categoriasAtivas = categories.filter((c) => c.isActive);
   const avisosAbertos = notices.filter((notice) => notice.status === "open");
   const historico = notices.filter((notice) => notice.status === "resolved");
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: companyDetails?.timezone ?? "America/Sao_Paulo",
+  }).format(new Date());
 
   return (
     <div className="w-full">
@@ -130,7 +154,9 @@ export default async function FornecedorPage({
         </div>
         <div>
           <p className="text-fg-subtle text-xs">Situação</p>
-          <Badge variant={supplier.status === "active" ? "default" : "secondary"}>
+          <Badge
+            variant={supplier.status === "active" ? "default" : "secondary"}
+          >
             {STATUS_LABEL[supplier.status] ?? supplier.status}
           </Badge>
         </div>
@@ -142,18 +168,30 @@ export default async function FornecedorPage({
         ) : null}
       </section>
 
+      <SupplierScheduleManager
+        supplierId={id}
+        schedules={schedules}
+        templateItems={templateItems}
+        products={products}
+        categories={categoriasAtivas}
+        today={today}
+        canManage={podeEditar}
+      />
+
       <section className="mb-8">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-fg flex items-center gap-2 text-sm font-semibold">
               Avisos e combinados
               {avisosAbertos.length > 0 ? (
-                <Badge variant="outline">{avisosAbertos.length} em aberto</Badge>
+                <Badge variant="outline">
+                  {avisosAbertos.length} em aberto
+                </Badge>
               ) : null}
             </h2>
             <p className="text-fg-muted mt-1 text-sm">
-              Créditos, alertas e acordos que precisam ser lembrados nas próximas
-              compras.
+              Créditos, alertas e acordos que precisam ser lembrados nas
+              próximas compras.
             </p>
           </div>
           {podeEditar ? <SupplierNoticeDialog supplierId={id} /> : null}
@@ -168,9 +206,8 @@ export default async function FornecedorPage({
             {avisosAbertos.map((notice) => {
               const overdue = isSupplierNoticeOverdue(notice.due_date);
               const kindLabel =
-                SUPPLIER_NOTICE_KIND_LABEL[
-                  notice.kind as SupplierNoticeKind
-                ] ?? "Registro";
+                SUPPLIER_NOTICE_KIND_LABEL[notice.kind as SupplierNoticeKind] ??
+                "Registro";
               return (
                 <article
                   key={notice.id}
@@ -183,7 +220,11 @@ export default async function FornecedorPage({
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                        <Badge variant={notice.kind === "credit" ? "default" : "secondary"}>
+                        <Badge
+                          variant={
+                            notice.kind === "credit" ? "default" : "secondary"
+                          }
+                        >
                           {kindLabel}
                         </Badge>
                         {notice.priority === "high" ? (
@@ -209,8 +250,15 @@ export default async function FornecedorPage({
 
                   <div className="text-fg-subtle mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                     {notice.due_date ? (
-                      <span className={overdue ? "text-warning font-medium" : undefined}>
-                        <CalendarClock className="mr-1 inline size-3.5" aria-hidden />
+                      <span
+                        className={
+                          overdue ? "text-warning font-medium" : undefined
+                        }
+                      >
+                        <CalendarClock
+                          className="mr-1 inline size-3.5"
+                          aria-hidden
+                        />
                         {overdue ? "Venceu em" : "Válido até"}{" "}
                         {formatSupplierNoticeDate(notice.due_date)}
                       </span>
@@ -233,7 +281,9 @@ export default async function FornecedorPage({
                           title: notice.title,
                           description: notice.description,
                           amount:
-                            notice.amount === null ? null : Number(notice.amount),
+                            notice.amount === null
+                              ? null
+                              : Number(notice.amount),
                           dueDate: notice.due_date,
                           priority: notice.priority,
                         }}
@@ -267,7 +317,9 @@ export default async function FornecedorPage({
                             notice.kind as SupplierNoticeKind
                           ] ?? "Registro"}
                         </Badge>
-                        <span className="text-fg font-medium">{notice.title}</span>
+                        <span className="text-fg font-medium">
+                          {notice.title}
+                        </span>
                       </div>
                       {notice.resolution_note ? (
                         <p className="text-fg-muted mt-1 text-sm">
@@ -275,7 +327,8 @@ export default async function FornecedorPage({
                         </p>
                       ) : null}
                       <p className="text-fg-subtle mt-1 text-xs">
-                        Resolvido por {notice.resolved_by_name ?? "Usuário da equipe"}
+                        Resolvido por{" "}
+                        {notice.resolved_by_name ?? "Usuário da equipe"}
                         {notice.resolved_at
                           ? ` em ${DATE_TIME.format(new Date(notice.resolved_at))}`
                           : ""}
@@ -321,7 +374,9 @@ export default async function FornecedorPage({
                 <TableHead>WhatsApp</TableHead>
                 <TableHead>E-mail</TableHead>
                 <TableHead>Situação</TableHead>
-                {podeEditar || podeConversar ? <TableHead className="w-0" /> : null}
+                {podeEditar || podeConversar ? (
+                  <TableHead className="w-0" />
+                ) : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -345,38 +400,46 @@ export default async function FornecedorPage({
                     {contact.is_primary && contact.is_active ? (
                       <Badge>Principal</Badge>
                     ) : null}
-                    <Badge variant={contact.is_active ? "secondary" : "outline"}>
+                    <Badge
+                      variant={contact.is_active ? "secondary" : "outline"}
+                    >
                       {contact.is_active ? "Ativo" : "Inativo"}
                     </Badge>
                   </TableCell>
                   {podeEditar || podeConversar ? (
                     <TableCell className="space-y-1">
-                      {podeConversar && contact.is_active && contact.whatsapp ? (
+                      {podeConversar &&
+                      contact.is_active &&
+                      contact.whatsapp ? (
                         <form action={startWhatsAppConversationAction}>
-                          <input type="hidden" name="contact_id" value={contact.id} />
+                          <input
+                            type="hidden"
+                            name="contact_id"
+                            value={contact.id}
+                          />
                           <Button type="submit" size="sm" variant="outline">
                             Conversar
                           </Button>
                         </form>
                       ) : null}
                       {podeEditar ? (
-                      <form
-                        action={setContactActive.bind(
-                          null,
-                          contact.id,
-                          id,
-                          !contact.is_active,
-                        )}
-                      >
-                        <Button
-                          type="submit"
-                          size="sm"
-                          variant="ghost"
-                          className="text-fg-muted whitespace-nowrap"
+                        <form
+                          action={setContactActive.bind(
+                            null,
+                            contact.id,
+                            id,
+                            !contact.is_active,
+                          )}
                         >
-                          {contact.is_active ? "Desativar" : "Reativar"}
-                        </Button>
-                      </form>
+                          <Button
+                            type="submit"
+                            size="sm"
+                            variant="ghost"
+                            className="text-fg-muted whitespace-nowrap"
+                          >
+                            {contact.is_active ? "Desativar" : "Reativar"}
+                          </Button>
+                        </form>
                       ) : null}
                     </TableCell>
                   ) : null}

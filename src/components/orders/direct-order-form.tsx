@@ -4,12 +4,16 @@ import { AlertTriangle, ArrowRight, Bell, PackagePlus } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useState } from "react";
 
-import { useFechaModalAoConcluir, useModalDeRota } from "@/components/layout/route-modal";
+import {
+  useFechaModalAoConcluir,
+  useModalDeRota,
+} from "@/components/layout/route-modal";
 import {
   ErrorLine,
   OrderItemRows,
   selectClass,
   Submit,
+  type ItemSeed,
   type OrderableProduct,
 } from "@/components/orders/order-item-rows";
 import { Button } from "@/components/ui/button";
@@ -54,6 +58,8 @@ export type DirectOrderOptions = {
     notes: string;
     isActive: boolean;
   }[];
+  initialSupplierId?: string;
+  initialItems?: ItemSeed[];
 };
 
 /**
@@ -66,11 +72,17 @@ export function CamposDoPedidoDireto({
   suppliers,
   products,
   shoppingItems,
+  initialSupplierId,
+  initialItems,
   idPrefixo = "",
 }: DirectOrderOptions & { idPrefixo?: string }) {
   const idFornecedor = `${idPrefixo}supplierId`;
   const idPrazo = `${idPrefixo}deliveryDueDate`;
-  const [supplierId, setSupplierId] = useState("");
+  const [supplierId, setSupplierId] = useState(
+    suppliers.some((supplier) => supplier.id === initialSupplierId)
+      ? (initialSupplierId ?? "")
+      : "",
+  );
   const selectedSupplier =
     suppliers.find((supplier) => supplier.id === supplierId) ?? null;
   const openNotices = selectedSupplier?.openNotices ?? [];
@@ -131,7 +143,10 @@ export function CamposDoPedidoDireto({
                 aria-hidden
               />
             ) : (
-              <Bell className="text-fg-subtle mt-0.5 size-4 shrink-0" aria-hidden />
+              <Bell
+                className="text-fg-subtle mt-0.5 size-4 shrink-0"
+                aria-hidden
+              />
             )}
             <div className="min-w-0 flex-1">
               <p className="text-fg text-sm font-medium">
@@ -177,10 +192,22 @@ export function CamposDoPedidoDireto({
         </section>
       ) : null}
 
+      {initialItems && initialItems.length > 0 ? (
+        <div className="border-primary/25 bg-primary-soft text-fg rounded-xl border px-3 py-2 text-sm">
+          <strong>{initialItems.length} produtos do modelo carregados.</strong>{" "}
+          Revise as quantidades e informe os preços atuais antes de criar o
+          pedido.
+        </div>
+      ) : null}
+
       <OrderItemRows
         products={products}
         shoppingItems={shoppingItems}
-        seeds={[{ productId: "", quantity: "", price: "", notes: "" }]}
+        seeds={
+          initialItems?.length
+            ? initialItems
+            : [{ productId: "", quantity: "", price: "", notes: "" }]
+        }
       />
     </>
   );
@@ -236,7 +263,13 @@ export function FaltaCadastro({ suppliers, products }: DirectOrderOptions) {
  * O resto — campos, validação, action, mensagem de erro — é literalmente o
  * mesmo código nos dois casos.
  */
-export function DirectOrderForm({ suppliers, products, shoppingItems }: DirectOrderOptions) {
+export function DirectOrderForm({
+  suppliers,
+  products,
+  shoppingItems,
+  initialSupplierId,
+  initialItems,
+}: DirectOrderOptions) {
   const modal = useModalDeRota();
   const [state, formAction] = useActionState<OrderActionState, FormData>(
     useFechaModalAoConcluir(createDirectOrder),
@@ -248,6 +281,8 @@ export function DirectOrderForm({ suppliers, products, shoppingItems }: DirectOr
       suppliers={suppliers}
       products={products}
       shoppingItems={shoppingItems}
+      initialSupplierId={initialSupplierId}
+      initialItems={initialItems}
       idPrefixo={modal ? "modal-" : ""}
     />
   );

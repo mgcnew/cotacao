@@ -53,6 +53,22 @@ const roundSchema = z.object({
     .max(500)
     .optional()
     .transform((v) => (v ? v : null)),
+  initialSupplierId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || null)
+    .refine((value) => value === null || z.uuid().safeParse(value).success, {
+      error: "Fornecedor inicial inválido",
+    }),
+  initialScheduleId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || null)
+    .refine((value) => value === null || z.uuid().safeParse(value).success, {
+      error: "Modelo de compra inválido",
+    }),
 });
 
 /**
@@ -77,13 +93,102 @@ export async function createRound(
   const parsed = roundSchema.safeParse({
     title: formData.get("title"),
     notes: formData.get("notes"),
+    initialSupplierId: String(formData.get("initialSupplierId") ?? ""),
+    initialScheduleId: String(formData.get("initialScheduleId") ?? ""),
   });
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
+  if (parsed.data.initialScheduleId && !parsed.data.initialSupplierId) {
+    return { error: "O modelo de compra precisa de um fornecedor." };
+  }
 
   const supabase = await createServerSupabaseClient();
+  let initialContactId: string | null = null;
+  let templateItems: {
+    product_id: string;
+    default_quantity: number;
+    notes: string | null;
+    products: {
+      purchase_unit_id: string;
+      pricing_unit_id: string;
+      comparison_unit_id: string | null;
+      is_active: boolean;
+    } | null;
+  }[] = [];
+  if (parsed.data.initialSupplierId) {
+    const [{ data: supplier }, { data: contacts }, scheduleResult] =
+      await Promise.all([
+        supabase
+          .from("suppliers")
+          .select("id")
+          .eq("company_id", company.companyId)
+          .eq("id", parsed.data.initialSupplierId)
+          .eq("status", "active")
+          .maybeSingle(),
+        supabase
+          .from("supplier_contacts")
+          .select("id, is_primary")
+          .eq("company_id", company.companyId)
+          .eq("supplier_id", parsed.data.initialSupplierId)
+          .eq("is_active", true)
+          .order("is_primary", { ascending: false })
+          .limit(1),
+        parsed.data.initialScheduleId
+          ? supabase
+              .from("supplier_purchase_schedules")
+              .select("id")
+              .eq("company_id", company.companyId)
+              .eq("supplier_id", parsed.data.initialSupplierId)
+              .eq("id", parsed.data.initialScheduleId)
+              .eq("is_active", true)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+
+    if (!supplier) {
+      return { error: "O fornecedor da agenda não está mais ativo." };
+    }
+    initialContactId = contacts?.[0]?.id ?? null;
+    if (!initialContactId) {
+      return {
+        error:
+          "Cadastre um contato ativo no fornecedor antes de criar a cotação.",
+      };
+    }
+    if (parsed.data.initialScheduleId && !scheduleResult.data) {
+      return { error: "O modelo de compra não pertence a este fornecedor." };
+    }
+    if (parsed.data.initialScheduleId) {
+      const { data: items, error: itemsError } = await supabase
+        .from("supplier_purchase_schedule_items")
+        .select(
+          `
+          product_id,
+          default_quantity,
+          notes,
+          products!supplier_purchase_schedule_items_company_id_product_id_fkey (
+            purchase_unit_id,
+            pricing_unit_id,
+            comparison_unit_id,
+            is_active
+          )
+        `,
+        )
+        .eq("company_id", company.companyId)
+        .eq("schedule_id", parsed.data.initialScheduleId)
+        .order("sort_order")
+        .order("created_at");
+      if (itemsError) {
+        return {
+          error: `Não foi possível carregar o modelo: ${itemsError.message}`,
+        };
+      }
+      templateItems = (items ?? []) as unknown as typeof templateItems;
+    }
+  }
+
   const { data, error } = await supabase
     .from("purchase_rounds")
     .insert({
@@ -101,11 +206,74 @@ export async function createRound(
   // está começando não tem por que aprender o que é "grupo" para cotar cinco
   // itens — abre a rodada e já adiciona produto. Quem organiza por grupo
   // renomeia este e cria os outros.
-  await supabase.from("purchase_round_groups").insert({
-    company_id: company.companyId,
-    purchase_round_id: data.id,
-    name: GRUPO_PADRAO,
-  });
+  const { data: defaultGroup, error: defaultGroupError } = await supabase
+    .from("purchase_round_groups")
+    .insert({
+      company_id: company.companyId,
+      purchase_round_id: data.id,
+      name: GRUPO_PADRAO,
+    })
+    .select("id")
+    .single();
+
+  if (defaultGroupError || !defaultGroup) {
+    revalidatePath("/compras");
+    return {
+      error:
+        "A rodada foi criada, mas o grupo inicial não pôde ser preparado. Abra a rodada para continuar.",
+      roundId: data.id,
+    };
+  }
+
+  const activeTemplateItems = templateItems.filter(
+    (item) => item.products?.is_active,
+  );
+  if (activeTemplateItems.length > 0) {
+    const { error: templateError } = await supabase
+      .from("quotation_items")
+      .insert(
+        activeTemplateItems.map((item) => ({
+          company_id: company.companyId,
+          purchase_round_id: data.id,
+          group_id: defaultGroup.id,
+          product_id: item.product_id,
+          requested_quantity: item.default_quantity,
+          purchase_unit_id: item.products!.purchase_unit_id,
+          pricing_unit_id: item.products!.pricing_unit_id,
+          comparison_unit_id: item.products!.comparison_unit_id,
+          notes: item.notes,
+        })),
+      );
+    if (templateError) {
+      revalidatePath("/compras");
+      return {
+        error:
+          "A rodada foi criada, mas os produtos do modelo não puderam ser adicionados. Abra a rodada para continuar.",
+        roundId: data.id,
+      };
+    }
+  }
+
+  if (parsed.data.initialSupplierId && initialContactId) {
+    const { error: supplierError } = await supabase.rpc(
+      "rpc_upsert_round_supplier_groups",
+      {
+        p_company_id: company.companyId,
+        p_purchase_round_id: data.id,
+        p_supplier_id: parsed.data.initialSupplierId,
+        p_supplier_contact_id: initialContactId,
+        p_group_ids: [defaultGroup.id],
+      },
+    );
+    if (supplierError) {
+      revalidatePath("/compras");
+      return {
+        error:
+          "A rodada e os produtos foram criados, mas o fornecedor não pôde ser vinculado. Abra a rodada para continuar.",
+        roundId: data.id,
+      };
+    }
+  }
 
   revalidatePath("/compras");
 

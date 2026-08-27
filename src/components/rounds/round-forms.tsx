@@ -1,6 +1,7 @@
 "use client";
 
 import { ListChecks, Play } from "lucide-react";
+import Link from "next/link";
 import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
@@ -50,7 +51,13 @@ function Submit({ label }: { label: string }) {
  * aberto por cima de uma lista, dois campos "title" quebrariam a associação do
  * `<label>` — e um rótulo que aponta para o campo errado é pior do que nenhum.
  */
-export function CamposDaRodada({ idPrefixo = "" }: { idPrefixo?: string }) {
+export function CamposDaRodada({
+  idPrefixo = "",
+  initialTitle = "",
+}: {
+  idPrefixo?: string;
+  initialTitle?: string;
+}) {
   const idTitulo = `${idPrefixo}title`;
   const idNotas = `${idPrefixo}notes`;
 
@@ -66,6 +73,7 @@ export function CamposDaRodada({ idPrefixo = "" }: { idPrefixo?: string }) {
           required
           autoFocus
           maxLength={120}
+          defaultValue={initialTitle}
           placeholder="Compra semanal — 3ª semana de agosto"
         />
         <p className="text-fg-subtle text-xs">
@@ -90,7 +98,15 @@ export function CamposDaRodada({ idPrefixo = "" }: { idPrefixo?: string }) {
  * montar a cotação, e parar numa lista seria um clique a mais para voltar ao
  * que já estava fazendo. É o `apos=abrir` que diz isso à action.
  */
-export function RoundForm() {
+export function RoundForm({
+  initialSupplierId,
+  initialScheduleId,
+  initialTitle,
+}: {
+  initialSupplierId?: string;
+  initialScheduleId?: string;
+  initialTitle?: string;
+} = {}) {
   const [state, formAction] = useActionState<RoundFormState, FormData>(
     createRound,
     { error: null },
@@ -102,14 +118,38 @@ export function RoundForm() {
       className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5"
     >
       <input type="hidden" name="apos" value="abrir" />
+      <input
+        type="hidden"
+        name="initialSupplierId"
+        value={initialSupplierId ?? ""}
+      />
+      <input
+        type="hidden"
+        name="initialScheduleId"
+        value={initialScheduleId ?? ""}
+      />
       {/* Lado a lado só aqui. No modal os mesmos campos ficam empilhados —
           lá a caixa é estreita; aqui a rodada tem a página inteira, e dois
           campos soltos um sobre o outro viravam duas linhas de um metro. */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <CamposDaRodada />
+        <CamposDaRodada initialTitle={initialTitle} />
       </div>
 
+      {initialScheduleId ? (
+        <p className="border-primary/25 bg-primary-soft text-fg rounded-lg border px-3 py-2 text-sm">
+          Ao criar, os produtos e quantidades habituais deste fornecedor serão
+          incluídos na rodada para você revisar antes do envio.
+        </p>
+      ) : null}
+
       <ErrorLine error={state.error} />
+      {state.roundId ? (
+        <div>
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/compras/${state.roundId}`}>Abrir rodada criada</Link>
+          </Button>
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-fg-subtle text-xs">

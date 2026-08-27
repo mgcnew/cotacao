@@ -3,10 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { getPermissions, requireActiveCompany, requireUser } from "@/lib/auth/dal";
+import { listPurchaseSuggestions } from "@/features/shopping-list/suggestions";
+import {
+  getPermissions,
+  requireActiveCompany,
+  requireUser,
+} from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type ShoppingListState = { error: string | null; savedAt?: number };
+export type PurchaseSuggestionState = {
+  error: string | null;
+  savedAt?: number;
+  savedCount?: number;
+};
 
 function canManage(permissions: Set<string>) {
   return (
@@ -19,7 +29,8 @@ function canManage(permissions: Set<string>) {
 async function requireManage() {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
-  if (!canManage(permissions)) throw new Error("Sem permissão para alterar a lista.");
+  if (!canManage(permissions))
+    throw new Error("Sem permissão para alterar a lista.");
   return company;
 }
 
@@ -120,8 +131,10 @@ export async function addShoppingListItem(
         added_by: user.id,
       });
 
-  if (write.error) return { error: `Não foi possível adicionar: ${write.error.message}` };
+  if (write.error)
+    return { error: `Não foi possível adicionar: ${write.error.message}` };
   revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
   return { error: null, savedAt: Date.now() };
 }
 export async function updateShoppingListItem(formData: FormData) {
@@ -142,12 +155,16 @@ export async function updateShoppingListItem(formData: FormData) {
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase
     .from("shopping_list_items")
-    .update({ requested_quantity: parsed.data.quantity, notes: parsed.data.notes || null })
+    .update({
+      requested_quantity: parsed.data.quantity,
+      notes: parsed.data.notes || null,
+    })
     .eq("company_id", company.companyId)
     .eq("id", parsed.data.itemId)
     .eq("status", "pending");
   if (error) throw new Error(`Não foi possível atualizar: ${error.message}`);
   revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
 }
 
 export async function removeShoppingListItem(itemId: string) {
@@ -161,6 +178,7 @@ export async function removeShoppingListItem(itemId: string) {
     .eq("status", "pending");
   if (error) throw new Error(`Não foi possível remover: ${error.message}`);
   revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
 }
 
 export async function importShoppingItemsToRound(
@@ -169,19 +187,132 @@ export async function importShoppingItemsToRound(
 ): Promise<ShoppingListState> {
   const company = await requireActiveCompany();
   const ids = formData.getAll("shoppingItemId").map(String);
-  if (ids.length === 0) return { error: "Selecione ao menos um item da lista." };
+  if (ids.length === 0)
+    return { error: "Selecione ao menos um item da lista." };
 
   const supabase = await createServerSupabaseClient();
   const roundId = String(formData.get("roundId") ?? "");
-  const { data, error } = await supabase.rpc("rpc_import_shopping_items_to_round", {
-    p_company_id: company.companyId,
-    p_round_id: roundId,
-    p_group_id: String(formData.get("groupId") ?? "") || null,
-    p_shopping_item_ids: ids,
-  });
+  const { data, error } = await supabase.rpc(
+    "rpc_import_shopping_items_to_round",
+    {
+      p_company_id: company.companyId,
+      p_round_id: roundId,
+      p_group_id: String(formData.get("groupId") ?? "") || null,
+      p_shopping_item_ids: ids,
+    },
+  );
   if (error) return { error: `Não foi possível importar: ${error.message}` };
   if (!data) return { error: "Nenhum item pendente pôde ser importado." };
   revalidatePath(`/compras/${roundId}`);
   revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
+  return { error: null, savedAt: Date.now() };
+}
+
+export async function acceptHighConfidencePurchaseSuggestions(
+  previous: PurchaseSuggestionState,
+  formData: FormData,
+): Promise<PurchaseSuggestionState> {
+  void previous;
+  void formData;
+  const company = await requireManage();
+  // Recalcula no servidor no momento da aprovação. Assim, uma tela antiga não
+  // adiciona uma necessidade que já foi coberta por outro usuário ou pedido.
+  const suggestions = (await listPurchaseSuggestions(company.companyId)).filter(
+    (suggestion) => suggestion.confidence === "high",
+  );
+  if (suggestions.length === 0) {
+    return { error: "As sugestões já foram revisadas ou cobertas." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  let savedCount = 0;
+  for (const suggestion of suggestions) {
+    const { error } = await supabase.rpc("rpc_accept_purchase_suggestion", {
+      p_company_id: company.companyId,
+      p_product_id: suggestion.productId,
+      p_quantity: suggestion.suggestedQuantity,
+      p_suggested_quantity: suggestion.suggestedQuantity,
+    });
+    if (error) {
+      return {
+        error:
+          savedCount > 0
+            ? `${savedCount} adicionada(s), mas o processo parou: ${error.message}`
+            : `Não foi possível adicionar as sugestões: ${error.message}`,
+        savedCount,
+      };
+    }
+    savedCount += 1;
+  }
+
+  revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
+  return { error: null, savedAt: Date.now(), savedCount };
+}
+
+const suggestionSchema = z.object({
+  productId: z.uuid(),
+  suggestedQuantity: z.coerce.number().positive(),
+});
+
+export async function acceptPurchaseSuggestion(
+  _previous: PurchaseSuggestionState,
+  formData: FormData,
+): Promise<PurchaseSuggestionState> {
+  const company = await requireManage();
+  const parsed = suggestionSchema
+    .extend({ quantity: z.coerce.number().positive() })
+    .safeParse({
+      productId: formData.get("productId"),
+      suggestedQuantity: String(
+        formData.get("suggestedQuantity") ?? "",
+      ).replace(",", "."),
+      quantity: String(formData.get("quantity") ?? "").replace(",", "."),
+    });
+  if (!parsed.success) return { error: "Informe uma quantidade válida." };
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_accept_purchase_suggestion", {
+    p_company_id: company.companyId,
+    p_product_id: parsed.data.productId,
+    p_quantity: parsed.data.quantity,
+    p_suggested_quantity: parsed.data.suggestedQuantity,
+  });
+  if (error) {
+    return { error: `Não foi possível adicionar a sugestão: ${error.message}` };
+  }
+
+  revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
+  return { error: null, savedAt: Date.now() };
+}
+
+export async function dismissPurchaseSuggestion(
+  _previous: PurchaseSuggestionState,
+  formData: FormData,
+): Promise<PurchaseSuggestionState> {
+  const company = await requireManage();
+  const parsed = suggestionSchema.safeParse({
+    productId: formData.get("productId"),
+    suggestedQuantity: String(formData.get("suggestedQuantity") ?? "").replace(
+      ",",
+      ".",
+    ),
+  });
+  if (!parsed.success) return { error: "Sugestão inválida." };
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_dismiss_purchase_suggestion", {
+    p_company_id: company.companyId,
+    p_product_id: parsed.data.productId,
+    p_suggested_quantity: parsed.data.suggestedQuantity,
+  });
+  if (error) {
+    return { error: `Não foi possível dispensar a sugestão: ${error.message}` };
+  }
+
+  revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
   return { error: null, savedAt: Date.now() };
 }

@@ -5,6 +5,10 @@
     {
       "path": "/api/evolution/reconcile",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/purchase-assistant/digest",
+      "schedule": "0 11 * * *"
     }
   ]
 }

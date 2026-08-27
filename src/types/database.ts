@@ -1945,6 +1945,47 @@ export type Database = {
           },
         ];
       };
+      purchase_assistant_digest_runs: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          digest_date: string;
+          id: string;
+          overdue_schedule_count: number;
+          schedule_count: number;
+          suggestion_count: number;
+          user_id: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          digest_date: string;
+          id?: string;
+          overdue_schedule_count?: number;
+          schedule_count?: number;
+          suggestion_count?: number;
+          user_id: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          digest_date?: string;
+          id?: string;
+          overdue_schedule_count?: number;
+          schedule_count?: number;
+          suggestion_count?: number;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "purchase_assistant_digest_runs_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       purchase_round_groups: {
         Row: {
           company_id: string;
@@ -2078,6 +2119,50 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "companies";
             referencedColumns: ["id"];
+          },
+        ];
+      };
+      purchase_suggestion_events: {
+        Row: {
+          action: string;
+          chosen_quantity: number | null;
+          company_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          product_id: string;
+          suggested_quantity: number | null;
+          valid_until: string;
+        };
+        Insert: {
+          action: string;
+          chosen_quantity?: number | null;
+          company_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          product_id: string;
+          suggested_quantity?: number | null;
+          valid_until: string;
+        };
+        Update: {
+          action?: string;
+          chosen_quantity?: number | null;
+          company_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          product_id?: string;
+          suggested_quantity?: number | null;
+          valid_until?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "purchase_suggestion_events_company_id_product_id_fkey";
+            columns: ["company_id", "product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["company_id", "id"];
           },
         ];
       };
@@ -2980,36 +3065,107 @@ export type Database = {
           },
         ];
       };
+      supplier_purchase_pattern_decisions: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          decided_by: string | null;
+          detected_interval_weeks: number;
+          detected_weekday: number;
+          dismissed_until: string;
+          id: string;
+          order_count: number;
+          supplier_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          decided_by?: string | null;
+          detected_interval_weeks: number;
+          detected_weekday: number;
+          dismissed_until: string;
+          id?: string;
+          order_count: number;
+          supplier_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          decided_by?: string | null;
+          detected_interval_weeks?: number;
+          detected_weekday?: number;
+          dismissed_until?: string;
+          id?: string;
+          order_count?: number;
+          supplier_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "supplier_purchase_pattern_decisions_company_id_supplier_id_fkey";
+            columns: ["company_id", "supplier_id"];
+            isOneToOne: true;
+            referencedRelation: "suppliers";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
       supplier_purchase_schedules: {
         Row: {
+          anchor_date: string;
           category_id: string | null;
           company_id: string;
           created_at: string;
+          expected_delivery_days: number | null;
           id: string;
+          interval_weeks: number;
           is_active: boolean;
+          label: string | null;
+          last_dismissed_occurrence: string | null;
+          notes: string | null;
           preferred_time: string | null;
+          reminder_days_before: number;
+          snoozed_until: string | null;
           supplier_id: string;
           updated_at: string;
           weekday: number;
         };
         Insert: {
+          anchor_date?: string;
           category_id?: string | null;
           company_id: string;
           created_at?: string;
+          expected_delivery_days?: number | null;
           id?: string;
+          interval_weeks?: number;
           is_active?: boolean;
+          label?: string | null;
+          last_dismissed_occurrence?: string | null;
+          notes?: string | null;
           preferred_time?: string | null;
+          reminder_days_before?: number;
+          snoozed_until?: string | null;
           supplier_id: string;
           updated_at?: string;
           weekday: number;
         };
         Update: {
+          anchor_date?: string;
           category_id?: string | null;
           company_id?: string;
           created_at?: string;
+          expected_delivery_days?: number | null;
           id?: string;
+          interval_weeks?: number;
           is_active?: boolean;
+          label?: string | null;
+          last_dismissed_occurrence?: string | null;
+          notes?: string | null;
           preferred_time?: string | null;
+          reminder_days_before?: number;
+          snoozed_until?: string | null;
           supplier_id?: string;
           updated_at?: string;
           weekday?: number;
@@ -3034,6 +3190,57 @@ export type Database = {
             columns: ["company_id", "supplier_id"];
             isOneToOne: false;
             referencedRelation: "suppliers";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
+      supplier_purchase_schedule_items: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          default_quantity: number;
+          id: string;
+          notes: string | null;
+          product_id: string;
+          schedule_id: string;
+          sort_order: number;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          default_quantity: number;
+          id?: string;
+          notes?: string | null;
+          product_id: string;
+          schedule_id: string;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          default_quantity?: number;
+          id?: string;
+          notes?: string | null;
+          product_id?: string;
+          schedule_id?: string;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "supplier_purchase_schedule_items_company_id_product_id_fkey";
+            columns: ["company_id", "product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "supplier_purchase_schedule_items_company_id_schedule_id_fkey";
+            columns: ["company_id", "schedule_id"];
+            isOneToOne: false;
+            referencedRelation: "supplier_purchase_schedules";
             referencedColumns: ["company_id", "id"];
           },
         ];
@@ -3657,6 +3864,46 @@ export type Database = {
         Args: { p_company_id: string; p_purchase_round_id: string };
         Returns: Json;
       };
+      rpc_get_purchase_suggestions: {
+        Args: {
+          p_company_id: string;
+          p_history_weeks?: number;
+          p_limit?: number;
+        };
+        Returns: {
+          active_weeks: number;
+          confidence: string;
+          current_week_received_quantity: number;
+          expected_weekly_quantity: number;
+          last_received_at: string | null;
+          observed_weeks: number;
+          open_order_quantity: number;
+          open_quotation_quantity: number;
+          product_id: string;
+          product_name: string;
+          purchase_unit: string;
+          shopping_list_quantity: number;
+          suggested_quantity: number;
+          variation_percent: number;
+        }[];
+      };
+      rpc_accept_purchase_suggestion: {
+        Args: {
+          p_company_id: string;
+          p_product_id: string;
+          p_quantity: number;
+          p_suggested_quantity?: number;
+        };
+        Returns: string;
+      };
+      rpc_dismiss_purchase_suggestion: {
+        Args: {
+          p_company_id: string;
+          p_product_id: string;
+          p_suggested_quantity?: number;
+        };
+        Returns: string;
+      };
       rpc_whatsapp_metrics: {
         Args: { p_company_id: string; p_days: number };
         Returns: Json;
@@ -3763,6 +4010,15 @@ export type Database = {
           p_status: string;
         };
         Returns: Json;
+      };
+      rpc_service_create_purchase_assistant_digest: {
+        Args: {
+          p_company_id: string;
+          p_overdue_schedule_count: number;
+          p_schedule_count: number;
+          p_suggestion_count: number;
+        };
+        Returns: number;
       };
       rpc_round_snapshot: {
         Args: { p_company_id: string; p_purchase_round_id: string };
