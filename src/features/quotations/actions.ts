@@ -57,10 +57,14 @@ export async function submitQuotation(
   const items: ResponseItem[] = [];
 
   for (const id of itemIds) {
-    const doesNotSupply = formData.get(`nao_fornece_${id}`) === "on";
+    const responseStatus = String(formData.get(`status_${id}`) ?? "priced");
+    const doesNotSupply =
+      responseStatus === "does_not_supply" ||
+      formData.get(`nao_fornece_${id}`) === "on";
+    const unavailable = responseStatus === "unavailable";
     const rawPrice = String(formData.get(`preco_${id}`) ?? "").trim();
 
-    if (!doesNotSupply && !rawPrice) {
+    if (!doesNotSupply && !unavailable && !rawPrice) {
       const productName = String(formData.get(`nome_${id}`) ?? "este item");
       return {
         error: `Informe o preço de "${productName}" ou marque que não fornece.`,
@@ -68,9 +72,12 @@ export async function submitQuotation(
     }
 
     const price = rawPrice ? toNumericString(rawPrice) : undefined;
-    if (price !== undefined && !Number.isFinite(Number(price))) {
+    if (
+      price !== undefined &&
+      (!Number.isFinite(Number(price)) || Number(price) <= 0)
+    ) {
       const productName = String(formData.get(`nome_${id}`) ?? "este item");
-      return { error: `Preço inválido em "${productName}".` };
+      return { error: `Informe um preço maior que zero em "${productName}".` };
     }
 
     const attributes: ResponseAttribute[] = [];
@@ -107,8 +114,8 @@ export async function submitQuotation(
     items.push({
       supplier_quotation_item_id: id,
       does_not_supply: doesNotSupply ? "true" : "false",
-      quoted_price: doesNotSupply ? undefined : price,
-      is_available: doesNotSupply ? undefined : "true",
+      quoted_price: doesNotSupply || unavailable ? undefined : price,
+      is_available: doesNotSupply ? undefined : unavailable ? "false" : "true",
       notes: String(formData.get(`obs_${id}`) ?? "").trim() || undefined,
       attributes: attributes.length > 0 ? attributes : undefined,
     });

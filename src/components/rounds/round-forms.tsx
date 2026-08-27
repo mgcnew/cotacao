@@ -1,6 +1,7 @@
 "use client";
 
 import { ListChecks, Play } from "lucide-react";
+import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -177,6 +178,7 @@ export function ItemForm({
     addQuotationItem,
     { error: null },
   );
+  const quantityRef = React.useRef<HTMLInputElement>(null);
 
   const perguntarGrupo = groups.length > 1;
 
@@ -210,6 +212,8 @@ export function ItemForm({
             placeholder="Digite o nome do produto…"
             emptyMessage="Nenhum produto encontrado."
             required
+            focusKey={state.savedAt}
+            onOptionSelected={() => quantityRef.current?.focus()}
           />
         </div>
 
@@ -239,6 +243,7 @@ export function ItemForm({
             Quantidade
           </label>
           <Input
+            ref={quantityRef}
             id="quantity"
             name="quantity"
             required
@@ -252,7 +257,8 @@ export function ItemForm({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-fg-subtle text-xs">
-          As unidades vêm do cadastro do produto e ficam gravadas no item.
+          Digite o produto, use Enter, informe a quantidade e use Enter
+          novamente para adicionar. O foco volta ao produto.
         </p>
         <Submit label="Adicionar produto" />
       </div>
@@ -380,10 +386,12 @@ export function SupplierPickerForm({
           placeholder="Digite o nome do fornecedor…"
           emptyMessage="Nenhum fornecedor encontrado."
           required
+          focusKey={state.savedAt}
+          submitOnEnter
         />
         <p className="text-fg-subtle text-xs">
-          Ele entra já com todos os itens da rodada, e o link vai para o contato
-          principal.
+          Digite e pressione Enter para adicionar rapidamente. O foco volta para
+          este campo para o próximo fornecedor.
         </p>
       </div>
 

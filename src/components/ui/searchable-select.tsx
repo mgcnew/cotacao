@@ -21,6 +21,9 @@ export function SearchableSelect({
   value,
   defaultValue = "",
   onValueChange,
+  onOptionSelected,
+  submitOnEnter = false,
+  focusKey,
   required = false,
   className,
 }: {
@@ -32,6 +35,11 @@ export function SearchableSelect({
   value?: string;
   defaultValue?: string;
   onValueChange?: (value: string) => void;
+  onOptionSelected?: (option: SearchableOption) => void;
+  /** Ao escolher a sugestão com Enter, envia o formulário que contém o campo. */
+  submitOnEnter?: boolean;
+  /** Quando muda após um salvamento, limpa o fluxo e devolve o foco ao campo. */
+  focusKey?: string | number;
   required?: boolean;
   className?: string;
 }) {
@@ -43,7 +51,14 @@ export function SearchableSelect({
   const [open, setOpen] = React.useState(false);
   const [activeIndex, setActiveIndex] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const hiddenRef = React.useRef<HTMLInputElement>(null);
   const listId = `${id}-suggestions`;
+
+  React.useEffect(() => {
+    if (focusKey === undefined) return;
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [focusKey]);
 
   const needle = normalizeListSearch(query);
   const suggestions = options
@@ -61,11 +76,18 @@ export function SearchableSelect({
     onValueChange?.(nextValue);
   }
 
-  function choose(option: SearchableOption) {
+  function choose(option: SearchableOption, submit = false) {
     changeValue(option.id);
+    // Mantém o valor do DOM sincronizado antes de um requestSubmit imediato.
+    // O estado React confirma o mesmo valor no render seguinte.
+    if (hiddenRef.current) hiddenRef.current.value = option.id;
     setQuery(option.name);
     setOpen(false);
     setActiveIndex(0);
+    onOptionSelected?.(option);
+    if (submit) {
+      queueMicrotask(() => hiddenRef.current?.form?.requestSubmit());
+    }
   }
 
   function clear() {
@@ -83,7 +105,7 @@ export function SearchableSelect({
         if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
       }}
     >
-      <input type="hidden" name={name} value={selectedId} />
+      <input ref={hiddenRef} type="hidden" name={name} value={selectedId} />
       <div className="relative">
         <Search
           className="text-fg-subtle pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
@@ -127,7 +149,7 @@ export function SearchableSelect({
               const option = suggestions[activeIndex];
               if (!option) return;
               event.preventDefault();
-              choose(option);
+              choose(option, submitOnEnter);
             } else if (event.key === "Escape") {
               setOpen(false);
             }

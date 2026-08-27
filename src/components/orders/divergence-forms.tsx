@@ -8,6 +8,7 @@ import { useFormStatus } from "react-dom";
 import { ErrorLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   closeOrderBalance,
   resolveCommercialDivergence,
@@ -98,31 +99,51 @@ export function ReportDivergenceForm({
         </p>
       </div>
 
-      <select name="type" required defaultValue="" className={selectClass}>
-        <option value="" disabled>
-          Selecione…
-        </option>
-        {ORDER_DIVERGENCE_TYPES.map((t) => (
-          <option key={t.value} value={t.value}>
-            {t.hint ? `${t.label} — ${t.hint}` : t.label}
-          </option>
-        ))}
-      </select>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="public-divergence-type"
+            className="text-fg-muted text-xs font-medium"
+          >
+            Tipo da diferença
+          </label>
+          <ThemedSelect
+            id="public-divergence-type"
+            name="type"
+            required
+            placeholder="Selecione…"
+            options={ORDER_DIVERGENCE_TYPES.map((type) => ({
+              value: type.value,
+              label: type.hint ? `${type.label} — ${type.hint}` : type.label,
+            }))}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="public-divergence-item"
+            className="text-fg-muted text-xs font-medium"
+          >
+            Produto afetado
+          </label>
+          <ThemedSelect
+            id="public-divergence-item"
+            name="orderRevisionItemId"
+            emptyOptionLabel="O pedido inteiro"
+            options={items.map((item) => ({
+              value: item.id,
+              label: item.name,
+            }))}
+          />
+        </div>
+      </div>
 
-      <select name="orderRevisionItemId" defaultValue="" className={selectClass}>
-        <option value="">O pedido inteiro</option>
-        {items.map((i) => (
-          <option key={i.id} value={i.id}>
-            {i.name}
-          </option>
-        ))}
-      </select>
-
-      <Input
+      <textarea
         name="notes"
         required
         maxLength={300}
         placeholder="Explique para o comprador (obrigatório)"
+        rows={3}
+        className="border-input bg-transparent text-fg placeholder:text-fg-subtle focus-visible:border-ring focus-visible:ring-ring/50 min-h-20 w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none focus-visible:ring-3"
       />
 
       <ErrorLine error={state.error} />
