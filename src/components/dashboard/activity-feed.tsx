@@ -41,9 +41,6 @@ export function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
           <>
             <span className="min-w-0 flex-1">
               <span className="text-fg text-sm">{entry.label}</span>
-              {entry.bySupplier ? (
-                <span className="text-fg-subtle text-xs"> · pelo fornecedor</span>
-              ) : null}
               {entry.detail ? (
                 <span className="text-fg-muted block text-xs">
                   {entry.detail}
@@ -72,7 +69,9 @@ export function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
                 {conteudo}
               </Link>
             ) : (
-              <span className="flex min-w-0 flex-1 items-baseline gap-3">{conteudo}</span>
+              <span className="flex min-w-0 flex-1 items-baseline gap-3">
+                {conteudo}
+              </span>
             )}
           </li>
         );
