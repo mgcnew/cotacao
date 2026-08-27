@@ -91,7 +91,7 @@ function SuggestionCard({
           <p className="text-fg-muted mt-1 text-xs">
             Ritmo observado:{" "}
             {quantity(
-              suggestion.expectedWeeklyQuantity,
+              suggestion.historicalWeeklyQuantity,
               suggestion.purchaseUnit,
             )}{" "}
             por semana
@@ -105,8 +105,8 @@ function SuggestionCard({
           }
         >
           {suggestion.confidence === "high"
-            ? "Alta confiança"
-            : "Confiança média"}
+            ? "Histórico consistente"
+            : "Revisar histórico"}
         </span>
       </div>
 
@@ -117,7 +117,33 @@ function SuggestionCard({
         <p className="text-primary mt-0.5 text-lg font-bold">
           {quantity(suggestion.suggestedQuantity, suggestion.purchaseUnit)}
         </p>
+        {suggestion.demandAdjustmentPercent !== 0 ? (
+          <p className="text-fg-muted mt-1 text-xs">
+            Meta ajustada para{" "}
+            {quantity(
+              suggestion.expectedWeeklyQuantity,
+              suggestion.purchaseUnit,
+            )}{" "}
+            ({suggestion.demandAdjustmentPercent > 0 ? "+" : ""}
+            {NUMBER.format(suggestion.demandAdjustmentPercent)}% pelo
+            calendário)
+          </p>
+        ) : null}
       </div>
+
+      {suggestion.demandContexts.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {suggestion.demandContexts.map((context) => (
+            <span
+              key={`${context.name}-${context.adjustmentPercent}`}
+              className="bg-warning-soft text-warning rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            >
+              {context.name}: {context.adjustmentPercent > 0 ? "+" : ""}
+              {NUMBER.format(context.adjustmentPercent)}%
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <details className="group mt-3">
         <summary className="text-fg-muted flex cursor-pointer list-none items-center gap-1 text-xs font-medium">
@@ -135,6 +161,20 @@ function SuggestionCard({
           <p>
             Oscilação do histórico: {NUMBER.format(suggestion.variationPercent)}
             %
+          </p>
+          <p>
+            Base histórica:{" "}
+            {quantity(
+              suggestion.historicalWeeklyQuantity,
+              suggestion.purchaseUnit,
+            )}
+          </p>
+          <p>
+            Meta desta semana:{" "}
+            {quantity(
+              suggestion.expectedWeeklyQuantity,
+              suggestion.purchaseUnit,
+            )}
           </p>
           <p>
             Já recebido nesta semana:{" "}

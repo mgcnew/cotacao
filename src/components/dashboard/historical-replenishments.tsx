@@ -74,17 +74,20 @@ export function HistoricalReplenishments({
                     }
                   >
                     {suggestion.confidence === "high"
-                      ? "alta confiança"
+                      ? "histórico consistente"
                       : "revisar padrão"}
                   </span>
                 </div>
                 <p className="text-fg-muted mt-0.5 text-xs">
                   Ritmo de{" "}
                   {quantity(
-                    suggestion.expectedWeeklyQuantity,
+                    suggestion.historicalWeeklyQuantity,
                     suggestion.purchaseUnit,
                   )}{" "}
                   por semana
+                  {suggestion.demandAdjustmentPercent !== 0
+                    ? ` · meta ajustada ${quantity(suggestion.expectedWeeklyQuantity, suggestion.purchaseUnit)}`
+                    : ""}
                   {covered > 0
                     ? ` · ${quantity(covered, suggestion.purchaseUnit)} já coberto`
                     : " · nada coberto"}

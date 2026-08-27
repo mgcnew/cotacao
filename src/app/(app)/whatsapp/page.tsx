@@ -52,7 +52,6 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 function param(value: string | string[] | undefined) {
   return typeof value === "string" ? value : "";
 }
-
 function connectionLabel(status: string) {
   return ({ connected: "Conectado", connecting: "Conectando", disconnected: "Desconectado", error: "Com erro", unknown: "Não verificado" } as Record<string, string>)[status] ?? status;
 }
@@ -145,7 +144,7 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
     <div
       data-mobile-scroll="contained"
       className={cn(
-        "flex min-h-0 w-full flex-col max-md:h-full",
+        "flex h-[calc(100dvh-6.5rem)] min-h-0 w-full flex-col overflow-hidden",
         selected && "md:max-lg:-mx-6 md:max-lg:-my-6 md:max-lg:h-[calc(100dvh-3.5rem)] md:max-lg:w-[calc(100%+3rem)]",
       )}
     >
@@ -200,10 +199,10 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
       />
 
       <div className={cn(
-        "border-border bg-surface grid min-h-96 min-w-0 max-w-full overflow-hidden rounded-2xl border shadow-sm lg:h-[calc(100dvh-20rem)] lg:min-h-125 lg:grid-cols-[19rem_minmax(0,1fr)_18rem]",
+        "border-border bg-surface grid min-h-0 min-w-0 max-w-full flex-1 overflow-hidden rounded-2xl border shadow-sm lg:grid-cols-[19rem_minmax(0,1fr)_18rem]",
         selected
           ? "min-h-0 flex-1 max-lg:rounded-none max-lg:border-0 max-lg:shadow-none"
-          : "h-[calc(100dvh-12rem)] max-md:h-auto max-md:min-h-0 max-md:flex-1 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:shadow-none",
+          : "max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:shadow-none",
       )}>
         <aside className={cn("border-border min-h-0 min-w-0 max-w-full flex-col overflow-hidden border-r", selected ? "hidden lg:flex" : "flex")}>
           <div className="border-border min-w-0 max-w-full space-y-3 border-b p-3">

@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Clock3,
-} from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3 } from "lucide-react";
 import { Popover as PopoverPrimitive } from "radix-ui";
 import * as React from "react";
 
@@ -23,6 +18,11 @@ const DATE_TIME = new Intl.DateTimeFormat("pt-BR", {
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+});
+const DATE = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
 });
 const FULL_DATE = new Intl.DateTimeFormat("pt-BR", { dateStyle: "full" });
 const WEEKDAYS = [
@@ -94,16 +94,26 @@ export function DateTimePicker({
   name,
   form,
   placeholder = "Escolher data e hora",
+  defaultValue = "",
+  dateOnly = false,
 }: {
   id: string;
   name: string;
   form?: string;
   placeholder?: string;
+  defaultValue?: string;
+  dateOnly?: boolean;
 }) {
-  const [selected, setSelected] = React.useState<Date | null>(null);
-  const [visibleMonth, setVisibleMonth] = React.useState(
-    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-  );
+  const initialDate = defaultValue
+    ? new Date(dateOnly ? `${defaultValue}T12:00:00` : defaultValue)
+    : null;
+  const validInitialDate =
+    initialDate && !Number.isNaN(initialDate.getTime()) ? initialDate : null;
+  const [selected, setSelected] = React.useState<Date | null>(validInitialDate);
+  const [visibleMonth, setVisibleMonth] = React.useState(() => {
+    const base = validInitialDate ?? new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
   const days = daysForMonth(visibleMonth);
   const today = new Date();
 
@@ -129,14 +139,15 @@ export function DateTimePicker({
     }
   }
 
+  const selectedValue = selected
+    ? dateOnly
+      ? `${selected.getFullYear()}-${String(selected.getMonth() + 1).padStart(2, "0")}-${String(selected.getDate()).padStart(2, "0")}`
+      : selected.toISOString()
+    : "";
+
   return (
     <PopoverPrimitive.Root>
-      <input
-        type="hidden"
-        name={name}
-        form={form}
-        value={selected?.toISOString() ?? ""}
-      />
+      <input type="hidden" name={name} form={form} value={selectedValue} />
       <PopoverPrimitive.Trigger asChild>
         <Button
           id={id}
@@ -149,7 +160,11 @@ export function DateTimePicker({
         >
           <CalendarDays className="size-4" aria-hidden />
           <span className="min-w-0 truncate">
-            {selected ? DATE_TIME.format(selected) : placeholder}
+            {selected
+              ? dateOnly
+                ? DATE.format(selected)
+                : DATE_TIME.format(selected)
+              : placeholder}
           </span>
         </Button>
       </PopoverPrimitive.Trigger>
@@ -232,28 +247,30 @@ export function DateTimePicker({
             })}
           </div>
 
-          <div className="border-border mt-3 border-t pt-3">
-            <p className="text-fg-muted mb-2 flex items-center gap-1.5 text-xs font-medium">
-              <Clock3 className="size-3.5" aria-hidden /> Horário
-            </p>
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <ThemedSelect
-                id={`${id}-hour`}
-                value={String((selected ?? today).getHours())}
-                onValueChange={(value) => chooseTime("hour", Number(value))}
-                ariaLabel="Hora"
-                options={HOURS}
-              />
-              <span className="text-fg-muted">:</span>
-              <ThemedSelect
-                id={`${id}-minute`}
-                value={String((selected ?? today).getMinutes())}
-                onValueChange={(value) => chooseTime("minute", Number(value))}
-                ariaLabel="Minuto"
-                options={MINUTES}
-              />
+          {!dateOnly ? (
+            <div className="border-border mt-3 border-t pt-3">
+              <p className="text-fg-muted mb-2 flex items-center gap-1.5 text-xs font-medium">
+                <Clock3 className="size-3.5" aria-hidden /> Horário
+              </p>
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <ThemedSelect
+                  id={`${id}-hour`}
+                  value={String((selected ?? today).getHours())}
+                  onValueChange={(value) => chooseTime("hour", Number(value))}
+                  ariaLabel="Hora"
+                  options={HOURS}
+                />
+                <span className="text-fg-muted">:</span>
+                <ThemedSelect
+                  id={`${id}-minute`}
+                  value={String((selected ?? today).getMinutes())}
+                  onValueChange={(value) => chooseTime("minute", Number(value))}
+                  ariaLabel="Minuto"
+                  options={MINUTES}
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div className="border-border mt-3 flex items-center justify-between border-t pt-3">
             <Button
@@ -266,8 +283,13 @@ export function DateTimePicker({
               Limpar
             </Button>
             <div className="flex items-center gap-1">
-              <Button type="button" size="sm" variant="outline" onClick={chooseNow}>
-                Agora
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={chooseNow}
+              >
+                {dateOnly ? "Hoje" : "Agora"}
               </Button>
               <PopoverPrimitive.Close asChild>
                 <Button type="button" size="sm">

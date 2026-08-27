@@ -724,6 +724,81 @@ export type Database = {
           },
         ];
       };
+      demand_calendar_events: {
+        Row: {
+          adjustment_percent: number;
+          category_id: string | null;
+          company_id: string;
+          created_at: string;
+          created_by: string | null;
+          end_date: string;
+          event_type: string;
+          id: string;
+          is_active: boolean;
+          name: string;
+          notes: string | null;
+          product_id: string | null;
+          recurrence: string;
+          recurrence_until: string | null;
+          scope: string;
+          start_date: string;
+          updated_at: string;
+        };
+        Insert: {
+          adjustment_percent: number;
+          category_id?: string | null;
+          company_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          end_date: string;
+          event_type: string;
+          id?: string;
+          is_active?: boolean;
+          name: string;
+          notes?: string | null;
+          product_id?: string | null;
+          recurrence?: string;
+          recurrence_until?: string | null;
+          scope?: string;
+          start_date: string;
+          updated_at?: string;
+        };
+        Update: {
+          adjustment_percent?: number;
+          category_id?: string | null;
+          company_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          end_date?: string;
+          event_type?: string;
+          id?: string;
+          is_active?: boolean;
+          name?: string;
+          notes?: string | null;
+          product_id?: string | null;
+          recurrence?: string;
+          recurrence_until?: string | null;
+          scope?: string;
+          start_date?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "demand_calendar_events_company_id_category_id_fkey";
+            columns: ["company_id", "category_id"];
+            isOneToOne: false;
+            referencedRelation: "categories";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "demand_calendar_events_company_id_product_id_fkey";
+            columns: ["company_id", "product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
       domain_events: {
         Row: {
           actor_supplier_id: string | null;
@@ -3863,6 +3938,29 @@ export type Database = {
       rpc_get_purchase_round_report: {
         Args: { p_company_id: string; p_purchase_round_id: string };
         Returns: Json;
+      };
+      rpc_get_purchase_demand_baselines: {
+        Args: {
+          p_company_id: string;
+          p_history_weeks?: number;
+          p_limit?: number;
+        };
+        Returns: {
+          active_weeks: number;
+          category_id: string;
+          confidence: string;
+          current_week_received_quantity: number;
+          historical_weekly_quantity: number;
+          last_received_at: string | null;
+          observed_weeks: number;
+          open_order_quantity: number;
+          open_quotation_quantity: number;
+          product_id: string;
+          product_name: string;
+          purchase_unit: string;
+          shopping_list_quantity: number;
+          variation_percent: number;
+        }[];
       };
       rpc_get_purchase_suggestions: {
         Args: {

@@ -1,5 +1,6 @@
 import { Check, Minus } from "lucide-react";
 
+import { DemandCalendarManager } from "@/components/demand-calendar/demand-calendar-manager";
 import { PageHeader } from "@/components/layout/page-header";
 import { ThemeControls } from "@/components/theme-controls";
 import { WhatsAppConnectionSettings } from "@/components/whatsapp/connection-settings";
@@ -28,6 +29,10 @@ import {
   listPermissionCatalog,
   listRoles,
 } from "@/features/company/queries";
+import {
+  listDemandCalendarEvents,
+  listDemandCalendarOptions,
+} from "@/features/demand-calendar/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { getWhatsAppConnection } from "@/features/whatsapp/queries";
 import { isEvolutionProvisioningConfigured } from "@/lib/evolution/client";
@@ -59,9 +64,24 @@ const MODULE_LABEL: Record<string, string> = {
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-export default async function ConfiguracoesPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function ConfiguracoesPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const company = await requireActiveCompany();
-  const [dados, roles, members, catalog, minhasPermissoes, whatsapp, templates, params] = await Promise.all([
+  const [
+    dados,
+    roles,
+    members,
+    catalog,
+    minhasPermissoes,
+    whatsapp,
+    templates,
+    demandEvents,
+    demandOptions,
+    params,
+  ] = await Promise.all([
     getCompany(company.companyId),
     listRoles(company.companyId),
     listMembers(company.companyId),
@@ -69,10 +89,19 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
     getPermissions(company.companyId),
     getWhatsAppConnection(company.companyId),
     getCompanyWhatsAppTemplates(company.companyId),
+    listDemandCalendarEvents(company.companyId),
+    listDemandCalendarOptions(company.companyId),
     searchParams,
   ]);
   const requestedTab = typeof params.aba === "string" ? params.aba : "";
-  const activeTab = ["aparencia", "empresa", "whatsapp", "papeis", "permissoes"].includes(requestedTab)
+  const activeTab = [
+    "aparencia",
+    "empresa",
+    "demanda",
+    "whatsapp",
+    "papeis",
+    "permissoes",
+  ].includes(requestedTab)
     ? requestedTab
     : "aparencia";
   const evolutionConfigured = isEvolutionProvisioningConfigured();
@@ -81,7 +110,7 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
         ok: whatsapp.status !== "error",
         configured: evolutionConfigured,
         status: evolutionConfigured
-          ? whatsapp.status as WhatsAppSetupState["status"]
+          ? (whatsapp.status as WhatsAppSetupState["status"])
           : "not_configured",
         phone: whatsapp.phone_number,
         qrCode: null,
@@ -110,13 +139,14 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
     <div className="w-full">
       <PageHeader
         title="Configurações"
-        description="Aparência, dados da empresa, papéis e suas permissões."
+        description="Aparência, demanda, integrações, dados da empresa e permissões."
       />
 
       <Tabs defaultValue={activeTab}>
-        <TabsList>
+        <TabsList className="h-auto max-w-full flex-wrap justify-start">
           <TabsTrigger value="aparencia">Aparência</TabsTrigger>
           <TabsTrigger value="empresa">Empresa</TabsTrigger>
+          <TabsTrigger value="demanda">Demanda</TabsTrigger>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="papeis">Papéis</TabsTrigger>
           <TabsTrigger value="permissoes">Minhas permissões</TabsTrigger>
@@ -191,6 +221,19 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="demanda" className="mt-4">
+          <DemandCalendarManager
+            events={demandEvents}
+            categories={demandOptions.categories}
+            products={demandOptions.products}
+            canManage={
+              minhasPermissoes.has("product.update") ||
+              minhasPermissoes.has("purchase_round.create") ||
+              minhasPermissoes.has("order.create")
+            }
+          />
         </TabsContent>
 
         <TabsContent value="whatsapp" className="mt-4">
