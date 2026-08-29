@@ -336,7 +336,7 @@ function CompletedRoundResult({ dados }: { dados: DadosDaAlocacao }) {
           ) {
             uncalculatedWins += 1;
           }
-        } else if (cell?.doesNotSupply) unavailable += 1;
+        } else if (cell?.doesNotSupply || cell?.isAvailable === false) unavailable += 1;
         else if (cell?.currentPrice !== null && cell?.currentPrice !== undefined)
           losses += 1;
         else noResponse += 1;
@@ -535,6 +535,10 @@ function CompletedItemResult({ row, dados }: { row: Row; dados: DadosDaAlocacao 
                 </>
               ) : cell?.doesNotSupply ? (
                 <p className="text-fg-subtle mt-1 text-xs">Não fornece</p>
+              ) : cell?.isAvailable === false ? (
+                <p className="text-fg-subtle mt-1 text-xs">
+                  Sem disponibilidade nesta cotação
+                </p>
               ) : hasPrice ? (
                 <>
                   <p className="text-fg mt-1 text-sm font-semibold tabular-nums">

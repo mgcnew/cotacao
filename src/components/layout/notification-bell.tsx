@@ -65,7 +65,12 @@ export function NotificationBell({
             className="fixed inset-0 z-40 cursor-default"
           />
 
-          <div className="border-border bg-surface absolute right-0 z-50 mt-2 flex w-80 max-w-[90vw] flex-col rounded-xl border shadow-lg">
+          <div
+            className={cn(
+              "border-border bg-surface fixed inset-x-2 top-14 z-50 flex max-h-[calc(100dvh-4rem)] flex-col overflow-hidden rounded-xl border shadow-lg",
+              "sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-80 sm:max-w-[90vw]",
+            )}
+          >
             <div className="border-border flex items-center justify-between gap-2 border-b px-3 py-2">
               <span className="text-fg text-sm font-medium">Notificações</span>
               <div className="flex items-center gap-1">
@@ -98,7 +103,7 @@ export function NotificationBell({
                 confirma um pedido ou aponta divergência.
               </p>
             ) : (
-              <ul className="max-h-96 overflow-y-auto">
+              <ul className="min-h-0 flex-1 overflow-y-auto sm:max-h-96">
                 {notifications.map((n) => {
                   const conteudo = (
                     <>
@@ -119,7 +124,7 @@ export function NotificationBell({
                         <span className="min-w-0">
                           <span
                             className={cn(
-                              "block text-sm",
+                              "block break-words text-sm",
                               n.readAt
                                 ? "text-fg-muted"
                                 : "text-fg font-medium",
@@ -128,7 +133,7 @@ export function NotificationBell({
                             {n.title}
                           </span>
                           {n.message ? (
-                            <span className="text-fg-muted block text-xs">
+                            <span className="text-fg-muted block break-words text-xs">
                               {n.message}
                             </span>
                           ) : null}

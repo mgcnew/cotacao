@@ -8,6 +8,20 @@ export const PURCHASE_WEEKDAYS = [
   "Sábado",
 ] as const;
 
+const WEEKDAY_LIST = new Intl.ListFormat("pt-BR", {
+  style: "long",
+  type: "conjunction",
+});
+
+export function formatPurchaseWeekdays(weekdays: number[]) {
+  return WEEKDAY_LIST.format(
+    weekdays
+      .filter((weekday) => weekday >= 0 && weekday <= 6)
+      .sort((left, right) => left - right)
+      .map((weekday) => PURCHASE_WEEKDAYS[weekday]),
+  );
+}
+
 export const PURCHASE_INTERVAL_LABEL: Record<number, string> = {
   1: "Toda semana",
   2: "A cada 2 semanas",
@@ -21,6 +35,9 @@ export type SupplierPurchaseSchedule = {
   categoryId: string | null;
   categoryName: string | null;
   label: string | null;
+  /** Todos os dias em que o fornecedor aceita pedidos nesta rotina. */
+  weekdays: number[];
+  /** Primeiro dia, mantido para compatibilidade com registros antigos. */
   weekday: number;
   preferredTime: string | null;
   intervalWeeks: number;

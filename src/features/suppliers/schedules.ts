@@ -16,6 +16,7 @@ type ScheduleRow = {
   supplier_id: string;
   category_id: string | null;
   label: string | null;
+  weekdays?: number[];
   weekday: number;
   preferred_time: string | null;
   interval_weeks: number;
@@ -35,6 +36,7 @@ const SCHEDULE_SELECT = `
   supplier_id,
   category_id,
   label,
+  weekdays,
   weekday,
   preferred_time,
   interval_weeks,
@@ -49,7 +51,19 @@ const SCHEDULE_SELECT = `
   categories!supplier_purchase_schedules_company_id_category_id_fkey ( name )
 `;
 
+// Mantém a página disponível durante uma implantação em duas etapas, quando o
+// código pode chegar alguns segundos antes da migration 0073.
+const LEGACY_SCHEDULE_SELECT = SCHEDULE_SELECT.replace("  weekdays,\n", "");
+
+function missingWeekdaysColumn(error: { message: string } | null) {
+  return Boolean(
+    error?.message.includes("supplier_purchase_schedules.weekdays") &&
+      error.message.includes("does not exist"),
+  );
+}
+
 function mapSchedule(row: ScheduleRow): SupplierPurchaseSchedule {
+  const weekdays = row.weekdays?.length ? row.weekdays : [row.weekday];
   return {
     id: row.id,
     supplierId: row.supplier_id,
@@ -57,7 +71,8 @@ function mapSchedule(row: ScheduleRow): SupplierPurchaseSchedule {
     categoryId: row.category_id,
     categoryName: row.categories?.name ?? null,
     label: row.label,
-    weekday: row.weekday,
+    weekdays,
+    weekday: weekdays[0] ?? row.weekday,
     preferredTime: row.preferred_time,
     intervalWeeks: row.interval_weeks,
     anchorDate: row.anchor_date,
@@ -73,13 +88,19 @@ export async function listSupplierPurchaseSchedules(
   supplierId: string,
 ): Promise<SupplierPurchaseSchedule[]> {
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("supplier_purchase_schedules")
-    .select(SCHEDULE_SELECT)
-    .eq("company_id", companyId)
-    .eq("supplier_id", supplierId)
-    .order("is_active", { ascending: false })
-    .order("weekday");
+  const load = (select: string) =>
+    supabase
+      .from("supplier_purchase_schedules")
+      .select(select)
+      .eq("company_id", companyId)
+      .eq("supplier_id", supplierId)
+      .order("is_active", { ascending: false })
+      .order("weekday");
+  let { data, error } = await load(SCHEDULE_SELECT);
+
+  if (missingWeekdaysColumn(error)) {
+    ({ data, error } = await load(LEGACY_SCHEDULE_SELECT));
+  }
 
   if (error) throw new Error(`Falha ao carregar a agenda: ${error.message}`);
   return ((data ?? []) as unknown as ScheduleRow[]).map(mapSchedule);
@@ -231,9 +252,13 @@ function diffDays(later: string, earlier: string) {
   );
 }
 
-function occurrenceFor(row: ScheduleRow, today: string) {
+function occurrenceForWeekday(
+  row: ScheduleRow,
+  weekday: number,
+  today: string,
+) {
   const anchor = dateUtc(row.anchor_date);
-  const offset = (row.weekday - anchor.getUTCDay() + 7) % 7;
+  const offset = (weekday - anchor.getUTCDay() + 7) % 7;
   const first = addDays(row.anchor_date, offset);
   const period = row.interval_weeks * 7;
 
@@ -248,6 +273,21 @@ function occurrenceFor(row: ScheduleRow, today: string) {
   const next = addDays(previous, period);
   // Ao entrar na antecedência do próximo ciclo, ele substitui o ciclo antigo.
   return diffDays(next, today) <= row.reminder_days_before ? next : previous;
+}
+
+function occurrenceFor(row: ScheduleRow, today: string) {
+  const weekdays = row.weekdays?.length ? row.weekdays : [row.weekday];
+  const occurrences = [...new Set(weekdays)]
+    .map((weekday) => occurrenceForWeekday(row, weekday, today))
+    .filter((occurrence): occurrence is string => occurrence !== null);
+
+  // A próxima ocorrência que já entrou na antecedência substitui qualquer
+  // atraso anterior. Se vários dias já estiverem na janela, usa o mais perto.
+  const upcoming = occurrences.filter((occurrence) => occurrence >= today);
+  if (upcoming.length > 0) return upcoming.sort()[0];
+
+  // Sem uma futura, fica o dia vencido mais recente.
+  return occurrences.sort().at(-1) ?? null;
 }
 
 function localDate(instant: string, timezone: string) {
@@ -267,8 +307,7 @@ export async function listPurchaseScheduleAlertsWithClient(
   companyId: string,
   supabase: SupabaseClient<Database>,
 ): Promise<PurchaseScheduleAlert[]> {
-  const [{ data: company, error: companyError }, { data, error }] =
-    await Promise.all([
+  const [companyResult, schedulesResult] = await Promise.all([
       supabase
         .from("companies")
         .select("timezone")
@@ -280,6 +319,18 @@ export async function listPurchaseScheduleAlertsWithClient(
         .eq("company_id", companyId)
         .eq("is_active", true),
     ]);
+  const { data: company, error: companyError } = companyResult;
+  let { data, error } = schedulesResult;
+
+  if (missingWeekdaysColumn(error)) {
+    const legacyResult = await supabase
+      .from("supplier_purchase_schedules")
+      .select(LEGACY_SCHEDULE_SELECT)
+      .eq("company_id", companyId)
+      .eq("is_active", true);
+    data = legacyResult.data as unknown as typeof data;
+    error = legacyResult.error;
+  }
 
   if (companyError) {
     throw new Error(

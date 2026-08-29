@@ -13,7 +13,7 @@ import {
   snoozePurchaseSchedule,
 } from "@/features/suppliers/schedule-actions";
 import {
-  PURCHASE_WEEKDAYS,
+  formatPurchaseWeekdays,
   type PurchaseScheduleAlert,
 } from "@/features/suppliers/schedule-model";
 
@@ -108,7 +108,7 @@ export function RecurringPurchases({
                   </div>
                   <p className="text-fg-muted mt-0.5 text-sm">
                     {alert.label ||
-                      `Compra habitual de ${PURCHASE_WEEKDAYS[alert.weekday]}`}
+                      `Compra habitual · ${formatPurchaseWeekdays(alert.weekdays)}`}
                     {alert.categoryName ? ` · ${alert.categoryName}` : ""}
                     {alert.templateItemCount > 0
                       ? ` · ${alert.templateItemCount} ${alert.templateItemCount === 1 ? "produto no modelo" : "produtos no modelo"}`
@@ -164,7 +164,7 @@ export function RecurringPurchases({
                       )}
                     >
                       <Button type="submit" size="sm" variant="ghost">
-                        <Check aria-hidden /> Não comprar neste ciclo
+                        <Check aria-hidden /> Ignorar este dia
                       </Button>
                     </form>
                   </>

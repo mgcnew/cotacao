@@ -17,10 +17,24 @@ import { cn } from "@/lib/utils";
 
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
 const STATUS_OPTIONS = [
-  { value: "priced", label: "Tenho disponível — informar preço" },
-  { value: "unavailable", label: "Sem disponibilidade nesta cotação" },
-  { value: "does_not_supply", label: "Não trabalho com este produto" },
-];
+  {
+    value: "priced",
+    label: "Tenho disponível",
+    description: "Vou informar o preço",
+  },
+  {
+    value: "unavailable",
+    label: "Sem disponibilidade agora",
+    description: "Trabalho com o produto, mas não consigo atender desta vez",
+  },
+  {
+    value: "does_not_supply",
+    label: "Não trabalho com este produto",
+    description: "Não forneço este item",
+  },
+] as const;
+
+type ResponseStatus = (typeof STATUS_OPTIONS)[number]["value"] | "";
 
 function SubmitButton({
   completed,
@@ -35,14 +49,14 @@ function SubmitButton({
     <Button
       type="submit"
       size="lg"
-      disabled={pending || !ready}
+      disabled={pending}
       className="w-full sm:w-auto"
     >
       {pending
         ? "Enviando…"
         : ready
           ? `Enviar ${total === 1 ? "resposta" : `${total} respostas`}`
-          : `Faltam ${total - completed}`}
+          : `Revisar ${total - completed} ${total - completed === 1 ? "pendente" : "pendentes"}`}
     </Button>
   );
 }
@@ -50,15 +64,37 @@ function SubmitButton({
 function ItemCard({
   item,
   onResolvedChange,
+  showValidation,
 }: {
   item: PublicQuotationItem;
   onResolvedChange: (id: string, resolved: boolean) => void;
+  showValidation: boolean;
 }) {
   const id = item.supplier_quotation_item_id;
-  const [status, setStatus] = React.useState("priced");
+  const [status, setStatus] = React.useState<ResponseStatus>("");
   const [price, setPrice] = React.useState("");
   const priced = status === "priced";
-  const resolved = !priced || price.trim().length > 0;
+  const numericPrice = Number(price.replace(/\./g, "").replace(",", "."));
+  const validPrice =
+    price.trim().length > 0 && Number.isFinite(numericPrice) && numericPrice > 0;
+  const resolved = status !== "" && (!priced || validPrice);
+  const validationMessage =
+    status === ""
+      ? "Escolha uma resposta para este produto."
+      : priced && !validPrice
+        ? price.trim()
+          ? "Informe um preço válido e maior que zero."
+          : "Informe o preço deste produto para continuar."
+        : null;
+
+  function chooseStatus(nextStatus: ResponseStatus) {
+    setStatus(nextStatus);
+    if (nextStatus === "priced") {
+      window.requestAnimationFrame(() =>
+        document.getElementById(`preco_${id}`)?.focus(),
+      );
+    }
+  }
 
   React.useEffect(() => {
     onResolvedChange(id, resolved);
@@ -66,9 +102,11 @@ function ItemCard({
 
   return (
     <article
+      id={`cotacao-item-${id}`}
       className={cn(
-        "border-border bg-surface overflow-hidden rounded-xl border transition-colors",
+        "border-border bg-surface scroll-mt-24 overflow-hidden rounded-xl border transition-colors",
         resolved && "border-success/35",
+        showValidation && validationMessage && "border-destructive/60",
       )}
     >
       <input type="hidden" name="itemId" value={id} />
@@ -101,53 +139,83 @@ function ItemCard({
       </header>
 
       <div className="flex flex-col gap-4 p-4">
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor={`status_${id}`}
-            className="text-fg text-sm font-medium"
+        <fieldset
+          aria-required="true"
+          aria-invalid={showValidation && status === ""}
+          className="flex flex-col gap-2"
+        >
+          <legend className="text-fg text-sm font-medium">
+            Você consegue fornecer este produto?
+          </legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {STATUS_OPTIONS.map((option) => (
+              <label
+                key={option.value}
+                className={cn(
+                  "border-border bg-surface-sunken hover:border-primary/45 relative flex cursor-pointer gap-2.5 rounded-lg border p-3 transition-colors",
+                  "focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-3",
+                  status === option.value &&
+                    "border-primary bg-primary-soft",
+                )}
+              >
+                <input
+                  type="radio"
+                  name={`status_${id}`}
+                  value={option.value}
+                  checked={status === option.value}
+                  onChange={() => chooseStatus(option.value)}
+                  className="accent-primary mt-0.5 size-4 shrink-0"
+                />
+                <span className="min-w-0">
+                  <span className="text-fg block text-sm font-medium">
+                    {option.label}
+                  </span>
+                  <span className="text-fg-muted mt-0.5 block text-xs leading-snug">
+                    {option.description}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {showValidation && validationMessage ? (
+          <p
+            role="alert"
+            className="bg-destructive-soft text-destructive flex items-start gap-2 rounded-lg px-3 py-2 text-sm"
           >
-            Disponibilidade
-          </label>
-          <ThemedSelect
-            id={`status_${id}`}
-            name={`status_${id}`}
-            value={status}
-            onValueChange={setStatus}
-            options={STATUS_OPTIONS}
-          />
-          {status === "unavailable" ? (
-            <p className="text-fg-subtle text-xs">
-              Use quando você trabalha com o produto, mas não consegue atender
-              esta compra agora.
-            </p>
-          ) : status === "does_not_supply" ? (
-            <p className="text-fg-subtle text-xs">
-              Esta informação ajuda o comprador a não solicitar o produto nas
-              próximas cotações.
-            </p>
-          ) : null}
-        </div>
+            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+            {validationMessage}
+          </p>
+        ) : null}
 
         <div className="grid gap-3 sm:grid-cols-[11rem_1fr]">
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor={`preco_${id}`}
-              className="text-fg text-sm font-medium"
-            >
-              Preço por {item.pricing_unit.symbol}
-            </label>
-            <Input
-              id={`preco_${id}`}
-              name={`preco_${id}`}
-              inputMode="decimal"
-              enterKeyHint="next"
-              placeholder="0,00"
-              value={price}
-              required={priced}
-              disabled={!priced}
-              onChange={(event) => setPrice(event.target.value)}
-            />
-          </div>
+          {priced ? (
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor={`preco_${id}`}
+                className="text-fg text-sm font-medium"
+              >
+                Preço por {item.pricing_unit.symbol}
+              </label>
+              <Input
+                id={`preco_${id}`}
+                name={`preco_${id}`}
+                inputMode="decimal"
+                enterKeyHint="next"
+                placeholder="0,00"
+                value={price}
+                aria-invalid={showValidation && !validPrice}
+                onChange={(event) => setPrice(event.target.value)}
+              />
+            </div>
+          ) : (
+            <div className="bg-surface-sunken text-fg-muted flex items-center rounded-lg px-3 py-2 text-sm">
+              {status
+                ? "Não é necessário informar preço nesta opção."
+                : "Escolha uma opção acima para liberar o preenchimento."}
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <label
@@ -236,6 +304,7 @@ export function QuotationResponseForm({
     { error: null },
   );
   const [resolved, setResolved] = React.useState<Record<string, boolean>>({});
+  const [showValidation, setShowValidation] = React.useState(false);
   const pendentes = items.filter((item) => !item.already_answered);
   const completed = pendentes.filter(
     (item) => resolved[item.supplier_quotation_item_id],
@@ -247,6 +316,26 @@ export function QuotationResponseForm({
       current[id] === value ? current : { ...current, [id]: value },
     );
   }, []);
+
+  function focusFirstPending() {
+    const firstPending = pendentes.find(
+      (item) => !resolved[item.supplier_quotation_item_id],
+    );
+    if (!firstPending) return;
+
+    const card = document.getElementById(
+      `cotacao-item-${firstPending.supplier_quotation_item_id}`,
+    );
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const selectedStatus = card?.querySelector<HTMLInputElement>(
+      'input[type="radio"]:checked',
+    );
+    const field =
+      selectedStatus?.value === "priced"
+        ? card?.querySelector<HTMLInputElement>('input[name^="preco_"]')
+        : card?.querySelector<HTMLInputElement>('input[type="radio"]');
+    window.setTimeout(() => field?.focus({ preventScroll: true }), 350);
+  }
 
   if (state.submitted) {
     return (
@@ -286,7 +375,23 @@ export function QuotationResponseForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <form
+      action={formAction}
+      className="flex flex-col gap-5"
+      onSubmit={(event) => {
+        if (completed === pendentes.length) return;
+        event.preventDefault();
+        setShowValidation(true);
+        focusFirstPending();
+      }}
+      onInvalid={(event) => {
+        setShowValidation(true);
+        event.currentTarget
+          .querySelector(":invalid")
+          ?.closest("article")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }}
+    >
       <input type="hidden" name="token" value={token} />
 
       <section className="border-border bg-surface sticky top-2 z-20 rounded-xl border p-3 shadow-sm sm:top-4">
@@ -305,6 +410,9 @@ export function QuotationResponseForm({
             style={{ width: `${progress}%` }}
           />
         </div>
+        <p className="text-fg-subtle mt-2 text-xs">
+          Em cada produto, escolha uma das três respostas visíveis abaixo.
+        </p>
       </section>
 
       {[...groups.entries()].map(([group, groupItems]) => (
@@ -322,6 +430,7 @@ export function QuotationResponseForm({
               key={item.supplier_quotation_item_id}
               item={item}
               onResolvedChange={updateResolved}
+              showValidation={showValidation}
             />
           ))}
         </section>

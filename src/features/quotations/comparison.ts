@@ -22,6 +22,8 @@ export type ComparisonCell = {
   currentPrice: number | null;
   negotiated: boolean;
   doesNotSupply: boolean;
+  /** `false` significa indisponibilidade apenas nesta cotação. */
+  isAvailable: boolean | null;
   notes: string | null;
   /** Atributos que o fornecedor declarou, ex.: quantidade por pacote. */
   attributes: { name: string; value: string }[];
@@ -139,7 +141,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       ? supabase
           .from("quotation_response_items")
           .select(
-            "id, supplier_quotation_item_id, quoted_price, does_not_supply, notes",
+            "id, supplier_quotation_item_id, quoted_price, is_available, does_not_supply, notes",
           )
           .eq("company_id", companyId)
           .in("supplier_quotation_item_id", linkIds)
@@ -279,6 +281,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
           currentPrice: null,
           negotiated: false,
           doesNotSupply: false,
+          isAvailable: null,
           notes: null,
           attributes: [],
           normalizedPrice: null,
@@ -320,6 +323,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         currentPrice: current,
         negotiated: Boolean(price?.last_negotiation_id),
         doesNotSupply: response.does_not_supply,
+        isAvailable: response.is_available,
         notes: response.notes,
         attributes: attrsByResponse.get(response.id) ?? [],
         normalizedPrice: normalized,

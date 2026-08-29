@@ -26,6 +26,7 @@ import {
   type PurchaseScheduleState,
 } from "@/features/suppliers/schedule-actions";
 import {
+  formatPurchaseWeekdays,
   PURCHASE_INTERVAL_LABEL,
   PURCHASE_WEEKDAYS,
   type ScheduleProductOption,
@@ -107,23 +108,36 @@ function ScheduleForm({
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor={`${prefix}-weekday`}
-            className="text-fg text-sm font-medium"
-          >
-            Dia do pedido
-          </label>
-          <ThemedSelect
-            id={`${prefix}-weekday`}
-            name="weekday"
-            required
-            defaultValue={String(schedule?.weekday ?? 1)}
-            options={PURCHASE_WEEKDAYS.map((label, value) => ({
-              value: String(value),
-              label,
-            }))}
-          />
+        <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-4">
+          <fieldset>
+            <legend className="text-fg text-sm font-medium">
+              Dias do pedido
+            </legend>
+            <p className="text-fg-subtle mt-0.5 text-xs">
+              Marque todos os dias em que este fornecedor aceita pedidos.
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+              {PURCHASE_WEEKDAYS.map((label, weekday) => (
+                <label
+                  key={label}
+                  className="border-border bg-surface hover:border-primary/45 has-checked:border-primary has-checked:bg-primary-soft text-fg flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    name="weekdays"
+                    value={weekday}
+                    defaultChecked={
+                      schedule
+                        ? schedule.weekdays.includes(weekday)
+                        : weekday === 1
+                    }
+                    className="accent-primary size-4 shrink-0"
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -242,7 +256,8 @@ function ScheduleForm({
 
       <p className="text-fg-subtle text-xs">
         Em agendas quinzenais ou de quatro semanas, a data-base define quais
-        semanas pertencem ao ciclo.
+        semanas pertencem ao ciclo; todos os dias marcados valem nessas
+        semanas.
       </p>
       <ErrorLine error={state.error} />
       <SuccessLine
@@ -276,7 +291,7 @@ function ScheduleSummary({ schedule }: { schedule: SupplierPurchaseSchedule }) {
         </span>
       </div>
       <p className="text-fg-muted mt-0.5 text-sm">
-        {interval} · {PURCHASE_WEEKDAYS[schedule.weekday]}
+        {interval} · {formatPurchaseWeekdays(schedule.weekdays)}
         {schedule.preferredTime
           ? ` até ${schedule.preferredTime.slice(0, 5)}`
           : ""}
@@ -581,8 +596,8 @@ export function SupplierScheduleManager({
             ) : null}
           </h2>
           <p className="text-fg-muted mt-1 text-sm">
-            O sistema avisa antes do dia habitual e deixa de alertar quando o
-            pedido ou a cotação já estiverem preparados.
+            O sistema avisa antes de cada dia configurado e deixa de alertar
+            quando o pedido ou a cotação já estiverem preparados.
           </p>
         </div>
       </div>

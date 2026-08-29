@@ -27,14 +27,16 @@ function supplierStats(supplier: Supplier, rows: Row[]) {
   let priced = 0;
   let best = 0;
   let missing = 0;
+  let unavailable = 0;
   for (const row of rows) {
     const cell = row.cells.get(supplier.id);
     if (cell?.currentPrice !== null && cell?.currentPrice !== undefined && !cell.doesNotSupply) {
       priced += 1;
       if (cell.currentPrice === row.bestPrice) best += 1;
-    } else if (!cell?.doesNotSupply) missing += 1;
+    } else if (cell?.doesNotSupply || cell?.isAvailable === false) unavailable += 1;
+    else missing += 1;
   }
-  return { priced, best, missing };
+  return { priced, best, missing, unavailable };
 }
 
 /**
@@ -65,7 +67,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
     const hasPrice = cell?.currentPrice !== null && cell?.currentPrice !== undefined && !cell.doesNotSupply;
     const isBest = hasPrice && cell.currentPrice === row.bestPrice;
     if (filter === "above") return hasPrice && !isBest;
-    if (filter === "missing") return !hasPrice && !cell?.doesNotSupply;
+    if (filter === "missing") return !hasPrice && !cell?.doesNotSupply && cell?.isAvailable !== false;
     if (filter === "best") return isBest;
     return true;
   });
@@ -152,6 +154,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">{stats.priced} preços</Badge>
             <Badge variant="outline">{stats.best} melhores</Badge>
+            {stats.unavailable > 0 ? <Badge variant="outline">{stats.unavailable} indisponíveis</Badge> : null}
             {stats.missing > 0 ? <Badge variant="destructive">{stats.missing} pendentes</Badge> : null}
             {supplier.completed_at ? <Badge>resposta concluída</Badge> : <Badge variant="outline">não concluiu</Badge>}
           </div>
@@ -237,6 +240,15 @@ function SupplierOffer({ row, supplier, cell, dados }: { row: Row; supplier: Sup
         <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline">não fornece</Badge>{cell.correctionCount > 0 ? <Badge variant="outline">corrigido</Badge> : null}</div>
         {cell.notes ? <p className="text-fg-muted mt-1 text-xs">{cell.notes}</p> : null}
         {dados.podeCorrigir && cell.responseItemId ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} doesNotSupply supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} /> : null}
+      </div>
+    );
+  }
+
+  if (cell.isAvailable === false) {
+    return (
+      <div>
+        <Badge variant="outline">sem disponibilidade nesta cotação</Badge>
+        {cell.notes ? <p className="text-fg-muted mt-1 text-xs">{cell.notes}</p> : null}
       </div>
     );
   }

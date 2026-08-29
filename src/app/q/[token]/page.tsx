@@ -47,7 +47,8 @@ export default async function CotacaoPublicaPage({
                   {quotation.purchase_round.title}
                 </h1>
                 <p className="text-fg-muted mt-1 max-w-xl text-sm">
-                  Informe um preço ou a disponibilidade de cada produto. Você
+                  Em cada produto, escolha se tem disponível, se está sem
+                  disponibilidade agora ou se não trabalha com o item. Você
                   poderá revisar tudo antes de enviar.
                 </p>
               </div>

@@ -29,7 +29,11 @@ const scheduleSchema = z.object({
     })
     .transform((v) => v || null),
   categoryId: z.union([z.literal(""), z.uuid()]).transform((v) => v || null),
-  weekday: z.coerce.number().int().min(0).max(6),
+  weekdays: z
+    .array(z.coerce.number().int().min(0).max(6))
+    .min(1, "Escolha ao menos um dia para o pedido.")
+    .max(7)
+    .transform((values) => [...new Set(values)].sort((a, b) => a - b)),
   intervalWeeks: z.coerce.number().int().min(1).max(12),
   anchorDate: z.iso.date({ error: "Data-base inválida." }),
   preferredTime: z
@@ -63,7 +67,7 @@ export async function saveSupplierPurchaseSchedule(
     supplierId: formData.get("supplierId"),
     label: formData.get("label") ?? "",
     categoryId: formData.get("categoryId") ?? "",
-    weekday: formData.get("weekday"),
+    weekdays: formData.getAll("weekdays"),
     intervalWeeks: formData.get("intervalWeeks"),
     anchorDate: formData.get("anchorDate"),
     preferredTime: formData.get("preferredTime") ?? "",
@@ -79,7 +83,8 @@ export async function saveSupplierPurchaseSchedule(
     supplier_id: supplierId,
     label: values.label,
     category_id: values.categoryId,
-    weekday: values.weekday,
+    weekdays: values.weekdays,
+    weekday: values.weekdays[0],
     interval_weeks: values.intervalWeeks,
     anchor_date: values.anchorDate,
     preferred_time: values.preferredTime,
@@ -320,6 +325,7 @@ export async function acceptDetectedPurchasePattern(
     company_id: company.companyId,
     supplier_id: pattern.supplierId,
     label: "Rotina detectada pelo histórico",
+    weekdays: [pattern.weekday],
     weekday: pattern.weekday,
     interval_weeks: pattern.intervalWeeks,
     anchor_date: pattern.anchorDate,

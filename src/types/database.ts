@@ -3206,6 +3206,7 @@ export type Database = {
           supplier_id: string;
           updated_at: string;
           weekday: number;
+          weekdays: number[];
         };
         Insert: {
           anchor_date?: string;
@@ -3225,6 +3226,7 @@ export type Database = {
           supplier_id: string;
           updated_at?: string;
           weekday: number;
+          weekdays?: number[];
         };
         Update: {
           anchor_date?: string;
@@ -3244,6 +3246,7 @@ export type Database = {
           supplier_id?: string;
           updated_at?: string;
           weekday?: number;
+          weekdays?: number[];
         };
         Relationships: [
           {

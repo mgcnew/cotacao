@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ArrowRight, Bell, PackagePlus } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 
 import {
   useFechaModalAoConcluir,
@@ -11,14 +11,14 @@ import {
 import {
   ErrorLine,
   OrderItemRows,
-  selectClass,
   Submit,
   type ItemSeed,
   type OrderableProduct,
 } from "@/components/orders/order-item-rows";
 import { Button } from "@/components/ui/button";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   createDirectOrder,
   type OrderActionState,
@@ -83,6 +83,14 @@ export function CamposDoPedidoDireto({
       ? (initialSupplierId ?? "")
       : "",
   );
+  const supplierOptions = useMemo(
+    () =>
+      suppliers.map((supplier) => ({
+        id: supplier.id,
+        name: supplier.name,
+      })),
+    [suppliers],
+  );
   const selectedSupplier =
     suppliers.find((supplier) => supplier.id === supplierId) ?? null;
   const openNotices = selectedSupplier?.openNotices ?? [];
@@ -97,21 +105,16 @@ export function CamposDoPedidoDireto({
           <label htmlFor={idFornecedor} className="text-fg text-sm font-medium">
             Fornecedor
           </label>
-          <select
+          <SearchableSelect
             id={idFornecedor}
             name="supplierId"
             required
             value={supplierId}
-            onChange={(event) => setSupplierId(event.target.value)}
-            className={selectClass}
-          >
-            <option value="">Selecione…</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+            onValueChange={setSupplierId}
+            options={supplierOptions}
+            placeholder="Digite o nome do fornecedor…"
+            emptyMessage="Nenhum fornecedor encontrado."
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -119,11 +122,11 @@ export function CamposDoPedidoDireto({
             Entrega prevista{" "}
             <span className="text-fg-subtle font-normal">(opcional)</span>
           </label>
-          <Input
+          <DateTimePicker
             id={idPrazo}
             name="deliveryDueDate"
-            type="date"
-            className="h-8"
+            dateOnly
+            placeholder="Escolher data"
           />
         </div>
       </div>
@@ -203,6 +206,7 @@ export function CamposDoPedidoDireto({
       <OrderItemRows
         products={products}
         shoppingItems={shoppingItems}
+        idPrefix={idPrefixo}
         seeds={
           initialItems?.length
             ? initialItems

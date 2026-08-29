@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 export { ErrorLine } from "@/components/layout/form-feedback";
 
@@ -69,6 +70,7 @@ export function OrderItemRows({
   products,
   seeds,
   shoppingItems = [],
+  idPrefix = "",
 }: {
   products: OrderableProduct[];
   seeds: ItemSeed[];
@@ -81,12 +83,22 @@ export function OrderItemRows({
     notes: string;
     isActive: boolean;
   }[];
+  idPrefix?: string;
 }) {
   const proximaChave = React.useRef(seeds.length);
   const [rows, setRows] = React.useState<Row[]>(() =>
     seeds.map((seed, index) => ({ ...seed, key: index })),
   );
   const [selectedShopping, setSelectedShopping] = React.useState<string[]>([]);
+  const productOptions = React.useMemo(
+    () =>
+      products.map((product) => ({
+        id: product.id,
+        name: product.name,
+        description: `${product.purchaseUnit} · preço por ${product.pricingUnit}`,
+      })),
+    [products],
+  );
 
   const unidadesDe = (row: Row) => products.find((p) => p.id === row.productId);
 
@@ -172,6 +184,9 @@ export function OrderItemRows({
       ) : null}
       {rows.map((row) => {
         const unidades = unidadesDe(row);
+        const productFieldId = `${idPrefix}produto-${row.key}`;
+        const quantityFieldId = `${idPrefix}qtd-${row.key}`;
+        const priceFieldId = `${idPrefix}preco-${row.key}`;
         return (
           <div
             key={row.key}
@@ -198,7 +213,7 @@ export function OrderItemRows({
             <div className="grid gap-2 sm:grid-cols-[1fr_7rem_7rem]">
               <div className="flex flex-col gap-1">
                 <label
-                  htmlFor={`produto-${row.key}`}
+                  htmlFor={productFieldId}
                   className="text-fg-muted text-xs"
                 >
                   Produto
@@ -207,45 +222,40 @@ export function OrderItemRows({
                   <>
                     <input type="hidden" name="productId" value={row.productId} />
                     <p
-                      id={`produto-${row.key}`}
+                      id={productFieldId}
                       className="text-fg flex h-8 items-center text-sm"
                     >
                       {row.productName}
                     </p>
                   </>
                 ) : (
-                  <select
-                    id={`produto-${row.key}`}
+                  <SearchableSelect
+                    id={productFieldId}
                     name="productId"
                     required
-                    className={selectClass}
                     value={row.productId}
-                    onChange={(e) =>
+                    onValueChange={(productId) =>
                       setRows((prev) =>
                         prev.map((r) =>
                           r.key === row.key
-                            ? { ...r, productId: e.target.value }
+                            ? { ...r, productId }
                             : r,
                         ),
                       )
                     }
-                  >
-                    <option value="">Selecione…</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                    options={productOptions}
+                    placeholder="Digite o nome do produto…"
+                    emptyMessage="Nenhum produto encontrado."
+                  />
                 )}
               </div>
 
               <div className="flex flex-col gap-1">
-                <label htmlFor={`qtd-${row.key}`} className="text-fg-muted text-xs">
+                <label htmlFor={quantityFieldId} className="text-fg-muted text-xs">
                   Quantidade{unidades ? ` (${unidades.purchaseUnit})` : ""}
                 </label>
                 <Input
-                  id={`qtd-${row.key}`}
+                  id={quantityFieldId}
                   name="quantity"
                   required
                   inputMode="decimal"
@@ -256,13 +266,13 @@ export function OrderItemRows({
 
               <div className="flex flex-col gap-1">
                 <label
-                  htmlFor={`preco-${row.key}`}
+                  htmlFor={priceFieldId}
                   className="text-fg-muted text-xs"
                 >
                   Preço{unidades ? ` (por ${unidades.pricingUnit})` : ""}
                 </label>
                 <Input
-                  id={`preco-${row.key}`}
+                  id={priceFieldId}
                   name="price"
                   required
                   inputMode="decimal"

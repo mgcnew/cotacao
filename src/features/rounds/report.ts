@@ -12,6 +12,7 @@ export type RoundReportOffer = {
   quotedPrice: number | null;
   finalPrice: number | null;
   doesNotSupply: boolean;
+  isAvailable: boolean | null;
   wonQuantity: number;
   estimatedPricingQuantity: number | null;
   selectedPrice: number | null;
@@ -243,6 +244,7 @@ export const getRoundReport = cache(
             quotedPrice: cell?.quotedPrice ?? null,
             finalPrice: cell?.currentPrice ?? null,
             doesNotSupply: cell?.doesNotSupply ?? false,
+            isAvailable: cell?.isAvailable ?? null,
             wonQuantity,
             estimatedPricingQuantity,
             selectedPrice,
@@ -250,7 +252,7 @@ export const getRoundReport = cache(
             outcome:
               wins.length > 0
                 ? "won"
-                : cell?.doesNotSupply
+                : cell?.doesNotSupply || cell?.isAvailable === false
                   ? "unavailable"
                   : hasPrice
                     ? "lost"

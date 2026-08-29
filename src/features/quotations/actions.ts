@@ -57,7 +57,15 @@ export async function submitQuotation(
   const items: ResponseItem[] = [];
 
   for (const id of itemIds) {
-    const responseStatus = String(formData.get(`status_${id}`) ?? "priced");
+    const responseStatus = String(formData.get(`status_${id}`) ?? "");
+    if (
+      responseStatus !== "priced" &&
+      responseStatus !== "unavailable" &&
+      responseStatus !== "does_not_supply"
+    ) {
+      const productName = String(formData.get(`nome_${id}`) ?? "este item");
+      return { error: `Escolha a disponibilidade de "${productName}".` };
+    }
     const doesNotSupply =
       responseStatus === "does_not_supply" ||
       formData.get(`nao_fornece_${id}`) === "on";
