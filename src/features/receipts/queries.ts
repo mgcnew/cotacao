@@ -140,7 +140,13 @@ export async function getReceiptConference(
   const { data: receipt, error } = await supabase
     .from("receipts")
     .select(
-      "id, order_id, status, received_at, invoice_number, invoice_series, invoice_total, notes, checked_at",
+      `
+      id, order_id, status, received_at, invoice_number, invoice_series,
+      invoice_total, notes, checked_at,
+      receipt_documents (
+        id, file_name, access_key, storage_path, created_at
+      )
+    `,
     )
     .eq("company_id", companyId)
     .eq("id", receiptId)
@@ -149,6 +155,23 @@ export async function getReceiptConference(
   if (error) throw new Error(`Falha ao abrir a conferência: ${error.message}`);
   if (!receipt) return null;
 
+  const documents = await Promise.all(
+    (receipt.receipt_documents ?? []).map(async (document) => {
+      const signed = await supabase.storage
+        .from("receipt-documents")
+        .createSignedUrl(document.storage_path, 600, {
+          download: document.file_name,
+        });
+      return {
+        id: document.id,
+        fileName: document.file_name,
+        accessKey: document.access_key,
+        createdAt: document.created_at,
+        downloadUrl: signed.data?.signedUrl ?? null,
+      };
+    }),
+  );
+
   const order = await getOrder(companyId, receipt.order_id);
   if (!order) return null;
   const revision = await getCurrentRevision(
@@ -156,6 +179,41 @@ export async function getReceiptConference(
     order.id,
     order.current_revision_id,
   );
+
+  const productIds = revision?.items.map((item) => item.productId) ?? [];
+  const [companyResult, barcodeResult] = await Promise.all([
+    supabase
+      .from("companies")
+      .select("document_number")
+      .eq("id", companyId)
+      .maybeSingle(),
+    productIds.length
+      ? supabase
+          .from("product_barcodes")
+          .select("product_id, code")
+          .eq("company_id", companyId)
+          .eq("is_active", true)
+          .in("product_id", productIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (companyResult.error) {
+    throw new Error(
+      `Falha ao validar o destinatário da nota: ${companyResult.error.message}`,
+    );
+  }
+  if (barcodeResult.error) {
+    throw new Error(
+      `Falha ao carregar códigos dos produtos: ${barcodeResult.error.message}`,
+    );
+  }
+
+  const barcodesByProduct = new Map<string, string[]>();
+  for (const barcode of barcodeResult.data ?? []) {
+    const current = barcodesByProduct.get(barcode.product_id) ?? [];
+    current.push(barcode.code);
+    barcodesByProduct.set(barcode.product_id, current);
+  }
 
   return {
     receipt: {
@@ -168,8 +226,21 @@ export async function getReceiptConference(
         receipt.invoice_total === null ? null : Number(receipt.invoice_total),
       notes: receipt.notes,
       checkedAt: receipt.checked_at,
+      documents: documents.sort((left, right) =>
+        right.createdAt.localeCompare(left.createdAt),
+      ),
     },
     order,
-    revision,
+    companyDocument: companyResult.data?.document_number ?? null,
+    supplierDocument: order.suppliers.document_number ?? null,
+    revision: revision
+      ? {
+          ...revision,
+          items: revision.items.map((item) => ({
+            ...item,
+            barcodes: barcodesByProduct.get(item.productId) ?? [],
+          })),
+        }
+      : null,
   };
 }

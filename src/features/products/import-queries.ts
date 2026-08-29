@@ -60,6 +60,7 @@ export async function listProductImportItems(
       .eq("company_id", companyId)
       .eq("batch_id", batchId);
     if (filters.status) query = query.eq("status", filters.status);
+    else query = query.not("status", "in", "(imported,ignored)");
     const term = filters.search.replace(/[%_,().]/g, " ").trim();
     if (term)
       query = query.or(

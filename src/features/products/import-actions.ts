@@ -391,12 +391,44 @@ export async function updateProductImportItemAction(
     .eq("id", itemId)
     .in("status", ["pending", "ready", "blocked"]);
   if (error) return { error: error.message, message: null, savedAt: Date.now() };
+
+  if (issues.length === 0 && configured) {
+    const { data: published, error: publishError } = await supabase.rpc(
+      "rpc_publish_product_import_items",
+      {
+        p_company_id: company.companyId,
+        p_batch_id: batchId,
+        p_item_ids: [itemId],
+      },
+    );
+    if (publishError) {
+      revalidatePath(`/produtos/importacoes/${batchId}`);
+      return {
+        error: `Alterações salvas, mas o produto não foi publicado: ${publishError.message}`,
+        message: null,
+        savedAt: Date.now(),
+      };
+    }
+
+    revalidatePath("/produtos");
+    revalidatePath("/produtos/importacoes");
+    revalidatePath(`/produtos/importacoes/${batchId}`);
+    return {
+      error: null,
+      message:
+        published === 1
+          ? "Produto salvo e adicionado ao catálogo."
+          : "Produto salvo.",
+      savedAt: Date.now(),
+    };
+  }
+
   revalidatePath(`/produtos/importacoes/${batchId}`);
   return {
     error: null,
     message: issues.length
       ? "Alterações salvas. Revise as pendências indicadas."
-      : "Produto salvo no rascunho.",
+      : "Produto salvo. Complete categoria e unidades para publicá-lo.",
     savedAt: Date.now(),
   };
 }

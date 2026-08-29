@@ -95,6 +95,12 @@ export default async function ProductImportDetailPage({
   const success =
     (Array.isArray(query.sucesso) ? query.sucesso[0] : query.sucesso) ?? null;
   const editable = batch.status === "draft";
+  const pendingMappings = mappings.filter(
+    (mapping) =>
+      !mapping.category_id ||
+      !mapping.purchase_unit_id ||
+      !mapping.pricing_unit_id,
+  );
 
   return (
     <div className="w-full min-w-0">
@@ -129,20 +135,21 @@ export default async function ProductImportDetailPage({
         ))}
       </div>
 
-      {editable ? (
+      {editable && pendingMappings.length > 0 ? (
         <details
           className="border-border bg-surface mb-5 rounded-xl border p-4"
-          open={mappings.some((item) => !item.category_id)}
+          open
         >
           <summary className="cursor-pointer font-medium">
-            Mapear as {mappings.length} seções
+            Configurar {pendingMappings.length}{" "}
+            {pendingMappings.length === 1 ? "seção pendente" : "seções pendentes"}
           </summary>
           <p className="text-fg-muted mt-1 text-xs">
             Aplique categoria e unidades a todos os itens ainda em rascunho da
             seção.
           </p>
           <div className="mt-4 grid gap-2">
-            {mappings.map((mapping) => (
+            {pendingMappings.map((mapping) => (
               <form
                 key={mapping.id}
                 action={applyProductImportMappingAction}
@@ -259,6 +266,13 @@ export default async function ProductImportDetailPage({
           <span>Ações</span>
         </div>
         <div className="divide-border divide-y">
+          {items.length === 0 ? (
+            <p className="text-fg-muted px-4 py-10 text-center text-sm">
+              {search || status
+                ? "Nenhum produto encontrado com estes filtros."
+                : "Nenhum produto pendente. Os produtos salvos já estão disponíveis no catálogo e podem ser consultados pelo filtro “Importado”."}
+            </p>
+          ) : null}
           {items.map((item) => {
             const formId = `edit-${item.id}`;
             const locked =

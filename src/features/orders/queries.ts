@@ -371,7 +371,7 @@ export async function getOrder(companyId: string, orderId: string) {
       order_number,
       status,
       current_revision_id,
-      suppliers!inner ( id, name ),
+      suppliers!inner ( id, name, document_number ),
       purchase_rounds ( id, title )
     `,
     )

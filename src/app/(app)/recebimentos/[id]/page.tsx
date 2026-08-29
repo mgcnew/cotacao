@@ -53,6 +53,27 @@ export default async function ConferenciaPage({
           <Button asChild size="sm" className="mt-4">
             <Link href={`/pedidos/${order.id}`}>Ver pedido</Link>
           </Button>
+          {receipt.documents.length ? (
+            <div className="border-border mt-4 border-t pt-4">
+              <p className="text-fg mb-2 text-sm font-medium">XML da NF-e</p>
+              <div className="flex flex-wrap gap-2">
+                {receipt.documents.map((document) =>
+                  document.downloadUrl ? (
+                    <Button
+                      key={document.id}
+                      asChild
+                      size="sm"
+                      variant="outline"
+                    >
+                      <a href={document.downloadUrl}>
+                        Baixar {document.fileName}
+                      </a>
+                    </Button>
+                  ) : null,
+                )}
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : !revision ? (
         <p className="text-destructive text-sm">
@@ -67,6 +88,9 @@ export default async function ConferenciaPage({
           invoiceSeries={receipt.invoiceSeries}
           invoiceTotal={receipt.invoiceTotal}
           notes={receipt.notes}
+          companyDocument={data.companyDocument}
+          supplierDocument={data.supplierDocument}
+          existingDocuments={receipt.documents}
         />
       ) : (
         <p className="border-border bg-surface-sunken text-fg-muted rounded-xl border p-4 text-sm">

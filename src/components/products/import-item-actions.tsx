@@ -72,8 +72,8 @@ export function ProductImportItemActions({
           <input type="hidden" name="batchId" value={batchId} />
           <input type="hidden" name="itemId" value={itemId} />
           <ActionButton
-            label="Salvar"
-            busyLabel="Salvando…"
+            label="Salvar produto"
+            busyLabel="Salvando e publicando…"
             variant="outline"
           />
         </form>

@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import {
+  getPermissions,
+  requireActiveCompany,
+  requireUser,
+} from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type ReceiptActionState = {
@@ -11,6 +15,251 @@ export type ReceiptActionState = {
   savedAt?: number;
   receiptId?: string;
 };
+
+export type ReceiptNfeUploadState = {
+  error: string | null;
+  saved?: boolean;
+  accessKey?: string;
+};
+
+const XML_MAX_SIZE = 4 * 1024 * 1024;
+
+function xmlSection(xml: string, tag: string) {
+  const pattern = new RegExp(
+    "<(?:[\\w.-]+:)?" +
+      tag +
+      "\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?" +
+      tag +
+      ">",
+    "i",
+  );
+  return pattern.exec(xml)?.[1] ?? null;
+}
+
+function xmlValue(xml: string, tag: string) {
+  return (
+    xmlSection(xml, tag)
+      ?.replace(/<[^>]+>/g, "")
+      .trim() || null
+  );
+}
+
+function xmlDocument(section: string | null) {
+  if (!section) return null;
+  return (
+    (xmlValue(section, "CNPJ") ?? xmlValue(section, "CPF"))?.replace(
+      /\D/g,
+      "",
+    ) ?? null
+  );
+}
+
+export async function uploadReceiptNfe(
+  formData: FormData,
+): Promise<ReceiptNfeUploadState> {
+  const company = await requireActiveCompany();
+  const user = await requireUser();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.post")) {
+    return { error: "Seu papel não permite anexar a NF-e ao recebimento." };
+  }
+
+  const receiptId = String(formData.get("receiptId") ?? "");
+  const file = formData.get("file");
+  if (!receiptId || !(file instanceof File) || file.size === 0) {
+    return { error: "Selecione o arquivo XML da NF-e." };
+  }
+  if (file.size > XML_MAX_SIZE) {
+    return { error: "O XML deve ter no máximo 4 MB." };
+  }
+  if (!file.name.toLowerCase().endsWith(".xml")) {
+    return { error: "O documento precisa ser um arquivo XML." };
+  }
+
+  const xml = await file.text();
+  const info = xmlSection(xml, "infNFe");
+  const protocol = xmlSection(xml, "infProt");
+  const authorizationStatus = protocol ? xmlValue(protocol, "cStat") : null;
+  if (
+    !info ||
+    !protocol ||
+    !["100", "150"].includes(authorizationStatus ?? "")
+  ) {
+    return { error: "O XML não possui autorização de uso da NF-e." };
+  }
+  if (
+    [...xml.matchAll(/<(?:[\w.-]+:)?tpEvento\b[^>]*>([^<]*)</gi)].some(
+      (match) => match[1]?.trim() === "110111",
+    )
+  ) {
+    return { error: "A NF-e possui evento de cancelamento." };
+  }
+
+  const accessKey =
+    /\bId\s*=\s*["']NFe(\d{44})["']/i.exec(xml)?.[1] ??
+    (protocol ? xmlValue(protocol, "chNFe") : null);
+  if (!accessKey || !/^\d{44}$/.test(accessKey)) {
+    return { error: "A chave de acesso da NF-e é inválida." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const [receiptResult, companyResult] = await Promise.all([
+    supabase
+      .from("receipts")
+      .select(
+        "id, status, orders!inner ( suppliers!inner ( document_number ) )",
+      )
+      .eq("company_id", company.companyId)
+      .eq("id", receiptId)
+      .maybeSingle(),
+    supabase
+      .from("companies")
+      .select("document_number")
+      .eq("id", company.companyId)
+      .maybeSingle(),
+  ]);
+  if (receiptResult.error || companyResult.error) {
+    return { error: "Não foi possível validar o recebimento e a NF-e." };
+  }
+  if (!receiptResult.data || receiptResult.data.status !== "draft") {
+    return { error: "A chegada não existe ou já foi conferida." };
+  }
+
+  const issuerDocument = xmlDocument(xmlSection(info, "emit"));
+  const recipientDocument = xmlDocument(xmlSection(info, "dest"));
+  const expectedRecipient = companyResult.data?.document_number?.replace(
+    /\D/g,
+    "",
+  );
+  const expectedIssuer =
+    receiptResult.data.orders.suppliers.document_number?.replace(/\D/g, "");
+  if (
+    expectedRecipient &&
+    recipientDocument &&
+    expectedRecipient !== recipientDocument
+  ) {
+    return { error: "O destinatário da NF-e é diferente da empresa atual." };
+  }
+  if (
+    expectedIssuer &&
+    issuerDocument &&
+    expectedIssuer.slice(0, 8) !== issuerDocument.slice(0, 8)
+  ) {
+    return { error: "O emitente da NF-e é diferente do fornecedor do pedido." };
+  }
+
+  const existing = await supabase
+    .from("receipt_documents")
+    .select("id")
+    .eq("company_id", company.companyId)
+    .eq("receipt_id", receiptId)
+    .eq("kind", "nfe_xml")
+    .eq("access_key", accessKey)
+    .maybeSingle();
+  if (existing.error) {
+    return {
+      error: "Não foi possível consultar os anexos: " + existing.error.message,
+    };
+  }
+  if (existing.data) {
+    return { error: null, saved: true, accessKey };
+  }
+
+  const storagePath =
+    company.companyId + "/" + receiptId + "/" + accessKey + ".xml";
+  const { error: uploadError } = await supabase.storage
+    .from("receipt-documents")
+    .upload(storagePath, new Uint8Array(await file.arrayBuffer()), {
+      contentType: "application/xml",
+      cacheControl: "3600",
+      upsert: false,
+    });
+  const alreadyUploaded =
+    uploadError && /already exists|duplicate/i.test(uploadError.message);
+  if (uploadError && !alreadyUploaded) {
+    return { error: "Não foi possível guardar o XML: " + uploadError.message };
+  }
+
+  const safeFileName =
+    file.name.split(/[\\/]/).pop()?.trim().slice(0, 255) || accessKey + ".xml";
+  const { error: metadataError } = await supabase
+    .from("receipt_documents")
+    .insert({
+      company_id: company.companyId,
+      receipt_id: receiptId,
+      kind: "nfe_xml",
+      access_key: accessKey,
+      file_name: safeFileName,
+      storage_path: storagePath,
+      file_size: file.size,
+      uploaded_by: user.id,
+    });
+  if (metadataError && !/duplicate/i.test(metadataError.message)) {
+    if (!alreadyUploaded) {
+      await supabase.storage.from("receipt-documents").remove([storagePath]);
+    }
+    return {
+      error: "Não foi possível vincular o XML: " + metadataError.message,
+    };
+  }
+
+  return { error: null, saved: true, accessKey };
+}
+
+export async function deleteReceiptNfe(
+  formData: FormData,
+): Promise<ReceiptNfeUploadState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.post")) {
+    return { error: "Seu papel não permite remover a NF-e do recebimento." };
+  }
+
+  const receiptId = String(formData.get("receiptId") ?? "");
+  const accessKey = String(formData.get("accessKey") ?? "");
+  if (!receiptId || !/^\d{44}$/.test(accessKey)) {
+    return { error: "Não foi possível identificar o XML que será removido." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const document = await supabase
+    .from("receipt_documents")
+    .select("id, storage_path")
+    .eq("company_id", company.companyId)
+    .eq("receipt_id", receiptId)
+    .eq("kind", "nfe_xml")
+    .eq("access_key", accessKey)
+    .maybeSingle();
+  if (document.error) {
+    return {
+      error: "Não foi possível consultar o XML: " + document.error.message,
+    };
+  }
+  if (!document.data) return { error: null, saved: false, accessKey };
+
+  const storage = await supabase.storage
+    .from("receipt-documents")
+    .remove([document.data.storage_path]);
+  if (storage.error) {
+    return {
+      error: "Não foi possível remover o XML: " + storage.error.message,
+    };
+  }
+
+  const deletion = await supabase
+    .from("receipt_documents")
+    .delete()
+    .eq("company_id", company.companyId)
+    .eq("id", document.data.id);
+  if (deletion.error) {
+    return {
+      error:
+        "O arquivo foi removido, mas o vínculo não pôde ser limpo: " +
+        deletion.error.message,
+    };
+  }
+  return { error: null, saved: false, accessKey };
+}
 
 function decimal(value: FormDataEntryValue | null): string {
   return String(value ?? "")
