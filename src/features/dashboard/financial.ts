@@ -216,8 +216,9 @@ export async function getFinancialJourney(
     ...new Set(rows.flatMap((row) => row.supplier_id ?? [])),
   ];
   const orderIds = [...new Set(rows.flatMap((row) => row.order_id ?? []))];
+  const receiptIds = [...new Set(rows.flatMap((row) => row.receipt_id ?? []))];
 
-  const [products, suppliers, orders] = await Promise.all([
+  const [products, suppliers, orders, receipts] = await Promise.all([
     productIds.length
       ? supabase
           .from("products")
@@ -239,11 +240,18 @@ export async function getFinancialJourney(
           .eq("company_id", companyId)
           .in("id", orderIds)
       : Promise.resolve({ data: [], error: null }),
+    receiptIds.length
+      ? supabase
+          .from("receipts")
+          .select("id, invoice_total, nfe_totals")
+          .eq("company_id", companyId)
+          .in("id", receiptIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
-  if (products.error || suppliers.error || orders.error) {
+  if (products.error || suppliers.error || orders.error || receipts.error) {
     throw new Error(
-      `Falha ao identificar os registros da memória: ${products.error?.message ?? suppliers.error?.message ?? orders.error?.message}`,
+      `Falha ao identificar os registros da memória: ${products.error?.message ?? suppliers.error?.message ?? orders.error?.message ?? receipts.error?.message}`,
     );
   }
 
@@ -255,6 +263,27 @@ export async function getFinancialJourney(
   );
   const orderNumber = new Map(
     (orders.data ?? []).map((row) => [row.id, row.order_number]),
+  );
+  const receiptTotals = new Map(
+    (receipts.data ?? []).map((row) => {
+      const totals = row.nfe_totals as {
+        invoice?: number;
+        products?: number;
+      } | null;
+      const invoice = totals?.invoice ?? row.invoice_total;
+      const productsTotal = totals?.products ?? null;
+      return [
+        row.id,
+        {
+          invoiceTotal: invoice === null ? null : Number(invoice),
+          productsTotal: productsTotal === null ? null : Number(productsTotal),
+          fiscalAdjustment:
+            invoice === null || productsTotal === null
+              ? null
+              : Number(invoice) - Number(productsTotal),
+        },
+      ] as const;
+    }),
   );
   const grouped = new Map<
     string,
@@ -268,6 +297,11 @@ export async function getFinancialJourney(
         : (row.divergence_impact ?? 0),
     );
     const key = row.receipt_id ?? `sem-recebimento-${index}`;
+    const fiscal = receiptTotals.get(row.receipt_id ?? "") ?? {
+      invoiceTotal: null,
+      productsTotal: null,
+      fiscalAdjustment: null,
+    };
     const current = grouped.get(key) ?? {
       receiptId: row.receipt_id,
       receivedAt: row.received_at ?? `${input.de}T00:00:00`,
@@ -277,6 +311,7 @@ export async function getFinancialJourney(
         "Fornecedor não identificado",
       orderId: row.order_id,
       orderNumber: orderNumber.get(row.order_id ?? "") ?? null,
+      ...fiscal,
       contribution: 0,
       items: [],
     };

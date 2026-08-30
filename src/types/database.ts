@@ -2609,6 +2609,7 @@ export type Database = {
           invoice_number: string | null;
           invoice_series: string | null;
           invoice_total: number | null;
+          nfe_totals: Json | null;
           notes: string | null;
           order_id: string;
           received_at: string | null;
@@ -2625,6 +2626,7 @@ export type Database = {
           invoice_number?: string | null;
           invoice_series?: string | null;
           invoice_total?: number | null;
+          nfe_totals?: Json | null;
           notes?: string | null;
           order_id: string;
           received_at?: string | null;
@@ -2641,6 +2643,7 @@ export type Database = {
           invoice_number?: string | null;
           invoice_series?: string | null;
           invoice_total?: number | null;
+          nfe_totals?: Json | null;
           notes?: string | null;
           order_id?: string;
           received_at?: string | null;
@@ -3188,6 +3191,76 @@ export type Database = {
             columns: ["company_id", "supplier_id"];
             isOneToOne: false;
             referencedRelation: "suppliers";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
+      supplier_product_nfe_unit_rules: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          created_by: string | null;
+          factor: number | null;
+          id: string;
+          last_used_at: string;
+          mode: string;
+          product_id: string;
+          source: string;
+          supplier_id: string;
+          target_unit_id: string;
+          updated_at: string;
+          xml_unit: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          factor?: number | null;
+          id?: string;
+          last_used_at?: string;
+          mode: string;
+          product_id: string;
+          source?: string;
+          supplier_id: string;
+          target_unit_id: string;
+          updated_at?: string;
+          xml_unit: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          factor?: number | null;
+          id?: string;
+          last_used_at?: string;
+          mode?: string;
+          product_id?: string;
+          source?: string;
+          supplier_id?: string;
+          target_unit_id?: string;
+          updated_at?: string;
+          xml_unit?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "supplier_product_nfe_unit_rules_company_id_product_id_fkey";
+            columns: ["company_id", "product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "supplier_product_nfe_unit_rules_company_id_supplier_id_fkey";
+            columns: ["company_id", "supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "supplier_product_nfe_unit_rules_company_id_target_unit_id_fkey";
+            columns: ["company_id", "target_unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
             referencedColumns: ["company_id", "id"];
           },
         ];
@@ -4130,6 +4203,26 @@ export type Database = {
         };
         Returns: string;
       };
+      rpc_save_supplier_product_nfe_unit_rule: {
+        Args: {
+          p_company_id: string;
+          p_factor?: number;
+          p_mode: string;
+          p_order_revision_item_id: string;
+          p_receipt_id: string;
+          p_target_kind: string;
+          p_xml_unit: string;
+        };
+        Returns: string;
+      };
+      rpc_save_receipt_nfe_totals: {
+        Args: {
+          p_company_id: string;
+          p_receipt_id: string;
+          p_totals: Json | null;
+        };
+        Returns: undefined;
+      };
       rpc_mark_round_supplier_sent: {
         Args: { p_company_id: string; p_round_supplier_id: string };
         Returns: Json;
@@ -4376,12 +4469,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -4403,13 +4496,12 @@ export type Tables<
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -4428,13 +4520,12 @@ export type TablesInsert<
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -4453,13 +4544,12 @@ export type TablesUpdate<
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -4472,11 +4562,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }

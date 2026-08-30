@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   FileCode2,
   Link2,
+  Scale,
   Upload,
   X,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import {
   adoptSupplierDocumentFromNfe,
   deleteReceiptNfe,
   learnSupplierProductAlias,
+  saveSupplierProductNfeUnitRule,
   uploadReceiptNfe,
 } from "@/features/receipts/actions";
 import {
@@ -24,6 +26,7 @@ import {
   matchNfeItem,
   nfePriceForUnit,
   nfeQuantityForUnit,
+  normalizedNfeUnit,
   parseNfeXml,
   type NfeItem,
   type NfeItemMatch,
@@ -51,6 +54,15 @@ export type NfeOrderItemForImport = {
     supplierName: string;
     barcode: string | null;
   }[];
+  unitRules: NfeUnitRule[];
+};
+
+export type NfeUnitRule = {
+  id: string;
+  xmlUnit: string;
+  targetUnit: string;
+  mode: "fixed_factor" | "manual_quantity";
+  factor: number | null;
 };
 
 export type ImportedNfeItem = {
@@ -60,6 +72,8 @@ export type ImportedNfeItem = {
   xmlItems: NfeItem[];
   match: NfeItemMatch;
   warnings: string[];
+  conversionNotes: string[];
+  manualConfirmationRequired: boolean;
 };
 
 export type NfeImportPayload = {
@@ -68,6 +82,12 @@ export type NfeImportPayload = {
   items: Record<string, ImportedNfeItem>;
   unmatched: NfeItem[];
   warnings: string[];
+};
+
+type ConversionDraft = {
+  xmlUnit: string;
+  mode: "fixed_factor" | "manual_quantity";
+  factor: string;
 };
 
 function formatDocument(document: string | null) {
@@ -81,7 +101,54 @@ function formatDocument(document: string | null) {
   return document;
 }
 
-function importedItemValues(
+function quantityForXmlUnit(item: NfeItem, unit: string) {
+  const wanted = normalizedNfeUnit(unit);
+  if (wanted === normalizedNfeUnit(item.commercialUnit)) {
+    return item.commercialQuantity;
+  }
+  if (wanted === normalizedNfeUnit(item.tributaryUnit)) {
+    return item.tributaryQuantity;
+  }
+  return null;
+}
+
+function convertedQuantity(
+  xmlItems: NfeItem[],
+  targetUnit: string,
+  rules: NfeUnitRule[],
+  pendingQuantity: number,
+) {
+  for (const rule of rules) {
+    if (normalizedNfeUnit(rule.targetUnit) !== normalizedNfeUnit(targetUnit)) {
+      continue;
+    }
+    const sourceValues = xmlItems.map((item) =>
+      quantityForXmlUnit(item, rule.xmlUnit),
+    );
+    if (!sourceValues.every((value): value is number => value !== null)) {
+      continue;
+    }
+    const sourceQuantity = sourceValues.reduce((sum, value) => sum + value, 0);
+    if (rule.mode === "manual_quantity") {
+      return {
+        quantity: pendingQuantity,
+        note: `A NF-e informa ${QTY.format(sourceQuantity)} ${rule.xmlUnit}; confirme abaixo a quantidade física em ${targetUnit}.`,
+        manual: true,
+      };
+    }
+    if (rule.factor && rule.factor > 0) {
+      const quantity = sourceQuantity * rule.factor;
+      return {
+        quantity,
+        note: `${QTY.format(sourceQuantity)} ${rule.xmlUnit} × ${QTY.format(rule.factor)} = ${QTY.format(quantity)} ${targetUnit}.`,
+        manual: false,
+      };
+    }
+  }
+  return null;
+}
+
+export function importedItemValues(
   xmlItems: NfeItem[],
   orderItem: NfeOrderItemForImport,
 ) {
@@ -92,6 +159,8 @@ function importedItemValues(
     nfeQuantityForUnit(xmlItem, orderItem.pricingUnit),
   );
   const warnings: string[] = [];
+  const conversionNotes: string[] = [];
+  let manualConfirmationRequired = false;
 
   let logisticQuantity = logisticValues.every(
     (quantity): quantity is number => quantity !== null,
@@ -104,20 +173,35 @@ function importedItemValues(
     ? pricingValues.reduce((sum, quantity) => sum + quantity, 0)
     : null;
 
-  if (orderItem.sameUnit && logisticQuantity === null) {
-    logisticQuantity = xmlItems.reduce(
-      (sum, xmlItem) => sum + xmlItem.commercialQuantity,
-      0,
+  if (logisticQuantity === null) {
+    const converted = convertedQuantity(
+      xmlItems,
+      orderItem.purchaseUnit,
+      orderItem.unitRules,
+      orderItem.pendingQuantity,
     );
-    pricingQuantity = logisticQuantity;
-    warnings.push(
-      "A unidade da nota não correspondeu a " +
-        orderItem.purchaseUnit +
-        "; confira a quantidade sugerida.",
+    if (converted) {
+      logisticQuantity = converted.quantity;
+      conversionNotes.push(converted.note);
+      manualConfirmationRequired = converted.manual;
+    }
+  }
+  if (pricingQuantity === null && !orderItem.sameUnit) {
+    const converted = convertedQuantity(
+      xmlItems,
+      orderItem.pricingUnit,
+      orderItem.unitRules.filter((rule) => rule.mode === "fixed_factor"),
+      orderItem.pendingQuantity,
     );
-  } else if (orderItem.sameUnit) {
+    if (converted) {
+      pricingQuantity = converted.quantity;
+      conversionNotes.push(converted.note);
+    }
+  }
+
+  if (orderItem.sameUnit && logisticQuantity !== null) {
     pricingQuantity = logisticQuantity;
-  } else {
+  } else if (!orderItem.sameUnit) {
     if (logisticQuantity === null) {
       warnings.push(
         "A nota não informa quantidade na unidade de compra " +
@@ -170,7 +254,20 @@ function importedItemValues(
     );
   }
 
-  return { logisticQuantity, pricingQuantity, practicedPrice, warnings };
+  if (orderItem.sameUnit && logisticQuantity === null) {
+    warnings.push(
+      `Configure como a unidade da nota vira ${orderItem.purchaseUnit}; nenhuma quantidade foi presumida.`,
+    );
+  }
+
+  return {
+    logisticQuantity,
+    pricingQuantity,
+    practicedPrice,
+    warnings,
+    conversionNotes,
+    manualConfirmationRequired,
+  };
 }
 
 export function NfeImportPanel({
@@ -210,7 +307,228 @@ export function NfeImportPanel({
   const [adoptedSupplierDocument, setAdoptedSupplierDocument] = React.useState<
     string | null
   >(null);
+  const [conversionDrafts, setConversionDrafts] = React.useState<
+    Record<string, ConversionDraft>
+  >({});
+  const [savingConversion, setSavingConversion] = React.useState<string | null>(
+    null,
+  );
+  const [unitRuleOverrides, setUnitRuleOverrides] = React.useState<
+    Record<string, NfeUnitRule[]>
+  >({});
   const inputId = React.useId();
+
+  function itemWithCurrentRules(item: NfeOrderItemForImport) {
+    return {
+      ...item,
+      unitRules: unitRuleOverrides[item.id] ?? item.unitRules,
+    };
+  }
+
+  function sourceUnits(xmlItems: NfeItem[]) {
+    return [
+      ...new Set(
+        xmlItems
+          .flatMap((item) => [item.commercialUnit, item.tributaryUnit])
+          .map(normalizedNfeUnit)
+          .filter(Boolean),
+      ),
+    ];
+  }
+
+  async function saveConversion(
+    orderItem: NfeOrderItemForImport,
+    imported: ImportedNfeItem,
+    targetKind: "purchase" | "pricing",
+  ) {
+    if (!value) return;
+    const key = `${orderItem.id}:${targetKind}`;
+    const availableUnits = sourceUnits(imported.xmlItems);
+    const draft = conversionDrafts[key] ?? {
+      xmlUnit: availableUnits[0] ?? "",
+      mode: "fixed_factor",
+      factor: "",
+    };
+    const targetUnit =
+      targetKind === "purchase"
+        ? orderItem.purchaseUnit
+        : orderItem.pricingUnit;
+    setSavingConversion(key);
+    setError(null);
+    setMessage(null);
+    const data = new FormData();
+    data.set("receiptId", receiptId);
+    data.set("orderRevisionItemId", orderItem.id);
+    data.set("xmlUnit", draft.xmlUnit);
+    data.set("targetKind", targetKind);
+    data.set("targetUnit", targetUnit);
+    data.set("mode", draft.mode);
+    if (draft.factor) data.set("factor", draft.factor);
+    const result = await saveSupplierProductNfeUnitRule(data);
+    if (result.error || !result.rule) {
+      setError(result.error ?? "Não foi possível salvar a conversão.");
+      setSavingConversion(null);
+      return;
+    }
+    const currentItem = itemWithCurrentRules(orderItem);
+    const nextRules = [
+      ...currentItem.unitRules.filter(
+        (rule) =>
+          !(
+            normalizedNfeUnit(rule.xmlUnit) ===
+              normalizedNfeUnit(result.rule!.xmlUnit) &&
+            normalizedNfeUnit(rule.targetUnit) ===
+              normalizedNfeUnit(result.rule!.targetUnit)
+          ),
+      ),
+      result.rule,
+    ];
+    const recomputed = importedItemValues(imported.xmlItems, {
+      ...currentItem,
+      unitRules: nextRules,
+    });
+    onChange({
+      ...value,
+      items: {
+        ...value.items,
+        [orderItem.id]: { ...imported, ...recomputed },
+      },
+    });
+    setUnitRuleOverrides((current) => ({
+      ...current,
+      [orderItem.id]: nextRules,
+    }));
+    setMessage(result.message ?? "Conversão salva.");
+    setSavingConversion(null);
+  }
+
+  function conversionEditor(
+    orderItem: NfeOrderItemForImport,
+    imported: ImportedNfeItem,
+    targetKind: "purchase" | "pricing",
+  ) {
+    const key = `${orderItem.id}:${targetKind}`;
+    const units = sourceUnits(imported.xmlItems);
+    const fallback: ConversionDraft = {
+      xmlUnit: units[0] ?? "",
+      mode: "fixed_factor",
+      factor: "",
+    };
+    const draft = conversionDrafts[key] ?? fallback;
+    const targetUnit =
+      targetKind === "purchase"
+        ? orderItem.purchaseUnit
+        : orderItem.pricingUnit;
+    return (
+      <div
+        key={key}
+        className="border-warning/40 bg-warning/5 rounded-lg border p-3"
+      >
+        <p className="text-fg text-sm font-medium">
+          Ensinar conversão para {orderItem.productName}
+        </p>
+        <p className="text-fg-muted mt-1 text-xs">
+          A nota usa outra unidade. Salve uma vez e as próximas notas deste
+          fornecedor usarão a mesma regra.
+        </p>
+        {orderItem.sameUnit ? (
+          <p className="text-fg-muted mt-1 text-xs">
+            Se este produto tiver peso variável, configure no cadastro uma
+            unidade de compra física e outra unidade de preço (por exemplo, UN e
+            KG).
+          </p>
+        ) : null}
+        <div className="mt-3 grid gap-3 sm:grid-cols-[10rem_minmax(12rem,1fr)_10rem_auto] sm:items-end">
+          <div>
+            <label className="text-fg-muted mb-1 block text-xs">
+              Unidade na nota
+            </label>
+            <ThemedSelect
+              id={`conversion-source-${key}`}
+              value={draft.xmlUnit}
+              onValueChange={(xmlUnit) =>
+                setConversionDrafts((current) => ({
+                  ...current,
+                  [key]: { ...draft, xmlUnit },
+                }))
+              }
+              options={units.map((unit) => ({ value: unit, label: unit }))}
+            />
+          </div>
+          <div>
+            <label className="text-fg-muted mb-1 block text-xs">
+              Como converter para {targetUnit}
+            </label>
+            <ThemedSelect
+              id={`conversion-mode-${key}`}
+              value={draft.mode}
+              onValueChange={(mode) =>
+                setConversionDrafts((current) => ({
+                  ...current,
+                  [key]: {
+                    ...draft,
+                    mode: mode as ConversionDraft["mode"],
+                  },
+                }))
+              }
+              options={[
+                {
+                  value: "fixed_factor",
+                  label: `Cada embalagem equivale a uma quantidade fixa de ${targetUnit}`,
+                },
+                ...(targetKind === "purchase" && !orderItem.sameUnit
+                  ? [
+                      {
+                        value: "manual_quantity",
+                        label: `Peso variável: confirmar quantidade em ${targetUnit}`,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </div>
+          {draft.mode === "fixed_factor" ? (
+            <div>
+              <label className="text-fg-muted mb-1 block text-xs">
+                1 {draft.xmlUnit} equivale a
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  className="border-input bg-background text-fg h-9 min-w-0 rounded-lg border px-3 text-sm"
+                  inputMode="decimal"
+                  value={draft.factor}
+                  onChange={(event) =>
+                    setConversionDrafts((current) => ({
+                      ...current,
+                      [key]: { ...draft, factor: event.target.value },
+                    }))
+                  }
+                  placeholder="Ex.: 12"
+                />
+                <span className="text-fg-muted text-xs">{targetUnit}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-fg-muted text-xs">
+              O saldo pedido será sugerido e exigirá confirmação.
+            </p>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            disabled={
+              savingConversion === key ||
+              !draft.xmlUnit ||
+              (draft.mode === "fixed_factor" && !draft.factor)
+            }
+            onClick={() => void saveConversion(orderItem, imported, targetKind)}
+          >
+            {savingConversion === key ? "Salvando…" : "Salvar e aplicar"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   async function associateItem(xmlItem: NfeItem) {
     if (!value) return;
@@ -247,7 +565,7 @@ export function NfeImportPanel({
       items: {
         ...value.items,
         [orderItem.id]: {
-          ...importedItemValues(xmlItems, orderItem),
+          ...importedItemValues(xmlItems, itemWithCurrentRules(orderItem)),
           xmlItems,
           match: {
             orderItemId: orderItem.id,
@@ -324,9 +642,9 @@ export function NfeImportPanel({
       const expectedIssuer = digits(supplierDocument);
       const issuerBranchDiffers = Boolean(
         expectedIssuer &&
-          nfe.issuer.document &&
-          expectedIssuer !== nfe.issuer.document &&
-          expectedIssuer.slice(0, 8) === nfe.issuer.document.slice(0, 8),
+        nfe.issuer.document &&
+        expectedIssuer !== nfe.issuer.document &&
+        expectedIssuer.slice(0, 8) === nfe.issuer.document.slice(0, 8),
       );
       if (
         expectedRecipient &&
@@ -381,7 +699,7 @@ export function NfeImportPanel({
         const group = grouped.get(item.id);
         if (!group) continue;
         importedItems[item.id] = {
-          ...importedItemValues(group.xmlItems, item),
+          ...importedItemValues(group.xmlItems, itemWithCurrentRules(item)),
           xmlItems: group.xmlItems,
           match: group.match,
         };
@@ -573,6 +891,47 @@ export function NfeImportPanel({
                   ) : null}
                 </div>
               </div>
+            </div>
+          ) : null}
+          {Object.entries(value.items).some(([itemId, imported]) => {
+            const orderItem = items.find((item) => item.id === itemId);
+            return Boolean(
+              orderItem &&
+              (imported.logisticQuantity === null ||
+                (!orderItem.sameUnit && imported.pricingQuantity === null)),
+            );
+          }) ? (
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <Scale
+                  className="text-warning mt-0.5 size-4 shrink-0"
+                  aria-hidden
+                />
+                <div>
+                  <p className="text-fg text-sm font-medium">
+                    Unidades que precisam de conversão
+                  </p>
+                  <p className="text-fg-muted text-xs">
+                    Nenhuma quantidade será presumida sem uma regra clara.
+                  </p>
+                </div>
+              </div>
+              {Object.entries(value.items).flatMap(([itemId, imported]) => {
+                const orderItem = items.find((item) => item.id === itemId);
+                if (!orderItem) return [];
+                const editors: React.ReactNode[] = [];
+                if (imported.logisticQuantity === null) {
+                  editors.push(
+                    conversionEditor(orderItem, imported, "purchase"),
+                  );
+                }
+                if (!orderItem.sameUnit && imported.pricingQuantity === null) {
+                  editors.push(
+                    conversionEditor(orderItem, imported, "pricing"),
+                  );
+                }
+                return editors;
+              })}
             </div>
           ) : null}
           {value.unmatched.length ? (

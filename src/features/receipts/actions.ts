@@ -27,6 +27,13 @@ export type ReceiptNfeAssistState = {
   error: string | null;
   message?: string;
   documentNumber?: string;
+  rule?: {
+    id: string;
+    xmlUnit: string;
+    targetUnit: string;
+    mode: "fixed_factor" | "manual_quantity";
+    factor: number | null;
+  };
 };
 
 const XML_MAX_SIZE = 4 * 1024 * 1024;
@@ -59,6 +66,52 @@ function xmlDocument(section: string | null) {
       "",
     ) ?? null
   );
+}
+
+function xmlNumber(xml: string, tag: string) {
+  const parsed = Number(xmlValue(xml, tag));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function nfeFiscalTotals(info: string) {
+  const totals = xmlSection(info, "ICMSTot");
+  if (!totals) return null;
+  const result = {
+    products: xmlNumber(totals, "vProd"),
+    freight: xmlNumber(totals, "vFrete"),
+    insurance: xmlNumber(totals, "vSeg"),
+    discount: xmlNumber(totals, "vDesc"),
+    other: xmlNumber(totals, "vOutro"),
+    importTax: xmlNumber(totals, "vII"),
+    ipi: xmlNumber(totals, "vIPI"),
+    returnedIpi: xmlNumber(totals, "vIPIDevol"),
+    icmsSt: xmlNumber(totals, "vST"),
+    fcpSt: xmlNumber(totals, "vFCPST"),
+    monophaseRetainedIcms: xmlNumber(totals, "vICMSMonoReten"),
+    services: xmlNumber(totals, "vServ"),
+    desoneratedIcms: xmlNumber(totals, "vICMSDeson"),
+    estimatedTaxes: xmlNumber(totals, "vTotTrib"),
+    invoice: xmlNumber(totals, "vNF"),
+  };
+  const composedTotal =
+    result.products -
+    result.discount -
+    result.desoneratedIcms +
+    result.icmsSt +
+    result.fcpSt +
+    result.monophaseRetainedIcms +
+    result.freight +
+    result.insurance +
+    result.other +
+    result.importTax +
+    result.ipi +
+    result.returnedIpi +
+    result.services;
+  return {
+    ...result,
+    composedTotal,
+    residual: result.invoice - composedTotal,
+  };
 }
 
 export async function uploadReceiptNfe(
@@ -154,6 +207,10 @@ export async function uploadReceiptNfe(
   ) {
     return { error: "O emitente da NF-e é diferente do fornecedor do pedido." };
   }
+  const fiscalTotals = nfeFiscalTotals(info);
+  if (!fiscalTotals) {
+    return { error: "O XML não informou os totais fiscais da NF-e." };
+  }
 
   const existing = await supabase
     .from("receipt_documents")
@@ -169,6 +226,18 @@ export async function uploadReceiptNfe(
     };
   }
   if (existing.data) {
+    const savedTotals = await supabase.rpc("rpc_save_receipt_nfe_totals", {
+      p_company_id: company.companyId,
+      p_receipt_id: receiptId,
+      p_totals: fiscalTotals,
+    });
+    if (savedTotals.error) {
+      return {
+        error:
+          "O XML já estava anexado, mas os totais fiscais não puderam ser atualizados: " +
+          savedTotals.error.message,
+      };
+    }
     return { error: null, saved: true, accessKey };
   }
 
@@ -207,6 +276,19 @@ export async function uploadReceiptNfe(
     }
     return {
       error: "Não foi possível vincular o XML: " + metadataError.message,
+    };
+  }
+
+  const savedTotals = await supabase.rpc("rpc_save_receipt_nfe_totals", {
+    p_company_id: company.companyId,
+    p_receipt_id: receiptId,
+    p_totals: fiscalTotals,
+  });
+  if (savedTotals.error) {
+    return {
+      error:
+        "O XML foi anexado, mas os totais fiscais não puderam ser guardados: " +
+        savedTotals.error.message,
     };
   }
 
@@ -265,6 +347,19 @@ export async function deleteReceiptNfe(
         deletion.error.message,
     };
   }
+  const remaining = await supabase
+    .from("receipt_documents")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", company.companyId)
+    .eq("receipt_id", receiptId)
+    .eq("kind", "nfe_xml");
+  if (!remaining.error && (remaining.count ?? 0) === 0) {
+    await supabase.rpc("rpc_save_receipt_nfe_totals", {
+      p_company_id: company.companyId,
+      p_receipt_id: receiptId,
+      p_totals: null,
+    });
+  }
   return { error: null, saved: false, accessKey };
 }
 
@@ -304,6 +399,75 @@ export async function learnSupplierProductAlias(
     error: null,
     message:
       "Associação salva. As próximas notas deste fornecedor reconhecerão o produto.",
+  };
+}
+
+export async function saveSupplierProductNfeUnitRule(
+  formData: FormData,
+): Promise<ReceiptNfeAssistState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.post")) {
+    return { error: "Seu papel não permite ensinar conversões da NF-e." };
+  }
+
+  const receiptId = String(formData.get("receiptId") ?? "");
+  const orderRevisionItemId = String(formData.get("orderRevisionItemId") ?? "");
+  const xmlUnit = String(formData.get("xmlUnit") ?? "")
+    .trim()
+    .toUpperCase();
+  const targetKind = String(formData.get("targetKind") ?? "");
+  const targetUnit = String(formData.get("targetUnit") ?? "");
+  const mode = String(formData.get("mode") ?? "");
+  const rawFactor = String(formData.get("factor") ?? "")
+    .trim()
+    .replace(",", ".");
+  const factor = rawFactor ? Number(rawFactor) : null;
+
+  if (!receiptId || !orderRevisionItemId || !xmlUnit || !targetUnit) {
+    return { error: "Informe a unidade da nota e a unidade de destino." };
+  }
+  if (!["purchase", "pricing"].includes(targetKind)) {
+    return { error: "Destino da conversão inválido." };
+  }
+  if (!["fixed_factor", "manual_quantity"].includes(mode)) {
+    return { error: "Escolha como a quantidade deve ser convertida." };
+  }
+  if (mode === "fixed_factor" && (!factor || !Number.isFinite(factor))) {
+    return { error: "Informe quantas unidades existem na embalagem da nota." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "rpc_save_supplier_product_nfe_unit_rule",
+    {
+      p_company_id: company.companyId,
+      p_receipt_id: receiptId,
+      p_order_revision_item_id: orderRevisionItemId,
+      p_xml_unit: xmlUnit,
+      p_target_kind: targetKind,
+      p_mode: mode,
+      p_factor: mode === "fixed_factor" ? factor! : undefined,
+    },
+  );
+  if (error) {
+    return { error: `Não foi possível salvar a conversão: ${error.message}` };
+  }
+
+  revalidatePath(`/recebimentos/${receiptId}`);
+  return {
+    error: null,
+    message:
+      mode === "fixed_factor"
+        ? `Conversão salva: 1 ${xmlUnit} = ${factor} ${targetUnit}.`
+        : `Regra salva: a quantidade em ${targetUnit} deverá ser confirmada no recebimento.`,
+    rule: {
+      id: String(data),
+      xmlUnit,
+      targetUnit,
+      mode: mode as "fixed_factor" | "manual_quantity",
+      factor: mode === "fixed_factor" ? factor : null,
+    },
   };
 }
 
@@ -508,6 +672,14 @@ export async function postDraftReceipt(
       : decimal(formData.get(`prec_${id}`));
     const price = decimal(formData.get(`preco_${id}`));
     const name = String(formData.get(`nome_${id}`) ?? "este item");
+    if (
+      formData.get(`manual_required_${id}`) === "1" &&
+      formData.get(`manual_confirm_${id}`) !== "on"
+    ) {
+      return {
+        error: `Em "${name}", confirme a quantidade física que não veio no XML.`,
+      };
+    }
     if (!logistic && !pricing) continue;
     if (!logistic || !pricing || !price) {
       return {

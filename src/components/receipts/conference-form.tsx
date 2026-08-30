@@ -40,6 +40,13 @@ type Item = {
     supplierName: string;
     barcode: string | null;
   }[];
+  unitRules: {
+    id: string;
+    xmlUnit: string;
+    targetUnit: string;
+    mode: "fixed_factor" | "manual_quantity";
+    factor: number | null;
+  }[];
 };
 
 function numberFromField(value: FormDataEntryValue | null) {
@@ -60,6 +67,10 @@ function decimalInput(value: number | null | undefined, digitsAfter = 6) {
     .replace(/0+$/, "")
     .replace(/\.$/, "")
     .replace(".", ",");
+}
+
+function signedMoney(value: number) {
+  return value > 0 ? `+${MONEY.format(value)}` : MONEY.format(value);
 }
 
 function matchLabel(
@@ -163,6 +174,28 @@ export function ReceiptConferenceForm({
     setTypedInvoiceTotal(numberFromField(data.get("invoiceTotal")));
   }
 
+  const fiscal = xmlImport?.nfe.fiscalTotals;
+  const productReconciliation = fiscal
+    ? fiscal.products - calculatedTotal
+    : typedInvoiceTotal - calculatedTotal;
+  const fiscalComponents = fiscal
+    ? [
+        ["Frete", fiscal.freight],
+        ["Seguro", fiscal.insurance],
+        ["Outras despesas", fiscal.other],
+        ["IPI", fiscal.ipi],
+        ["IPI devolvido", fiscal.returnedIpi],
+        ["ICMS ST", fiscal.icmsSt],
+        ["FCP ST", fiscal.fcpSt],
+        ["ICMS monofásico retido", fiscal.monophaseRetainedIcms],
+        ["Imposto de importação", fiscal.importTax],
+        ["Serviços", fiscal.services],
+        ["Desconto", -fiscal.discount],
+        ["ICMS desonerado", -fiscal.desoneratedIcms],
+        ["Outros ajustes fiscais", fiscal.residual],
+      ].filter((component) => Math.abs(Number(component[1])) > 0.004)
+    : [];
+
   return (
     <div className="flex flex-col gap-5">
       <NfeImportPanel
@@ -251,27 +284,81 @@ export function ReceiptConferenceForm({
               />
             </div>
           </div>
-          <div className="bg-surface-sunken mt-4 grid gap-2 rounded-lg px-3 py-2 text-sm sm:grid-cols-3">
+          <div
+            className={`bg-surface-sunken mt-4 grid gap-2 rounded-lg px-3 py-2 text-sm ${fiscal ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}
+          >
             <span>
-              Soma dos itens: <strong>{MONEY.format(calculatedTotal)}</strong>
+              Produtos conferidos:{" "}
+              <strong>{MONEY.format(calculatedTotal)}</strong>
             </span>
+            {fiscal ? (
+              <span>
+                Produtos no XML:{" "}
+                <strong>{MONEY.format(fiscal.products)}</strong>
+              </span>
+            ) : null}
             <span>
               Total da nota: <strong>{MONEY.format(typedInvoiceTotal)}</strong>
             </span>
             <span
               className={
-                typedInvoiceTotal &&
-                Math.abs(typedInvoiceTotal - calculatedTotal) > 0.009
+                Math.abs(productReconciliation) > 0.009
                   ? "text-destructive"
                   : "text-success"
               }
             >
-              Diferença:{" "}
-              <strong>
-                {MONEY.format(typedInvoiceTotal - calculatedTotal)}
-              </strong>
+              {fiscal ? "Produtos a conciliar:" : "Diferença:"}{" "}
+              <strong>{signedMoney(productReconciliation)}</strong>
             </span>
           </div>
+          {fiscal ? (
+            <div className="border-border mt-3 rounded-lg border px-3 py-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-fg font-medium">
+                    Ajuste fiscal da nota:{" "}
+                    {signedMoney(fiscal.invoice - fiscal.products)}
+                  </p>
+                  <p className="text-fg-muted text-xs">
+                    É a diferença entre os produtos do XML e o total a pagar;
+                    não altera o preço unitário usado nas divergências.
+                  </p>
+                </div>
+                {Math.abs(productReconciliation) <= 0.009 ? (
+                  <Badge variant="secondary">Produtos conciliados</Badge>
+                ) : (
+                  <Badge variant="outline">Revisar produtos</Badge>
+                )}
+              </div>
+              {fiscalComponents.length ? (
+                <details className="mt-3">
+                  <summary className="text-primary cursor-pointer text-xs font-medium">
+                    Ver composição fiscal
+                  </summary>
+                  <div className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                    {fiscalComponents.map(([label, amount]) => (
+                      <div
+                        key={String(label)}
+                        className="text-fg-muted flex justify-between gap-3 text-xs"
+                      >
+                        <span>{label}</span>
+                        <strong className="text-fg">
+                          {signedMoney(Number(amount))}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
+              {fiscal.estimatedTaxes > 0 ? (
+                <p className="text-fg-subtle mt-2 text-xs">
+                  Tributos aproximados informativos no XML:{" "}
+                  {MONEY.format(fiscal.estimatedTaxes)}. Esse valor já está
+                  embutido e não é somado novamente.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="flex flex-col gap-3">
@@ -400,6 +487,32 @@ export function ReceiptConferenceForm({
                     A quantidade usada no valor é a mesma recebida, pois compra
                     e precificação estão em {item.purchaseUnit}.
                   </p>
+                ) : null}
+                {imported?.conversionNotes.length ? (
+                  <div className="bg-primary/5 text-fg-muted mt-3 rounded-md px-3 py-2 text-xs">
+                    {imported.conversionNotes.map((note) => (
+                      <p key={note}>{note}</p>
+                    ))}
+                  </div>
+                ) : null}
+                {imported?.manualConfirmationRequired ? (
+                  <label className="border-warning/40 bg-warning/5 text-fg mt-3 flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-xs">
+                    <input
+                      type="hidden"
+                      name={`manual_required_${item.id}`}
+                      value="1"
+                    />
+                    <input
+                      type="checkbox"
+                      name={`manual_confirm_${item.id}`}
+                      required
+                      className="border-input mt-0.5 size-4 rounded"
+                    />
+                    <span>
+                      Confirmo a quantidade física informada acima. Ela não veio
+                      no XML e precisa ser conferida na entrega.
+                    </span>
+                  </label>
                 ) : null}
                 {imported?.warnings.length ? (
                   <div className="bg-warning-soft text-warning mt-3 flex items-start gap-2 rounded-md px-3 py-2 text-xs">

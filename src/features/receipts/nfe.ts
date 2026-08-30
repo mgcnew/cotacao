@@ -26,7 +26,28 @@ export type ParsedNfe = {
   issuer: NfeParty;
   recipient: NfeParty;
   total: number;
+  fiscalTotals: NfeFiscalTotals;
   items: NfeItem[];
+};
+
+export type NfeFiscalTotals = {
+  products: number;
+  freight: number;
+  insurance: number;
+  discount: number;
+  other: number;
+  importTax: number;
+  ipi: number;
+  returnedIpi: number;
+  icmsSt: number;
+  fcpSt: number;
+  monophaseRetainedIcms: number;
+  services: number;
+  desoneratedIcms: number;
+  estimatedTaxes: number;
+  invoice: number;
+  composedTotal: number;
+  residual: number;
 };
 
 export type NfeOrderItem = {
@@ -176,6 +197,36 @@ export function parseNfeXml(xml: string): ParsedNfe {
     };
   });
 
+  const products = numberValue(totals, "vProd");
+  const freight = numberValue(totals, "vFrete");
+  const insurance = numberValue(totals, "vSeg");
+  const discount = numberValue(totals, "vDesc");
+  const other = numberValue(totals, "vOutro");
+  const importTax = numberValue(totals, "vII");
+  const ipi = numberValue(totals, "vIPI");
+  const returnedIpi = numberValue(totals, "vIPIDevol");
+  const icmsSt = numberValue(totals, "vST");
+  const fcpSt = numberValue(totals, "vFCPST");
+  const monophaseRetainedIcms = numberValue(totals, "vICMSMonoReten");
+  const services = numberValue(totals, "vServ");
+  const desoneratedIcms = numberValue(totals, "vICMSDeson");
+  const estimatedTaxes = numberValue(totals, "vTotTrib");
+  const invoice = numberValue(totals, "vNF");
+  const composedTotal =
+    products -
+    discount -
+    desoneratedIcms +
+    icmsSt +
+    fcpSt +
+    monophaseRetainedIcms +
+    freight +
+    insurance +
+    other +
+    importTax +
+    ipi +
+    returnedIpi +
+    services;
+
   const rawId = info.getAttribute("Id");
   const accessKey = rawId?.replace(/^NFe/i, "") || value(protocol, "chNFe");
   if (!accessKey || !/^\d{44}$/.test(accessKey)) {
@@ -199,7 +250,26 @@ export function parseNfeXml(xml: string): ParsedNfe {
         digits(value(recipient, "CNPJ") ?? value(recipient, "CPF")) || null,
       name: value(recipient, "xNome"),
     },
-    total: numberValue(totals, "vNF"),
+    total: invoice,
+    fiscalTotals: {
+      products,
+      freight,
+      insurance,
+      discount,
+      other,
+      importTax,
+      ipi,
+      returnedIpi,
+      icmsSt,
+      fcpSt,
+      monophaseRetainedIcms,
+      services,
+      desoneratedIcms,
+      estimatedTaxes,
+      invoice,
+      composedTotal,
+      residual: invoice - composedTotal,
+    },
     items,
   };
 }
@@ -328,7 +398,7 @@ const UNIT_ALIASES: Record<string, string> = {
   ML: "ML",
 };
 
-function normalizedUnit(unit: string | null | undefined) {
+export function normalizedNfeUnit(unit: string | null | undefined) {
   const normalized = String(unit ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -338,22 +408,22 @@ function normalizedUnit(unit: string | null | undefined) {
 }
 
 export function nfeQuantityForUnit(item: NfeItem, unit: string) {
-  const wanted = normalizedUnit(unit);
-  if (wanted && normalizedUnit(item.commercialUnit) === wanted) {
+  const wanted = normalizedNfeUnit(unit);
+  if (wanted && normalizedNfeUnit(item.commercialUnit) === wanted) {
     return item.commercialQuantity;
   }
-  if (wanted && normalizedUnit(item.tributaryUnit) === wanted) {
+  if (wanted && normalizedNfeUnit(item.tributaryUnit) === wanted) {
     return item.tributaryQuantity;
   }
   return null;
 }
 
 export function nfePriceForUnit(item: NfeItem, unit: string) {
-  const wanted = normalizedUnit(unit);
-  if (wanted && normalizedUnit(item.commercialUnit) === wanted) {
+  const wanted = normalizedNfeUnit(unit);
+  if (wanted && normalizedNfeUnit(item.commercialUnit) === wanted) {
     return item.commercialUnitPrice;
   }
-  if (wanted && normalizedUnit(item.tributaryUnit) === wanted) {
+  if (wanted && normalizedNfeUnit(item.tributaryUnit) === wanted) {
     return item.tributaryUnitPrice;
   }
   return null;

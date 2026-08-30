@@ -12,6 +12,10 @@ const DATE_TIME = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
   timeStyle: "short",
 });
+const MONEY = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
 
 export default async function ConferenciaPage({
   params,
@@ -53,6 +57,26 @@ export default async function ConferenciaPage({
           <Button asChild size="sm" className="mt-4">
             <Link href={`/pedidos/${order.id}`}>Ver pedido</Link>
           </Button>
+          {receipt.nfeTotals ? (
+            <div className="bg-surface-sunken mt-4 grid gap-2 rounded-lg px-3 py-3 text-sm sm:grid-cols-3">
+              <span>
+                Produtos:{" "}
+                <strong>{MONEY.format(receipt.nfeTotals.products)}</strong>
+              </span>
+              <span>
+                Ajuste fiscal:{" "}
+                <strong>
+                  {MONEY.format(
+                    receipt.nfeTotals.invoice - receipt.nfeTotals.products,
+                  )}
+                </strong>
+              </span>
+              <span>
+                Total da NF-e:{" "}
+                <strong>{MONEY.format(receipt.nfeTotals.invoice)}</strong>
+              </span>
+            </div>
+          ) : null}
           {receipt.documents.length ? (
             <div className="border-border mt-4 border-t pt-4">
               <p className="text-fg mb-2 text-sm font-medium">XML da NF-e</p>

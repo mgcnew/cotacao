@@ -453,6 +453,8 @@ function mapRevision(data: RevisionRow) {
         notes: item.notes,
         purchaseUnit: item.purchase_unit?.symbol ?? "",
         pricingUnit: item.pricing_unit?.symbol ?? "",
+        purchaseUnitId: item.purchase_unit?.id ?? "",
+        pricingUnitId: item.pricing_unit?.id ?? "",
         sameUnit:
           Boolean(item.purchase_unit?.id) &&
           item.purchase_unit?.id === item.pricing_unit?.id,

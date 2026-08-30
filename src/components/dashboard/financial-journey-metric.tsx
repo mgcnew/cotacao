@@ -151,6 +151,19 @@ function EventCard({
         </summary>
 
         <div className="border-border border-t px-3 pb-3 sm:px-4 sm:pb-4">
+          {event.fiscalAdjustment !== null &&
+          Math.abs(event.fiscalAdjustment) > 0.009 ? (
+            <div className="bg-surface-sunken text-fg-muted mt-3 rounded-lg px-3 py-2 text-xs">
+              <p>
+                Ajuste fiscal da NF-e:{" "}
+                <strong className="text-fg">
+                  {signedMoney(event.fiscalAdjustment)}
+                </strong>
+                . Esse valor explica a diferença entre produtos e total da nota,
+                mas não compõe a divergência comercial acima.
+              </p>
+            </div>
+          ) : null}
           <div className="divide-border divide-y">
             {event.items.map((item, index) => (
               <div

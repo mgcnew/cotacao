@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getCurrentRevision, getOrder } from "@/features/orders/queries";
+import type { NfeFiscalTotals } from "@/features/receipts/nfe";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function listReceivingBoard(companyId: string) {
@@ -142,7 +143,7 @@ export async function getReceiptConference(
     .select(
       `
       id, order_id, status, received_at, invoice_number, invoice_series,
-      invoice_total, notes, checked_at,
+      invoice_total, nfe_totals, notes, checked_at,
       receipt_documents (
         id, file_name, access_key, storage_path, created_at
       )
@@ -181,29 +182,38 @@ export async function getReceiptConference(
   );
 
   const productIds = revision?.items.map((item) => item.productId) ?? [];
-  const [companyResult, barcodeResult, aliasResult] = await Promise.all([
-    supabase
-      .from("companies")
-      .select("document_number")
-      .eq("id", companyId)
-      .maybeSingle(),
-    productIds.length
-      ? supabase
-          .from("product_barcodes")
-          .select("product_id, code")
-          .eq("company_id", companyId)
-          .eq("is_active", true)
-          .in("product_id", productIds)
-      : Promise.resolve({ data: [], error: null }),
-    productIds.length
-      ? supabase
-          .from("supplier_product_aliases")
-          .select("product_id, supplier_code, supplier_name, barcode")
-          .eq("company_id", companyId)
-          .eq("supplier_id", order.suppliers.id)
-          .in("product_id", productIds)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
+  const [companyResult, barcodeResult, aliasResult, unitRuleResult] =
+    await Promise.all([
+      supabase
+        .from("companies")
+        .select("document_number")
+        .eq("id", companyId)
+        .maybeSingle(),
+      productIds.length
+        ? supabase
+            .from("product_barcodes")
+            .select("product_id, code")
+            .eq("company_id", companyId)
+            .eq("is_active", true)
+            .in("product_id", productIds)
+        : Promise.resolve({ data: [], error: null }),
+      productIds.length
+        ? supabase
+            .from("supplier_product_aliases")
+            .select("product_id, supplier_code, supplier_name, barcode")
+            .eq("company_id", companyId)
+            .eq("supplier_id", order.suppliers.id)
+            .in("product_id", productIds)
+        : Promise.resolve({ data: [], error: null }),
+      productIds.length
+        ? supabase
+            .from("supplier_product_nfe_unit_rules")
+            .select("id, product_id, xml_unit, target_unit_id, mode, factor")
+            .eq("company_id", companyId)
+            .eq("supplier_id", order.suppliers.id)
+            .in("product_id", productIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
 
   if (companyResult.error) {
     throw new Error(
@@ -218,6 +228,11 @@ export async function getReceiptConference(
   if (aliasResult.error) {
     throw new Error(
       `Falha ao carregar nomes aprendidos da NF-e: ${aliasResult.error.message}`,
+    );
+  }
+  if (unitRuleResult.error) {
+    throw new Error(
+      `Falha ao carregar conversões aprendidas da NF-e: ${unitRuleResult.error.message}`,
     );
   }
 
@@ -254,6 +269,8 @@ export async function getReceiptConference(
       invoiceSeries: receipt.invoice_series,
       invoiceTotal:
         receipt.invoice_total === null ? null : Number(receipt.invoice_total),
+      nfeTotals:
+        (receipt.nfe_totals as unknown as NfeFiscalTotals | null) ?? null,
       notes: receipt.notes,
       checkedAt: receipt.checked_at,
       documents: documents.sort((left, right) =>
@@ -270,6 +287,24 @@ export async function getReceiptConference(
             ...item,
             barcodes: barcodesByProduct.get(item.productId) ?? [],
             aliases: aliasesByProduct.get(item.productId) ?? [],
+            unitRules: (unitRuleResult.data ?? [])
+              .filter(
+                (rule) =>
+                  rule.product_id === item.productId &&
+                  [item.purchaseUnitId, item.pricingUnitId].includes(
+                    rule.target_unit_id,
+                  ),
+              )
+              .map((rule) => ({
+                id: rule.id,
+                xmlUnit: rule.xml_unit,
+                targetUnit:
+                  rule.target_unit_id === item.purchaseUnitId
+                    ? item.purchaseUnit
+                    : item.pricingUnit,
+                mode: rule.mode as "fixed_factor" | "manual_quantity",
+                factor: rule.factor === null ? null : Number(rule.factor),
+              })),
           })),
         }
       : null,

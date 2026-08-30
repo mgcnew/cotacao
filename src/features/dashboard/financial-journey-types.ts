@@ -17,6 +17,9 @@ export type FinancialJourneyEvent = {
   supplierName: string;
   orderId: string | null;
   orderNumber: number | null;
+  invoiceTotal: number | null;
+  productsTotal: number | null;
+  fiscalAdjustment: number | null;
   contribution: number;
   balanceBefore: number;
   balanceAfter: number;
