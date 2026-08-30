@@ -145,10 +145,12 @@
   --border-strong: #3a4150;
   --input-bg: #171b24;
 
-  --success: #43be83;
-  --warning: #dda43a;
-  --destructive: #f0736a;
-  --info: #77adf7;
+  /* Cores de ação mais firmes: o fundo continua discreto, mas números,
+     ícones e estados não perdem presença sobre as superfícies escuras. */
+  --success: #25b875;
+  --warning: #e7a928;
+  --destructive: #f2554d;
+  --info: #4b96f3;
   --neutral: #a2a2ab;
 
   --primary-soft: color-mix(in oklab, var(--primary) 16%, var(--surface));
@@ -215,33 +217,33 @@
 }
 
 .dark[data-accent="blue"] {
-  --primary: #4e8df5;
-  --primary-hover: #6ba1f8;
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
   --primary-fg: #0a0a0c;
 }
 .dark[data-accent="indigo"] {
-  --primary: #7c79f0;
-  --primary-hover: #918ef5;
+  --primary: #6366f1;
+  --primary-hover: #818cf8;
   --primary-fg: #0a0a0c;
 }
 .dark[data-accent="purple"] {
-  --primary: #a78bfa;
-  --primary-hover: #b9a2fc;
+  --primary: #8b5cf6;
+  --primary-hover: #a78bfa;
   --primary-fg: #0a0a0c;
 }
 .dark[data-accent="green"] {
-  --primary: #3fbf7a;
-  --primary-hover: #57cd8d;
+  --primary: #22a45d;
+  --primary-hover: #37be73;
   --primary-fg: #0a0a0c;
 }
 .dark[data-accent="orange"] {
-  --primary: #f08a4b;
-  --primary-hover: #f79d64;
+  --primary: #e86f2b;
+  --primary-hover: #f18a50;
   --primary-fg: #0a0a0c;
 }
 .dark[data-accent="red"] {
-  --primary: #f2685c;
-  --primary-hover: #f67f74;
+  --primary: #ef4b45;
+  --primary-hover: #f66b64;
   --primary-fg: #0a0a0c;
 }
 
