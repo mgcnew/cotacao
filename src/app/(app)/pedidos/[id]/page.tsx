@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { RouteModal } from "@/components/layout/route-modal";
 import {
   CloseBalanceForm,
   ResolveDivergenceForm,
@@ -17,6 +18,7 @@ import { SendOrderControls } from "@/components/orders/send-order-controls";
 import { ArrivalDialog } from "@/components/receipts/arrival-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DialogBody } from "@/components/ui/dialog";
 import {
   ORDER_DIVERGENCE_STATUS_LABEL,
   ORDER_DIVERGENCE_TYPE_LABEL,
@@ -113,6 +115,16 @@ export default async function PedidoPage({
   params,
 }: PageProps<"/pedidos/[id]">) {
   const { id } = await params;
+  return <PedidoContent id={id} />;
+}
+
+export async function PedidoContent({
+  id,
+  emModal = false,
+}: {
+  id: string;
+  emModal?: boolean;
+}) {
   const company = await requireActiveCompany();
 
   const [order, permissions] = await Promise.all([
@@ -198,25 +210,8 @@ export default async function PedidoPage({
     (receipt) => receipt.status !== "draft",
   );
 
-  return (
-    <div className="w-full">
-      <PageHeader
-        title={`Pedido #${order.order_number}`}
-        description={`${order.suppliers.name}${order.purchase_rounds?.title ? ` · ${order.purchase_rounds.title}` : " · pedido direto"}`}
-        action={
-          <>
-            <Button asChild size="sm" variant="ghost">
-              <Link href="/pedidos">Voltar</Link>
-            </Button>
-            <Badge
-              variant={order.status === "received" ? "default" : "secondary"}
-            >
-              {ORDER_STATUS_LABEL[order.status] ?? order.status}
-            </Badge>
-          </>
-        }
-      />
-
+  const content = (
+    <>
       {revision ? (
         <section className="border-border bg-surface mb-6 rounded-xl border p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -619,6 +614,46 @@ export default async function PedidoPage({
       ) : null}
 
       {podeCancelar && !encerrado ? <CancelOrderForm orderId={id} /> : null}
+    </>
+  );
+
+  const description = `${order.suppliers.name}${order.purchase_rounds?.title ? ` · ${order.purchase_rounds.title}` : " · pedido direto"}`;
+  const status = (
+    <Badge variant={order.status === "received" ? "default" : "secondary"}>
+      {ORDER_STATUS_LABEL[order.status] ?? order.status}
+    </Badge>
+  );
+
+  if (emModal) {
+    return (
+      <RouteModal
+        size="xl"
+        titulo={`Pedido #${order.order_number}`}
+        descricao={description}
+        acao={status}
+      >
+        <DialogBody className="min-h-0 overflow-y-auto">
+          <div className="w-full">{content}</div>
+        </DialogBody>
+      </RouteModal>
+    );
+  }
+
+  return (
+    <div className="w-full">
+      <PageHeader
+        title={`Pedido #${order.order_number}`}
+        description={description}
+        action={
+          <>
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/pedidos">Voltar</Link>
+            </Button>
+            {status}
+          </>
+        }
+      />
+      {content}
     </div>
   );
 }

@@ -5,9 +5,11 @@ import { redirect } from "next/navigation";
 import { EmptyState } from "@/components/layout/empty-state";
 import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
+import { RouteModal } from "@/components/layout/route-modal";
 import { ResolveDivergenceForm } from "@/components/orders/divergence-forms";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DialogBody } from "@/components/ui/dialog";
 import { listPendingCommercialDivergences } from "@/features/orders/commercial-divergences";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
@@ -22,6 +24,14 @@ const DATE = new Intl.DateTimeFormat("pt-BR", {
 });
 
 export default async function CommercialDivergencesPage() {
+  return <CommercialDivergencesContent />;
+}
+
+export async function CommercialDivergencesContent({
+  emModal = false,
+}: {
+  emModal?: boolean;
+}) {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
   if (
@@ -39,20 +49,8 @@ export default async function CommercialDivergencesPage() {
   );
   const disputes = rows.filter((row) => row.status === "to_dispute").length;
 
-  return (
-    <div className="w-full">
-      <PageHeader
-        title="Divergências do recebimento"
-        description="Decida o que fazer quando a nota ou a mercadoria vier diferente do pedido. Cada decisão fica registrada no histórico."
-        action={
-          <Button asChild size="sm" variant="outline">
-            <Link href="/pedidos">
-              <ArrowLeft aria-hidden /> Pedidos
-            </Link>
-          </Button>
-        }
-      />
-
+  const content = (
+    <>
       <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
         <Metric
           label="A decidir"
@@ -203,6 +201,45 @@ export default async function CommercialDivergencesPage() {
           ))}
         </ul>
       )}
+    </>
+  );
+
+  const description =
+    "Decida o que fazer quando a nota ou a mercadoria vier diferente do pedido. Cada decisão fica registrada no histórico.";
+
+  if (emModal) {
+    return (
+      <RouteModal
+        size="xl"
+        titulo="Divergências do recebimento"
+        descricao={description}
+        acao={
+          <Badge variant={rows.length ? "destructive" : "secondary"}>
+            {rows.length} {rows.length === 1 ? "pendência" : "pendências"}
+          </Badge>
+        }
+      >
+        <DialogBody className="min-h-0 overflow-y-auto">
+          <div className="w-full">{content}</div>
+        </DialogBody>
+      </RouteModal>
+    );
+  }
+
+  return (
+    <div className="w-full">
+      <PageHeader
+        title="Divergências do recebimento"
+        description={description}
+        action={
+          <Button asChild size="sm" variant="outline">
+            <Link href="/pedidos">
+              <ArrowLeft aria-hidden /> Pedidos
+            </Link>
+          </Button>
+        }
+      />
+      {content}
     </div>
   );
 }

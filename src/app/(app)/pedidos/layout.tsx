@@ -7,9 +7,10 @@
  * mas o endereço vira `/pedidos/novo`, então F5 e link colado caem na página
  * inteira, com o mesmo formulário.
  *
- * `@modal/[id]` e `@modal/novo` devolvem `null` pelo mesmo motivo de lá: rota
- * paralela que deixa de casar continua desenhada, e abrir um pedido a partir do
- * modal o deixaria pendurado por cima da ficha.
+ * `@modal/(.)[id]` e `@modal/(.)divergencias` interceptam a navegação feita a
+ * partir da lista. Um F5 ou link externo continua abrindo a página completa.
+ * As rotas sem interceptação devolvem `null` para não deixar um modal antigo
+ * pendurado quando a navegação muda de contexto.
  */
 export default function PedidosLayout({
   children,
