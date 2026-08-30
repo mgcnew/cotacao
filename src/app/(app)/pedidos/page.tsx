@@ -15,18 +15,9 @@ import {
 } from "@/components/layout/page-skeleton";
 import { SendOrderDialog } from "@/components/orders/order-dialogs";
 import { OrderFilterFields } from "@/components/orders/order-filter-bar";
-import { AdaptivePageSize } from "@/components/ui/adaptive-page-size";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   contarOrderFilters,
   hasAnyOrderFilter,
@@ -37,9 +28,7 @@ import {
 import {
   listOrders,
   orderNextStep,
-  ORDERS_PAGE_SIZE,
   ORDER_STATUS_LABEL,
-  summarizeOrders,
 } from "@/features/orders/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { parseListPagination } from "@/lib/list-pagination";
@@ -179,13 +168,21 @@ async function ListaDePedidos({
   paginationParams: Record<string, string | string[] | undefined>;
 }) {
   const filtrando = hasAnyOrderFilter(filters);
-  const { rows: orders, truncated } = await listOrders(companyId, filters);
-  const resumo = summarizeOrders(orders);
-  const pagination = parseListPagination(paginationParams, orders.length, {
-    pageSizeRange: { min: 1, max: 100, default: 10 },
+  const requestedPagination = parseListPagination(
+    paginationParams,
+    Number.MAX_SAFE_INTEGER,
+  );
+  const {
+    rows: orders,
+    total,
+    page,
+    pageSize,
+    summary,
+  } = await listOrders(companyId, filters, {
+    page: requestedPagination.page,
+    pageSize: requestedPagination.pageSize,
   });
-  const visibleOrders = orders.slice(pagination.start, pagination.end);
-  const presentedOrders = visibleOrders.map((order) => {
+  const presentedOrders = orders.map((order) => {
     const passo = orderNextStep(order.status);
     // Sem a permissão, o passo existe mas não é desta pessoa: o botão vira
     // apenas a porta de entrada do pedido.
@@ -207,29 +204,29 @@ async function ListaDePedidos({
         <div className="mb-4 grid grid-cols-2 gap-2 sm:mb-6 sm:gap-3 lg:grid-cols-4">
           <Metric
             label={filtrando ? "Pedidos nesta seleção" : "Pedidos"}
-            value={String(resumo.quantidade)}
-            hint={`${MONEY.format(resumo.valor)} fora os cancelados`}
+            value={String(summary.quantity)}
+            hint={`${MONEY.format(summary.value)} fora os cancelados`}
           />
           <Metric
             label="Em rascunho"
-            value={String(resumo.rascunhos)}
+            value={String(summary.drafts)}
             hint="ainda não saíram daqui"
           />
           <Metric
             label="A receber"
-            value={String(resumo.aReceber)}
-            hint={`${resumo.aguardandoConfirmacao} aguardando confirmação`}
+            value={String(summary.toReceive)}
+            hint={`${summary.awaitingConfirmation} aguardando confirmação`}
           />
           <Metric
             label="Atrasados"
-            value={String(resumo.atrasados)}
+            value={String(summary.overdue)}
             hint="prazo vencido, mercadoria por vir"
-            tone={resumo.atrasados > 0 ? "bad" : "neutral"}
+            tone={summary.overdue > 0 ? "bad" : "neutral"}
           />
         </div>
       ) : null}
 
-      {orders.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           icon={ClipboardList}
           title={
@@ -253,154 +250,23 @@ async function ListaDePedidos({
           }
         />
       ) : (
-        <>
-          <div className="sm:hidden">
-            <AdaptivePageSize current={pagination.pageSize} minRows={1} />
-            <div className="flex flex-col gap-3">
-              {presentedOrders.map((item) => (
-                <OrderMobileCard key={item.order.id} {...item} />
-              ))}
-              <DataTablePagination
-                page={pagination.page}
-                pageSize={pagination.pageSize}
-                total={orders.length}
-                allowPageSize={false}
-              />
-              {truncated ? <TruncatedOrdersNotice /> : null}
-            </div>
+        <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
+          <div className="bg-surface-sunken text-fg-muted hidden grid-cols-[minmax(5rem,.7fr)_minmax(9rem,1.4fr)_7rem_4rem_7rem_minmax(8rem,1fr)_8rem] gap-3 border-b px-4 py-2 text-xs font-medium sm:grid">
+            <span>Pedido</span>
+            <span>Fornecedor</span>
+            <span>Entrega</span>
+            <span className="text-right">Itens</span>
+            <span className="text-right">Total</span>
+            <span>Situação</span>
+            <span className="text-right">Próximo passo</span>
           </div>
-
-          <div className="hidden sm:contents">
-            <AdaptivePageSize current={pagination.pageSize} />
-            <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
-                    <TableHead>Pedido</TableHead>
-                    <TableHead>Fornecedor</TableHead>
-                    <TableHead className="hidden lg:table-cell">
-                      Entrega
-                    </TableHead>
-                    <TableHead className="hidden text-right lg:table-cell">
-                      Itens
-                    </TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead>Situação</TableHead>
-                    <TableHead className="text-right">Próximo passo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {presentedOrders.map(
-                    ({ order, passo, podeAgir, enviarAqui }) => (
-                      <TableRow key={order.id}>
-                        <TableCell>
-                          <IntentPrefetchLink
-                            href={`/pedidos/${order.id}`}
-                            className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline"
-                          >
-                            #{order.orderNumber}
-                          </IntentPrefetchLink>
-                          {order.roundTitle ? (
-                            <span className="text-fg-subtle block text-xs">
-                              {order.roundTitle}
-                            </span>
-                          ) : (
-                            <span className="text-fg-subtle block text-xs">
-                              pedido direto
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-fg-muted">
-                          {order.supplierName}
-                        </TableCell>
-                        <TableCell className="hidden text-xs lg:table-cell">
-                          {order.deliveryDueDate ? (
-                            <span
-                              className={
-                                order.isOverdue
-                                  ? "text-destructive font-medium"
-                                  : "text-fg-muted"
-                              }
-                            >
-                              {formatarDia(order.deliveryDueDate)}
-                            </span>
-                          ) : (
-                            <span className="text-fg-muted">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-fg-muted hidden text-right tabular-nums lg:table-cell">
-                          {order.itemCount}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {MONEY.format(order.total)}
-                        </TableCell>
-                        <TableCell>
-                          <span className="flex flex-wrap items-center gap-1">
-                            <Badge
-                              variant={
-                                order.status === "received"
-                                  ? "default"
-                                  : passo.pending
-                                    ? "outline"
-                                    : "secondary"
-                              }
-                            >
-                              {ORDER_STATUS_LABEL[order.status] ?? order.status}
-                            </Badge>
-                            {order.isOverdue ? (
-                              <Badge variant="destructive">
-                                Atrasado · {order.overdueDays}d
-                              </Badge>
-                            ) : null}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {/* Enviar é o único passo que cabe inteiro aqui: são
-                          alguns botões e uma mensagem para conferir, sem
-                          formulário longo. Dar entrada mexe em quantidade por
-                          item e depende do que já foi recebido — esse continua
-                          sendo assunto da tela do pedido. */}
-                          {enviarAqui ? (
-                            <SendOrderDialog
-                              orderId={order.id}
-                              orderNumber={order.orderNumber}
-                              supplierName={order.supplierName}
-                              rotulo={passo.label}
-                              rotuloCurto={passo.shortLabel}
-                            />
-                          ) : (
-                            <Button
-                              asChild
-                              size="sm"
-                              variant={
-                                passo.pending && podeAgir
-                                  ? "default"
-                                  : "outline"
-                              }
-                            >
-                              <IntentPrefetchLink href={`/pedidos/${order.id}`}>
-                                {podeAgir ? passo.label : "Abrir"}
-                              </IntentPrefetchLink>
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ),
-                  )}
-                </TableBody>
-              </Table>
-
-              <DataTablePagination
-                page={pagination.page}
-                pageSize={pagination.pageSize}
-                total={orders.length}
-                allowPageSize={false}
-              />
-
-              {truncated ? <TruncatedOrdersNotice /> : null}
-            </div>
+          <div className="divide-border divide-y">
+            {presentedOrders.map((item) => (
+              <OrderResponsiveRow key={item.order.id} {...item} />
+            ))}
           </div>
-        </>
+          <DataTablePagination page={page} pageSize={pageSize} total={total} />
+        </div>
       )}
     </>
   );
@@ -413,33 +279,30 @@ type PresentedOrder = {
   enviarAqui: boolean;
 };
 
-function OrderMobileCard({
+function OrderResponsiveRow({
   order,
   passo,
   podeAgir,
   enviarAqui,
 }: PresentedOrder) {
   return (
-    <article
-      data-slot="adaptive-row"
-      className="border-border bg-surface min-w-0 rounded-xl border p-4 shadow-xs"
-    >
-      <header className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+    <article className="grid min-w-0 gap-3 p-4 sm:grid-cols-[minmax(5rem,.7fr)_minmax(9rem,1.4fr)_7rem_4rem_7rem_minmax(8rem,1fr)_8rem] sm:items-center sm:py-3">
+      <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="min-w-0">
           <IntentPrefetchLink
             href={`/pedidos/${order.id}`}
             className="text-fg hover:text-primary font-semibold underline-offset-4 hover:underline"
           >
-            Pedido #{order.orderNumber}
+            <span className="sm:hidden">Pedido </span>#{order.orderNumber}
           </IntentPrefetchLink>
-          <p className="text-fg mt-1 wrap-anywhere text-sm font-medium">
-            {order.supplierName}
-          </p>
           <p className="text-fg-subtle text-xs">
             {order.roundTitle ?? "Pedido direto"}
           </p>
+          <p className="text-fg mt-1 wrap-anywhere text-sm font-medium sm:hidden">
+            {order.supplierName}
+          </p>
         </div>
-        <span className="flex max-w-full flex-wrap justify-end gap-1">
+        <span className="flex max-w-full flex-wrap justify-end gap-1 sm:hidden">
           <Badge
             variant={
               order.status === "received"
@@ -455,9 +318,45 @@ function OrderMobileCard({
             <Badge variant="destructive">Atrasado · {order.overdueDays}d</Badge>
           ) : null}
         </span>
-      </header>
+      </div>
+      <p className="text-fg hidden wrap-anywhere text-sm font-medium sm:block">
+        {order.supplierName}
+      </p>
+      <p
+        className={
+          order.isOverdue
+            ? "text-destructive hidden text-xs font-medium sm:block"
+            : "text-fg-muted hidden text-xs sm:block"
+        }
+      >
+        {order.deliveryDueDate
+          ? formatarDia(order.deliveryDueDate)
+          : "Sem prazo"}
+      </p>
+      <p className="text-fg-muted hidden text-right text-sm tabular-nums sm:block">
+        {order.itemCount}
+      </p>
+      <p className="text-fg hidden text-right text-sm font-semibold tabular-nums sm:block">
+        {MONEY.format(order.total)}
+      </p>
+      <span className="hidden max-w-full flex-wrap gap-1 sm:flex sm:justify-start">
+        <Badge
+          variant={
+            order.status === "received"
+              ? "default"
+              : passo.pending
+                ? "outline"
+                : "secondary"
+          }
+        >
+          {ORDER_STATUS_LABEL[order.status] ?? order.status}
+        </Badge>
+        {order.isOverdue ? (
+          <Badge variant="destructive">Atrasado · {order.overdueDays}d</Badge>
+        ) : null}
+      </span>
 
-      <dl className="border-border mt-3 grid grid-cols-3 gap-2 border-y py-3 text-center">
+      <dl className="border-border grid grid-cols-3 gap-2 border-y py-3 text-center sm:hidden">
         <div className="min-w-0">
           <dt className="text-fg-subtle text-[11px]">Total</dt>
           <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">
@@ -486,7 +385,7 @@ function OrderMobileCard({
         </div>
       </dl>
 
-      <div className="mt-3 [&_[data-slot=button]]:w-full">
+      <div className="[&_[data-slot=button]]:w-full sm:text-right sm:[&_[data-slot=button]]:w-auto">
         {enviarAqui ? (
           <SendOrderDialog
             orderId={order.id}
@@ -509,17 +408,5 @@ function OrderMobileCard({
         )}
       </div>
     </article>
-  );
-}
-
-function TruncatedOrdersNotice() {
-  return (
-    <p
-      data-slot="table-extra-footer"
-      className="text-fg-subtle border-border border-t px-3 py-2 text-xs"
-    >
-      Mostrando os {ORDERS_PAGE_SIZE} pedidos mais recentes. Use os filtros para
-      chegar aos mais antigos.
-    </p>
   );
 }

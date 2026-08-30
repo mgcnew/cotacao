@@ -4203,6 +4203,19 @@ export type Database = {
         };
         Returns: string;
       };
+      rpc_list_orders_page: {
+        Args: {
+          p_company_id: string;
+          p_from?: string;
+          p_order_number?: number;
+          p_page?: number;
+          p_page_size?: number;
+          p_situation?: string;
+          p_supplier_id?: string;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
       rpc_save_supplier_product_nfe_unit_rule: {
         Args: {
           p_company_id: string;

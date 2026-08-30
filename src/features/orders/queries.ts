@@ -4,7 +4,6 @@ import { formatCnpj } from "@/features/company/cnpj";
 import type { OrderFilters } from "@/features/orders/filters";
 import type { OrderMessageContext } from "@/features/orders/message";
 import { listPendingShoppingItems } from "@/features/shopping-list/queries";
-import { PEDIDO_EM_ANDAMENTO } from "@/features/orders/lifecycle";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -172,8 +171,31 @@ export async function listDirectOrderOptions(companyId: string) {
   };
 }
 
-/** Teto de linhas. Acima disso a resposta é o filtro, não a rolagem. */
-export const ORDERS_PAGE_SIZE = 200;
+/** Catálogo mínimo usado para editar ou revisar um pedido existente. */
+export async function listOrderEditableProducts(companyId: string) {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select(
+      `
+      id,
+      name,
+      purchase_unit:units!products_company_id_purchase_unit_id_fkey ( symbol ),
+      pricing_unit:units!products_company_id_pricing_unit_id_fkey ( symbol )
+    `,
+    )
+    .eq("company_id", companyId)
+    .eq("is_active", true)
+    .order("name");
+
+  if (error) throw new Error(`Falha ao listar produtos: ${error.message}`);
+  return (data ?? []).map((product) => ({
+    id: product.id,
+    name: product.name,
+    purchaseUnit: product.purchase_unit?.symbol ?? "",
+    pricingUnit: product.pricing_unit?.symbol ?? "",
+  }));
+}
 
 export type OrderListRow = {
   id: string;
@@ -189,42 +211,22 @@ export type OrderListRow = {
   overdueDays: number;
 };
 
-/**
- * Quem decide o que é atraso é `v_order_delivery_status`, não esta função.
- *
- * A regra já mora no banco, e repeti-la aqui criaria uma segunda verdade: foi
- * exatamente o que aconteceu antes da 0028, quando a tela contava três
- * situações e a view contava duas. Custa uma consulta a mais e vale a pena.
- *
- * O que não vale a pena é ela ser SEQUENCIAL. Antes esta consulta recebia os
- * ids da página e só podia sair depois que a lista voltasse — duas viagens em
- * fila, ~250 ms cada. Agora pergunta pelos atrasados da empresa inteira e sai
- * em paralelo com a lista; o cruzamento é feito aqui. São pedidos vencidos e
- * ainda não recebidos: uma lista curta por definição, porque atraso é coisa
- * que se resolve.
- */
-async function readOverdue(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  companyId: string,
-): Promise<Map<string, number>> {
-  const { data, error } = await supabase
-    .from("v_order_delivery_status")
-    .select("order_id, overdue_days")
-    .eq("company_id", companyId)
-    .eq("is_overdue", true);
+export type OrderListSummary = {
+  quantity: number;
+  value: number;
+  drafts: number;
+  awaitingConfirmation: number;
+  toReceive: number;
+  overdue: number;
+};
 
-  if (error) throw new Error(`Falha ao apurar atrasos: ${error.message}`);
-
-  // Coluna de view chega tipada como anulável, mesmo vindo de `orders.id`, que
-  // é chave primária. O filtro é para o compilador, não para os dados.
-  return new Map(
-    (data ?? [])
-      .filter((r): r is { order_id: string; overdue_days: number } =>
-        Boolean(r.order_id),
-      )
-      .map((r) => [r.order_id, Number(r.overdue_days)]),
-  );
-}
+type OrderPagePayload = {
+  rows: OrderListRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  summary: OrderListSummary;
+};
 
 export async function listOrders(
   companyId: string,
@@ -235,128 +237,45 @@ export async function listOrders(
     ate: null,
     numero: null,
   },
-): Promise<{ rows: OrderListRow[]; truncated: boolean }> {
+  pagination: { page: number; pageSize: number } = { page: 1, pageSize: 10 },
+): Promise<OrderPagePayload> {
   const supabase = await createServerSupabaseClient();
-
-  // Atraso e prazo do dia são condições da view, não colunas de `orders`.
-  // Perguntar a ela quais pedidos se encaixam e restringir a lista a eles é
-  // melhor do que trazer tudo e peneirar depois — assim o teto de linhas não
-  // corta antes do filtro.
-  let daView: string[] | null = null;
-  if (filters.situacao === "atrasados" || filters.situacao === "entrega_hoje") {
-    let consulta = supabase
-      .from("v_order_delivery_status")
-      .select("order_id")
-      .eq("company_id", companyId);
-
-    // Quem decide o que é "hoje" é a view, usando o fuso da empresa (0029).
-    // Calcular a data aqui criaria uma terceira noção de hoje: a do servidor.
-    consulta =
-      filters.situacao === "atrasados"
-        ? consulta.eq("is_overdue", true)
-        : consulta.eq("is_due_today", true);
-
-    const { data, error } = await consulta;
-    if (error) throw new Error(`Falha ao apurar prazos: ${error.message}`);
-
-    daView = (data ?? [])
-      .map((r) => r.order_id)
-      .filter((id): id is string => Boolean(id));
-    if (daView.length === 0) return { rows: [], truncated: false };
-  }
-
-  let query = supabase
-    .from("orders")
-    .select(
-      `
-      id,
-      order_number,
-      status,
-      created_at,
-      current_revision_id,
-      suppliers!inner ( name ),
-      purchase_rounds ( title ),
-      order_revisions!order_revisions_company_id_order_id_fkey (
-        id, revision_number, status, delivery_due_date,
-        order_revision_items ( requested_quantity, agreed_price )
-      )
-    `,
-    )
-    .eq("company_id", companyId);
-
-  if (daView) {
-    query = query.in("id", daView);
-  } else if (filters.situacao === "abertos") {
-    query = query.in("status", [...PEDIDO_EM_ANDAMENTO, "draft"]);
-  } else if (filters.situacao) {
-    query = query.eq("status", filters.situacao);
-  }
-
-  if (filters.fornecedorId)
-    query = query.eq("supplier_id", filters.fornecedorId);
-  if (filters.numero) query = query.eq("order_number", filters.numero);
-  if (filters.de) query = query.gte("created_at", `${filters.de}T00:00:00`);
-  if (filters.ate) query = query.lte("created_at", `${filters.ate}T23:59:59`);
-
-  // As duas saem juntas: a de atrasos não depende mais do resultado da lista.
-  const [{ data, error }, atraso] = await Promise.all([
-    query
-      .order("order_number", { ascending: false })
-      .limit(ORDERS_PAGE_SIZE + 1),
-    readOverdue(supabase, companyId),
-  ]);
-
-  if (error) throw new Error(`Falha ao listar pedidos: ${error.message}`);
-
-  const truncated = (data ?? []).length > ORDERS_PAGE_SIZE;
-  const pagina = (data ?? []).slice(0, ORDERS_PAGE_SIZE);
-
-  const rows = pagina.map((order) => {
-    // A vigente é a que `current_revision_id` aponta, não a de número mais
-    // alto: uma revisão 2 ainda em rascunho não é o que o fornecedor recebeu,
-    // e somar os itens dela mostraria um total que ninguém combinou.
-    const revisions = order.order_revisions ?? [];
-    const revision =
-      revisions.find((r) => r.id === order.current_revision_id) ??
-      [...revisions].sort((a, b) => b.revision_number - a.revision_number)[0];
-    const items = revision?.order_revision_items ?? [];
-
-    return {
-      id: order.id,
-      orderNumber: order.order_number,
-      status: order.status,
-      supplierName: order.suppliers.name,
-      roundTitle: order.purchase_rounds?.title ?? null,
-      deliveryDueDate: revision?.delivery_due_date ?? null,
-      itemCount: items.length,
-      total: items.reduce(
-        (sum, i) => sum + Number(i.requested_quantity) * Number(i.agreed_price),
-        0,
-      ),
-      isOverdue: atraso.has(order.id),
-      overdueDays: atraso.get(order.id) ?? 0,
-    };
+  const { data, error } = await supabase.rpc("rpc_list_orders_page", {
+    p_company_id: companyId,
+    p_page: pagination.page,
+    p_page_size: pagination.pageSize,
+    p_situation: filters.situacao ?? undefined,
+    p_supplier_id: filters.fornecedorId ?? undefined,
+    p_from: filters.de ?? undefined,
+    p_to: filters.ate ?? undefined,
+    p_order_number: filters.numero ?? undefined,
   });
 
-  return { rows, truncated };
-}
+  if (error) throw new Error(`Falha ao listar pedidos: ${error.message}`);
+  const payload = data as unknown as OrderPagePayload | null;
+  if (!payload || !Array.isArray(payload.rows) || !payload.summary) {
+    throw new Error("Falha ao listar pedidos: resposta inválida do banco.");
+  }
 
-/** Números do recorte, para o resumo no topo da lista. */
-export function summarizeOrders(rows: OrderListRow[]) {
   return {
-    quantidade: rows.length,
-    valor: rows
-      .filter((r) => r.status !== "cancelled")
-      .reduce((sum, r) => sum + r.total, 0),
-    rascunhos: rows.filter((r) => r.status === "draft").length,
-    aguardandoConfirmacao: rows.filter(
-      (r) => r.status === "awaiting_confirmation",
-    ).length,
-    aReceber: rows.filter(
-      (r) =>
-        r.status === "awaiting_delivery" || r.status === "partially_received",
-    ).length,
-    atrasados: rows.filter((r) => r.isOverdue).length,
+    rows: payload.rows.map((row) => ({
+      ...row,
+      orderNumber: Number(row.orderNumber),
+      itemCount: Number(row.itemCount),
+      total: Number(row.total),
+      overdueDays: Number(row.overdueDays),
+    })),
+    total: Number(payload.total),
+    page: Number(payload.page),
+    pageSize: Number(payload.pageSize),
+    summary: {
+      quantity: Number(payload.summary.quantity),
+      value: Number(payload.summary.value),
+      drafts: Number(payload.summary.drafts),
+      awaitingConfirmation: Number(payload.summary.awaitingConfirmation),
+      toReceive: Number(payload.summary.toReceive),
+      overdue: Number(payload.summary.overdue),
+    },
   };
 }
 

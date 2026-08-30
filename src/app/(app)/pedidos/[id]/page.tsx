@@ -29,7 +29,7 @@ import {
   getCurrentRevision,
   getDraftRevision,
   getOrder,
-  listDirectOrderOptions,
+  listOrderEditableProducts,
   getOrderMessageContext,
   listOrderDivergences,
   listOrderReceipts,
@@ -168,17 +168,17 @@ export async function PedidoContent({
     podeRevisar && !draft && REVISAVEL.includes(order.status);
 
   // O catálogo só é carregado quando há de fato um formulário para preencher.
-  const products =
+  // Catálogo e painel de envio são independentes. Antes o segundo só começava
+  // depois de quatro consultas do formulário de pedido direto, embora este
+  // detalhe use apenas os produtos daquele pacote.
+  const [products, envio] = await Promise.all([
     podeMexerNoRascunho || podeCriarRevisao
-      ? (await listDirectOrderOptions(company.companyId)).products
-      : [];
-
-  // Contatos e mensagem só interessam quando existe rascunho para enviar. A
-  // prévia vai sem link de propósito: o link ainda não foi gerado, e inventar
-  // um endereço aqui seria mostrar um que não abre.
-  const envio =
+      ? listOrderEditableProducts(company.companyId)
+      : Promise.resolve([]),
+    // Contatos e mensagem só interessam quando existe rascunho para enviar. A
+    // prévia vai sem link de propósito: o link ainda não foi gerado.
     podeEnviar && draft && !encerrado
-      ? await (async () => {
+      ? (async () => {
           const [contacts, context, whatsapp, templates] = await Promise.all([
             listOrderSendContacts(company.companyId, order.suppliers.id),
             getOrderMessageContext(company.companyId, id, draft.id),
@@ -194,7 +194,8 @@ export async function PedidoContent({
               isEvolutionConfigured() && whatsapp?.status === "connected",
           };
         })()
-      : null;
+      : Promise.resolve(null),
+  ]);
 
   const total = (revision?.items ?? []).reduce(
     (sum, i) => sum + i.requestedQuantity * i.agreedPrice,
