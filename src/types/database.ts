@@ -3129,6 +3129,69 @@ export type Database = {
           },
         ];
       };
+      supplier_product_aliases: {
+        Row: {
+          barcode: string | null;
+          company_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          last_seen_at: string;
+          normalized_name: string;
+          product_id: string;
+          source: string;
+          supplier_code: string | null;
+          supplier_id: string;
+          supplier_name: string;
+          updated_at: string;
+        };
+        Insert: {
+          barcode?: string | null;
+          company_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_seen_at?: string;
+          normalized_name?: never;
+          product_id: string;
+          source?: string;
+          supplier_code?: string | null;
+          supplier_id: string;
+          supplier_name: string;
+          updated_at?: string;
+        };
+        Update: {
+          barcode?: string | null;
+          company_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_seen_at?: string;
+          normalized_name?: never;
+          product_id?: string;
+          source?: string;
+          supplier_code?: string | null;
+          supplier_id?: string;
+          supplier_name?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "supplier_product_aliases_company_id_product_id_fkey";
+            columns: ["company_id", "product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "supplier_product_aliases_company_id_supplier_id_fkey";
+            columns: ["company_id", "supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
       supplier_products: {
         Row: {
           company_id: string;
@@ -4055,6 +4118,17 @@ export type Database = {
       rpc_whatsapp_metrics: {
         Args: { p_company_id: string; p_days: number };
         Returns: Json;
+      };
+      rpc_learn_supplier_product_alias: {
+        Args: {
+          p_barcode?: string;
+          p_company_id: string;
+          p_order_revision_item_id: string;
+          p_receipt_id: string;
+          p_supplier_code?: string;
+          p_supplier_name: string;
+        };
+        Returns: string;
       };
       rpc_mark_round_supplier_sent: {
         Args: { p_company_id: string; p_round_supplier_id: string };

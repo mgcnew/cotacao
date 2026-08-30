@@ -35,6 +35,11 @@ type Item = {
   pricingUnit: string;
   sameUnit: boolean;
   barcodes: string[];
+  aliases: {
+    supplierCode: string | null;
+    supplierName: string;
+    barcode: string | null;
+  }[];
 };
 
 function numberFromField(value: FormDataEntryValue | null) {
@@ -57,6 +62,23 @@ function decimalInput(value: number | null | undefined, digitsAfter = 6) {
     .replace(".", ",");
 }
 
+function matchLabel(
+  method: NfeImportPayload["items"][string]["match"]["method"],
+) {
+  switch (method) {
+    case "supplier-code":
+      return "XML · código aprendido";
+    case "supplier-name":
+      return "XML · nome aprendido";
+    case "barcode":
+      return "XML · código de barras";
+    case "exact-name":
+      return "XML · nome exato";
+    default:
+      return "XML · nome semelhante";
+  }
+}
+
 function Submit() {
   const { pending } = useFormStatus();
   return (
@@ -76,6 +98,7 @@ export function ReceiptConferenceForm({
   notes,
   companyDocument,
   supplierDocument,
+  canUpdateSupplier,
   existingDocuments,
 }: {
   receiptId: string;
@@ -87,6 +110,7 @@ export function ReceiptConferenceForm({
   notes: string | null;
   companyDocument: string | null;
   supplierDocument: string | null;
+  canUpdateSupplier: boolean;
   existingDocuments: {
     id: string;
     fileName: string;
@@ -146,6 +170,7 @@ export function ReceiptConferenceForm({
         items={items}
         companyDocument={companyDocument}
         supplierDocument={supplierDocument}
+        canUpdateSupplier={canUpdateSupplier}
         existingDocuments={existingDocuments}
         value={xmlImport}
         onChange={applyXml}
@@ -285,11 +310,7 @@ export function ReceiptConferenceForm({
                       {xmlImport ? (
                         <Badge variant={imported ? "secondary" : "outline"}>
                           {imported
-                            ? imported.match.method === "barcode"
-                              ? "XML · código de barras"
-                              : imported.match.method === "exact-name"
-                                ? "XML · nome exato"
-                                : "XML · nome semelhante"
+                            ? matchLabel(imported.match.method)
                             : "Não localizado no XML"}
                         </Badge>
                       ) : null}

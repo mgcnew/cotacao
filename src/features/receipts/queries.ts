@@ -181,7 +181,7 @@ export async function getReceiptConference(
   );
 
   const productIds = revision?.items.map((item) => item.productId) ?? [];
-  const [companyResult, barcodeResult] = await Promise.all([
+  const [companyResult, barcodeResult, aliasResult] = await Promise.all([
     supabase
       .from("companies")
       .select("document_number")
@@ -193,6 +193,14 @@ export async function getReceiptConference(
           .select("product_id, code")
           .eq("company_id", companyId)
           .eq("is_active", true)
+          .in("product_id", productIds)
+      : Promise.resolve({ data: [], error: null }),
+    productIds.length
+      ? supabase
+          .from("supplier_product_aliases")
+          .select("product_id, supplier_code, supplier_name, barcode")
+          .eq("company_id", companyId)
+          .eq("supplier_id", order.suppliers.id)
           .in("product_id", productIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
@@ -207,12 +215,34 @@ export async function getReceiptConference(
       `Falha ao carregar códigos dos produtos: ${barcodeResult.error.message}`,
     );
   }
+  if (aliasResult.error) {
+    throw new Error(
+      `Falha ao carregar nomes aprendidos da NF-e: ${aliasResult.error.message}`,
+    );
+  }
 
   const barcodesByProduct = new Map<string, string[]>();
   for (const barcode of barcodeResult.data ?? []) {
     const current = barcodesByProduct.get(barcode.product_id) ?? [];
     current.push(barcode.code);
     barcodesByProduct.set(barcode.product_id, current);
+  }
+  const aliasesByProduct = new Map<
+    string,
+    {
+      supplierCode: string | null;
+      supplierName: string;
+      barcode: string | null;
+    }[]
+  >();
+  for (const alias of aliasResult.data ?? []) {
+    const current = aliasesByProduct.get(alias.product_id) ?? [];
+    current.push({
+      supplierCode: alias.supplier_code,
+      supplierName: alias.supplier_name,
+      barcode: alias.barcode,
+    });
+    aliasesByProduct.set(alias.product_id, current);
   }
 
   return {
@@ -239,6 +269,7 @@ export async function getReceiptConference(
           items: revision.items.map((item) => ({
             ...item,
             barcodes: barcodesByProduct.get(item.productId) ?? [],
+            aliases: aliasesByProduct.get(item.productId) ?? [],
           })),
         }
       : null,

@@ -4,15 +4,19 @@ import {
   AlertTriangle,
   CheckCircle2,
   FileCode2,
+  Link2,
   Upload,
   X,
 } from "lucide-react";
 import * as React from "react";
 
-import { ErrorLine } from "@/components/layout/form-feedback";
+import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
+  adoptSupplierDocumentFromNfe,
   deleteReceiptNfe,
+  learnSupplierProductAlias,
   uploadReceiptNfe,
 } from "@/features/receipts/actions";
 import {
@@ -42,6 +46,11 @@ export type NfeOrderItemForImport = {
   pricingUnit: string;
   sameUnit: boolean;
   barcodes: string[];
+  aliases: {
+    supplierCode: string | null;
+    supplierName: string;
+    barcode: string | null;
+  }[];
 };
 
 export type ImportedNfeItem = {
@@ -169,6 +178,7 @@ export function NfeImportPanel({
   items,
   companyDocument,
   supplierDocument,
+  canUpdateSupplier,
   existingDocuments,
   value,
   onChange,
@@ -177,6 +187,7 @@ export function NfeImportPanel({
   items: NfeOrderItemForImport[];
   companyDocument: string | null;
   supplierDocument: string | null;
+  canUpdateSupplier: boolean;
   existingDocuments: {
     id: string;
     fileName: string;
@@ -188,7 +199,96 @@ export function NfeImportPanel({
   const [error, setError] = React.useState<string | null>(null);
   const [reading, setReading] = React.useState(false);
   const [removing, setRemoving] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [associationSelections, setAssociationSelections] = React.useState<
+    Record<string, string>
+  >({});
+  const [associatingLine, setAssociatingLine] = React.useState<string | null>(
+    null,
+  );
+  const [updatingSupplier, setUpdatingSupplier] = React.useState(false);
+  const [adoptedSupplierDocument, setAdoptedSupplierDocument] = React.useState<
+    string | null
+  >(null);
   const inputId = React.useId();
+
+  async function associateItem(xmlItem: NfeItem) {
+    if (!value) return;
+    const orderItemId = associationSelections[xmlItem.lineNumber];
+    const orderItem = items.find((item) => item.id === orderItemId);
+    if (!orderItem) {
+      setError("Escolha o produto correspondente no pedido.");
+      return;
+    }
+
+    setAssociatingLine(xmlItem.lineNumber);
+    setError(null);
+    setMessage(null);
+    const associationData = new FormData();
+    associationData.set("receiptId", receiptId);
+    associationData.set("orderRevisionItemId", orderItem.id);
+    associationData.set("supplierName", xmlItem.description);
+    if (xmlItem.supplierCode) {
+      associationData.set("supplierCode", xmlItem.supplierCode);
+    }
+    const barcode = xmlItem.barcode ?? xmlItem.tributaryBarcode;
+    if (barcode) associationData.set("barcode", barcode);
+    const result = await learnSupplierProductAlias(associationData);
+    if (result.error) {
+      setError(result.error);
+      setAssociatingLine(null);
+      return;
+    }
+
+    const previous = value.items[orderItem.id];
+    const xmlItems = [...(previous?.xmlItems ?? []), xmlItem];
+    onChange({
+      ...value,
+      items: {
+        ...value.items,
+        [orderItem.id]: {
+          ...importedItemValues(xmlItems, orderItem),
+          xmlItems,
+          match: {
+            orderItemId: orderItem.id,
+            method: "supplier-name",
+            confidence: 1,
+          },
+        },
+      },
+      unmatched: value.unmatched.filter(
+        (item) => item.lineNumber !== xmlItem.lineNumber,
+      ),
+    });
+    setMessage(result.message ?? "Associação salva.");
+    setAssociatingLine(null);
+  }
+
+  async function adoptSupplierDocument() {
+    if (!value?.nfe.accessKey) return;
+    setUpdatingSupplier(true);
+    setError(null);
+    setMessage(null);
+    const documentData = new FormData();
+    documentData.set("receiptId", receiptId);
+    documentData.set("accessKey", value.nfe.accessKey);
+    const result = await adoptSupplierDocumentFromNfe(documentData);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setAdoptedSupplierDocument(result.documentNumber ?? null);
+      setMessage(result.message ?? "Fornecedor atualizado.");
+      if (value) {
+        onChange({
+          ...value,
+          warnings: value.warnings.filter(
+            (warning) => !warning.startsWith("Cadastre o CNPJ do fornecedor"),
+          ),
+        });
+      }
+    }
+    setUpdatingSupplier(false);
+  }
 
   async function removeXml() {
     if (!value?.nfe.accessKey) return;
@@ -210,6 +310,7 @@ export function NfeImportPanel({
     if (!file) return;
     setReading(true);
     setError(null);
+    setMessage(null);
     try {
       if (file.size > XML_MAX_SIZE) {
         throw new Error("O XML deve ter no máximo 4 MB.");
@@ -285,12 +386,6 @@ export function NfeImportPanel({
           match: group.match,
         };
       }
-      if (!Object.keys(importedItems).length) {
-        throw new Error(
-          "Nenhum produto da nota pôde ser associado aos produtos deste pedido. Confira os códigos de barras e os nomes cadastrados.",
-        );
-      }
-
       const uploadData = new FormData();
       uploadData.set("receiptId", receiptId);
       uploadData.set("file", file);
@@ -381,6 +476,7 @@ export function NfeImportPanel({
       </div>
       <div className="mt-3">
         <ErrorLine error={error} />
+        <SuccessLine message={message} />
       </div>
       {!value && existingDocuments.length ? (
         <div className="bg-surface-sunken text-fg-muted mt-3 rounded-lg px-3 py-2 text-sm">
@@ -418,6 +514,42 @@ export function NfeImportPanel({
               .
             </span>
           </div>
+          {!supplierDocument &&
+          !adoptedSupplierDocument &&
+          digits(value.nfe.issuer.document).length === 14 ? (
+            <div className="border-border bg-surface-sunken flex flex-col gap-3 rounded-lg border px-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-fg font-medium">
+                  Completar cadastro do fornecedor
+                </p>
+                <p className="text-fg-muted text-xs">
+                  CNPJ identificado no XML:{" "}
+                  {formatDocument(value.nfe.issuer.document)}
+                </p>
+              </div>
+              {canUpdateSupplier ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={updatingSupplier}
+                  onClick={() => void adoptSupplierDocument()}
+                >
+                  {updatingSupplier ? "Atualizando…" : "Usar CNPJ da nota"}
+                </Button>
+              ) : (
+                <span className="text-fg-subtle text-xs">
+                  É necessária permissão para editar fornecedores.
+                </span>
+              )}
+            </div>
+          ) : null}
+          {adoptedSupplierDocument ? (
+            <p className="bg-success-soft text-success rounded-lg px-3 py-2 text-sm">
+              CNPJ {formatDocument(adoptedSupplierDocument)} salvo no
+              fornecedor.
+            </p>
+          ) : null}
           {value.warnings.length || value.unmatched.length ? (
             <div className="bg-warning-soft text-warning rounded-lg px-3 py-2 text-sm">
               <div className="flex items-start gap-2">
@@ -440,6 +572,72 @@ export function NfeImportPanel({
                     </p>
                   ) : null}
                 </div>
+              </div>
+            </div>
+          ) : null}
+          {value.unmatched.length ? (
+            <div className="border-warning/40 bg-warning/5 rounded-lg border p-3">
+              <div className="mb-3 flex items-start gap-2">
+                <Link2
+                  className="text-warning mt-0.5 size-4 shrink-0"
+                  aria-hidden
+                />
+                <div>
+                  <p className="text-fg text-sm font-medium">
+                    Ensinar correspondência dos produtos
+                  </p>
+                  <p className="text-fg-muted text-xs">
+                    Associe uma vez. Nas próximas notas deste fornecedor, o
+                    código e o nome serão reconhecidos automaticamente.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {value.unmatched.map((xmlItem) => (
+                  <div
+                    key={xmlItem.lineNumber}
+                    className="border-border bg-surface grid gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,1fr)_auto] sm:items-end"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-fg truncate text-sm font-medium">
+                        {xmlItem.description}
+                      </p>
+                      <p className="text-fg-muted text-xs">
+                        Código {xmlItem.supplierCode ?? "não informado"} ·{" "}
+                        {QTY.format(xmlItem.commercialQuantity)}{" "}
+                        {xmlItem.commercialUnit ?? ""}
+                      </p>
+                    </div>
+                    <ThemedSelect
+                      id={`nfe-association-${xmlItem.lineNumber}`}
+                      value={associationSelections[xmlItem.lineNumber] ?? ""}
+                      onValueChange={(selected) =>
+                        setAssociationSelections((current) => ({
+                          ...current,
+                          [xmlItem.lineNumber]: selected,
+                        }))
+                      }
+                      placeholder="Escolher produto do pedido"
+                      options={items.map((item) => ({
+                        value: item.id,
+                        label: item.productName,
+                      }))}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={
+                        !associationSelections[xmlItem.lineNumber] ||
+                        associatingLine === xmlItem.lineNumber
+                      }
+                      onClick={() => void associateItem(xmlItem)}
+                    >
+                      {associatingLine === xmlItem.lineNumber
+                        ? "Associando…"
+                        : "Associar"}
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
           ) : null}

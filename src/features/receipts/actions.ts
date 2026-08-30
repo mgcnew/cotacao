@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { isValidCnpj } from "@/features/company/cnpj";
 import {
   getPermissions,
   requireActiveCompany,
@@ -20,6 +21,12 @@ export type ReceiptNfeUploadState = {
   error: string | null;
   saved?: boolean;
   accessKey?: string;
+};
+
+export type ReceiptNfeAssistState = {
+  error: string | null;
+  message?: string;
+  documentNumber?: string;
 };
 
 const XML_MAX_SIZE = 4 * 1024 * 1024;
@@ -259,6 +266,137 @@ export async function deleteReceiptNfe(
     };
   }
   return { error: null, saved: false, accessKey };
+}
+
+export async function learnSupplierProductAlias(
+  formData: FormData,
+): Promise<ReceiptNfeAssistState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.post")) {
+    return { error: "Seu papel não permite associar produtos da NF-e." };
+  }
+
+  const receiptId = String(formData.get("receiptId") ?? "");
+  const orderRevisionItemId = String(formData.get("orderRevisionItemId") ?? "");
+  const supplierName = String(formData.get("supplierName") ?? "").trim();
+  const supplierCode = String(formData.get("supplierCode") ?? "").trim();
+  const barcode = String(formData.get("barcode") ?? "").trim();
+  if (!receiptId || !orderRevisionItemId || !supplierName) {
+    return { error: "Informe qual produto do pedido corresponde ao item." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_learn_supplier_product_alias", {
+    p_company_id: company.companyId,
+    p_receipt_id: receiptId,
+    p_order_revision_item_id: orderRevisionItemId,
+    p_supplier_name: supplierName,
+    p_supplier_code: supplierCode || undefined,
+    p_barcode: barcode || undefined,
+  });
+  if (error) {
+    return { error: `Não foi possível guardar a associação: ${error.message}` };
+  }
+
+  revalidatePath(`/recebimentos/${receiptId}`);
+  return {
+    error: null,
+    message:
+      "Associação salva. As próximas notas deste fornecedor reconhecerão o produto.",
+  };
+}
+
+export async function adoptSupplierDocumentFromNfe(
+  formData: FormData,
+): Promise<ReceiptNfeAssistState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.post") || !permissions.has("supplier.update")) {
+    return {
+      error: "Seu papel não permite atualizar o cadastro do fornecedor.",
+    };
+  }
+
+  const receiptId = String(formData.get("receiptId") ?? "");
+  const accessKey = String(formData.get("accessKey") ?? "");
+  if (!receiptId || !/^\d{44}$/.test(accessKey)) {
+    return { error: "Não foi possível identificar a NF-e anexada." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const [documentResult, receiptResult] = await Promise.all([
+    supabase
+      .from("receipt_documents")
+      .select("storage_path")
+      .eq("company_id", company.companyId)
+      .eq("receipt_id", receiptId)
+      .eq("kind", "nfe_xml")
+      .eq("access_key", accessKey)
+      .maybeSingle(),
+    supabase
+      .from("receipts")
+      .select(
+        "status, orders!inner ( supplier_id, suppliers!inner ( document_number ) )",
+      )
+      .eq("company_id", company.companyId)
+      .eq("id", receiptId)
+      .maybeSingle(),
+  ]);
+  if (documentResult.error || receiptResult.error) {
+    return { error: "Não foi possível validar a NF-e e o fornecedor." };
+  }
+  if (!documentResult.data || !receiptResult.data) {
+    return { error: "NF-e ou recebimento não encontrado." };
+  }
+  if (receiptResult.data.status !== "draft") {
+    return { error: "A conferência já foi finalizada." };
+  }
+  if (receiptResult.data.orders.suppliers.document_number) {
+    return { error: "O fornecedor já possui CNPJ cadastrado." };
+  }
+
+  const downloaded = await supabase.storage
+    .from("receipt-documents")
+    .download(documentResult.data.storage_path);
+  if (downloaded.error || !downloaded.data) {
+    return { error: "Não foi possível reler o XML armazenado." };
+  }
+  const xml = await downloaded.data.text();
+  const info = xmlSection(xml, "infNFe");
+  const issuerDocument = xmlDocument(info ? xmlSection(info, "emit") : null);
+  if (!issuerDocument || !isValidCnpj(issuerDocument)) {
+    return { error: "O XML não contém um CNPJ de emitente válido." };
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from("suppliers")
+    .update({ document_number: issuerDocument })
+    .eq("company_id", company.companyId)
+    .eq("id", receiptResult.data.orders.supplier_id)
+    .is("document_number", null)
+    .select("id")
+    .maybeSingle();
+  if (updateError) {
+    return {
+      error:
+        updateError.code === "23505"
+          ? "Este CNPJ já pertence a outro fornecedor."
+          : `Não foi possível atualizar o fornecedor: ${updateError.message}`,
+    };
+  }
+  if (!updated) {
+    return { error: "O fornecedor já foi atualizado por outra pessoa." };
+  }
+
+  revalidatePath(`/fornecedores/${updated.id}`);
+  revalidatePath("/fornecedores");
+  revalidatePath(`/recebimentos/${receiptId}`);
+  return {
+    error: null,
+    message: "CNPJ da NF-e adicionado ao cadastro do fornecedor.",
+    documentNumber: issuerDocument,
+  };
 }
 
 function decimal(value: FormDataEntryValue | null): string {

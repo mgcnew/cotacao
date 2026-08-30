@@ -90,6 +90,7 @@ export default async function ConferenciaPage({
           notes={receipt.notes}
           companyDocument={data.companyDocument}
           supplierDocument={data.supplierDocument}
+          canUpdateSupplier={permissions.has("supplier.update")}
           existingDocuments={receipt.documents}
         />
       ) : (

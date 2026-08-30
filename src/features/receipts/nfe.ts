@@ -33,11 +33,21 @@ export type NfeOrderItem = {
   id: string;
   productName: string;
   barcodes: string[];
+  aliases: {
+    supplierCode: string | null;
+    supplierName: string;
+    barcode: string | null;
+  }[];
 };
 
 export type NfeItemMatch = {
   orderItemId: string;
-  method: "barcode" | "exact-name" | "similar-name";
+  method:
+    | "supplier-code"
+    | "supplier-name"
+    | "barcode"
+    | "exact-name"
+    | "similar-name";
   confidence: number;
 };
 
@@ -198,12 +208,37 @@ export function matchNfeItem(
   nfeItem: NfeItem,
   orderItems: NfeOrderItem[],
 ): NfeItemMatch | null {
+  if (nfeItem.supplierCode) {
+    const codeMatches = orderItems.filter((item) =>
+      item.aliases.some((alias) => alias.supplierCode === nfeItem.supplierCode),
+    );
+    if (codeMatches.length === 1) {
+      return {
+        orderItemId: codeMatches[0].id,
+        method: "supplier-code",
+        confidence: 1,
+      };
+    }
+  }
+
   const nfeBarcodes = new Set(
     [nfeItem.barcode, nfeItem.tributaryBarcode].filter(
       (barcode): barcode is string => Boolean(barcode),
     ),
   );
   if (nfeBarcodes.size) {
+    const aliasBarcodeMatches = orderItems.filter((item) =>
+      item.aliases.some((alias) =>
+        nfeBarcodes.has(normalizedBarcode(alias.barcode) ?? ""),
+      ),
+    );
+    if (aliasBarcodeMatches.length === 1) {
+      return {
+        orderItemId: aliasBarcodeMatches[0].id,
+        method: "supplier-code",
+        confidence: 1,
+      };
+    }
     const barcodeMatches = orderItems.filter((item) =>
       item.barcodes.some((barcode) =>
         nfeBarcodes.has(normalizedBarcode(barcode) ?? ""),
@@ -216,6 +251,21 @@ export function matchNfeItem(
         confidence: 1,
       };
     }
+  }
+
+  const aliasNameMatches = orderItems.filter((item) =>
+    item.aliases.some(
+      (alias) =>
+        normalizeProductName(alias.supplierName) ===
+        normalizeProductName(nfeItem.description),
+    ),
+  );
+  if (aliasNameMatches.length === 1) {
+    return {
+      orderItemId: aliasNameMatches[0].id,
+      method: "supplier-name",
+      confidence: 1,
+    };
   }
 
   const exactMatches = orderItems.filter(
