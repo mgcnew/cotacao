@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { ProductListFilters } from "@/features/products/filters";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -34,6 +35,64 @@ export async function listProducts(companyId: string) {
   return data ?? [];
 }
 
+export type ProductListRow = {
+  id: string;
+  name: string;
+  categoryId: string;
+  categoryName: string;
+  purpose: string;
+  isActive: boolean;
+  purchaseUnitCode: string;
+  pricingUnitCode: string;
+  comparisonUnitCode: string | null;
+};
+
+export type ProductFilterCategory = { id: string; name: string };
+
+type ProductPagePayload = {
+  rows: ProductListRow[];
+  total: number;
+  catalogTotal: number;
+  page: number;
+  pageSize: number;
+  categories: ProductFilterCategory[];
+};
+
+/** Recorte enxuto usado somente pela tela do catálogo. */
+export async function listProductsPage(
+  companyId: string,
+  filters: ProductListFilters,
+  pagination: { page: number; pageSize: number },
+): Promise<ProductPagePayload> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("rpc_list_products_page", {
+    p_company_id: companyId,
+    p_page: pagination.page,
+    p_page_size: pagination.pageSize,
+    p_search: filters.busca || undefined,
+    p_status: filters.status ?? undefined,
+    p_category_id: filters.categoriaId ?? undefined,
+  });
+
+  if (error) throw new Error(`Falha ao listar produtos: ${error.message}`);
+  const payload = data as unknown as ProductPagePayload | null;
+  if (
+    !payload ||
+    !Array.isArray(payload.rows) ||
+    !Array.isArray(payload.categories)
+  ) {
+    throw new Error("Falha ao listar produtos: resposta inválida do banco.");
+  }
+
+  return {
+    ...payload,
+    total: Number(payload.total),
+    catalogTotal: Number(payload.catalogTotal),
+    page: Number(payload.page),
+    pageSize: Number(payload.pageSize),
+  };
+}
+
 export async function getProduct(companyId: string, productId: string) {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
@@ -62,8 +121,7 @@ export async function getProduct(companyId: string, productId: string) {
 export async function getCatalogCounts(companyId: string) {
   const supabase = await createServerSupabaseClient();
 
-  // A página já traz todos os produtos para busca e paginação. Recontá-los no
-  // banco era uma quarta viagem HTTP cujo resultado nem era exibido.
+  // Os totais chegam depois da lista por Suspense e não bloqueiam o catálogo.
   const [categories, units] = await Promise.all([
     supabase
       .from("categories")

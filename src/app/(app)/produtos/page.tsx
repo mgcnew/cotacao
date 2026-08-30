@@ -20,13 +20,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { setProductActive } from "@/features/products/actions";
-import { getCatalogCounts, listProducts } from "@/features/products/queries";
+import {
+  countProductListFilters,
+  parseProductListFilters,
+} from "@/features/products/filters";
+import {
+  getCatalogCounts,
+  listProductsPage,
+} from "@/features/products/queries";
 import { PRODUCT_PURPOSE_LABEL } from "@/features/products/purposes";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
-import {
-  normalizeListSearch,
-  parseListPagination,
-} from "@/lib/list-pagination";
+import { parseListPagination } from "@/lib/list-pagination";
 
 const selectClass =
   "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
@@ -137,60 +141,26 @@ async function ProdutosContent({
 }: {
   searchParams: PageProps<"/produtos">["searchParams"];
 }) {
-  const company = await requireActiveCompany();
-  const [products, permissions, parametros] = await Promise.all([
-    listProducts(company.companyId),
-    getPermissions(company.companyId),
+  const [company, parametros] = await Promise.all([
+    requireActiveCompany(),
     searchParams,
   ]);
-
-  const bruto = Array.isArray(parametros.busca)
-    ? parametros.busca[0]
-    : parametros.busca;
-  const busca = (bruto ?? "").trim();
-  const statusBruto = Array.isArray(parametros.status)
-    ? parametros.status[0]
-    : parametros.status;
-  const status = ["ativos", "inativos"].includes(statusBruto ?? "")
-    ? (statusBruto ?? "todos")
-    : "todos";
-  const categoryMap = new Map<string, string>();
-  for (const product of products) {
-    categoryMap.set(
-      product.category_id,
-      product.categories?.name ?? "Categoria sem nome",
-    );
-  }
-  const categories = [...categoryMap]
-    .map(([id, name]) => ({ id, name }))
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  const categoriaBruta = Array.isArray(parametros.categoria)
-    ? parametros.categoria[0]
-    : parametros.categoria;
-  const categoria = categories.some((item) => item.id === categoriaBruta)
-    ? (categoriaBruta ?? null)
-    : null;
-
-  const filtrados = products.filter((product) => {
-    if (
-      busca &&
-      !normalizeListSearch(product.name).includes(normalizeListSearch(busca))
-    ) {
-      return false;
-    }
-    if (status === "ativos" && !product.is_active) return false;
-    if (status === "inativos" && product.is_active) return false;
-    if (categoria && product.category_id !== categoria) return false;
-    return true;
-  });
-  const pagination = parseListPagination(parametros, filtrados.length, {
-    pageSizeRange: { min: 1, max: 100, default: 10 },
-  });
-  const visiveis = filtrados.slice(pagination.start, pagination.end);
-  const filtrosAtivos =
-    Number(Boolean(busca)) +
-    Number(status !== "todos") +
-    Number(Boolean(categoria));
+  const filters = parseProductListFilters(parametros);
+  const requestedPagination = parseListPagination(
+    parametros,
+    Number.MAX_SAFE_INTEGER,
+    {
+      pageSizeRange: { min: 1, max: 100, default: 10 },
+    },
+  );
+  const [catalog, permissions] = await Promise.all([
+    listProductsPage(company.companyId, filters, {
+      page: requestedPagination.page,
+      pageSize: requestedPagination.pageSize,
+    }),
+    getPermissions(company.companyId),
+  ]);
+  const filtrosAtivos = countProductListFilters(filters);
   const temFiltro = filtrosAtivos > 0;
 
   const podeCriar = permissions.has("product.create");
@@ -198,21 +168,21 @@ async function ProdutosContent({
 
   return (
     <>
-      {products.length > 0 ? (
+      {catalog.catalogTotal > 0 ? (
         <div className="mb-4 flex items-center">
           <FilterDialog basePath="/produtos" ativos={filtrosAtivos}>
             <ProductFilterFields
-              busca={busca}
-              status={status}
-              categoria={categoria}
-              categories={categories}
-              pageSize={pagination.pageSize}
+              busca={filters.busca}
+              status={filters.status ?? "todos"}
+              categoria={filters.categoriaId}
+              categories={catalog.categories}
+              pageSize={catalog.pageSize}
             />
           </FilterDialog>
         </div>
       ) : null}
 
-      {filtrados.length === 0 && temFiltro ? (
+      {catalog.total === 0 && temFiltro ? (
         <EmptyState
           icon={Package}
           title="Nenhum produto neste filtro"
@@ -223,7 +193,7 @@ async function ProdutosContent({
             </Button>
           }
         />
-      ) : products.length === 0 ? (
+      ) : catalog.catalogTotal === 0 ? (
         <EmptyState
           icon={Package}
           title="Catálogo vazio"
@@ -238,12 +208,12 @@ async function ProdutosContent({
         />
       ) : (
         <>
-          <AdaptivePageSize current={pagination.pageSize} />
+          <AdaptivePageSize current={catalog.pageSize} />
           <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-[calc(100dvh-14rem)]">
             <Table
               containerClassName="min-h-0 flex-1"
               className={
-                visiveis.length === pagination.pageSize ? "h-full" : undefined
+                catalog.rows.length === catalog.pageSize ? "h-full" : undefined
               }
             >
               <TableHeader>
@@ -270,7 +240,7 @@ async function ProdutosContent({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visiveis.map((product) => (
+                {catalog.rows.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell className="font-medium">
                       <Link
@@ -280,35 +250,34 @@ async function ProdutosContent({
                         {product.name}
                       </Link>
                       <span className="text-fg-muted block max-w-40 text-xs font-normal whitespace-normal md:hidden">
-                        {product.categories?.name} ·{" "}
+                        {product.categoryName} ·{" "}
                         <span className="font-mono">
-                          {product.purchase_unit?.code}
+                          {product.purchaseUnitCode}
                         </span>
                       </span>
                     </TableCell>
                     <TableCell className="text-fg-muted hidden md:table-cell">
-                      {product.categories?.name}
+                      {product.categoryName}
                     </TableCell>
                     <TableCell className="text-fg-muted hidden lg:table-cell">
                       {PRODUCT_PURPOSE_LABEL[product.purpose] ??
                         product.purpose}
                     </TableCell>
                     <TableCell className="text-fg-muted hidden font-mono text-xs sm:table-cell">
-                      {product.purchase_unit?.code}
+                      {product.purchaseUnitCode}
                     </TableCell>
                     <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
-                      {product.pricing_unit?.code}
+                      {product.pricingUnitCode}
                     </TableCell>
                     <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
                       {/* Sem unidade própria, quem compara é a de precificação. */}
-                      {product.comparison_unit?.code ??
-                        product.pricing_unit?.code}
+                      {product.comparisonUnitCode ?? product.pricingUnitCode}
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={product.is_active ? "default" : "secondary"}
+                        variant={product.isActive ? "default" : "secondary"}
                       >
-                        {product.is_active ? "Ativo" : "Inativo"}
+                        {product.isActive ? "Ativo" : "Inativo"}
                       </Badge>
                     </TableCell>
                     {podeEditar ? (
@@ -317,7 +286,7 @@ async function ProdutosContent({
                           action={setProductActive.bind(
                             null,
                             product.id,
-                            !product.is_active,
+                            !product.isActive,
                           )}
                         >
                           <Button
@@ -326,7 +295,7 @@ async function ProdutosContent({
                             variant="ghost"
                             className="text-fg-muted whitespace-nowrap"
                           >
-                            {product.is_active ? "Desativar" : "Reativar"}
+                            {product.isActive ? "Desativar" : "Reativar"}
                           </Button>
                         </form>
                       </TableCell>
@@ -336,9 +305,9 @@ async function ProdutosContent({
               </TableBody>
             </Table>
             <DataTablePagination
-              page={pagination.page}
-              pageSize={pagination.pageSize}
-              total={filtrados.length}
+              page={catalog.page}
+              pageSize={catalog.pageSize}
+              total={catalog.total}
               allowPageSize={false}
             />
           </div>

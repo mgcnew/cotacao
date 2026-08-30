@@ -4216,6 +4216,17 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_list_products_page: {
+        Args: {
+          p_category_id?: string;
+          p_company_id: string;
+          p_page?: number;
+          p_page_size?: number;
+          p_search?: string;
+          p_status?: string;
+        };
+        Returns: Json;
+      };
       rpc_save_supplier_product_nfe_unit_rule: {
         Args: {
           p_company_id: string;
