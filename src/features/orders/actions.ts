@@ -1206,6 +1206,38 @@ export async function resolveCommercialDivergence(
   }
 
   const supabase = await createServerSupabaseClient();
+  const { data: divergence, error: divergenceError } = await supabase
+    .from("commercial_divergences")
+    .select("status, type, financial_impact")
+    .eq("company_id", company.companyId)
+    .eq("id", divergenceId)
+    .maybeSingle();
+
+  if (divergenceError || !divergence) {
+    return { error: "Divergência comercial não encontrada." };
+  }
+  if (!["pending", "to_dispute"].includes(divergence.status)) {
+    return { error: "Esta divergência já foi encerrada." };
+  }
+
+  const impact = Number(divergence.financial_impact ?? 0);
+  if (divergence.type === "price" && impact < 0 && status !== "accepted") {
+    return {
+      error: "Preço menor é ganho: registre a diferença como favorável.",
+    };
+  }
+  if (
+    notes.length < 3 &&
+    (impact > 0 || status === "to_dispute" || status === "resolved")
+  ) {
+    return {
+      error:
+        status === "to_dispute"
+          ? "Explique o que será contestado com o fornecedor."
+          : "Registre o motivo da decisão para manter o histórico claro.",
+    };
+  }
+
   const { error } = await supabase.rpc("rpc_resolve_commercial_divergence", {
     p_company_id: company.companyId,
     p_divergence_id: divergenceId,
@@ -1221,6 +1253,8 @@ export async function resolveCommercialDivergence(
   }
 
   revalidatePath(`/pedidos/${orderId}`);
+  revalidatePath("/pedidos/divergencias");
+  revalidatePath("/dashboard");
   return { error: null, savedAt: Date.now() };
 }
 

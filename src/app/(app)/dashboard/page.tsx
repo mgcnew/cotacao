@@ -1,11 +1,9 @@
 import {
-  BadgeDollarSign,
   CalendarDays,
   ClipboardList,
   MessageCircle,
   MessageSquareText,
   Plus,
-  Scale,
   ShoppingCart,
   TrendingDown,
   TriangleAlert,
@@ -17,6 +15,7 @@ import { Suspense } from "react";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { AttentionList } from "@/components/dashboard/attention-list";
 import { DashboardMetric } from "@/components/dashboard/dashboard-metric";
+import { FinancialJourneyMetric } from "@/components/dashboard/financial-journey-metric";
 import { DetectedPurchasePatterns } from "@/components/dashboard/detected-purchase-patterns";
 import { FirstSteps } from "@/components/dashboard/first-steps";
 import { HistoricalReplenishments } from "@/components/dashboard/historical-replenishments";
@@ -515,11 +514,12 @@ async function Financial({ companyId }: { companyId: string }) {
                 value={MONEY.format(financial.valorRecebido)}
                 hint="Preço conferido na nota × quantidade recebida"
               />
-              <DashboardMetric
-                icon={BadgeDollarSign}
-                label="Resultado efetivo vs. cotado"
-                value={MONEY.format(financial.economiaRealizada)}
-                hint="Proposta original menos preço e quantidade conferidos"
+              <FinancialJourneyMetric
+                metric="realized"
+                value={financial.economiaRealizada}
+                de={financial.de}
+                ate={financial.ate}
+                timezone={company.timezone}
                 tone={
                   financial.economiaRealizada > 0
                     ? "good"
@@ -528,11 +528,12 @@ async function Financial({ companyId }: { companyId: string }) {
                       : "neutral"
                 }
               />
-              <DashboardMetric
-                icon={Scale}
-                label="Diferença da nota x pedido"
-                value={MONEY.format(financial.impactoDivergencias)}
-                hint="Nota menos pedido: positivo indica valor pago a mais"
+              <FinancialJourneyMetric
+                metric="divergence"
+                value={financial.impactoDivergencias}
+                de={financial.de}
+                ate={financial.ate}
+                timezone={company.timezone}
                 tone={
                   financial.impactoDivergencias > 0
                     ? "bad"

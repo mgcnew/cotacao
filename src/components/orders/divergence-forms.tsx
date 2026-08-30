@@ -16,7 +16,6 @@ import {
   type OrderActionState,
 } from "@/features/orders/actions";
 import {
-  COMMERCIAL_DIVERGENCE_RESOLUTIONS,
   ORDER_DIVERGENCE_RESOLUTIONS,
   ORDER_DIVERGENCE_TYPES,
 } from "@/features/orders/divergences";
@@ -24,9 +23,6 @@ import {
   reportOrderDivergence,
   type DivergenceState,
 } from "@/features/orders/public-actions";
-
-const selectClass =
-  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
 
 function Submit({
   label,
@@ -169,20 +165,43 @@ export function ResolveDivergenceForm({
   divergenceId,
   orderId,
   commercial = false,
+  financialImpact = 0,
+  commercialStatus = "pending",
 }: {
   divergenceId: string;
   orderId: string;
   commercial?: boolean;
+  financialImpact?: number;
+  commercialStatus?: string;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [decision, setDecision] = React.useState("");
   const [state, formAction] = useActionState<OrderActionState, FormData>(
     commercial ? resolveCommercialDivergence : resolveOrderDivergence,
     { error: null },
   );
 
   const options = commercial
-    ? COMMERCIAL_DIVERGENCE_RESOLUTIONS
+    ? financialImpact < 0
+      ? [{ value: "accepted", label: "Registrar como ganho" }]
+      : commercialStatus === "to_dispute"
+        ? [
+            { value: "resolved", label: "Correção recebida — resolver" },
+            { value: "justified", label: "Fornecedor justificou — aceitar" },
+            { value: "accepted", label: "Aceitar o valor cobrado" },
+          ]
+        : [
+            { value: "to_dispute", label: "Contestar com o fornecedor" },
+            { value: "accepted", label: "Aceitar o valor cobrado" },
+            { value: "justified", label: "Diferença já justificada" },
+            { value: "resolved", label: "Valor já corrigido ou estornado" },
+          ]
     : ORDER_DIVERGENCE_RESOLUTIONS;
+  const noteRequired =
+    commercial &&
+    (financialImpact > 0 ||
+      decision === "to_dispute" ||
+      decision === "resolved");
 
   if (!open) {
     return (
@@ -192,7 +211,7 @@ export function ResolveDivergenceForm({
         variant="outline"
         onClick={() => setOpen(true)}
       >
-        Resolver
+        {commercialStatus === "to_dispute" ? "Acompanhar" : "Decidir"}
       </Button>
     );
   }
@@ -206,29 +225,39 @@ export function ResolveDivergenceForm({
       <input type="hidden" name="divergenceId" value={divergenceId} />
       <input type="hidden" name="orderId" value={orderId} />
 
-      <select name="status" required defaultValue="" className={selectClass}>
-        <option value="" disabled>
-          O que fazer?
-        </option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <ThemedSelect
+        id={`divergence-status-${divergenceId}`}
+        name="status"
+        required
+        value={decision}
+        onValueChange={setDecision}
+        placeholder="O que fazer?"
+        options={[...options]}
+      />
 
       <Input
         name="notes"
+        required={noteRequired}
+        minLength={noteRequired ? 3 : undefined}
         maxLength={300}
-        placeholder="Observação (opcional)"
+        placeholder={
+          noteRequired
+            ? decision === "to_dispute"
+              ? "O que será contestado? (obrigatório)"
+              : "Motivo da decisão (obrigatório)"
+            : "Observação (opcional)"
+        }
         className="h-8"
       />
 
       <ErrorLine error={state.error} />
 
       <p className="text-fg-subtle text-xs">
-        Registra a decisão. Mudar quantidade ou preço do pedido exige uma nova
-        revisão.
+        {commercial
+          ? financialImpact < 0
+            ? "O valor menor fica registrado como ganho e sai das pendências."
+            : "Contestar mantém o caso em acompanhamento. Aceitar ou justificar encerra a pendência e preserva o histórico."
+          : "Registra a decisão. Mudar quantidade ou preço do pedido exige uma nova revisão."}
       </p>
 
       <div className="flex items-center gap-2">

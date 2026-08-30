@@ -1,6 +1,11 @@
 import "server-only";
 
 import { getSavingsSummary } from "@/features/analytics/queries";
+import type {
+  FinancialJourney,
+  FinancialJourneyEvent,
+  FinancialJourneyMetric,
+} from "@/features/dashboard/financial-journey-types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -167,5 +172,148 @@ export async function getMonthFinancials(
     ),
     economiaRealizada: savings.realized,
     impactoDivergencias: savings.divergenceImpact,
+  };
+}
+
+/**
+ * Memória dos dois resultados realizados do Dashboard.
+ *
+ * A consulta usa a mesma view, as mesmas colunas e o mesmo recorte de
+ * `getSavingsSummary`. A única conta adicional é o saldo acumulado para
+ * explicar a evolução; o total continua sendo a soma determinística da view.
+ */
+export async function getFinancialJourney(
+  companyId: string,
+  input: { de: string; ate: string; metric: FinancialJourneyMetric },
+): Promise<FinancialJourney> {
+  const supabase = await createServerSupabaseClient();
+  const rows = [];
+
+  for (let start = 0; ; start += 1000) {
+    const page = await supabase
+      .from("v_realized_savings")
+      .select(
+        "product_id, supplier_id, quoted_price, agreed_price, practiced_price, pricing_quantity_received, realized_savings, divergence_impact, received_at, order_id, receipt_id",
+      )
+      .eq("company_id", companyId)
+      .gte("received_at", `${input.de}T00:00:00`)
+      .lte("received_at", `${input.ate}T23:59:59`)
+      .order("received_at", { ascending: true })
+      .order("receipt_id", { ascending: true })
+      .range(start, start + 999);
+
+    if (page.error) {
+      throw new Error(
+        `Falha ao carregar memória financeira: ${page.error.message}`,
+      );
+    }
+    rows.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
+  }
+
+  const productIds = [...new Set(rows.flatMap((row) => row.product_id ?? []))];
+  const supplierIds = [
+    ...new Set(rows.flatMap((row) => row.supplier_id ?? [])),
+  ];
+  const orderIds = [...new Set(rows.flatMap((row) => row.order_id ?? []))];
+
+  const [products, suppliers, orders] = await Promise.all([
+    productIds.length
+      ? supabase
+          .from("products")
+          .select("id, name")
+          .eq("company_id", companyId)
+          .in("id", productIds)
+      : Promise.resolve({ data: [], error: null }),
+    supplierIds.length
+      ? supabase
+          .from("suppliers")
+          .select("id, name")
+          .eq("company_id", companyId)
+          .in("id", supplierIds)
+      : Promise.resolve({ data: [], error: null }),
+    orderIds.length
+      ? supabase
+          .from("orders")
+          .select("id, order_number")
+          .eq("company_id", companyId)
+          .in("id", orderIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (products.error || suppliers.error || orders.error) {
+    throw new Error(
+      `Falha ao identificar os registros da memória: ${products.error?.message ?? suppliers.error?.message ?? orders.error?.message}`,
+    );
+  }
+
+  const productName = new Map(
+    (products.data ?? []).map((row) => [row.id, row.name]),
+  );
+  const supplierName = new Map(
+    (suppliers.data ?? []).map((row) => [row.id, row.name]),
+  );
+  const orderNumber = new Map(
+    (orders.data ?? []).map((row) => [row.id, row.order_number]),
+  );
+  const grouped = new Map<
+    string,
+    Omit<FinancialJourneyEvent, "balanceBefore" | "balanceAfter">
+  >();
+
+  for (const [index, row] of rows.entries()) {
+    const contribution = Number(
+      input.metric === "realized"
+        ? (row.realized_savings ?? 0)
+        : (row.divergence_impact ?? 0),
+    );
+    const key = row.receipt_id ?? `sem-recebimento-${index}`;
+    const current = grouped.get(key) ?? {
+      receiptId: row.receipt_id,
+      receivedAt: row.received_at ?? `${input.de}T00:00:00`,
+      supplierId: row.supplier_id,
+      supplierName:
+        supplierName.get(row.supplier_id ?? "") ??
+        "Fornecedor não identificado",
+      orderId: row.order_id,
+      orderNumber: orderNumber.get(row.order_id ?? "") ?? null,
+      contribution: 0,
+      items: [],
+    };
+
+    current.contribution += contribution;
+    current.items.push({
+      productId: row.product_id,
+      productName:
+        productName.get(row.product_id ?? "") ?? "Produto não identificado",
+      quoted: row.quoted_price === null ? null : Number(row.quoted_price),
+      agreed: Number(row.agreed_price ?? 0),
+      practiced: Number(row.practiced_price ?? 0),
+      quantity: Number(row.pricing_quantity_received ?? 0),
+      contribution,
+    });
+    grouped.set(key, current);
+  }
+
+  let balance = 0;
+  const events: FinancialJourneyEvent[] = [...grouped.values()]
+    .sort(
+      (a, b) =>
+        a.receivedAt.localeCompare(b.receivedAt) ||
+        (a.receiptId ?? "").localeCompare(b.receiptId ?? ""),
+    )
+    .map((event) => {
+      const balanceBefore = balance;
+      balance += event.contribution;
+      return { ...event, balanceBefore, balanceAfter: balance };
+    });
+
+  return {
+    metric: input.metric,
+    de: input.de,
+    ate: input.ate,
+    total: balance,
+    itemCount: rows.length,
+    events,
   };
 }

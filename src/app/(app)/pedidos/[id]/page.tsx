@@ -84,6 +84,12 @@ function formatarDia(iso: string): string {
   return DATA.format(new Date(ano, mes - 1, dia));
 }
 
+function priceFromJson(value: unknown): number | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const price = Number((value as Record<string, unknown>).price);
+  return Number.isFinite(price) ? price : null;
+}
+
 /** Situações em que o pedido já saiu daqui, mas ainda pode ser revisado. */
 const REVISAVEL = [
   "awaiting_confirmation",
@@ -467,40 +473,60 @@ export default async function PedidoPage({
       ) : null}
 
       {divergences.length > 0 ? (
-        <section className="mb-6">
+        <section id="divergencias-preco" className="mb-6 scroll-mt-20">
           <h2 className="text-fg mb-1 text-sm font-semibold">
             Divergências de preço
           </h2>
           <p className="text-fg-muted mb-3 text-sm">
-            Detectadas sozinhas no recebimento, comparando a nota com o
-            combinado.
+            Preço menor é ganho e será reconhecido automaticamente. Preço maior
+            precisa ser aceito com motivo, contestado ou encerrado após a
+            correção.
           </p>
           <ul className="flex flex-col gap-2">
             {divergences.map((d) => (
               <li
                 key={d.id}
-                className="border-border bg-surface flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm"
+                className="border-border bg-surface flex flex-col gap-2 rounded-xl border px-4 py-3 text-sm"
               >
-                <span className="text-fg">
-                  {d.type === "price" ? "Preço diferente do combinado" : d.type}
-                </span>
-                <span className="flex flex-wrap items-center gap-3">
-                  {d.financial_impact !== null ? (
-                    <span className="text-destructive font-medium tabular-nums">
-                      {MONEY.format(Number(d.financial_impact))}
-                    </span>
-                  ) : null}
-                  <Badge variant="outline">
-                    {COMMERCIAL_DIVERGENCE_STATUS_LABEL[d.status] ?? d.status}
-                  </Badge>
-                  {podeTratarComercial && d.status === "pending" ? (
-                    <ResolveDivergenceForm
-                      divergenceId={d.id}
-                      orderId={id}
-                      commercial
-                    />
-                  ) : null}
-                </span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-fg font-medium">
+                    {d.type === "price"
+                      ? "Preço diferente do combinado"
+                      : d.type}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-3">
+                    {d.financial_impact !== null ? (
+                      <span
+                        className={
+                          Number(d.financial_impact) > 0
+                            ? "text-destructive font-medium tabular-nums"
+                            : "text-success font-medium tabular-nums"
+                        }
+                      >
+                        {MONEY.format(Number(d.financial_impact))}
+                      </span>
+                    ) : null}
+                    <Badge variant="outline">
+                      {COMMERCIAL_DIVERGENCE_STATUS_LABEL[d.status] ?? d.status}
+                    </Badge>
+                    {podeTratarComercial &&
+                    ["pending", "to_dispute"].includes(d.status) ? (
+                      <ResolveDivergenceForm
+                        divergenceId={d.id}
+                        orderId={id}
+                        commercial
+                        financialImpact={Number(d.financial_impact ?? 0)}
+                        commercialStatus={d.status}
+                      />
+                    ) : null}
+                  </span>
+                </div>
+                {d.type === "price" ? (
+                  <p className="text-fg-muted text-xs tabular-nums">
+                    Combinado {MONEY.format(priceFromJson(d.agreed_value) ?? 0)}{" "}
+                    · nota {MONEY.format(priceFromJson(d.realized_value) ?? 0)}
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>

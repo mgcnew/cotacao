@@ -1,4 +1,4 @@
-import { ClipboardList, Plus } from "lucide-react";
+import { ClipboardList, Plus, Scale } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -110,6 +110,13 @@ export default async function PedidosPage({
                 />
               </Suspense>
             </FilterDialog>
+            {permissions.has("commercial_divergence.view") ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href="/pedidos/divergencias">
+                  <Scale aria-hidden /> Divergências
+                </Link>
+              </Button>
+            ) : null}
             {podeCriar ? (
               // Link, e não botão com estado: "novo pedido" é uma rota. Vindo
               // daqui ela é interceptada e abre por cima da lista; de F5 ou do
@@ -225,7 +232,9 @@ async function ListaDePedidos({
       {orders.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
-          title={filtrando ? "Nenhum pedido neste recorte" : "Nenhum pedido ainda"}
+          title={
+            filtrando ? "Nenhum pedido neste recorte" : "Nenhum pedido ainda"
+          }
           description={
             filtrando
               ? "Nenhum pedido casa com o filtro aplicado. Limpe o recorte para ver todos."
@@ -277,104 +286,104 @@ async function ListaDePedidos({
                     </TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead>Situação</TableHead>
-                    <TableHead className="text-right">
-                      Próximo passo
-                    </TableHead>
+                    <TableHead className="text-right">Próximo passo</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {presentedOrders.map(
                     ({ order, passo, podeAgir, enviarAqui }) => (
                       <TableRow key={order.id}>
-                    <TableCell>
-                      <IntentPrefetchLink
-                        href={`/pedidos/${order.id}`}
-                        className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline"
-                      >
-                        #{order.orderNumber}
-                      </IntentPrefetchLink>
-                      {order.roundTitle ? (
-                        <span className="text-fg-subtle block text-xs">
-                          {order.roundTitle}
-                        </span>
-                      ) : (
-                        <span className="text-fg-subtle block text-xs">
-                          pedido direto
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-fg-muted">
-                      {order.supplierName}
-                    </TableCell>
-                    <TableCell className="hidden text-xs lg:table-cell">
-                      {order.deliveryDueDate ? (
-                        <span
-                          className={
-                            order.isOverdue
-                              ? "text-destructive font-medium"
-                              : "text-fg-muted"
-                          }
-                        >
-                          {formatarDia(order.deliveryDueDate)}
-                        </span>
-                      ) : (
-                        <span className="text-fg-muted">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-fg-muted hidden text-right tabular-nums lg:table-cell">
-                      {order.itemCount}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {MONEY.format(order.total)}
-                    </TableCell>
-                    <TableCell>
-                      <span className="flex flex-wrap items-center gap-1">
-                        <Badge
-                          variant={
-                            order.status === "received"
-                              ? "default"
-                              : passo.pending
-                                ? "outline"
-                                : "secondary"
-                          }
-                        >
-                          {ORDER_STATUS_LABEL[order.status] ?? order.status}
-                        </Badge>
-                        {order.isOverdue ? (
-                          <Badge variant="destructive">
-                            Atrasado · {order.overdueDays}d
-                          </Badge>
-                        ) : null}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {/* Enviar é o único passo que cabe inteiro aqui: são
+                        <TableCell>
+                          <IntentPrefetchLink
+                            href={`/pedidos/${order.id}`}
+                            className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline"
+                          >
+                            #{order.orderNumber}
+                          </IntentPrefetchLink>
+                          {order.roundTitle ? (
+                            <span className="text-fg-subtle block text-xs">
+                              {order.roundTitle}
+                            </span>
+                          ) : (
+                            <span className="text-fg-subtle block text-xs">
+                              pedido direto
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-fg-muted">
+                          {order.supplierName}
+                        </TableCell>
+                        <TableCell className="hidden text-xs lg:table-cell">
+                          {order.deliveryDueDate ? (
+                            <span
+                              className={
+                                order.isOverdue
+                                  ? "text-destructive font-medium"
+                                  : "text-fg-muted"
+                              }
+                            >
+                              {formatarDia(order.deliveryDueDate)}
+                            </span>
+                          ) : (
+                            <span className="text-fg-muted">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-fg-muted hidden text-right tabular-nums lg:table-cell">
+                          {order.itemCount}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {MONEY.format(order.total)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="flex flex-wrap items-center gap-1">
+                            <Badge
+                              variant={
+                                order.status === "received"
+                                  ? "default"
+                                  : passo.pending
+                                    ? "outline"
+                                    : "secondary"
+                              }
+                            >
+                              {ORDER_STATUS_LABEL[order.status] ?? order.status}
+                            </Badge>
+                            {order.isOverdue ? (
+                              <Badge variant="destructive">
+                                Atrasado · {order.overdueDays}d
+                              </Badge>
+                            ) : null}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {/* Enviar é o único passo que cabe inteiro aqui: são
                           alguns botões e uma mensagem para conferir, sem
                           formulário longo. Dar entrada mexe em quantidade por
                           item e depende do que já foi recebido — esse continua
                           sendo assunto da tela do pedido. */}
-                      {enviarAqui ? (
-                        <SendOrderDialog
-                          orderId={order.id}
-                          orderNumber={order.orderNumber}
-                          supplierName={order.supplierName}
-                          rotulo={passo.label}
-                          rotuloCurto={passo.shortLabel}
-                        />
-                      ) : (
-                        <Button
-                          asChild
-                          size="sm"
-                          variant={
-                            passo.pending && podeAgir ? "default" : "outline"
-                          }
-                        >
-                          <IntentPrefetchLink href={`/pedidos/${order.id}`}>
-                            {podeAgir ? passo.label : "Abrir"}
-                          </IntentPrefetchLink>
-                        </Button>
-                      )}
-                    </TableCell>
+                          {enviarAqui ? (
+                            <SendOrderDialog
+                              orderId={order.id}
+                              orderNumber={order.orderNumber}
+                              supplierName={order.supplierName}
+                              rotulo={passo.label}
+                              rotuloCurto={passo.shortLabel}
+                            />
+                          ) : (
+                            <Button
+                              asChild
+                              size="sm"
+                              variant={
+                                passo.pending && podeAgir
+                                  ? "default"
+                                  : "outline"
+                              }
+                            >
+                              <IntentPrefetchLink href={`/pedidos/${order.id}`}>
+                                {podeAgir ? passo.label : "Abrir"}
+                              </IntentPrefetchLink>
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ),
                   )}
@@ -443,9 +452,7 @@ function OrderMobileCard({
             {ORDER_STATUS_LABEL[order.status] ?? order.status}
           </Badge>
           {order.isOverdue ? (
-            <Badge variant="destructive">
-              Atrasado · {order.overdueDays}d
-            </Badge>
+            <Badge variant="destructive">Atrasado · {order.overdueDays}d</Badge>
           ) : null}
         </span>
       </header>
@@ -511,8 +518,8 @@ function TruncatedOrdersNotice() {
       data-slot="table-extra-footer"
       className="text-fg-subtle border-border border-t px-3 py-2 text-xs"
     >
-      Mostrando os {ORDERS_PAGE_SIZE} pedidos mais recentes. Use os filtros
-      para chegar aos mais antigos.
+      Mostrando os {ORDERS_PAGE_SIZE} pedidos mais recentes. Use os filtros para
+      chegar aos mais antigos.
     </p>
   );
 }

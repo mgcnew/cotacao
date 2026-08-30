@@ -69,7 +69,11 @@ export async function getAttentionItems(
     if (s.pedidosAtrasados > 0) {
       itens.push({
         key: "pedidos-atrasados",
-        title: plural(s.pedidosAtrasados, "pedido atrasado", "pedidos atrasados"),
+        title: plural(
+          s.pedidosAtrasados,
+          "pedido atrasado",
+          "pedidos atrasados",
+        ),
         hint:
           s.pedidosAtrasados === 1
             ? `Prazo vencido há ${plural(s.atrasoPiorDias, "dia", "dias")}.`
@@ -127,8 +131,11 @@ export async function getAttentionItems(
       itens.push({
         key: "revisoes-pendentes",
         title:
-          plural(s.revisoesPendentes, "revisão aguardando", "revisões aguardando") +
-          " envio",
+          plural(
+            s.revisoesPendentes,
+            "revisão aguardando",
+            "revisões aguardando",
+          ) + " envio",
         hint: "O fornecedor ainda está com a versão anterior do pedido.",
         count: s.revisoesPendentes,
         severity: "high",
@@ -145,7 +152,7 @@ export async function getAttentionItems(
       itens.push({
         key: "falhas-de-envio",
         title: plural(s.falhasEnvio, "envio que falhou", "envios que falharam"),
-        hint: `Nos últimos ${DIAS_DE_FALHA} dias. A mensagem não chegou ao fornecedor.`,
+        hint: `Nos últimos ${DIAS_DE_FALHA} dias, sem reenvio bem-sucedido, abertura ou resposta posterior.`,
         count: s.falhasEnvio,
         severity: "high",
         href: "/pedidos?situacao=abertos",
@@ -162,14 +169,16 @@ export async function getAttentionItems(
       key: "divergencias-comerciais",
       title:
         plural(s.divergenciasComerciais, "divergência", "divergências") +
-        " de preço a resolver",
-      hint: "A nota veio diferente do combinado e ninguém decidiu o que fazer.",
+        " de recebimento a tratar",
+      hint: "Preço ou quantidade diferente do pedido, pendente ou em contestação.",
       count: s.divergenciasComerciais,
       severity: "high",
       href: destino(
         s.divergenciasComerciais,
-        s.divergenciaComercialOrderId,
-        "/pedidos",
+        s.divergenciaComercialOrderId
+          ? `${s.divergenciaComercialOrderId}#divergencias-preco`
+          : null,
+        "/pedidos/divergencias",
       ),
       actionLabel: "Tratar",
     });
@@ -228,7 +237,9 @@ function pendenciasDeRodada(s: DashboardSnapshot): AttentionItem[] {
       count: total,
       severity: "normal",
       href:
-        pendentes.length === 1 ? `/compras/${pendentes[0].roundId}` : "/compras",
+        pendentes.length === 1
+          ? `/compras/${pendentes[0].roundId}`
+          : "/compras",
       actionLabel: "Cobrar resposta",
     });
   }

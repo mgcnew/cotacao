@@ -127,6 +127,8 @@ export async function listNotifications(
       : undefined;
     let title = notification.title;
     let message = notification.message;
+    let priority = notification.priority;
+    let actionUrl = notification.action_url;
 
     switch (notification.type) {
       case "quotation.response_submitted":
@@ -147,8 +149,20 @@ export async function listNotifications(
         message = divergenceMessage(metadata);
         break;
       case "commercial_divergence.detected":
-        title = "Preço da nota diferente do combinado";
+        const agreed = Number(metadata.agreed_price);
+        const practiced = Number(metadata.practiced_price);
+        const favorable =
+          Number.isFinite(agreed) &&
+          Number.isFinite(practiced) &&
+          practiced < agreed;
+        title = favorable
+          ? "Ganho identificado no recebimento"
+          : "Preço da nota maior que o combinado";
         message = `Preço combinado: ${String(metadata.agreed_price ?? "não informado")}. Preço na nota: ${String(metadata.practiced_price ?? "não informado")}.`;
+        if (favorable) priority = "normal";
+        if (actionUrl?.startsWith("/pedidos/")) {
+          actionUrl = `${actionUrl}#divergencias-preco`;
+        }
         break;
       case "receipt.arrived":
         title = "Mercadoria aguardando conferência";
@@ -160,8 +174,8 @@ export async function listNotifications(
       type: notification.type,
       title,
       message,
-      priority: notification.priority,
-      actionUrl: notification.action_url,
+      priority,
+      actionUrl,
       readAt: notification.read_at,
       createdAt: notification.created_at,
     };
