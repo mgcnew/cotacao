@@ -2501,6 +2501,213 @@ export type Database = {
           },
         ];
       };
+      historical_nfe_imports: {
+        Row: {
+          access_key: string;
+          company_id: string;
+          created_at: string;
+          file_name: string;
+          file_size: number;
+          fiscal_totals: Json;
+          id: string;
+          invoice_number: string;
+          invoice_series: string | null;
+          invoice_total: number;
+          issued_at: string;
+          issuer_document: string | null;
+          issuer_name: string | null;
+          posted_at: string | null;
+          posted_by: string | null;
+          recipient_document: string | null;
+          recipient_name: string | null;
+          status: string;
+          storage_path: string;
+          supplier_id: string | null;
+          updated_at: string;
+          uploaded_by: string | null;
+          void_reason: string | null;
+          voided_at: string | null;
+        };
+        Insert: {
+          access_key: string;
+          company_id: string;
+          created_at?: string;
+          file_name: string;
+          file_size: number;
+          fiscal_totals: Json;
+          id?: string;
+          invoice_number: string;
+          invoice_series?: string | null;
+          invoice_total: number;
+          issued_at: string;
+          issuer_document?: string | null;
+          issuer_name?: string | null;
+          posted_at?: string | null;
+          posted_by?: string | null;
+          recipient_document?: string | null;
+          recipient_name?: string | null;
+          status?: string;
+          storage_path: string;
+          supplier_id?: string | null;
+          updated_at?: string;
+          uploaded_by?: string | null;
+          void_reason?: string | null;
+          voided_at?: string | null;
+        };
+        Update: {
+          access_key?: string;
+          company_id?: string;
+          created_at?: string;
+          file_name?: string;
+          file_size?: number;
+          fiscal_totals?: Json;
+          id?: string;
+          invoice_number?: string;
+          invoice_series?: string | null;
+          invoice_total?: number;
+          issued_at?: string;
+          issuer_document?: string | null;
+          issuer_name?: string | null;
+          posted_at?: string | null;
+          posted_by?: string | null;
+          recipient_document?: string | null;
+          recipient_name?: string | null;
+          status?: string;
+          storage_path?: string;
+          supplier_id?: string | null;
+          updated_at?: string;
+          uploaded_by?: string | null;
+          void_reason?: string | null;
+          voided_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "historical_nfe_imports_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "historical_nfe_imports_company_id_supplier_id_fkey";
+            columns: ["company_id", "supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
+      historical_nfe_items: {
+        Row: {
+          barcode: string | null;
+          commercial_quantity: number;
+          commercial_unit: string | null;
+          commercial_unit_price: number;
+          company_id: string;
+          created_at: string;
+          description: string;
+          id: string;
+          import_id: string;
+          item_discount: number;
+          item_freight: number;
+          item_insurance: number;
+          item_other: number;
+          line_number: string;
+          match_confidence: number | null;
+          match_method: string | null;
+          net_product_total: number;
+          notes: string | null;
+          practiced_price: number | null;
+          pricing_quantity: number | null;
+          product_id: string | null;
+          product_total: number;
+          reconciliation_status: string;
+          supplier_code: string | null;
+          tributary_barcode: string | null;
+          tributary_quantity: number;
+          tributary_unit: string | null;
+          tributary_unit_price: number;
+          updated_at: string;
+        };
+        Insert: {
+          barcode?: string | null;
+          commercial_quantity: number;
+          commercial_unit?: string | null;
+          commercial_unit_price: number;
+          company_id: string;
+          created_at?: string;
+          description: string;
+          id?: string;
+          import_id: string;
+          item_discount?: number;
+          item_freight?: number;
+          item_insurance?: number;
+          item_other?: number;
+          line_number: string;
+          match_confidence?: number | null;
+          match_method?: string | null;
+          net_product_total: number;
+          notes?: string | null;
+          practiced_price?: number | null;
+          pricing_quantity?: number | null;
+          product_id?: string | null;
+          product_total: number;
+          reconciliation_status?: string;
+          supplier_code?: string | null;
+          tributary_barcode?: string | null;
+          tributary_quantity: number;
+          tributary_unit?: string | null;
+          tributary_unit_price: number;
+          updated_at?: string;
+        };
+        Update: {
+          barcode?: string | null;
+          commercial_quantity?: number;
+          commercial_unit?: string | null;
+          commercial_unit_price?: number;
+          company_id?: string;
+          created_at?: string;
+          description?: string;
+          id?: string;
+          import_id?: string;
+          item_discount?: number;
+          item_freight?: number;
+          item_insurance?: number;
+          item_other?: number;
+          line_number?: string;
+          match_confidence?: number | null;
+          match_method?: string | null;
+          net_product_total?: number;
+          notes?: string | null;
+          practiced_price?: number | null;
+          pricing_quantity?: number | null;
+          product_id?: string | null;
+          product_total?: number;
+          reconciliation_status?: string;
+          supplier_code?: string | null;
+          tributary_barcode?: string | null;
+          tributary_quantity?: number;
+          tributary_unit?: string | null;
+          tributary_unit_price?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "historical_nfe_items_company_id_import_id_fkey";
+            columns: ["company_id", "import_id"];
+            isOneToOne: false;
+            referencedRelation: "historical_nfe_imports";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "historical_nfe_items_company_id_product_id_fkey";
+            columns: ["company_id", "product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
       receipt_documents: {
         Row: {
           access_key: string;
@@ -3728,6 +3935,27 @@ export type Database = {
       };
     };
     Views: {
+      v_purchase_price_history: {
+        Row: {
+          access_key: string | null;
+          company_id: string | null;
+          event_id: string | null;
+          historical_import_id: string | null;
+          invoice_number: string | null;
+          invoice_series: string | null;
+          occurred_at: string | null;
+          practiced_price: number | null;
+          pricing_quantity: number | null;
+          pricing_unit_symbol: string | null;
+          product_id: string | null;
+          product_name: string | null;
+          receipt_id: string | null;
+          source: string | null;
+          supplier_id: string | null;
+          supplier_name: string | null;
+        };
+        Relationships: [];
+      };
       v_conversion_history: {
         Row: {
           company_id: string | null;
@@ -3924,6 +4152,41 @@ export type Database = {
       };
     };
     Functions: {
+      rpc_create_historical_nfe_import: {
+        Args: {
+          p_access_key: string;
+          p_company_id: string;
+          p_file_name: string;
+          p_file_size: number;
+          p_fiscal_totals: Json;
+          p_invoice_number: string;
+          p_invoice_series: string | null;
+          p_invoice_total: number;
+          p_import_id: string;
+          p_issued_at: string;
+          p_issuer_document: string | null;
+          p_issuer_name: string | null;
+          p_items: Json;
+          p_recipient_document: string | null;
+          p_recipient_name: string | null;
+          p_storage_path: string;
+          p_supplier_id: string | null;
+        };
+        Returns: string;
+      };
+      rpc_discard_historical_nfe_import: {
+        Args: { p_company_id: string; p_import_id: string };
+        Returns: boolean;
+      };
+      rpc_post_historical_nfe_import: {
+        Args: {
+          p_company_id: string;
+          p_import_id: string;
+          p_items: Json;
+          p_supplier_id: string;
+        };
+        Returns: undefined;
+      };
       rpc_analytics_supplier_performance: {
         Args: {
           p_company_id: string;

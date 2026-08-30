@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { QuotationHistory } from "@/components/history/quotation-history";
+import { PurchasePriceHistory } from "@/components/history/purchase-price-history";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,10 @@ import {
   parseHistoryFilters,
 } from "@/features/history/queries";
 import { getSupplier } from "@/features/suppliers/queries";
+import {
+  listPurchasePriceHistory,
+  parsePurchaseHistoryPage,
+} from "@/features/receipts/historical-queries";
 import { requireActiveCompany } from "@/lib/auth/dal";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -27,13 +32,21 @@ export default async function HistoricoFornecedorPage({
     searchParams,
     requireActiveCompany(),
   ]);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  ) {
     notFound();
   }
   const filters = parseHistoryFilters(query, "produto");
-  const [supplier, history] = await Promise.all([
+  const [supplier, history, purchases] = await Promise.all([
     getSupplier(company.companyId, id),
     getQuotationHistory(company.companyId, { supplierId: id }, filters),
+    listPurchasePriceHistory(
+      company.companyId,
+      { supplierId: id },
+      filters,
+      parsePurchaseHistoryPage(query),
+    ),
   ]);
 
   if (!supplier) notFound();
@@ -42,7 +55,7 @@ export default async function HistoricoFornecedorPage({
     <div className="w-full">
       <PageHeader
         title={`Histórico de ${supplier.name}`}
-        description="Participações por item: respostas, preços, decisões ganhas ou perdidas e pedidos gerados."
+        description="Produtos efetivamente comprados, preços praticados e participações em cotações."
         action={
           <Button asChild size="sm" variant="ghost">
             <Link href={`/fornecedores/${id}`}>Voltar ao fornecedor</Link>
@@ -60,9 +73,24 @@ export default async function HistoricoFornecedorPage({
         </p>
       </div>
 
+      <PurchasePriceHistory
+        scope="supplier"
+        rows={purchases.rows}
+        pagination={purchases.pagination}
+        pricePoints={purchases.pricePoints}
+      />
+
       <QuotationHistory
         scope="supplier"
         {...history}
+        options={[
+          ...new Map(
+            [...history.options, ...purchases.options].map((option) => [
+              option.id,
+              option,
+            ]),
+          ).values(),
+        ]}
         filters={filters}
         basePath={`/fornecedores/${id}/historico`}
       />

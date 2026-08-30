@@ -218,7 +218,10 @@ export function importedItemValues(
     }
   }
 
-  const itemTotal = xmlItems.reduce((sum, xmlItem) => sum + xmlItem.total, 0);
+  const itemTotal = xmlItems.reduce(
+    (sum, xmlItem) => sum + Math.max(xmlItem.total - xmlItem.discount, 0),
+    0,
+  );
   let practicedPrice =
     pricingQuantity && pricingQuantity > 0 ? itemTotal / pricingQuantity : null;
   if (practicedPrice === null) {

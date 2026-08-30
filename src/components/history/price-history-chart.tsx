@@ -21,7 +21,15 @@ export type PriceHistoryPoint = {
   price: number;
 };
 
-export function PriceHistoryChart({ points }: { points: PriceHistoryPoint[] }) {
+export function PriceHistoryChart({
+  points,
+  title = "Evolução do preço",
+  description = "Último preço negociado de cada proposta no período selecionado.",
+}: {
+  points: PriceHistoryPoint[];
+  title?: string;
+  description?: string;
+}) {
   if (points.length < 2) return null;
 
   const data = points.map((point) => ({
@@ -35,14 +43,23 @@ export function PriceHistoryChart({ points }: { points: PriceHistoryPoint[] }) {
 
   return (
     <section className="border-border bg-surface mb-5 rounded-xl border p-4">
-      <h3 className="text-fg text-sm font-semibold">Evolução do preço</h3>
-      <p className="text-fg-muted mb-4 text-xs">
-        Último preço negociado de cada proposta no período selecionado.
-      </p>
-      <div className="h-64 w-full" role="img" aria-label="Evolução dos preços cotados">
+      <h3 className="text-fg text-sm font-semibold">{title}</h3>
+      <p className="text-fg-muted mb-4 text-xs">{description}</p>
+      <div
+        className="h-64 w-full"
+        role="img"
+        aria-label="Evolução dos preços cotados"
+      >
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+          <LineChart
+            data={data}
+            margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+          >
+            <CartesianGrid
+              stroke="var(--border)"
+              strokeDasharray="3 3"
+              vertical={false}
+            />
             <XAxis
               dataKey="label"
               tick={{ fill: "var(--fg-subtle)", fontSize: 11 }}
@@ -61,8 +78,7 @@ export function PriceHistoryChart({ points }: { points: PriceHistoryPoint[] }) {
               formatter={(value) => MONEY.format(Number(value))}
               labelFormatter={(_, payload) => {
                 const point = payload[0]?.payload as
-                  | (PriceHistoryPoint & { label: string })
-                  | undefined;
+                  (PriceHistoryPoint & { label: string }) | undefined;
                 return point ? `${point.label} · ${point.supplier}` : "";
               }}
               contentStyle={{

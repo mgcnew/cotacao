@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { QuotationHistory } from "@/components/history/quotation-history";
+import { PurchasePriceHistory } from "@/components/history/purchase-price-history";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,10 @@ import {
 } from "@/features/history/queries";
 import { getProduct } from "@/features/products/queries";
 import { PRODUCT_PURPOSE_LABEL } from "@/features/products/purposes";
+import {
+  listPurchasePriceHistory,
+  parsePurchaseHistoryPage,
+} from "@/features/receipts/historical-queries";
 import { requireActiveCompany } from "@/lib/auth/dal";
 
 export default async function ProdutoPage({
@@ -22,18 +27,28 @@ export default async function ProdutoPage({
     searchParams,
     requireActiveCompany(),
   ]);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  ) {
     notFound();
   }
   const filters = parseHistoryFilters(query, "fornecedor");
-  const [product, history] = await Promise.all([
+  const [product, history, purchases] = await Promise.all([
     getProduct(company.companyId, id),
     getQuotationHistory(company.companyId, { productId: id }, filters),
+    listPurchasePriceHistory(
+      company.companyId,
+      { productId: id },
+      filters,
+      parsePurchaseHistoryPage(query),
+    ),
   ]);
 
   if (!product) notFound();
 
-  const barcodes = product.product_barcodes.filter((barcode) => barcode.is_active);
+  const barcodes = product.product_barcodes.filter(
+    (barcode) => barcode.is_active,
+  );
 
   return (
     <div className="w-full">
@@ -60,11 +75,15 @@ export default async function ProdutoPage({
         </div>
         <div>
           <p className="text-fg-subtle text-xs">Unidade de compra</p>
-          <p className="text-fg text-sm">{product.purchase_unit?.symbol ?? "—"}</p>
+          <p className="text-fg text-sm">
+            {product.purchase_unit?.symbol ?? "—"}
+          </p>
         </div>
         <div>
           <p className="text-fg-subtle text-xs">Unidade de preço</p>
-          <p className="text-fg text-sm">{product.pricing_unit?.symbol ?? "—"}</p>
+          <p className="text-fg text-sm">
+            {product.pricing_unit?.symbol ?? "—"}
+          </p>
         </div>
         <div>
           <p className="text-fg-subtle text-xs">Situação</p>
@@ -82,17 +101,33 @@ export default async function ProdutoPage({
         ) : null}
       </section>
 
+      <PurchasePriceHistory
+        scope="product"
+        rows={purchases.rows}
+        pagination={purchases.pagination}
+        pricePoints={purchases.pricePoints}
+      />
+
       <section>
         <div className="mb-3">
           <h2 className="text-fg text-sm font-semibold">Histórico comercial</h2>
           <p className="text-fg-muted mt-1 text-sm">
             O preço riscado é a proposta inicial; o preço principal já considera
-            a última negociação. O valor da nota aparece quando houver recebimento.
+            a última negociação. O valor da nota aparece quando houver
+            recebimento.
           </p>
         </div>
         <QuotationHistory
           scope="product"
           {...history}
+          options={[
+            ...new Map(
+              [...history.options, ...purchases.options].map((option) => [
+                option.id,
+                option,
+              ]),
+            ).values(),
+          ]}
           filters={filters}
           basePath={`/produtos/${id}`}
         />

@@ -16,6 +16,7 @@ export type NfeItem = {
   tributaryQuantity: number;
   tributaryUnitPrice: number;
   total: number;
+  discount: number;
 };
 
 export type ParsedNfe = {
@@ -194,6 +195,7 @@ export function parseNfeXml(xml: string): ParsedNfe {
       tributaryQuantity: numberValue(product, "qTrib"),
       tributaryUnitPrice: numberValue(product, "vUnTrib"),
       total: numberValue(product, "vProd"),
+      discount: numberValue(product, "vDesc"),
     };
   });
 

@@ -67,6 +67,13 @@ export default async function RecebimentosPage() {
             </span>
           </>
         }
+        action={
+          canPost ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href="/recebimentos/historico">Importar histórico XML</Link>
+            </Button>
+          ) : null
+        }
       />
 
       <div className="mb-6 hidden gap-3 sm:grid sm:grid-cols-3">
@@ -287,7 +294,9 @@ export default async function RecebimentosPage() {
                   <p className="text-fg-subtle text-xs">
                     {receipt.checkedAt
                       ? dateTimeFormatter.format(new Date(receipt.checkedAt))
-                      : dateTimeFormatter.format(new Date(receipt.receivedAt!))}{" "}
+                      : dateTimeFormatter.format(
+                          new Date(receipt.receivedAt!),
+                        )}{" "}
                     · {receipt.itemCount}{" "}
                     {receipt.itemCount === 1 ? "item" : "itens"}
                     {receipt.invoiceNumber
