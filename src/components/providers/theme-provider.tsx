@@ -1,6 +1,7 @@
 "use client";
 
 import { ThemeProvider as NextThemesProvider } from "next-themes";
+import { usePathname } from "next/navigation";
 import * as React from "react";
 
 export const ACCENTS = [
@@ -97,13 +98,33 @@ function AccentProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * A cotação que vai por link nasce clara, sempre.
+ *
+ * Quem abre esse link não é usuário do sistema: é o vendedor do fornecedor,
+ * no celular dele, com o tema que ele escolheu para o aparelho — e não faz
+ * sentido um documento que representa a empresa mudar de cara conforme a
+ * configuração de quem recebeu.
+ *
+ * `forcedTheme` do next-themes aplica o claro sem gravar nada: a preferência
+ * de quem também usa o sistema continua intacta quando ele voltar às telas
+ * internas. Trocar o tema por `setTheme` faria o oposto — mudaria o app
+ * inteiro só por ter aberto um link.
+ */
+function temaForcado(pathname: string): string | undefined {
+  return pathname.startsWith("/q/") ? "light" : undefined;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
   return (
     <NextThemesProvider
       attribute="class"
       defaultTheme="system"
       enableSystem
       disableTransitionOnChange
+      forcedTheme={temaForcado(pathname)}
     >
       <AccentProvider>{children}</AccentProvider>
     </NextThemesProvider>
