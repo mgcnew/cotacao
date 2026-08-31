@@ -8,14 +8,22 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * RLS já isolando: o filtro deixa a intenção clara e evita varredura inútil.
  */
 
+/**
+ * Catálogo completo para montar rodadas, onde o usuário procura qualquer item.
+ *
+ * Pagina por `range` porque o PostgREST devolve no máximo `db.max_rows` (1000)
+ * linhas de topo: sem isso o fim do alfabeto some da busca sem nenhum aviso.
+ */
 export async function listProducts(companyId: string) {
   const supabase = await createServerSupabaseClient();
+  const rows = [];
 
-  // products referencia units 3x, então o join precisa nomear a FK.
-  const { data, error } = await supabase
-    .from("products")
-    .select(
-      `
+  for (let start = 0; ; start += 1000) {
+    // products referencia units 3x, então o join precisa nomear a FK.
+    const page = await supabase
+      .from("products")
+      .select(
+        `
       id,
       name,
       category_id,
@@ -27,12 +35,20 @@ export async function listProducts(companyId: string) {
       pricing_unit:units!products_company_id_pricing_unit_id_fkey ( code, symbol ),
       comparison_unit:units!products_company_id_comparison_unit_id_fkey ( code, symbol )
     `,
-    )
-    .eq("company_id", companyId)
-    .order("name");
+      )
+      .eq("company_id", companyId)
+      .order("name")
+      .order("id")
+      .range(start, start + 999);
 
-  if (error) throw new Error(`Falha ao listar produtos: ${error.message}`);
-  return data ?? [];
+    if (page.error) {
+      throw new Error(`Falha ao listar produtos: ${page.error.message}`);
+    }
+    rows.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
+  }
+
+  return rows;
 }
 
 export type ProductListRow = {

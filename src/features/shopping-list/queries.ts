@@ -9,27 +9,46 @@ export type ShoppingProduct = {
   barcodes: string[];
 };
 
+/**
+ * Catálogo ativo inteiro, usado pelo autocomplete e pelo casamento de código de
+ * barras — que precisam enxergar todos os produtos, não só os primeiros.
+ *
+ * O PostgREST corta a resposta em `db.max_rows` (1000). Sem paginar, o catálogo
+ * simplesmente sumia do fim do alfabeto: com 1079 ativos, tudo a partir de
+ * "Pao de alho…" ficava invisível na busca. O laço por `range` é o mesmo
+ * recurso já usado em analytics e no painel financeiro.
+ */
 export async function listShoppingProducts(
   companyId: string,
 ): Promise<ShoppingProduct[]> {
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select(
-      `
+  const data = [];
+
+  for (let start = 0; ; start += 1000) {
+    const page = await supabase
+      .from("products")
+      .select(
+        `
       id,
       name,
       purchase_unit:units!products_company_id_purchase_unit_id_fkey ( symbol ),
       product_barcodes ( code, is_active )
     `,
-    )
-    .eq("company_id", companyId)
-    .eq("is_active", true)
-    .order("name");
+      )
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .order("name")
+      .order("id")
+      .range(start, start + 999);
 
-  if (error) throw new Error(`Falha ao listar produtos: ${error.message}`);
+    if (page.error) {
+      throw new Error(`Falha ao listar produtos: ${page.error.message}`);
+    }
+    data.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
+  }
 
-  return (data ?? []).map((product) => ({
+  return data.map((product) => ({
     id: product.id,
     name: product.name,
     purchaseUnit: product.purchase_unit?.symbol ?? "",
