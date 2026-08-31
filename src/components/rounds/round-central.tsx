@@ -25,6 +25,7 @@ import {
 import { IndicadoresDaRodada } from "@/components/rounds/round-indicators";
 import { RoundSteps } from "@/components/rounds/round-steps";
 import { SendControls } from "@/components/rounds/send-controls";
+import { RemoveRoundSupplierButton } from "@/components/rounds/remove-round-supplier-button";
 import { SupplierGroupManager } from "@/components/rounds/supplier-group-manager";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -479,14 +480,23 @@ function Montagem({
                               : ""}
                           </span>
                         </span>
-                        {podeEditar ? (
-                          <ContactPicker
-                            roundId={roundId}
-                            roundSupplierId={rs.id}
-                            contactId={rs.supplier_contact_id}
-                            contacts={contatos.get(rs.supplier_id) ?? []}
-                          />
-                        ) : null}
+                        <span className="flex items-center gap-1">
+                          {podeEditar ? (
+                            <ContactPicker
+                              roundId={roundId}
+                              roundSupplierId={rs.id}
+                              contactId={rs.supplier_contact_id}
+                              contacts={contatos.get(rs.supplier_id) ?? []}
+                            />
+                          ) : null}
+                          {podeMontar ? (
+                            <RemoveRoundSupplierButton
+                              roundId={roundId}
+                              roundSupplierId={rs.id}
+                              supplierName={rs.suppliers?.name ?? "fornecedor"}
+                            />
+                          ) : null}
+                        </span>
                       </li>
                     ))}
                   </ul>
