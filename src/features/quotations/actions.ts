@@ -130,7 +130,7 @@ export async function submitQuotation(
   }
 
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc("rpc_public_submit_quotation", {
+  const { error } = await supabase.rpc("rpc_public_submit_quotation_validated", {
     p_token: token,
     p_items: items,
   });

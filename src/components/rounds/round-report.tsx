@@ -60,7 +60,7 @@ export function RoundReportContent({ report }: { report: RoundReport }) {
         ) : null}
       </section>
 
-      <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         <ReportMetric
           label="Itens cotados"
           value={String(report.summary.itemCount)}
@@ -84,6 +84,12 @@ export function RoundReportContent({ report }: { report: RoundReport }) {
           label="Economia negociada"
           value={MONEY.format(report.summary.negotiatedSavings)}
           detail="preço original x preço adjudicado"
+        />
+        <ReportMetric
+          label="Escolha de embalagens"
+          value={MONEY.format(report.summary.packagingChoiceResult)}
+          detail="custo unitário x melhor alternativa"
+          warning={report.summary.packagingChoiceResult < 0}
         />
       </section>
 

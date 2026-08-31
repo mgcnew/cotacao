@@ -55,8 +55,17 @@ export type ComparisonRow = {
   bestPrice: number | null;
   /** Menor preço normalizado — o que de fato compara propostas diferentes. */
   bestNormalized: number | null;
+  /** Indica que todas as propostas com preço têm uma base comum de comparação. */
+  usesNormalizedComparison: boolean;
+  /** A apresentação é necessária para não comparar pacotes incompatíveis. */
+  requiresPresentationComparison: boolean;
+  /** Menor valor na base efetivamente usada pela tela e pela recomendação. */
+  bestComparablePrice: number | null;
   /** Nome do atributo que converte, quando a categoria define um. */
   conversionName: string | null;
+  conversionDefinitionId: string | null;
+  conversionRequired: boolean;
+  conversionUnit: string | null;
 };
 
 export async function getRoundComparison(companyId: string, roundId: string) {
@@ -75,7 +84,8 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         purchase_unit_id,
         pricing_unit_id,
         comparison_unit_id,
-        products!inner ( name ),
+        product_id,
+        products!inner ( name, category_id ),
         purchase_unit:units!quotation_items_company_id_purchase_unit_id_fkey ( symbol ),
         pricing_unit:units!quotation_items_company_id_pricing_unit_id_fkey ( symbol ),
         comparison_unit:units!quotation_items_company_id_comparison_unit_id_fkey ( symbol )
@@ -120,6 +130,22 @@ export async function getRoundComparison(companyId: string, roundId: string) {
 
   if (items.length === 0 || allRoundSuppliers.length === 0) {
     return { rows: [] as ComparisonRow[], suppliers: allRoundSuppliers };
+  }
+
+  const { data: conversionDefinitions, error: conversionDefinitionsError } =
+    await supabase
+      .from("product_attribute_definitions")
+      .select(
+        "id, name, category_id, product_id, is_required, units ( symbol )",
+      )
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .eq("is_conversion_factor", true);
+
+  if (conversionDefinitionsError) {
+    throw new Error(
+      `Falha ao carregar conversões: ${conversionDefinitionsError.message}`,
+    );
   }
 
   const roundSupplierIds = allRoundSuppliers.map((rs) => rs.id);
@@ -258,7 +284,14 @@ export async function getRoundComparison(companyId: string, roundId: string) {
     const linkBySupplier = new Map<string, string>();
     const precos: number[] = [];
     const normalizados: number[] = [];
-    let conversionName: string | null = null;
+    const conversionDefinition =
+      (conversionDefinitions ?? []).find(
+        (definition) => definition.product_id === item.product_id,
+      ) ??
+      (conversionDefinitions ?? []).find(
+        (definition) => definition.category_id === item.products.category_id,
+      );
+    let conversionName: string | null = conversionDefinition?.name ?? null;
 
     for (const rs of roundSuppliers) {
       const link = (links ?? []).find(
@@ -332,6 +365,18 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       });
     }
 
+    const requiresPresentationComparison =
+      Boolean(conversionDefinition) &&
+      item.comparison_unit_id !== null &&
+      item.pricing_unit_id !== item.comparison_unit_id;
+    const usesNormalizedComparison =
+      precos.length > 0 &&
+      normalizados.length === precos.length &&
+      requiresPresentationComparison;
+    const bestPrice = precos.length > 0 ? Math.min(...precos) : null;
+    const bestNormalized =
+      normalizados.length > 0 ? Math.min(...normalizados) : null;
+
     return {
       itemId: item.id,
       commercialStatus: item.commercial_status,
@@ -349,10 +394,19 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       pricingUnit: item.pricing_unit?.symbol ?? "",
       comparisonUnit: item.comparison_unit?.symbol ?? null,
       cells,
-      bestPrice: precos.length > 0 ? Math.min(...precos) : null,
-      bestNormalized:
-        normalizados.length > 0 ? Math.min(...normalizados) : null,
+      bestPrice,
+      bestNormalized,
+      usesNormalizedComparison,
+      requiresPresentationComparison,
+      bestComparablePrice: requiresPresentationComparison
+        ? usesNormalizedComparison
+          ? bestNormalized
+          : null
+        : bestPrice,
       conversionName,
+      conversionDefinitionId: conversionDefinition?.id ?? null,
+      conversionRequired: conversionDefinition?.is_required ?? false,
+      conversionUnit: conversionDefinition?.units?.symbol ?? null,
     };
   });
 

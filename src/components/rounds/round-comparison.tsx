@@ -23,6 +23,12 @@ type Filter = "all" | "above" | "missing" | "best";
 type Supplier = DadosDaComparacao["suppliers"][number];
 type Row = DadosDaComparacao["rows"][number];
 
+function comparablePrice(row: Row, cell: Row["cells"] extends Map<string, infer C> ? C | undefined : never) {
+  return row.usesNormalizedComparison
+    ? (cell?.normalizedPrice ?? null)
+    : (cell?.currentPrice ?? null);
+}
+
 function supplierStats(supplier: Supplier, rows: Row[]) {
   let priced = 0;
   let best = 0;
@@ -32,7 +38,7 @@ function supplierStats(supplier: Supplier, rows: Row[]) {
     const cell = row.cells.get(supplier.id);
     if (cell?.currentPrice !== null && cell?.currentPrice !== undefined && !cell.doesNotSupply) {
       priced += 1;
-      if (cell.currentPrice === row.bestPrice) best += 1;
+      if (comparablePrice(row, cell) === row.bestComparablePrice) best += 1;
     } else if (cell?.doesNotSupply || cell?.isAvailable === false) unavailable += 1;
     else missing += 1;
   }
@@ -65,7 +71,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
     if (normalizedSearch && !`${row.productName} ${row.groupName}`.toLocaleLowerCase("pt-BR").includes(normalizedSearch)) return false;
     const cell = row.cells.get(supplier.id);
     const hasPrice = cell?.currentPrice !== null && cell?.currentPrice !== undefined && !cell.doesNotSupply;
-    const isBest = hasPrice && cell.currentPrice === row.bestPrice;
+    const isBest = hasPrice && comparablePrice(row, cell) === row.bestComparablePrice;
     if (filter === "above") return hasPrice && !isBest;
     if (filter === "missing") return !hasPrice && !cell?.doesNotSupply && cell?.isAvailable !== false;
     if (filter === "best") return isBest;
@@ -183,8 +189,8 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
       </div>
 
       <div className="border-border bg-surface-sunken rounded-xl border p-3 text-xs">
-        <p className="text-fg-muted">O valor de referência é o menor preço vigente da rodada. Uma negociação preserva o preço original no histórico.</p>
-        {rows.some((row) => row.conversionName) ? <p className="text-fg-subtle mt-1">Quando existe conversão de embalagem, o preço normalizado também aparece para evitar comparar apresentações diferentes como se fossem iguais.</p> : null}
+        <p className="text-fg-muted">O valor de referência é o menor preço comparável da rodada. Uma negociação preserva o preço original no histórico.</p>
+        {rows.some((row) => row.conversionName) ? <p className="text-fg-subtle mt-1">Quando todos informam a apresentação, a referência e os destaques usam o custo normalizado por unidade. Se algum fator estiver ausente, a tela sinaliza os valores sem misturar unidades diferentes.</p> : null}
       </div>
     </div>
   );
@@ -195,12 +201,13 @@ function ComparisonRow({ row, supplier, dados }: { row: Row; supplier: Supplier;
   const cell = row.cells.get(supplier.id);
   const bestSuppliers = dados.suppliers.filter((candidate) => {
     const candidateCell = row.cells.get(candidate.id);
-    return row.bestPrice !== null && candidateCell?.currentPrice === row.bestPrice && !candidateCell.doesNotSupply;
+    return row.bestComparablePrice !== null && comparablePrice(row, candidateCell) === row.bestComparablePrice && !candidateCell?.doesNotSupply;
   });
   const currentPrice = cell?.currentPrice ?? null;
   const hasPrice = currentPrice !== null && !cell?.doesNotSupply;
-  const isBest = hasPrice && currentPrice === row.bestPrice;
-  const difference = hasPrice && row.bestPrice !== null && row.bestPrice > 0 ? ((currentPrice - row.bestPrice) / row.bestPrice) * 100 : null;
+  const currentComparablePrice = comparablePrice(row, cell);
+  const isBest = hasPrice && currentComparablePrice === row.bestComparablePrice;
+  const difference = currentComparablePrice !== null && row.bestComparablePrice !== null && row.bestComparablePrice > 0 ? ((currentComparablePrice - row.bestComparablePrice) / row.bestComparablePrice) * 100 : null;
   const temOutros = dados.suppliers.length > 1;
   const idDoPainel = `respostas-${row.itemId}`;
 
@@ -209,7 +216,7 @@ function ComparisonRow({ row, supplier, dados }: { row: Row; supplier: Supplier;
       <div>
         <h3 className="text-fg text-sm font-semibold">{row.productName}</h3>
         <p className="text-fg-subtle mt-0.5 text-xs">{row.groupName} · {QTY.format(row.requestedQuantity)} {row.purchaseUnit} · preço por {row.pricingUnit}</p>
-        {row.conversionName ? <Badge variant="outline" className="mt-2">comparar apresentação</Badge> : null}
+        {row.conversionName ? <Badge variant={row.requiresPresentationComparison && !row.usesNormalizedComparison ? "destructive" : "outline"} className="mt-2">{row.requiresPresentationComparison && !row.usesNormalizedComparison ? "falta apresentação" : "comparação por apresentação"}</Badge> : null}
       </div>
 
       <div className="border-border lg:border-l lg:pl-3">
@@ -235,10 +242,10 @@ function ComparisonRow({ row, supplier, dados }: { row: Row; supplier: Supplier;
             </button>
           ) : null}
         </div>
-        {row.bestPrice === null ? <span className="text-fg-subtle text-sm">Nenhum preço recebido</span> : (
+        {row.bestComparablePrice === null ? <span className="text-fg-subtle text-sm">{row.requiresPresentationComparison ? "Preencha a apresentação de todas as propostas" : "Nenhum preço recebido"}</span> : (
           <>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-fg font-semibold tabular-nums">R$ {MONEY.format(row.bestPrice)}</span>
+              <span className="text-fg font-semibold tabular-nums">R$ {row.usesNormalizedComparison ? NORMALIZED.format(row.bestComparablePrice) : MONEY.format(row.bestComparablePrice)}{row.usesNormalizedComparison ? ` / ${row.comparisonUnit}` : ""}</span>
               {isBest ? <Badge variant="secondary">este fornecedor</Badge> : null}
             </div>
             <p className="text-fg-subtle mt-0.5 text-xs">{bestSuppliers.map((best) => best.suppliers.name).join(", ")}</p>
@@ -270,7 +277,7 @@ function TodasAsRespostas({ id, row, dados, emAnalise }: { id: string; row: Row;
       // Sem célula o item nunca foi enviado a este fornecedor: citá-lo aqui
       // sugeriria uma omissão que não houve.
       if (!cell) return [];
-      const preco = cell.doesNotSupply ? null : cell.currentPrice;
+      const preco = cell.doesNotSupply ? null : comparablePrice(row, cell);
       return [{ id: candidato.id, nome: candidato.suppliers.name, cell, preco }];
     })
     .sort((a, b) => {
@@ -283,7 +290,7 @@ function TodasAsRespostas({ id, row, dados, emAnalise }: { id: string; row: Row;
   return (
     <div id={id} className="border-border bg-surface-sunken mt-2 flex flex-col gap-1.5 rounded-lg border p-2">
       {linhas.map((linha) => {
-        const melhor = linha.preco !== null && linha.preco === row.bestPrice;
+        const melhor = linha.preco !== null && linha.preco === row.bestComparablePrice;
         return (
           <div key={linha.id} className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-xs">
             <span className={cn("min-w-0 truncate", linha.id === emAnalise ? "text-fg font-medium" : "text-fg-muted")}>
@@ -292,8 +299,8 @@ function TodasAsRespostas({ id, row, dados, emAnalise }: { id: string; row: Row;
             </span>
             {linha.preco !== null ? (
               <span className="flex items-center gap-1.5">
-                <span className={cn("tabular-nums", melhor ? "text-success font-semibold" : "text-fg")}>R$ {MONEY.format(linha.preco)}</span>
-                {linha.cell.normalizedPrice !== null && row.comparisonUnit ? <span className="text-fg-subtle tabular-nums">= {NORMALIZED.format(linha.cell.normalizedPrice)}/{row.comparisonUnit}</span> : null}
+                <span className={cn("tabular-nums", melhor ? "text-success font-semibold" : "text-fg")}>R$ {row.usesNormalizedComparison ? NORMALIZED.format(linha.preco) : MONEY.format(linha.preco)}{row.usesNormalizedComparison ? `/${row.comparisonUnit}` : ""}</span>
+                {row.usesNormalizedComparison && linha.cell.currentPrice !== null ? <span className="text-fg-subtle tabular-nums">pacote R$ {MONEY.format(linha.cell.currentPrice)}</span> : linha.cell.normalizedPrice !== null && row.comparisonUnit ? <span className="text-fg-subtle tabular-nums">= {NORMALIZED.format(linha.cell.normalizedPrice)}/{row.comparisonUnit}</span> : null}
               </span>
             ) : (
               <span className="text-fg-subtle">
@@ -315,7 +322,7 @@ function SupplierOffer({ row, supplier, cell, dados }: { row: Row; supplier: Sup
       <div>
         <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline">não fornece</Badge>{cell.correctionCount > 0 ? <Badge variant="outline">corrigido</Badge> : null}</div>
         {cell.notes ? <p className="text-fg-muted mt-1 text-xs">{cell.notes}</p> : null}
-        {dados.podeCorrigir && cell.responseItemId ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} doesNotSupply supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} /> : null}
+        {dados.podeCorrigir && cell.responseItemId ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} doesNotSupply supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} currentConversionFactor={cell.conversionFactor} conversionRequired={row.conversionRequired} /> : null}
       </div>
     );
   }
@@ -331,12 +338,12 @@ function SupplierOffer({ row, supplier, cell, dados }: { row: Row; supplier: Sup
 
   if (cell.responseItemId === null) {
     const link = row.supplierQuotationItemBySupplier.get(supplier.id);
-    return <div><Badge variant="destructive">aguardando preço</Badge>{dados.podeLancar && link ? <ManualPriceForm supplierQuotationItemId={link} roundId={dados.round.id} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} /> : null}</div>;
+    return <div><Badge variant="destructive">aguardando preço</Badge>{dados.podeLancar && link ? <ManualPriceForm supplierQuotationItemId={link} roundId={dados.round.id} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} comparisonUnit={row.comparisonUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} conversionRequired={row.conversionRequired} /> : null}</div>;
   }
 
   if (cell.currentPrice === null) return <Badge variant="destructive">resposta sem preço</Badge>;
 
-  const best = row.bestPrice !== null && cell.currentPrice === row.bestPrice;
+  const best = comparablePrice(row, cell) === row.bestComparablePrice;
   return (
     <div>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -350,7 +357,7 @@ function SupplierOffer({ row, supplier, cell, dados }: { row: Row; supplier: Sup
       {cell.notes ? <p className="text-fg-muted mt-1 text-xs">{cell.notes}</p> : null}
       <div className="mt-1 flex flex-wrap items-start gap-1">
         {dados.podeNegociar ? <NegotiationForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} supplierName={supplier.suppliers.name} productName={row.productName} /> : null}
-        {dados.podeCorrigir ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} doesNotSupply={false} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} /> : null}
+        {dados.podeCorrigir ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} doesNotSupply={false} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} currentConversionFactor={cell.conversionFactor} conversionRequired={row.conversionRequired} /> : null}
       </div>
     </div>
   );

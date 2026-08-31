@@ -59,6 +59,7 @@ function candidatesFor(row: Row, dados: DadosDaAlocacao): Candidate[] {
   const useNormalized =
     candidates.length > 0 &&
     candidates.every((candidate) => candidate.normalizedPrice !== null);
+  if (row.requiresPresentationComparison && !useNormalized) return [];
   return candidates
     .map(({ normalizedPrice, ...candidate }) => ({
       ...candidate,
@@ -273,7 +274,7 @@ export function AlocacaoConteudo({
                     {podeDecidir && candidates.length > 0 && round.status === "active" ? <AllocateForm roundId={round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={missing} initialSupplierId={candidates[0].id} buttonLabel="Completar" /> : null}
                   </div>
                 ))}
-                {withoutPrice.map((row) => <div key={row.itemId} className="border-border bg-surface flex items-center gap-3 rounded-lg border px-3 py-2.5"><div className="flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-muted text-xs">Nenhum fornecedor respondeu com preço</p></div><Badge variant="destructive">sem preço</Badge></div>)}
+                {withoutPrice.map((row) => <div key={row.itemId} className="border-border bg-surface flex items-center gap-3 rounded-lg border px-3 py-2.5"><div className="flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-muted text-xs">{row.requiresPresentationComparison ? "Falta informar a apresentação em uma ou mais propostas" : "Nenhum fornecedor respondeu com preço"}</p></div><Badge variant="destructive">{row.requiresPresentationComparison ? "conversão pendente" : "sem preço"}</Badge></div>)}
               </div>
             </section>
           ) : null}
@@ -497,6 +498,11 @@ function CompletedItemResult({ row, dados }: { row: Row; dados: DadosDaAlocacao 
                       allocation.selectedPrice * allocation.allocatedQuantity,
                     0,
                   ) / wonQuantity;
+          const packagingChoiceResult = wins.reduce(
+            (sum, allocation) =>
+              sum + (allocation.packagingChoiceResultEstimated ?? 0),
+            0,
+          );
           const hasPrice =
             cell?.currentPrice !== null && cell?.currentPrice !== undefined;
 
@@ -530,6 +536,11 @@ function CompletedItemResult({ row, dados }: { row: Row; dados: DadosDaAlocacao 
                   {cell?.negotiated && cell.quotedPrice !== null ? (
                     <p className="text-fg-subtle text-xs line-through tabular-nums">
                       Original: {MONEY.format(cell.quotedPrice)}
+                    </p>
+                  ) : null}
+                  {packagingChoiceResult !== 0 ? (
+                    <p className={packagingChoiceResult > 0 ? "text-success mt-1 text-xs font-medium" : "text-danger mt-1 text-xs font-medium"}>
+                      Escolha da embalagem: {MONEY.format(packagingChoiceResult)}
                     </p>
                   ) : null}
                 </>
@@ -598,6 +609,11 @@ function CompletedSummary({
         (allocation.estimatedPricingQuantity ?? 0)
     );
   }, 0);
+  const packagingChoiceResult = confirmed.reduce(
+    (sum, { allocation }) =>
+      sum + (allocation.packagingChoiceResultEstimated ?? 0),
+    0,
+  );
   const withoutPurchase = dados.rows.filter(
     (row) => row.commercialStatus === "closed_without_purchase",
   ).length;
@@ -620,11 +636,12 @@ function CompletedSummary({
           </Button>
         ) : null}
       </div>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         <Summary label="Itens cotados" value={String(dados.rows.length)} detail={withoutPurchase > 0 ? `${withoutPurchase} encerrados sem compra` : "escopo concluído"} />
         <Summary label="Fornecedores vencedores" value={String(suppliers.size)} detail={[...suppliers].map((id) => dados.supplierName.get(id)).filter(Boolean).join(", ") || "nenhum"} />
         <Summary label="Valor estimado" value={MONEY.format(estimatedTotal)} detail={`${calculableItems}/${purchasedItems} itens calculáveis`} alert={calculableItems < purchasedItems} />
         <Summary label="Economia negociada" value={MONEY.format(negotiatedSavings)} detail="preço original x adjudicado" />
+        <Summary label="Escolha de embalagens" value={MONEY.format(packagingChoiceResult)} detail="custo unitário x melhor alternativa" alert={packagingChoiceResult < 0} />
       </div>
     </section>
   );
@@ -721,6 +738,11 @@ function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados:
           <li key={allocation.allocationId} className="flex flex-wrap items-center gap-3 px-4 py-3">
             <ItemName row={row} quantity={allocation.allocatedQuantity} />
             <Price price={allocation.selectedPrice} pricingQuantity={allocation.estimatedPricingQuantity} unit={row.pricingUnit} />
+            {allocation.packagingChoiceResultEstimated !== null ? (
+              <span className={allocation.packagingChoiceResultEstimated >= 0 ? "text-success text-xs font-medium" : "text-danger text-xs font-medium"}>
+                embalagem {MONEY.format(allocation.packagingChoiceResultEstimated)}
+              </span>
+            ) : null}
             <Badge variant={allocation.status === "confirmed" ? "default" : "outline"}>{allocation.status === "confirmed" ? "confirmada" : "rascunho"}</Badge>
             {dados.podeDecidir && allocation.status === "draft" ? <form action={cancelAllocation.bind(null, allocation.allocationId, dados.round.id)}><Button type="submit" size="sm" variant="ghost" className="text-fg-subtle hover:text-destructive">Desfazer</Button></form> : null}
           </li>

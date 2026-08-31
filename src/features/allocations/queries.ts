@@ -21,6 +21,8 @@ export type AllocationRow = {
   estimatedPricingQuantity: number | null;
   estimatedPricingSource: string | null;
   selectedPrice: number;
+  /** Resultado econômico congelado, somente para produtos de embalagem. */
+  packagingChoiceResultEstimated: number | null;
   status: string;
 };
 
@@ -33,7 +35,7 @@ export async function listAllocations(
   const { data, error } = await supabase
     .from("purchase_allocations")
     .select(
-      "id, quotation_item_id, supplier_id, allocated_quantity, estimated_pricing_quantity, estimated_pricing_source, selected_price, status",
+      "id, quotation_item_id, supplier_id, allocated_quantity, estimated_pricing_quantity, estimated_pricing_source, selected_price, packaging_choice_result_estimated, status",
     )
     .eq("company_id", companyId)
     .eq("purchase_round_id", roundId)
@@ -55,6 +57,10 @@ export async function listAllocations(
         : Number(row.estimated_pricing_quantity),
     estimatedPricingSource: row.estimated_pricing_source,
     selectedPrice: Number(row.selected_price),
+    packagingChoiceResultEstimated:
+      row.packaging_choice_result_estimated === null
+        ? null
+        : Number(row.packaging_choice_result_estimated),
     status: row.status,
   }));
 }

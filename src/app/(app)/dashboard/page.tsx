@@ -3,6 +3,7 @@ import {
   ClipboardList,
   MessageCircle,
   MessageSquareText,
+  PackageCheck,
   Plus,
   ShoppingCart,
   TrendingDown,
@@ -471,7 +472,7 @@ async function Financial({ companyId }: { companyId: string }) {
                 {financial.cotacoesConcluidas === 1 ? "cotação" : "cotações"}.
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <DashboardMetric
                 icon={TrendingDown}
                 label="Resultado estimado das negociações"
@@ -491,6 +492,19 @@ async function Financial({ companyId }: { companyId: string }) {
                 value={MONEY.format(financial.valorPrevistoPedidos)}
                 hint="Preço final × quantidade estimada na decisão de compra"
               />
+              <DashboardMetric
+                icon={PackageCheck}
+                label="Ganho estimado nas embalagens"
+                value={MONEY.format(financial.economiaEscolhaEmbalagensEstimada)}
+                hint="Custo por unidade do vencedor contra a melhor alternativa"
+                tone={
+                  financial.economiaEscolhaEmbalagensEstimada > 0
+                    ? "good"
+                    : financial.economiaEscolhaEmbalagensEstimada < 0
+                      ? "bad"
+                      : "neutral"
+                }
+              />
             </div>
           </div>
 
@@ -507,7 +521,7 @@ async function Financial({ companyId }: { companyId: string }) {
                 .
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <DashboardMetric
                 icon={WalletCards}
                 label="Valor efetivamente recebido"
@@ -524,6 +538,19 @@ async function Financial({ companyId }: { companyId: string }) {
                   financial.economiaRealizada > 0
                     ? "good"
                     : financial.economiaRealizada < 0
+                      ? "bad"
+                      : "neutral"
+                }
+              />
+              <DashboardMetric
+                icon={PackageCheck}
+                label="Ganho realizado nas embalagens"
+                value={MONEY.format(financial.economiaEscolhaEmbalagensRealizada)}
+                hint="Vantagem proporcional às embalagens efetivamente recebidas"
+                tone={
+                  financial.economiaEscolhaEmbalagensRealizada > 0
+                    ? "good"
+                    : financial.economiaEscolhaEmbalagensRealizada < 0
                       ? "bad"
                       : "neutral"
                 }
@@ -549,7 +576,9 @@ async function Financial({ companyId }: { companyId: string }) {
             economia; resultado negativo significa que o preço terminou acima da
             proposta inicial. A previsão considera as cotações encerradas no
             mês. O realizado considera apenas o que já chegou. Pedidos diretos
-            entram no valor recebido, mas não geram economia contra cotação.
+            entram no valor recebido, mas não geram economia contra cotação. O
+            ganho de embalagens é separado e considera exclusivamente produtos
+            com finalidade Embalagem.
           </div>
         </div>
       )}

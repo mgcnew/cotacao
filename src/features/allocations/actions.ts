@@ -238,6 +238,7 @@ export async function allocateBestPrices(
       candidatesWithNormalization.every(
         (candidate) => candidate.normalizedPrice !== null,
       );
+    if (row.requiresPresentationComparison && !useNormalized) return [];
     const candidates = candidatesWithNormalization
       .map(({ normalizedPrice, ...candidate }) => ({
         ...candidate,
@@ -262,7 +263,9 @@ export async function allocateBestPrices(
       allocated_quantity: row.requestedQuantity,
       selected_price: best.price,
       benchmark_price_at_decision: best.price,
-      decision_reason: "Sugestão automática: menor preço vigente",
+      decision_reason: useNormalized
+        ? "Sugestão automática: menor preço na unidade de comparação"
+        : "Sugestão automática: menor preço vigente",
       allocated_by: user.id,
     }];
   });

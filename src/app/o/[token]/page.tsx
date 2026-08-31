@@ -54,6 +54,9 @@ export default async function PedidoPublicoPage({
     (sum, item) => sum + Number(item.total ?? 0),
     0,
   );
+  const packagingItems = data.revision.items.filter(
+    (item) => item.packaging_presentation !== null,
+  );
 
   return (
     <main className="bg-surface-sunken min-h-dvh px-3 py-4 sm:px-6 sm:py-8">
@@ -135,6 +138,14 @@ export default async function PedidoPublicoPage({
                       {item.notes}
                     </p>
                   ) : null}
+                  {item.packaging_presentation ? (
+                    <div className="border-primary/20 bg-primary-soft mt-2 inline-flex flex-col rounded-lg border px-2.5 py-1.5 text-xs">
+                      <span className="text-fg-muted">Apresentação confirmada na cotação</span>
+                      <strong className="text-primary mt-0.5 tabular-nums">
+                        {QTY.format(item.packaging_presentation.quantity_per_package)} {item.packaging_presentation.comparison_unit_symbol} por pacote
+                      </strong>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="sm:text-right">
                   <p className="text-fg tabular-nums">
@@ -194,12 +205,28 @@ export default async function PedidoPublicoPage({
           <ConfirmOrderForm
             token={token}
             alreadyConfirmed={data.revision.status === "confirmed"}
+            packagingPresentations={packagingItems.map((item) => ({
+              productName: item.product_name,
+              quantity: item.packaging_presentation!.quantity_per_package,
+              unit: item.packaging_presentation!.comparison_unit_symbol,
+            }))}
           />
 
           {data.revision.status === "sent" ? (
             <div className="border-border mt-4 border-t pt-4">
               <ReportDivergenceForm
                 token={token}
+                buttonLabel={
+                  packagingItems.length > 0
+                    ? "A apresentação ou outro dado mudou"
+                    : "Algo está errado neste pedido"
+                }
+                defaultType={packagingItems.length > 0 ? "specification" : ""}
+                defaultItemId={
+                  packagingItems.length === 1
+                    ? packagingItems[0].order_revision_item_id
+                    : ""
+                }
                 items={data.revision.items.map((i) => ({
                   id: i.order_revision_item_id,
                   name: i.product_name,

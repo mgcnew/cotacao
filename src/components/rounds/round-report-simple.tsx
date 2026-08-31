@@ -62,6 +62,20 @@ export function RoundReportSimpleContent({ report }: { report: RoundReport }) {
         </p>
       </section>
 
+      {report.summary.packagingChoiceResult !== 0 ? (
+        <section className="border-primary/25 bg-primary-soft rounded-xl border px-4 py-3 text-center">
+          <p className="text-fg-muted text-xs font-semibold tracking-wide uppercase">
+            Resultado da escolha de embalagens
+          </p>
+          <p className={report.summary.packagingChoiceResult > 0 ? "text-success mt-1 text-2xl font-bold tabular-nums" : "text-danger mt-1 text-2xl font-bold tabular-nums"}>
+            {MONEY.format(report.summary.packagingChoiceResult)}
+          </p>
+          <p className="text-fg-subtle mt-1 text-xs">
+            Comparação por unidade contra a melhor apresentação alternativa.
+          </p>
+        </section>
+      ) : null}
+
       <section className="grid grid-cols-3 gap-2">
         <SimpleMetric
           label="Valor da compra"

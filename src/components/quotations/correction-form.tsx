@@ -37,6 +37,11 @@ export function CorrectionForm({
   supplierName,
   productName,
   pricingUnit,
+  conversionDefinitionId = null,
+  conversionName = null,
+  conversionUnit = null,
+  currentConversionFactor = null,
+  conversionRequired = false,
 }: {
   responseItemId: string;
   roundId: string;
@@ -45,6 +50,11 @@ export function CorrectionForm({
   supplierName: string;
   productName: string;
   pricingUnit: string;
+  conversionDefinitionId?: string | null;
+  conversionName?: string | null;
+  conversionUnit?: string | null;
+  currentConversionFactor?: number | null;
+  conversionRequired?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [fornece, setFornece] = React.useState(!doesNotSupply);
@@ -109,6 +119,29 @@ export function CorrectionForm({
             name="price"
             inputMode="decimal"
             placeholder="0,00"
+            className="h-7 text-sm"
+          />
+        </div>
+      ) : null}
+
+      {fornece && conversionDefinitionId && conversionName ? (
+        <div className="border-primary/20 bg-primary-soft rounded-md border p-2">
+          <input type="hidden" name="conversionDefinitionId" value={conversionDefinitionId} />
+          <label
+            htmlFor={`corr-conversao-${responseItemId}`}
+            className="text-fg-muted mb-1 block text-xs"
+          >
+            {conversionName}{conversionUnit ? ` (${conversionUnit})` : ""}
+            {currentConversionFactor !== null
+              ? ` (atual: ${currentConversionFactor.toLocaleString("pt-BR")})`
+              : ""}
+          </label>
+          <Input
+            id={`corr-conversao-${responseItemId}`}
+            name="conversionFactor"
+            inputMode="decimal"
+            required={conversionRequired && currentConversionFactor === null}
+            placeholder="Deixe vazio para manter o valor atual"
             className="h-7 text-sm"
           />
         </div>

@@ -20,6 +20,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  *  - economia negociada: o que a negociação prometeu (cotado − combinado);
  *  - economia realizada: o que de fato entrou (cotado − praticado);
  *  - impacto de divergência: o que a nota cobrou a mais (praticado − combinado).
+ *  - escolha de embalagem: vantagem unitária contra a melhor alternativa,
+ *    somente para produtos com finalidade `packaging`.
  */
 
 /**
@@ -68,12 +70,14 @@ export type SavingsSummary = {
   negotiated: number;
   realized: number;
   divergenceImpact: number;
+  packagingChoice: number;
   /** Quanto da economia negociada sobreviveu até a nota fiscal. */
   captureRate: number | null;
   itemCount: number;
   economyItems: number;
   costItems: number;
   divergentItems: number;
+  packagingChoiceItems: number;
 };
 
 export async function getSavingsSummary(
@@ -92,11 +96,13 @@ export async function getSavingsSummary(
       negotiated: 0,
       realized: 0,
       divergenceImpact: 0,
+      packagingChoice: 0,
       captureRate: null,
       itemCount: 0,
       economyItems: 0,
       costItems: 0,
       divergentItems: 0,
+      packagingChoiceItems: 0,
     };
   }
 
@@ -105,7 +111,7 @@ export async function getSavingsSummary(
     let query = supabase
       .from("v_realized_savings")
       .select(
-        "negotiated_savings, realized_savings, divergence_impact, quoted_price",
+        "negotiated_savings, realized_savings, divergence_impact, packaging_choice_result, quoted_price",
       )
       .eq("company_id", companyId);
     query = applyFilters(query, filters, productIds);
@@ -128,11 +134,16 @@ export async function getSavingsSummary(
     (s, r) => s + Number(r.divergence_impact ?? 0),
     0,
   );
+  const packagingChoice = rows.reduce(
+    (s, r) => s + Number(r.packaging_choice_result ?? 0),
+    0,
+  );
 
   return {
     negotiated,
     realized,
     divergenceImpact,
+    packagingChoice,
     // Sem economia negociada não existe taxa de captura — dividir por zero
     // produziria um número que parece informação e não é.
     captureRate: negotiated > 0 ? realized / negotiated : null,
@@ -141,6 +152,9 @@ export async function getSavingsSummary(
     costItems: rows.filter((row) => Number(row.realized_savings) < 0).length,
     divergentItems: rows.filter((row) => Number(row.divergence_impact) !== 0)
       .length,
+    packagingChoiceItems: rows.filter(
+      (row) => Number(row.packaging_choice_result ?? 0) > 0,
+    ).length,
   };
 }
 

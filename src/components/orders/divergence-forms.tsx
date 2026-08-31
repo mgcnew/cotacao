@@ -45,9 +45,15 @@ function Submit({
 export function ReportDivergenceForm({
   token,
   items,
+  buttonLabel = "Algo está errado neste pedido",
+  defaultType = "",
+  defaultItemId = "",
 }: {
   token: string;
   items: { id: string; name: string }[];
+  buttonLabel?: string;
+  defaultType?: string;
+  defaultItemId?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [state, formAction] = useActionState<DivergenceState, FormData>(
@@ -76,7 +82,7 @@ export function ReportDivergenceForm({
         onClick={() => setOpen(true)}
       >
         <AlertTriangle className="size-4" aria-hidden />
-        Algo está errado neste pedido
+        {buttonLabel}
       </Button>
     );
   }
@@ -107,6 +113,7 @@ export function ReportDivergenceForm({
             id="public-divergence-type"
             name="type"
             required
+            defaultValue={defaultType}
             placeholder="Selecione…"
             options={ORDER_DIVERGENCE_TYPES.map((type) => ({
               value: type.value,
@@ -125,6 +132,7 @@ export function ReportDivergenceForm({
             id="public-divergence-item"
             name="orderRevisionItemId"
             emptyOptionLabel="O pedido inteiro"
+            defaultValue={defaultItemId}
             options={items.map((item) => ({
               value: item.id,
               label: item.name,

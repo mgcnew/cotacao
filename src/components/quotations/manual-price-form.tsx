@@ -42,12 +42,22 @@ export function ManualPriceForm({
   supplierName,
   productName,
   pricingUnit,
+  comparisonUnit,
+  conversionDefinitionId,
+  conversionName,
+  conversionUnit,
+  conversionRequired,
 }: {
   supplierQuotationItemId: string;
   roundId: string;
   supplierName: string;
   productName: string;
   pricingUnit: string;
+  comparisonUnit: string | null;
+  conversionDefinitionId: string | null;
+  conversionName: string | null;
+  conversionUnit: string | null;
+  conversionRequired: boolean;
 }) {
   const [state, formAction] = useActionState<CorrectionState, FormData>(
     recordManualQuotationItem,
@@ -86,6 +96,31 @@ export function ManualPriceForm({
         name="supplierQuotationItemId"
         value={supplierQuotationItemId}
       />
+
+      {conversionDefinitionId && conversionName && !naoFornece ? (
+        <div className="border-primary/20 bg-primary-soft rounded-md border p-2">
+          <input
+            type="hidden"
+            name="conversionDefinitionId"
+            value={conversionDefinitionId}
+          />
+          <label
+            className="text-fg-muted mb-1 block text-xs"
+            htmlFor={`conversao-${supplierQuotationItemId}`}
+          >
+            {conversionName}{conversionUnit ? ` (${conversionUnit})` : ""}
+            {conversionRequired ? <span className="text-destructive"> *</span> : null}
+          </label>
+          <Input
+            id={`conversao-${supplierQuotationItemId}`}
+            name="conversionFactor"
+            inputMode="decimal"
+            required={conversionRequired}
+            placeholder={`Para comparar por ${comparisonUnit ?? "unidade"}`}
+            className="h-7 w-full text-sm"
+          />
+        </div>
+      ) : null}
 
       <label className="sr-only" htmlFor={`preco-${supplierQuotationItemId}`}>
         Preço de {supplierName} para {productName}

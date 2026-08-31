@@ -16,6 +16,9 @@ export type PublicAttribute = {
   key: string;
   data_type: "text" | "numeric" | "boolean";
   required: boolean;
+  is_conversion_factor: boolean;
+  suggested_value_numeric: number | null;
+  suggested_confirmed_at: string | null;
   unit: { id: string; symbol: string } | null;
 };
 
@@ -52,14 +55,54 @@ export async function getPublicQuotation(
 ): Promise<PublicQuotation | null> {
   const supabase = await createServerSupabaseClient();
 
-  const { data, error } = await supabase.rpc("rpc_public_get_quotation", {
-    p_token: token,
-  });
+  const [quotationResult, conversionResult] = await Promise.all([
+    supabase.rpc("rpc_public_get_quotation", { p_token: token }),
+    supabase.rpc("rpc_public_get_quotation_conversion_context", {
+      p_token: token,
+    }),
+  ]);
+  const { data, error } = quotationResult;
 
   if (error) {
     if (error.code === "42501") return null;
     throw new Error(`Falha ao abrir a cotação: ${error.message}`);
   }
 
-  return data as unknown as PublicQuotation;
+  if (conversionResult.error && conversionResult.error.code !== "PGRST202") {
+    throw new Error(
+      `Falha ao carregar apresentações: ${conversionResult.error.message}`,
+    );
+  }
+
+  const quotation = data as unknown as PublicQuotation;
+  const contexts = (conversionResult.data ?? []) as unknown as {
+    supplier_quotation_item_id: string;
+    attribute_definition_id: string;
+    suggested_value_numeric: number | null;
+    suggested_confirmed_at: string | null;
+  }[];
+  const contextByItemAndAttribute = new Map(
+    contexts.map((context) => [
+      `${context.supplier_quotation_item_id}:${context.attribute_definition_id}`,
+      context,
+    ]),
+  );
+
+  return {
+    ...quotation,
+    items: quotation.items.map((item) => ({
+      ...item,
+      attributes: item.attributes.map((attribute) => {
+        const context = contextByItemAndAttribute.get(
+          `${item.supplier_quotation_item_id}:${attribute.attribute_definition_id}`,
+        );
+        return {
+          ...attribute,
+          is_conversion_factor: Boolean(context),
+          suggested_value_numeric: context?.suggested_value_numeric ?? null,
+          suggested_confirmed_at: context?.suggested_confirmed_at ?? null,
+        };
+      }),
+    })),
+  };
 }

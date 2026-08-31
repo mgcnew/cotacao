@@ -30,7 +30,9 @@ export type MonthFinancials = {
   cotacoesConcluidas: number;
   valorPrevistoPedidos: number;
   economiaEstimada: number;
+  economiaEscolhaEmbalagensEstimada: number;
   economiaRealizada: number;
+  economiaEscolhaEmbalagensRealizada: number;
   impactoDivergencias: number;
 };
 
@@ -108,7 +110,7 @@ export async function getMonthFinancials(
   const { de, ate } = mesCorrente(timezone);
   const supabase = await createServerSupabaseClient();
 
-  const [savings, comprado, snapshots] = await Promise.all([
+  const [savings, comprado, snapshots, packagingAllocations] = await Promise.all([
     getSavingsSummary(companyId, {
       de,
       ate,
@@ -136,6 +138,15 @@ export async function getMonthFinancials(
       .eq("company_id", companyId)
       .gte("purchase_rounds.completed_at", `${de}T00:00:00`)
       .lte("purchase_rounds.completed_at", `${ate}T23:59:59`),
+    supabase
+      .from("purchase_allocations")
+      .select(
+        "packaging_choice_result_estimated, purchase_rounds!inner ( completed_at )",
+      )
+      .eq("company_id", companyId)
+      .eq("status", "confirmed")
+      .gte("purchase_rounds.completed_at", `${de}T00:00:00`)
+      .lte("purchase_rounds.completed_at", `${ate}T23:59:59`),
   ]);
 
   if (comprado.error) {
@@ -144,6 +155,11 @@ export async function getMonthFinancials(
   if (snapshots.error) {
     throw new Error(
       `Falha ao somar cotações concluídas: ${snapshots.error.message}`,
+    );
+  }
+  if (packagingAllocations.error) {
+    throw new Error(
+      `Falha ao somar escolhas de embalagem: ${packagingAllocations.error.message}`,
     );
   }
 
@@ -170,7 +186,15 @@ export async function getMonthFinancials(
       (sum, item) => sum + item.economiaEstimada,
       0,
     ),
+    economiaEscolhaEmbalagensEstimada: (
+      packagingAllocations.data ?? []
+    ).reduce(
+      (sum, allocation) =>
+        sum + Number(allocation.packaging_choice_result_estimated ?? 0),
+      0,
+    ),
     economiaRealizada: savings.realized,
+    economiaEscolhaEmbalagensRealizada: savings.packagingChoice,
     impactoDivergencias: savings.divergenceImpact,
   };
 }

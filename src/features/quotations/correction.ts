@@ -34,6 +34,15 @@ const schema = z
       .trim()
       .min(3, { error: "Explique o motivo da correção" })
       .max(300, { error: "Motivo muito longo" }),
+    conversionDefinitionId: z
+      .uuid({ error: "Conversão inválida" })
+      .nullish()
+      .transform((v) => v ?? undefined),
+    conversionFactor: z
+      .string()
+      .trim()
+      .nullish()
+      .transform((v) => (v ? v : undefined)),
   })
   .refine((v) => v.supplies === "nao" || (v.price && v.price.length > 0), {
     error: "Informe o preço corrigido",
@@ -65,6 +74,8 @@ export async function correctResponseItem(
     price: formData.get("price"),
     notes: formData.get("notes"),
     reason: formData.get("reason"),
+    conversionDefinitionId: formData.get("conversionDefinitionId"),
+    conversionFactor: formData.get("conversionFactor"),
   });
 
   if (!parsed.success) {
@@ -81,8 +92,18 @@ export async function correctResponseItem(
     }
   }
 
+  let conversionFactor: number | undefined;
+  if (parsed.data.conversionFactor) {
+    conversionFactor = Number(
+      parsed.data.conversionFactor.replace(/\./g, "").replace(",", "."),
+    );
+    if (!Number.isFinite(conversionFactor) || conversionFactor <= 0) {
+      return { error: "A apresentação deve ser maior que zero." };
+    }
+  }
+
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc("rpc_correct_quotation_response_item", {
+  const { error } = await supabase.rpc("rpc_correct_quotation_item_with_conversion", {
     p_company_id: company.companyId,
     p_quotation_response_item_id: parsed.data.responseItemId,
     p_quoted_price: price,
@@ -90,6 +111,9 @@ export async function correctResponseItem(
     p_does_not_supply: !fornece,
     p_notes: parsed.data.notes,
     p_reason: parsed.data.reason,
+    p_conversion_attribute_definition_id:
+      parsed.data.conversionDefinitionId,
+    p_conversion_factor: conversionFactor,
   });
 
   if (error) {
@@ -126,6 +150,12 @@ export async function recordManualQuotationItem(
   );
   const doesNotSupply = formData.get("doesNotSupply") === "on";
   const precoBruto = String(formData.get("quotedPrice") ?? "").trim();
+  const conversionDefinitionId = String(
+    formData.get("conversionDefinitionId") ?? "",
+  );
+  const conversionFactorRaw = String(
+    formData.get("conversionFactor") ?? "",
+  ).trim();
 
   if (!supplierQuotationItemId) return { error: "Item inválido." };
 
@@ -138,13 +168,28 @@ export async function recordManualQuotationItem(
     return { error: "Informe o preço." };
   }
 
+  const conversionFactor = conversionFactorRaw
+    ? Number(conversionFactorRaw.replace(/\./g, "").replace(",", "."))
+    : null;
+  if (
+    conversionFactor !== null &&
+    (!Number.isFinite(conversionFactor) || conversionFactor <= 0)
+  ) {
+    return { error: "A apresentação deve ser maior que zero." };
+  }
+
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc("rpc_record_manual_quotation_item", {
+  const { error } = await supabase.rpc("rpc_record_manual_quotation_item_with_conversion", {
     p_company_id: company.companyId,
     p_supplier_quotation_item_id: supplierQuotationItemId,
     p_quoted_price: doesNotSupply ? undefined : (preco ?? undefined),
     p_does_not_supply: doesNotSupply,
     p_notes: String(formData.get("notes") ?? "").trim() || undefined,
+    p_conversion_attribute_definition_id:
+      conversionDefinitionId || undefined,
+    p_conversion_factor: doesNotSupply
+      ? undefined
+      : (conversionFactor ?? undefined),
   });
 
   if (error) {

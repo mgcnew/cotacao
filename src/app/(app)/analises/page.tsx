@@ -1,4 +1,4 @@
-import { BarChart3, ReceiptText, TrendingDown, TrendingUp } from "lucide-react";
+import { BarChart3, PackageCheck, ReceiptText, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -160,9 +160,9 @@ export default async function AnalisesPage({
         <SectionHeading
           id="financial-results"
           title="Resultado financeiro dos itens cotados"
-          description="Compara proposta inicial, preço combinado no pedido e preço conferido na nota. Pedidos diretos ficam fora desta comparação."
+          description="Compara proposta inicial, preço combinado no pedido e preço conferido na nota. A escolha de embalagens aparece separada e não altera os demais resultados."
         />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <Metric
             label="Resultado negociado recebido"
             value={MONEY.format(savings.negotiated)}
@@ -174,6 +174,12 @@ export default async function AnalisesPage({
             value={MONEY.format(savings.realized)}
             hint="Cotado menos valor efetivo da nota"
             tone={resultTone(savings.realized)}
+          />
+          <Metric
+            label="Escolha de embalagens"
+            value={MONEY.format(savings.packagingChoice)}
+            hint="Vencedor por unidade versus melhor alternativa"
+            tone={resultTone(savings.packagingChoice)}
           />
           <Metric
             label="Taxa de captura"
@@ -201,7 +207,7 @@ export default async function AnalisesPage({
             }
           />
         </div>
-        <div className="border-border bg-surface mt-3 grid gap-2 rounded-xl border p-3 sm:grid-cols-3">
+        <div className="border-border bg-surface mt-3 grid gap-2 rounded-xl border p-3 sm:grid-cols-4">
           <ResultCount
             icon={TrendingDown}
             label="Itens com economia"
@@ -219,6 +225,12 @@ export default async function AnalisesPage({
             label="Itens divergentes"
             value={savings.divergentItems}
             tone="neutral"
+          />
+          <ResultCount
+            icon={PackageCheck}
+            label="Embalagens com ganho"
+            value={savings.packagingChoiceItems}
+            tone="good"
           />
         </div>
       </section>

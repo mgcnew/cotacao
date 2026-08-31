@@ -1929,6 +1929,10 @@ export type Database = {
           estimated_pricing_quantity: number | null;
           estimated_pricing_source: string | null;
           id: string;
+          packaging_benchmark_unit_price: number | null;
+          packaging_choice_result_estimated: number | null;
+          packaging_comparison_quantity: number | null;
+          packaging_selected_unit_price: number | null;
           purchase_round_id: string;
           quotation_item_id: string;
           quotation_response_item_id: string;
@@ -1948,6 +1952,10 @@ export type Database = {
           estimated_pricing_quantity?: number | null;
           estimated_pricing_source?: string | null;
           id?: string;
+          packaging_benchmark_unit_price?: number | null;
+          packaging_choice_result_estimated?: number | null;
+          packaging_comparison_quantity?: number | null;
+          packaging_selected_unit_price?: number | null;
           purchase_round_id: string;
           quotation_item_id: string;
           quotation_response_item_id: string;
@@ -1967,6 +1975,10 @@ export type Database = {
           estimated_pricing_quantity?: number | null;
           estimated_pricing_source?: string | null;
           id?: string;
+          packaging_benchmark_unit_price?: number | null;
+          packaging_choice_result_estimated?: number | null;
+          packaging_comparison_quantity?: number | null;
+          packaging_selected_unit_price?: number | null;
           purchase_round_id?: string;
           quotation_item_id?: string;
           quotation_response_item_id?: string;
@@ -2349,34 +2361,50 @@ export type Database = {
         Row: {
           attribute_definition_id: string;
           company_id: string;
+          confirmed_at: string;
           created_at: string;
           id: string;
           quotation_response_item_id: string;
+          source_attribute_value_id: string | null;
           value_boolean: boolean | null;
           value_numeric: number | null;
           value_text: string | null;
+          value_origin: string;
         };
         Insert: {
           attribute_definition_id: string;
           company_id: string;
+          confirmed_at?: string;
           created_at?: string;
           id?: string;
           quotation_response_item_id: string;
+          source_attribute_value_id?: string | null;
           value_boolean?: boolean | null;
           value_numeric?: number | null;
           value_text?: string | null;
+          value_origin?: string;
         };
         Update: {
           attribute_definition_id?: string;
           company_id?: string;
+          confirmed_at?: string;
           created_at?: string;
           id?: string;
           quotation_response_item_id?: string;
+          source_attribute_value_id?: string | null;
           value_boolean?: boolean | null;
           value_numeric?: number | null;
           value_text?: string | null;
+          value_origin?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "quotation_response_attribute_values_source_fkey";
+            columns: ["source_attribute_value_id"];
+            isOneToOne: false;
+            referencedRelation: "quotation_response_attribute_values";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "quotation_response_attribute__company_id_attribute_definit_fkey";
             columns: ["company_id", "attribute_definition_id"];
@@ -4102,6 +4130,7 @@ export type Database = {
           negotiated_savings: number | null;
           order_id: string | null;
           order_revision_item_id: string | null;
+          packaging_choice_result: number | null;
           practiced_price: number | null;
           pricing_quantity_received: number | null;
           product_id: string | null;
@@ -4285,6 +4314,20 @@ export type Database = {
       rpc_correct_quotation_response_item: {
         Args: {
           p_company_id: string;
+          p_does_not_supply?: boolean;
+          p_is_available?: boolean;
+          p_notes?: string;
+          p_quotation_response_item_id: string;
+          p_quoted_price?: number;
+          p_reason?: string;
+        };
+        Returns: Json;
+      };
+      rpc_correct_quotation_item_with_conversion: {
+        Args: {
+          p_company_id: string;
+          p_conversion_attribute_definition_id?: string;
+          p_conversion_factor?: number;
           p_does_not_supply?: boolean;
           p_is_available?: boolean;
           p_notes?: string;
@@ -4565,8 +4608,23 @@ export type Database = {
         Returns: Json;
       };
       rpc_public_confirm_order: { Args: { p_token: string }; Returns: Json };
+      rpc_public_confirm_order_validated: {
+        Args: {
+          p_packaging_presentations_confirmed?: boolean;
+          p_token: string;
+        };
+        Returns: Json;
+      };
       rpc_public_get_order: { Args: { p_token: string }; Returns: Json };
+      rpc_public_get_order_packaging_context: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
       rpc_public_get_quotation: { Args: { p_token: string }; Returns: Json };
+      rpc_public_get_quotation_conversion_context: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
       rpc_public_report_order_divergence: {
         Args: { p_divergences: Json; p_token: string };
         Returns: Json;
@@ -4575,9 +4633,25 @@ export type Database = {
         Args: { p_items: Json; p_token: string };
         Returns: Json;
       };
+      rpc_public_submit_quotation_validated: {
+        Args: { p_items: Json; p_token: string };
+        Returns: Json;
+      };
       rpc_record_manual_quotation_item: {
         Args: {
           p_company_id: string;
+          p_does_not_supply?: boolean;
+          p_notes?: string;
+          p_quoted_price?: number;
+          p_supplier_quotation_item_id: string;
+        };
+        Returns: string;
+      };
+      rpc_record_manual_quotation_item_with_conversion: {
+        Args: {
+          p_company_id: string;
+          p_conversion_attribute_definition_id?: string;
+          p_conversion_factor?: number;
           p_does_not_supply?: boolean;
           p_notes?: string;
           p_quoted_price?: number;

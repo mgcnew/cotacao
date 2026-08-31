@@ -21,8 +21,10 @@ export async function confirmOrder(
   if (!token) return { error: "Link inválido." };
 
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc("rpc_public_confirm_order", {
+  const { error } = await supabase.rpc("rpc_public_confirm_order_validated", {
     p_token: token,
+    p_packaging_presentations_confirmed:
+      formData.get("packagingPresentationsConfirmed") === "on",
   });
 
   if (error) {

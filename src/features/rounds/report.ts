@@ -65,6 +65,8 @@ export type RoundReport = {
     winnerCount: number;
     estimatedAwardedValue: number;
     negotiatedSavings: number;
+    /** Resultado separado, exclusivo da escolha entre apresentações de embalagem. */
+    packagingChoiceResult: number;
     calculablePurchasedItems: number;
   };
 };
@@ -167,13 +169,36 @@ export const getRoundReport = cache(
     // implantação em que o código chegue segundos antes da migration, a RPC
     // pode ainda não existir; nesse intervalo a prévia dinâmica continua
     // funcionando e não derruba a tela.
-    const snapshot = await supabase.rpc("rpc_get_purchase_round_report", {
-      p_company_id: company.companyId,
-      p_purchase_round_id: roundId,
-    });
+    const [snapshot, packagingChoice] = await Promise.all([
+      supabase.rpc("rpc_get_purchase_round_report", {
+        p_company_id: company.companyId,
+        p_purchase_round_id: roundId,
+      }),
+      supabase
+        .from("purchase_allocations")
+        .select("packaging_choice_result_estimated")
+        .eq("company_id", company.companyId)
+        .eq("purchase_round_id", roundId)
+        .eq("status", "confirmed"),
+    ]);
+    if (packagingChoice.error) {
+      throw new Error(
+        `Falha ao calcular escolha de embalagens: ${packagingChoice.error.message}`,
+      );
+    }
+    const packagingChoiceResult = (packagingChoice.data ?? []).reduce(
+      (sum, allocation) =>
+        sum + Number(allocation.packaging_choice_result_estimated ?? 0),
+      0,
+    );
     if (!snapshot.error) {
       const report = normalizeRoundReport(snapshot.data);
-      if (report) return report;
+      if (report) {
+        return {
+          ...report,
+          summary: { ...report.summary, packagingChoiceResult },
+        };
+      }
     }
 
     const dados = await carregarAlocacao(roundId);
@@ -364,6 +389,7 @@ export const getRoundReport = cache(
             ),
           0,
         ),
+        packagingChoiceResult,
         calculablePurchasedItems,
       },
     };
