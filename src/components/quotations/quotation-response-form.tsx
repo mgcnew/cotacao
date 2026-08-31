@@ -16,12 +16,15 @@ import type { PublicQuotationItem } from "@/features/quotations/public";
 import { cn } from "@/lib/utils";
 
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
-const STATUS_OPTIONS = [
-  {
-    value: "priced",
-    label: "Tenho disponível",
-    description: "Vou informar o preço",
-  },
+/**
+ * As duas saídas para quem NÃO vai dar preço.
+ *
+ * "Tenho disponível" não está aqui de propósito: se o comprador mandou o link,
+ * é porque entende que o fornecedor trabalha com o item. Partir de "tem" e
+ * pedir só o preço tira um clique de cada produto — e são muitos produtos por
+ * rodada. Quem não puder atender diz por estes dois botões.
+ */
+const INDISPONIVEL_OPTIONS = [
   {
     value: "unavailable",
     label: "Sem disponibilidade agora",
@@ -34,7 +37,9 @@ const STATUS_OPTIONS = [
   },
 ] as const;
 
-type ResponseStatus = (typeof STATUS_OPTIONS)[number]["value"] | "";
+type ResponseStatus =
+  | "priced"
+  | (typeof INDISPONIVEL_OPTIONS)[number]["value"];
 
 function SubmitButton({
   completed,
@@ -71,28 +76,31 @@ function ItemCard({
   showValidation: boolean;
 }) {
   const id = item.supplier_quotation_item_id;
-  const [status, setStatus] = React.useState<ResponseStatus>("");
+  // Começa em "priced": o link já pressupõe que o fornecedor atende o item.
+  const [status, setStatus] = React.useState<ResponseStatus>("priced");
   const [price, setPrice] = React.useState("");
   const priced = status === "priced";
   const numericPrice = Number(price.replace(/\./g, "").replace(",", "."));
   const validPrice =
     price.trim().length > 0 && Number.isFinite(numericPrice) && numericPrice > 0;
-  const resolved = status !== "" && (!priced || validPrice);
+  const resolved = !priced || validPrice;
   const validationMessage =
-    status === ""
-      ? "Escolha uma resposta para este produto."
-      : priced && !validPrice
-        ? price.trim()
-          ? "Informe um preço válido e maior que zero."
-          : "Informe o preço deste produto para continuar."
-        : null;
+    priced && !validPrice
+      ? price.trim()
+        ? "Informe um preço válido e maior que zero."
+        : "Informe o preço ou diga que não consegue atender."
+      : null;
 
-  function chooseStatus(nextStatus: ResponseStatus) {
-    setStatus(nextStatus);
-    if (nextStatus === "priced") {
+  /** Clicar de novo na opção marcada volta para o preço. */
+  function alternarIndisponivel(opcao: ResponseStatus) {
+    const proximo = status === opcao ? "priced" : opcao;
+    setStatus(proximo);
+    if (proximo === "priced") {
       window.requestAnimationFrame(() =>
         document.getElementById(`preco_${id}`)?.focus(),
       );
+    } else {
+      setPrice("");
     }
   }
 
@@ -139,45 +147,8 @@ function ItemCard({
       </header>
 
       <div className="flex flex-col gap-4 p-4">
-        <fieldset
-          aria-required="true"
-          aria-invalid={showValidation && status === ""}
-          className="flex flex-col gap-2"
-        >
-          <legend className="text-fg text-sm font-medium">
-            Você consegue fornecer este produto?
-          </legend>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {STATUS_OPTIONS.map((option) => (
-              <label
-                key={option.value}
-                className={cn(
-                  "border-border bg-surface-sunken hover:border-primary/45 relative flex cursor-pointer gap-2.5 rounded-lg border p-3 transition-colors",
-                  "focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-3",
-                  status === option.value &&
-                    "border-primary bg-primary-soft",
-                )}
-              >
-                <input
-                  type="radio"
-                  name={`status_${id}`}
-                  value={option.value}
-                  checked={status === option.value}
-                  onChange={() => chooseStatus(option.value)}
-                  className="accent-primary mt-0.5 size-4 shrink-0"
-                />
-                <span className="min-w-0">
-                  <span className="text-fg block text-sm font-medium">
-                    {option.label}
-                  </span>
-                  <span className="text-fg-muted mt-0.5 block text-xs leading-snug">
-                    {option.description}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        {/* O status viaja escondido: a escolha explícita é só a de NÃO atender. */}
+        <input type="hidden" name={`status_${id}`} value={status} />
 
         {showValidation && validationMessage ? (
           <p
@@ -211,9 +182,7 @@ function ItemCard({
             </div>
           ) : (
             <div className="bg-surface-sunken text-fg-muted flex items-center rounded-lg px-3 py-2 text-sm">
-              {status
-                ? "Não é necessário informar preço nesta opção."
-                : "Escolha uma opção acima para liberar o preenchimento."}
+              Não é necessário informar preço nesta opção.
             </div>
           )}
 
@@ -230,6 +199,40 @@ function ItemCard({
               placeholder="Marca, prazo, condição ou substituição…"
               maxLength={300}
             />
+          </div>
+        </div>
+
+        <div
+          role="group"
+          aria-label={`Não consegue atender ${item.product_name}?`}
+          className="flex flex-col gap-2"
+        >
+          <p className="text-fg-muted text-xs">Não consegue atender?</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {INDISPONIVEL_OPTIONS.map((option) => {
+              const ativo = status === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={ativo}
+                  onClick={() => alternarIndisponivel(option.value)}
+                  className={cn(
+                    "border-border bg-surface-sunken hover:border-primary/45 focus-visible:border-ring focus-visible:ring-ring/50 rounded-lg border p-3 text-left transition-colors focus-visible:ring-3 focus-visible:outline-none",
+                    ativo && "border-primary bg-primary-soft",
+                  )}
+                >
+                  <span className="text-fg block text-sm font-medium">
+                    {option.label}
+                  </span>
+                  <span className="text-fg-muted mt-0.5 block text-xs leading-snug">
+                    {ativo
+                      ? "Marcado. Clique de novo para voltar a informar preço."
+                      : option.description}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -327,13 +330,8 @@ export function QuotationResponseForm({
       `cotacao-item-${firstPending.supplier_quotation_item_id}`,
     );
     card?.scrollIntoView({ behavior: "smooth", block: "center" });
-    const selectedStatus = card?.querySelector<HTMLInputElement>(
-      'input[type="radio"]:checked',
-    );
-    const field =
-      selectedStatus?.value === "priced"
-        ? card?.querySelector<HTMLInputElement>('input[name^="preco_"]')
-        : card?.querySelector<HTMLInputElement>('input[type="radio"]');
+    // Pendente só existe em item sem preço, e o preço é o campo que resolve.
+    const field = card?.querySelector<HTMLInputElement>('input[name^="preco_"]');
     window.setTimeout(() => field?.focus({ preventScroll: true }), 350);
   }
 
@@ -411,7 +409,8 @@ export function QuotationResponseForm({
           />
         </div>
         <p className="text-fg-subtle mt-2 text-xs">
-          Em cada produto, escolha uma das três respostas visíveis abaixo.
+          Basta informar o preço de cada produto. Só marque alguma coisa se não
+          conseguir atender.
         </p>
       </section>
 
@@ -448,8 +447,8 @@ export function QuotationResponseForm({
 
       <div className="border-border bg-surface sticky bottom-0 z-20 -mx-3 flex flex-col gap-2 border-t px-3 py-3 shadow-[0_-8px_20px_-16px_rgba(0,0,0,.45)] sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:rounded-xl sm:border">
         <p className="text-fg-subtle text-center text-xs sm:max-w-sm sm:text-left">
-          Confira antes de enviar. Preço, indisponibilidade ou “não trabalho”
-          resolvem cada item.
+          Informe o preço de cada produto. Se não conseguir atender algum, use
+          os botões do item.
         </p>
         <SubmitButton completed={completed} total={pendentes.length} />
       </div>
