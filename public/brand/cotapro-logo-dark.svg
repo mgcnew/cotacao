@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="188" height="48" viewBox="0 0 188 48">
+  <rect x="4" y="4" width="40" height="40" rx="11.25" fill="#6366f1"/>
+  <path d="M29.75 16.375a9.5 9.5 0 1 0 0 15.25" fill="none" stroke="#fff" stroke-width="3.875" stroke-linecap="round"/>
+  <path d="m28 24.125 2.688 2.688 5.125-5.813" fill="none" stroke="#fff" stroke-width="2.938" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="55" y="32" fill="#f0f1f4" font-family="Arial, sans-serif" font-size="25" font-weight="700" letter-spacing="-0.8">Cota<tspan fill="#818cf8">Pro</tspan></text>
+</svg>

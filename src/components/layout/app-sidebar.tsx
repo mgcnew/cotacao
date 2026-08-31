@@ -3,6 +3,7 @@
 import { ChevronLeft } from "lucide-react";
 import * as React from "react";
 
+import { CotaProMark } from "@/components/brand/cotapro-logo";
 import { GlobalSearch } from "@/components/layout/global-search";
 import { NavLink, useVisibleNav } from "@/components/layout/nav-list";
 import { cn } from "@/lib/utils";
@@ -39,12 +40,15 @@ export function AppSidebar({ companyName, permissions }: Props) {
           collapsed && "justify-center px-0",
         )}
       >
-        <span className="bg-primary text-primary-fg grid size-7 shrink-0 place-items-center rounded-md text-xs font-semibold">
-          {companyName.charAt(0).toUpperCase()}
-        </span>
+        <CotaProMark className="size-7" />
         {!collapsed && (
-          <span className="text-fg truncate text-sm font-semibold">
-            {companyName}
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="text-fg text-sm font-semibold tracking-tight">
+              Cota<span className="text-brand">Pro</span>
+            </span>
+            <span className="text-fg-subtle truncate text-[10px]">
+              {companyName}
+            </span>
           </span>
         )}
       </div>

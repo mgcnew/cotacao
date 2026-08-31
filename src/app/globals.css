@@ -28,6 +28,7 @@
   --input-bg: #ffffff;
 
   /* marca (accent padrão: indigo) */
+  --brand: #4f46e5;
   --primary: #4f46e5;
   --primary-hover: #4338ca;
   --primary-fg: #ffffff;
@@ -144,6 +145,8 @@
   --border-color: #292e3a;
   --border-strong: #3a4150;
   --input-bg: #171b24;
+
+  --brand: #6366f1;
 
   /* Cores de ação mais firmes: o fundo continua discreto, mas números,
      ícones e estados não perdem presença sobre as superfícies escuras. */
@@ -266,6 +269,7 @@
   --color-input-bg: var(--input-bg);
 
   /* semânticas + variantes soft (badges, alertas, chips) */
+  --color-brand: var(--brand);
   /* O texto que vai EM CIMA do primary. A variável existia desde o início, mas
      não estava exposta ao Tailwind: `text-primary-fg` aparecia em seis lugares
      (sigla da empresa no menu, contador do sino, passo atual da rodada) e não
@@ -394,6 +398,29 @@
   }
 }
 
+html:has([data-slot="landing-page"]) {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+[data-reveal] {
+  opacity: 1;
+  transform: none;
+}
+
+[data-reveal][data-reveal-state="waiting"] {
+  opacity: 0;
+  transform: translateY(18px);
+}
+
+[data-reveal][data-reveal-state="visible"] {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 560ms var(--ease) var(--reveal-delay, 0ms),
+    transform 560ms var(--ease) var(--reveal-delay, 0ms);
+}
+
 /* ============================================================
    POLIMENTO ESCURO
 
@@ -464,6 +491,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html:has([data-slot="landing-page"]) {
+    scroll-behavior: auto;
+  }
+
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
   *,
   *::before,
   *::after {

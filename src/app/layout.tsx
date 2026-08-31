@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { publicEnv } from "@/lib/env";
 
 import "./globals.css";
 
@@ -16,8 +17,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Compras",
-  description: "Gestão do ciclo de compras e cotações",
+  metadataBase: new URL(publicEnv.NEXT_PUBLIC_APP_URL),
+  title: {
+    default: "CotaPro",
+    template: "%s",
+  },
+  description:
+    "Gestão do ciclo de compras, da demanda à conferência do recebimento.",
+  applicationName: "CotaPro",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

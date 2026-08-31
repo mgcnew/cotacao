@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 
 import { AuthForm } from "@/components/auth/auth-form";
 import {
@@ -10,11 +11,18 @@ import {
 } from "@/components/ui/card";
 import { signUp } from "@/lib/auth/actions";
 
+export const metadata: Metadata = {
+  title: "Criar conta | CotaPro",
+  description: "Crie sua conta e configure sua operação de compras.",
+};
+
 export default function SignUpPage() {
   return (
-    <Card>
+    <Card className="border-border bg-surface gap-5 border py-5 shadow-sm ring-0">
       <CardHeader>
-        <CardTitle className="text-base">Criar conta</CardTitle>
+        <CardTitle className="text-xl font-semibold tracking-tight">
+          Comece sua operação
+        </CardTitle>
         <CardDescription>
           No passo seguinte você cria sua empresa e já começa a usar.
         </CardDescription>

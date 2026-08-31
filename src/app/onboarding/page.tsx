@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import { redirect } from "next/navigation";
 
+import { CotaProLogo } from "@/components/brand/cotapro-logo";
 import { CreateCompanyForm } from "@/components/company/create-company-form";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,13 +29,8 @@ export default async function OnboardingPage() {
   return (
     <div className="bg-surface-sunken flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center gap-2">
-          <div className="bg-primary text-primary-fg grid size-9 place-items-center rounded-lg text-sm font-semibold">
-            C
-          </div>
-          <h1 className="text-fg text-lg font-semibold tracking-tight">
-            Compras
-          </h1>
+        <div className="mb-8 flex justify-center">
+          <CotaProLogo compact />
         </div>
 
         <Card>

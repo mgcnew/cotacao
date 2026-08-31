@@ -3,6 +3,7 @@
 import { Menu, X } from "lucide-react";
 import * as React from "react";
 
+import { CotaProMark } from "@/components/brand/cotapro-logo";
 import { GlobalSearch } from "@/components/layout/global-search";
 import { NavLink, useVisibleNav } from "@/components/layout/nav-list";
 
@@ -54,11 +55,14 @@ export function MobileNav({ companyName, permissions }: Props) {
 
           <div className="border-border bg-surface relative flex h-full w-64 max-w-[80vw] flex-col border-r">
             <div className="flex h-14 items-center gap-2 px-3">
-              <span className="bg-primary text-primary-fg grid size-7 shrink-0 place-items-center rounded-md text-xs font-semibold">
-                {companyName.charAt(0).toUpperCase()}
-              </span>
-              <span className="text-fg flex-1 truncate text-sm font-semibold">
-                {companyName}
+              <CotaProMark className="size-7" />
+              <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                <span className="text-fg text-sm font-semibold tracking-tight">
+                  Cota<span className="text-brand">Pro</span>
+                </span>
+                <span className="text-fg-subtle truncate text-[10px]">
+                  {companyName}
+                </span>
               </span>
               <button
                 type="button"

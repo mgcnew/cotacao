@@ -31,14 +31,18 @@ const PUBLIC_PREFIXES = [
   "/login",
   "/signup",
   "/auth",
+  "/opengraph-image",
   "/q/",
   "/o/",
   "/api/evolution/",
 ];
 
 function isPublicPath(pathname: string) {
-  return PUBLIC_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(prefix),
+  return (
+    pathname === "/" ||
+    PUBLIC_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(prefix),
+    )
   );
 }
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 
 import { AuthForm } from "@/components/auth/auth-form";
 import {
@@ -10,17 +11,24 @@ import {
 } from "@/components/ui/card";
 import { signIn } from "@/lib/auth/actions";
 
-export default async function LoginPage({
-  searchParams,
-}: PageProps<"/login">) {
+export const metadata: Metadata = {
+  title: "Entrar | CotaPro",
+  description: "Acesse sua operação de compras.",
+};
+
+export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const params = await searchParams;
   const next = typeof params.next === "string" ? params.next : undefined;
 
   return (
-    <Card>
+    <Card className="border-border bg-surface gap-5 border py-5 shadow-sm ring-0">
       <CardHeader>
-        <CardTitle className="text-base">Entrar</CardTitle>
-        <CardDescription>Acesse sua conta para continuar.</CardDescription>
+        <CardTitle className="text-xl font-semibold tracking-tight">
+          Bem-vindo de volta
+        </CardTitle>
+        <CardDescription>
+          Entre para continuar sua operação de compras.
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <AuthForm action={signIn} mode="signin" next={next} />
