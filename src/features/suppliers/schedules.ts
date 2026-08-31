@@ -209,23 +209,40 @@ export async function getSupplierScheduleTemplateItems(
   return getScheduleTemplateItems(companyId, scheduleId);
 }
 
+/**
+ * Catálogo ativo para montar o modelo de compra do fornecedor.
+ *
+ * Pagina por `range` pelo mesmo motivo de `listShoppingProducts`: o PostgREST
+ * corta em `db.max_rows` (1000) e o fim do alfabeto sumiria do seletor.
+ */
 export async function listScheduleProductOptions(
   companyId: string,
 ): Promise<ScheduleProductOption[]> {
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select(
-      "id, name, purchase_unit:units!products_company_id_purchase_unit_id_fkey(symbol)",
-    )
-    .eq("company_id", companyId)
-    .eq("is_active", true)
-    .order("name");
+  const data = [];
 
-  if (error) {
-    throw new Error(`Falha ao listar produtos para o modelo: ${error.message}`);
+  for (let start = 0; ; start += 1000) {
+    const page = await supabase
+      .from("products")
+      .select(
+        "id, name, purchase_unit:units!products_company_id_purchase_unit_id_fkey(symbol)",
+      )
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .order("name")
+      .order("id")
+      .range(start, start + 999);
+
+    if (page.error) {
+      throw new Error(
+        `Falha ao listar produtos para o modelo: ${page.error.message}`,
+      );
+    }
+    data.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
   }
-  return (data ?? []).map((product) => ({
+
+  return data.map((product) => ({
     id: product.id,
     name: product.name,
     purchaseUnit: product.purchase_unit?.symbol ?? "",

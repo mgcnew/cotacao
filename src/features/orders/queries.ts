@@ -172,24 +172,41 @@ export async function listDirectOrderOptions(companyId: string) {
 }
 
 /** Catálogo mínimo usado para editar ou revisar um pedido existente. */
+/**
+ * Catálogo ativo para editar um rascunho ou abrir uma revisão.
+ *
+ * Pagina por `range`: sem isso o PostgREST devolve só as mil primeiras linhas
+ * e o item que falta no pedido pode ser justamente um dos que não vieram.
+ */
 export async function listOrderEditableProducts(companyId: string) {
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select(
-      `
+  const data = [];
+
+  for (let start = 0; ; start += 1000) {
+    const page = await supabase
+      .from("products")
+      .select(
+        `
       id,
       name,
       purchase_unit:units!products_company_id_purchase_unit_id_fkey ( symbol ),
       pricing_unit:units!products_company_id_pricing_unit_id_fkey ( symbol )
     `,
-    )
-    .eq("company_id", companyId)
-    .eq("is_active", true)
-    .order("name");
+      )
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .order("name")
+      .order("id")
+      .range(start, start + 999);
 
-  if (error) throw new Error(`Falha ao listar produtos: ${error.message}`);
-  return (data ?? []).map((product) => ({
+    if (page.error) {
+      throw new Error(`Falha ao listar produtos: ${page.error.message}`);
+    }
+    data.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
+  }
+
+  return data.map((product) => ({
     id: product.id,
     name: product.name,
     purchaseUnit: product.purchase_unit?.symbol ?? "",
