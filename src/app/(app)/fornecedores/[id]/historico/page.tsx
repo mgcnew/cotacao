@@ -6,11 +6,13 @@ import { PurchasePriceHistory } from "@/components/history/purchase-price-histor
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SupplierTabs } from "@/components/suppliers/supplier-tabs";
+import { DialogBody } from "@/components/ui/dialog";
 import {
   getQuotationHistory,
   parseHistoryFilters,
 } from "@/features/history/queries";
-import { getSupplier } from "@/features/suppliers/queries";
+import { carregarFornecedor } from "@/features/suppliers/central";
 import {
   listPurchasePriceHistory,
   parsePurchaseHistoryPage,
@@ -23,23 +25,42 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: "Bloqueado",
 };
 
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const EXPLICACAO =
+  "Uma mesma rodada pode ter produtos ganhos e não ganhos; por isso o resultado é calculado item a item.";
+
 export default async function HistoricoFornecedorPage({
   params,
   searchParams,
 }: PageProps<"/fornecedores/[id]/historico">) {
-  const [{ id }, query, company] = await Promise.all([
-    params,
-    searchParams,
-    requireActiveCompany(),
-  ]);
-  if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-  ) {
-    notFound();
-  }
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  return <HistoricoFornecedorContent id={id} query={query} />;
+}
+
+/**
+ * O histórico comercial do fornecedor, na página inteira e no modal da lista.
+ *
+ * Os filtros continuam apontando para `/fornecedores/<id>/historico`, a mesma
+ * rota que o modal intercepta: filtrar troca os dados sem fechar a caixa nem
+ * perder a lista montada atrás.
+ */
+export async function HistoricoFornecedorContent({
+  id,
+  query,
+  emModal = false,
+}: {
+  id: string;
+  query: Record<string, string | string[] | undefined>;
+  emModal?: boolean;
+}) {
+  if (!UUID.test(id)) notFound();
+
+  const company = await requireActiveCompany();
   const filters = parseHistoryFilters(query, "produto");
   const [supplier, history, purchases] = await Promise.all([
-    getSupplier(company.companyId, id),
+    carregarFornecedor(id),
     getQuotationHistory(company.companyId, { supplierId: id }, filters),
     listPurchasePriceHistory(
       company.companyId,
@@ -51,26 +72,18 @@ export default async function HistoricoFornecedorPage({
 
   if (!supplier) notFound();
 
-  return (
-    <div className="w-full">
-      <PageHeader
-        title={`Histórico de ${supplier.name}`}
-        description="Produtos efetivamente comprados, preços praticados e participações em cotações."
-        action={
-          <Button asChild size="sm" variant="ghost">
-            <Link href={`/fornecedores/${id}`}>Voltar ao fornecedor</Link>
-          </Button>
-        }
-      />
-
+  const content = (
+    <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Badge variant={supplier.status === "active" ? "default" : "secondary"}>
-          {STATUS_LABEL[supplier.status] ?? supplier.status}
-        </Badge>
-        <p className="text-fg-muted text-sm">
-          Uma mesma rodada pode ter produtos ganhos e não ganhos; por isso o
-          resultado é calculado item a item.
-        </p>
+        {/* No modal a situação já está no cabeçalho, ao lado do nome. */}
+        {emModal ? null : (
+          <Badge
+            variant={supplier.status === "active" ? "default" : "secondary"}
+          >
+            {STATUS_LABEL[supplier.status] ?? supplier.status}
+          </Badge>
+        )}
+        <p className="text-fg-muted text-sm">{EXPLICACAO}</p>
       </div>
 
       <PurchasePriceHistory
@@ -94,6 +107,28 @@ export default async function HistoricoFornecedorPage({
         filters={filters}
         basePath={`/fornecedores/${id}/historico`}
       />
+    </>
+  );
+
+  if (emModal) {
+    return <DialogBody>{content}</DialogBody>;
+  }
+
+  return (
+    <div className="w-full">
+      <PageHeader
+        title={supplier.name}
+        description="Produtos efetivamente comprados, preços praticados e participações em cotações."
+        action={
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/fornecedores">Voltar</Link>
+          </Button>
+        }
+      />
+      <div className="border-border -mx-4 mb-6 border-b sm:mx-0">
+        <SupplierTabs supplierId={id} />
+      </div>
+      {content}
     </div>
   );
 }
