@@ -16,6 +16,32 @@ import type { PublicQuotationItem } from "@/features/quotations/public";
 import { cn } from "@/lib/utils";
 
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+
+/** Nove dígitos chegam a 9.999.999,99 — muito além de qualquer preço unitário. */
+const MAX_DIGITOS = 9;
+
+/**
+ * Preço digitado como sequência de números, sem vírgula.
+ *
+ * Os dois últimos dígitos são sempre os centavos, então "7" vira 0,07, "70"
+ * vira 0,70 e "700" vira 7,00. É como todo aplicativo de banco se comporta, e
+ * resolve o erro que aparecia aqui: quem digitava "7" e enviava mandava sete
+ * reais achando que tinha mandado sete — ou parava para descobrir onde ficava
+ * a vírgula no teclado do celular.
+ *
+ * Apagar funciona sozinho: o valor volta a ser só os dígitos que sobraram.
+ */
+function formatarCentavos(entrada: string): string {
+  const digitos = entrada
+    .replace(/\D/g, "")
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, MAX_DIGITOS);
+  if (!digitos) return "";
+
+  const preenchido = digitos.padStart(3, "0");
+  const inteiro = Number(preenchido.slice(0, -2)).toLocaleString("pt-BR");
+  return `${inteiro},${preenchido.slice(-2)}`;
+}
 /**
  * As duas saídas para quem NÃO vai dar preço.
  *
@@ -172,12 +198,14 @@ function ItemCard({
               <Input
                 id={`preco_${id}`}
                 name={`preco_${id}`}
-                inputMode="decimal"
+                // Só dígitos entram, então o teclado numérico simples basta —
+                // uma tecla de vírgula aqui seria uma tecla que não faz nada.
+                inputMode="numeric"
                 enterKeyHint="next"
                 placeholder="0,00"
                 value={price}
                 aria-invalid={showValidation && !validPrice}
-                onChange={(event) => setPrice(event.target.value)}
+                onChange={(event) => setPrice(formatarCentavos(event.target.value))}
               />
             </div>
           ) : (
@@ -409,8 +437,8 @@ export function QuotationResponseForm({
           />
         </div>
         <p className="text-fg-subtle mt-2 text-xs">
-          Basta informar o preço de cada produto. Só marque alguma coisa se não
-          conseguir atender.
+          Digite só os números do preço — os dois últimos são os centavos. Só
+          marque alguma coisa se não conseguir atender.
         </p>
       </section>
 
