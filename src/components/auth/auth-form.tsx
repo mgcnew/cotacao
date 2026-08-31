@@ -1,12 +1,14 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, type FormEvent } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AuthFormState } from "@/lib/auth/actions";
+
+const REMEMBERED_EMAIL_KEY = "cotapro.auth.remembered-email";
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -24,14 +26,53 @@ type Props = {
 };
 
 export function AuthForm({ action, mode, next }: Props) {
+  const emailRef = useRef<HTMLInputElement>(null);
+  const rememberEmailRef = useRef<HTMLInputElement>(null);
   const [state, formAction] = useActionState<AuthFormState, FormData>(action, {
     error: null,
   });
 
   const isSignUp = mode === "signup";
 
+  useEffect(() => {
+    if (isSignUp) return;
+
+    try {
+      const rememberedEmail = window.localStorage.getItem(REMEMBERED_EMAIL_KEY);
+      if (!rememberedEmail) return;
+
+      if (emailRef.current) emailRef.current.value = rememberedEmail;
+      if (rememberEmailRef.current) rememberEmailRef.current.checked = true;
+    } catch {
+      // Alguns navegadores bloqueiam o armazenamento local no modo privado.
+      // Nesse caso, o login continua funcionando normalmente, só sem memória.
+    }
+  }, [isSignUp]);
+
+  function rememberEmail(event: FormEvent<HTMLFormElement>) {
+    if (isSignUp) return;
+
+    const formData = new FormData(event.currentTarget);
+    const email = formData.get("email");
+    const shouldRemember = formData.get("rememberEmail") === "on";
+
+    try {
+      if (shouldRemember && typeof email === "string" && email.trim()) {
+        window.localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim());
+      } else {
+        window.localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+      }
+    } catch {
+      // A autenticação não depende da disponibilidade do localStorage.
+    }
+  }
+
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form
+      action={formAction}
+      onSubmit={rememberEmail}
+      className="flex flex-col gap-4"
+    >
       {next ? <input type="hidden" name="next" value={next} /> : null}
 
       {isSignUp ? (
@@ -54,6 +95,7 @@ export function AuthForm({ action, mode, next }: Props) {
           E-mail
         </label>
         <Input
+          ref={emailRef}
           id="email"
           name="email"
           type="email"
@@ -77,6 +119,26 @@ export function AuthForm({ action, mode, next }: Props) {
           placeholder={isSignUp ? "Ao menos 8 caracteres" : "••••••••"}
         />
       </div>
+
+      {!isSignUp ? (
+        <label className="text-fg-muted -mt-1 flex w-fit cursor-pointer items-center gap-2 text-xs">
+          <input
+            ref={rememberEmailRef}
+            type="checkbox"
+            name="rememberEmail"
+            className="border-border bg-input-bg accent-primary size-3.5 rounded border"
+            onChange={(event) => {
+              if (event.currentTarget.checked) return;
+              try {
+                window.localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+              } catch {
+                // O campo continua utilizável mesmo sem armazenamento local.
+              }
+            }}
+          />
+          Lembrar meu e-mail neste dispositivo
+        </label>
+      ) : null}
 
       {state.error ? (
         <p
