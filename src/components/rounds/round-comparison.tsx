@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, ChevronDown, ChevronLeft, ChevronRight, Search, Store } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronLeft, ChevronRight, Info, Search, Store } from "lucide-react";
 import * as React from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
@@ -191,6 +191,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
 }
 
 function ComparisonRow({ row, supplier, dados }: { row: Row; supplier: Supplier; dados: DadosDaComparacao }) {
+  const [mostrandoTodos, setMostrandoTodos] = React.useState(false);
   const cell = row.cells.get(supplier.id);
   const bestSuppliers = dados.suppliers.filter((candidate) => {
     const candidateCell = row.cells.get(candidate.id);
@@ -200,6 +201,8 @@ function ComparisonRow({ row, supplier, dados }: { row: Row; supplier: Supplier;
   const hasPrice = currentPrice !== null && !cell?.doesNotSupply;
   const isBest = hasPrice && currentPrice === row.bestPrice;
   const difference = hasPrice && row.bestPrice !== null && row.bestPrice > 0 ? ((currentPrice - row.bestPrice) / row.bestPrice) * 100 : null;
+  const temOutros = dados.suppliers.length > 1;
+  const idDoPainel = `respostas-${row.itemId}`;
 
   return (
     <article className="border-border bg-surface grid gap-3 rounded-xl border p-3 lg:grid-cols-[minmax(12rem,1.2fr)_minmax(15rem,1fr)_minmax(12rem,.8fr)]">
@@ -215,7 +218,23 @@ function ComparisonRow({ row, supplier, dados }: { row: Row; supplier: Supplier;
       </div>
 
       <div className="border-border lg:border-l lg:pl-3">
-        <p className="text-fg-muted mb-1 text-xs font-medium">Melhor referência</p>
+        <div className="mb-1 flex items-center gap-1">
+          <p className="text-fg-muted text-xs font-medium">Melhor referência</p>
+          {/* A referência conta o menor preço; o (i) mostra de onde ele saiu e
+              o que os outros responderam, sem trocar de fornecedor em análise. */}
+          {temOutros ? (
+            <button
+              type="button"
+              onClick={() => setMostrandoTodos((atual) => !atual)}
+              aria-expanded={mostrandoTodos}
+              aria-controls={idDoPainel}
+              aria-label={`Ver o que cada fornecedor respondeu para ${row.productName}`}
+              className="text-fg-subtle hover:text-fg hover:bg-surface-muted focus-visible:ring-ring/50 rounded-full p-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            >
+              <Info className="size-3.5" aria-hidden />
+            </button>
+          ) : null}
+        </div>
         {row.bestPrice === null ? <span className="text-fg-subtle text-sm">Nenhum preço recebido</span> : (
           <>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -226,8 +245,65 @@ function ComparisonRow({ row, supplier, dados }: { row: Row; supplier: Supplier;
             {difference !== null && !isBest ? <Badge variant="destructive" className="mt-2">+{PERCENT.format(difference)}% acima</Badge> : null}
           </>
         )}
+        {temOutros && mostrandoTodos ? <TodasAsRespostas id={idDoPainel} row={row} dados={dados} emAnalise={supplier.id} /> : null}
       </div>
     </article>
+  );
+}
+
+/**
+ * O que cada fornecedor respondeu neste produto, sem sair do que está em análise.
+ *
+ * A comparação mostra um fornecedor por vez justamente para não virar matriz
+ * larga com rolagem horizontal. Mas na hora de decidir surge sempre a mesma
+ * pergunta — "e os outros, quanto deram?" — e respondê-la exigia trocar o
+ * fornecedor em análise e perder o lugar. Aqui a lista abre no próprio item.
+ *
+ * Ordem: quem deu preço primeiro, do menor para o maior, porque é assim que a
+ * decisão é tomada. Quem não deu vem depois, com o motivo — e isso também
+ * responde por que uma referência pode estar vazia.
+ */
+function TodasAsRespostas({ id, row, dados, emAnalise }: { id: string; row: Row; dados: DadosDaComparacao; emAnalise: string }) {
+  const linhas = dados.suppliers
+    .flatMap((candidato) => {
+      const cell = row.cells.get(candidato.id);
+      // Sem célula o item nunca foi enviado a este fornecedor: citá-lo aqui
+      // sugeriria uma omissão que não houve.
+      if (!cell) return [];
+      const preco = cell.doesNotSupply ? null : cell.currentPrice;
+      return [{ id: candidato.id, nome: candidato.suppliers.name, cell, preco }];
+    })
+    .sort((a, b) => {
+      if (a.preco !== null && b.preco !== null) return a.preco - b.preco;
+      if (a.preco !== null) return -1;
+      if (b.preco !== null) return 1;
+      return a.nome.localeCompare(b.nome, "pt-BR");
+    });
+
+  return (
+    <div id={id} className="border-border bg-surface-sunken mt-2 flex flex-col gap-1.5 rounded-lg border p-2">
+      {linhas.map((linha) => {
+        const melhor = linha.preco !== null && linha.preco === row.bestPrice;
+        return (
+          <div key={linha.id} className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-xs">
+            <span className={cn("min-w-0 truncate", linha.id === emAnalise ? "text-fg font-medium" : "text-fg-muted")}>
+              {linha.nome}
+              {linha.id === emAnalise ? <span className="text-fg-subtle font-normal"> · em análise</span> : null}
+            </span>
+            {linha.preco !== null ? (
+              <span className="flex items-center gap-1.5">
+                <span className={cn("tabular-nums", melhor ? "text-success font-semibold" : "text-fg")}>R$ {MONEY.format(linha.preco)}</span>
+                {linha.cell.normalizedPrice !== null && row.comparisonUnit ? <span className="text-fg-subtle tabular-nums">= {NORMALIZED.format(linha.cell.normalizedPrice)}/{row.comparisonUnit}</span> : null}
+              </span>
+            ) : (
+              <span className="text-fg-subtle">
+                {linha.cell.doesNotSupply ? "não fornece" : linha.cell.isAvailable === false ? "sem disponibilidade" : linha.cell.responseItemId === null ? "aguardando preço" : "resposta sem preço"}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
