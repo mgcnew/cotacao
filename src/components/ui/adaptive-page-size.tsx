@@ -106,7 +106,10 @@ export function AdaptivePageSize({
 
         const params = new URLSearchParams(searchParams.toString());
         params.set("por_pagina", String(next));
-        params.delete("pagina");
+        // Preserva a navegação em andamento. Antes, qualquer pequena diferença
+        // de altura entre duas páginas apagava `pagina` e devolvia a tabela à
+        // primeira logo após o clique. Se o novo tamanho reduzir o total de
+        // páginas, a consulta do servidor já limita ao último número válido.
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
       });
     };
