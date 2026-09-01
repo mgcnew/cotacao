@@ -568,16 +568,18 @@ export async function markWhatsAppConversationReadAction(conversationId: string)
 export async function setWhatsAppConversationStateAction(formData: FormData) {
   const company = await requireActiveCompany();
   await requireSendPermission(company.companyId);
+  // "none" existe para desfazer: marcar quem se espera era via de mão única, e
+  // uma conversa marcada por engano ficava pendente para sempre na lista.
   const parsed = z.object({
     conversation_id: z.string().uuid(),
-    awaiting_side: z.enum(["supplier", "buyer"]),
+    awaiting_side: z.enum(["supplier", "buyer", "none"]),
   }).safeParse({
     conversation_id: formData.get("conversation_id"),
     awaiting_side: formData.get("awaiting_side"),
   });
   if (!parsed.success) fail("Estado inválido.");
   const supabase = await createServerSupabaseClient();
-  await supabase.from("whatsapp_conversations").update({ awaiting_side: parsed.data.awaiting_side }).eq("company_id", company.companyId).eq("id", parsed.data.conversation_id);
+  await supabase.from("whatsapp_conversations").update({ awaiting_side: parsed.data.awaiting_side === "none" ? null : parsed.data.awaiting_side }).eq("company_id", company.companyId).eq("id", parsed.data.conversation_id);
   revalidatePath("/whatsapp");
 }
 
