@@ -268,7 +268,7 @@ export function QuotationHistory({
                         href={
                           scope === "product"
                             ? `/fornecedores/${row.supplier_id}/historico`
-                            : `/produtos/${row.product_id}`
+                            : `/produtos/historico/${row.product_id}`
                         }
                         className="text-fg-muted hover:text-fg hover:underline"
                       >

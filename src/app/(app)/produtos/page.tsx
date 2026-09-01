@@ -244,7 +244,7 @@ async function ProdutosContent({
                   <TableRow key={product.id}>
                     <TableCell className="font-medium">
                       <Link
-                        href={`/produtos/${product.id}`}
+                        href={`/produtos/historico/${product.id}`}
                         className="hover:text-primary hover:underline"
                       >
                         {product.name}

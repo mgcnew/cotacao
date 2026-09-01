@@ -29,7 +29,7 @@ const DESCRICAO =
 export default async function ProdutoPage({
   params,
   searchParams,
-}: PageProps<"/produtos/[id]">) {
+}: PageProps<"/produtos/historico/[id]">) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   return <ProdutoContent id={id} query={query} />;
 }
@@ -37,8 +37,8 @@ export default async function ProdutoPage({
 /**
  * O histórico do produto, servindo à página inteira e ao modal da lista.
  *
- * Os filtros continuam apontando para `/produtos/<id>`, a mesma rota que o
- * modal intercepta: filtrar por período ou fornecedor troca os dados sem
+ * Os filtros continuam apontando para `/produtos/historico/<id>`, a mesma rota
+ * que o modal intercepta: filtrar por período ou fornecedor troca os dados sem
  * fechar a caixa, e o catálogo segue montado atrás com sua página e rolagem.
  */
 export async function ProdutoContent({
@@ -147,7 +147,7 @@ export async function ProdutoContent({
             ).values(),
           ]}
           filters={filters}
-          basePath={`/produtos/${id}`}
+          basePath={`/produtos/historico/${id}`}
         />
       </section>
     </>

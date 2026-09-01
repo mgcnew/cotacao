@@ -81,7 +81,7 @@ export function PurchasePriceHistory({
                       href={
                         scope === "product"
                           ? `/fornecedores/${row.supplier_id}/historico`
-                          : `/produtos/${row.product_id}`
+                          : `/produtos/historico/${row.product_id}`
                       }
                       className="text-fg font-medium hover:underline"
                     >
