@@ -8,7 +8,6 @@ import {
   Check,
   CheckCircle2,
   ClipboardCheck,
-  FileCheck2,
   History,
   ListChecks,
   MessageCircle,
@@ -17,9 +16,7 @@ import {
   Search,
   Send,
   ShoppingCart,
-  Sparkles,
   Truck,
-  Users,
 } from "lucide-react";
 
 import { CotaProLogo, CotaProMark } from "@/components/brand/cotapro-logo";
@@ -36,83 +33,71 @@ export const metadata: Metadata = {
 
 const FLOW = [
   {
-    number: "01",
+    number: "1",
     title: "Planeje",
     description: "Agenda recorrente e lista de compras organizam a demanda.",
     icon: CalendarDays,
   },
   {
-    number: "02",
+    number: "2",
     title: "Cote",
     description: "Fornecedores respondem por link, sem precisar de cadastro.",
     icon: Send,
   },
   {
-    number: "03",
+    number: "3",
     title: "Decida",
     description: "Compare propostas e negocie com contexto de preço.",
     icon: Scale,
   },
   {
-    number: "04",
+    number: "4",
     title: "Acompanhe",
     description: "Pedidos, confirmações e conversas ficam no mesmo fluxo.",
     icon: Truck,
   },
   {
-    number: "05",
+    number: "5",
     title: "Confira",
     description: "A NF-e fecha o ciclo e alimenta o histórico real.",
     icon: PackageCheck,
   },
 ] as const;
 
+/**
+ * A afirmação mais forte da página, e a única sem seção própria mais abaixo.
+ *
+ * Eram seis cartões do mesmo tamanho, e dois deles repetiam o que as seções de
+ * NF-e e de indicadores já dizem com profundidade — por isso a grade lia como
+ * enchimento. O que sobra aqui é o que só é dito neste ponto, e o que o
+ * concorrente não consegue prometer fica em primeiro plano.
+ */
+const LEAD_FEATURE = {
+  title: "O fornecedor responde sem criar conta",
+  description:
+    "Ele recebe um link, vê só os seus itens e informa preço ou indisponibilidade pelo celular. Sem cadastro, sem senha, sem app — que é a razão de as cotações voltarem no mesmo dia.",
+} as const;
+
 const FEATURES = [
   {
     icon: ListChecks,
     title: "Demanda organizada",
     description:
-      "Lista de compras, agenda por fornecedor e múltiplos dias na semana para transformar rotina em planejamento.",
-  },
-  {
-    icon: Users,
-    title: "Fornecedor participa sem atrito",
-    description:
-      "Links claros para cotação e confirmação, com disponibilidade, justificativas e orientação item a item.",
+      "Lista de compras e agenda por fornecedor transformam rotina em planejamento.",
   },
   {
     icon: BadgeDollarSign,
     title: "Comparação que leva à decisão",
     description:
-      "Propostas lado a lado, melhor alocação, negociação e registro do que foi realmente acordado.",
+      "Propostas lado a lado, negociação e registro do que foi realmente acordado.",
   },
   {
     icon: MessageCircle,
-    title: "WhatsApp conectado à compra",
+    title: "WhatsApp na mesma linha do tempo",
     description:
-      "Envios, retornos e conversas operacionais permanecem próximos da rodada e do fornecedor certo.",
-  },
-  {
-    icon: FileCheck2,
-    title: "Conferência inteligente por NF-e",
-    description:
-      "Associe nomenclaturas, converta unidades, entenda impostos e reutilize o aprendizado nas próximas notas.",
-  },
-  {
-    icon: BarChart3,
-    title: "Gestão com explicação",
-    description:
-      "Indicadores mostram o resultado e permitem percorrer a jornada que formou cada valor.",
+      "Envios e retornos ficam junto da rodada e do fornecedor certo.",
   },
 ] as const;
-
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-primary mb-3 text-xs font-semibold tracking-[0.16em] uppercase">
-      {children}
-    </p>
-  );
-}
 
 function DashboardPreview() {
   const metrics = [
@@ -344,9 +329,8 @@ export default function HomePage() {
       <section className="relative">
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-[0.88fr_1.12fr] lg:px-8 lg:py-28">
           <div className="relative z-10">
-            <div className="bg-primary-soft text-primary mb-6 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium">
-              <Sparkles className="size-3.5" aria-hidden />O ciclo de compras em
-              um só lugar
+            <div className="bg-primary-soft text-primary mb-6 inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium">
+              O ciclo de compras em um só lugar
             </div>
             <h1 className="text-fg max-w-2xl text-4xl leading-[1.06] font-semibold tracking-[-0.04em] sm:text-5xl lg:text-6xl">
               Compre com clareza. Negocie com histórico. Receba sem surpresa.
@@ -379,18 +363,13 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="relative lg:pl-4">
-            <div
-              className="bg-primary-soft absolute -top-8 -right-20 size-56 rounded-full opacity-60"
-              aria-hidden
-            />
-            <div
-              className="bg-info-soft absolute -bottom-10 -left-12 size-40 rounded-full opacity-50"
-              aria-hidden
-            />
-            <div className="relative rotate-[0.4deg]">
-              <DashboardPreview />
-            </div>
+          {/* Sem os dois círculos coloridos que ficavam atrás e sem a
+              inclinação de 0,4° — halo de marca e print torto são o enfeite
+              padrão de landing gerada. A maquete é o argumento da página e se
+              sustenta pela própria borda e sombra; e, sendo uma tela para ler,
+              endireitá-la deixa o texto nítido. */}
+          <div className="lg:pl-4">
+            <DashboardPreview />
           </div>
         </div>
       </section>
@@ -429,7 +408,6 @@ export default function HomePage() {
         className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8"
       >
         <ScrollReveal className="max-w-2xl">
-          <Eyebrow>Fluxo completo</Eyebrow>
           <h2 className="text-fg text-3xl font-semibold tracking-tight sm:text-4xl">
             A compra avança sem perder o contexto.
           </h2>
@@ -439,32 +417,33 @@ export default function HomePage() {
           </p>
         </ScrollReveal>
 
-        <div className="mt-12 grid gap-3 md:grid-cols-5">
+        <ScrollReveal className="mt-12 grid gap-3 md:grid-cols-5">
           {FLOW.map(({ number, title, description, icon: Icon }, index) => (
-            <ScrollReveal key={number} delay={index * 70} className="h-full">
-              <div className="border-border bg-surface relative flex h-full flex-col rounded-xl border p-4 shadow-xs">
-                <div className="mb-7 flex items-center justify-between">
-                  <span className="bg-primary-soft text-primary grid size-9 place-items-center rounded-lg">
-                    <Icon className="size-4" aria-hidden />
-                  </span>
-                  <span className="text-fg-subtle font-mono text-[10px]">
-                    {number}
-                  </span>
-                </div>
-                <h3 className="text-fg text-sm font-semibold">{title}</h3>
-                <p className="text-fg-subtle mt-1.5 text-xs leading-relaxed">
-                  {description}
-                </p>
-                {index < FLOW.length - 1 ? (
-                  <ArrowRight
-                    className="text-border-strong absolute top-7 -right-3 z-10 hidden size-4 md:block"
-                    aria-hidden
-                  />
-                ) : null}
+            <div
+              key={number}
+              className="border-border bg-surface relative flex h-full flex-col rounded-xl border p-4 shadow-xs"
+            >
+              <div className="mb-7 flex items-center justify-between">
+                <span className="bg-primary-soft text-primary grid size-9 place-items-center rounded-lg">
+                  <Icon className="size-4" aria-hidden />
+                </span>
+                <span className="text-fg-subtle text-xs font-medium">
+                  {number}
+                </span>
               </div>
-            </ScrollReveal>
+              <h3 className="text-fg text-sm font-semibold">{title}</h3>
+              <p className="text-fg-subtle mt-1.5 text-xs leading-relaxed">
+                {description}
+              </p>
+              {index < FLOW.length - 1 ? (
+                <ArrowRight
+                  className="text-border-strong absolute top-7 -right-3 z-10 hidden size-4 md:block"
+                  aria-hidden
+                />
+              ) : null}
+            </div>
           ))}
-        </div>
+        </ScrollReveal>
       </section>
 
       <section
@@ -472,8 +451,7 @@ export default function HomePage() {
         className="bg-surface-sunken border-border border-y"
       >
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
-          <ScrollReveal className="mx-auto max-w-2xl text-center">
-            <Eyebrow>Trabalho bem conectado</Eyebrow>
+          <ScrollReveal className="max-w-2xl">
             <h2 className="text-fg text-3xl font-semibold tracking-tight sm:text-4xl">
               Mais produtividade onde a compra costuma travar.
             </h2>
@@ -483,26 +461,37 @@ export default function HomePage() {
             </p>
           </ScrollReveal>
 
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map(({ icon: Icon, title, description }, index) => (
-              <ScrollReveal
-                key={title}
-                delay={(index % 3) * 70}
-                className="h-full"
-              >
-                <article className="border-border bg-surface h-full rounded-xl border p-5 shadow-xs transition-transform hover:-translate-y-0.5">
-                  <span className="bg-primary-soft text-primary grid size-10 place-items-center rounded-xl">
-                    <Icon className="size-4.5" aria-hidden />
-                  </span>
-                  <h3 className="text-fg mt-5 text-base font-semibold">
-                    {title}
-                  </h3>
-                  <p className="text-fg-muted mt-2 text-sm leading-relaxed">
-                    {description}
-                  </p>
-                </article>
-              </ScrollReveal>
-            ))}
+          {/* A hierarquia é o conteúdo: a afirmação que sustenta o produto
+              ocupa a coluna larga, e o apoio corre ao lado sem virar cartão. */}
+          <div className="mt-12 grid gap-x-12 gap-y-10 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="border-primary-line border-l-2 pl-6 sm:pl-8">
+              <h3 className="text-fg text-2xl leading-tight font-semibold tracking-tight sm:text-3xl">
+                {LEAD_FEATURE.title}
+              </h3>
+              <p className="text-fg-muted mt-4 max-w-lg text-base leading-relaxed">
+                {LEAD_FEATURE.description}
+              </p>
+            </div>
+
+            <dl className="divide-border grid divide-y self-center">
+              {FEATURES.map(({ icon: Icon, title, description }) => (
+                <div
+                  key={title}
+                  className="flex gap-4 py-5 first:pt-0 last:pb-0"
+                >
+                  <Icon
+                    className="text-fg-subtle mt-0.5 size-4 shrink-0"
+                    aria-hidden
+                  />
+                  <div className="min-w-0">
+                    <dt className="text-fg text-sm font-semibold">{title}</dt>
+                    <dd className="text-fg-muted mt-1 text-sm leading-relaxed">
+                      {description}
+                    </dd>
+                  </div>
+                </div>
+              ))}
+            </dl>
           </div>
         </div>
       </section>
@@ -512,7 +501,6 @@ export default function HomePage() {
         className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-2 lg:px-8"
       >
         <ScrollReveal>
-          <Eyebrow>Do XML ao histórico</Eyebrow>
           <h2 className="text-fg text-3xl font-semibold tracking-tight sm:text-4xl">
             A nota não encerra apenas um pedido. Ela melhora a próxima compra.
           </h2>
@@ -601,7 +589,6 @@ export default function HomePage() {
           </ScrollReveal>
 
           <ScrollReveal delay={100}>
-            <Eyebrow>Indicadores acionáveis</Eyebrow>
             <h2 className="text-fg text-3xl font-semibold tracking-tight sm:text-4xl">
               Veja o número. E, quando precisar, entenda a história dele.
             </h2>

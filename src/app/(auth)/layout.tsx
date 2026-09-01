@@ -17,14 +17,11 @@ const STEPS = [
 export default function AuthLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="bg-background flex min-h-dvh">
-      <aside className="border-border bg-surface-sunken relative hidden w-[46%] flex-col justify-between overflow-hidden border-r p-10 lg:flex xl:p-14">
+      <aside className="border-border bg-surface-sunken hidden w-[46%] flex-col justify-between border-r p-10 lg:flex xl:p-14">
         <CotaProLogo />
 
-        <div className="relative z-10 max-w-lg py-12">
-          <p className="text-primary text-xs font-semibold tracking-[0.16em] uppercase">
-            Operação conectada
-          </p>
-          <h1 className="text-fg mt-4 text-4xl leading-tight font-semibold tracking-[-0.035em] xl:text-5xl">
+        <div className="max-w-lg py-12">
+          <h1 className="text-fg text-4xl leading-tight font-semibold tracking-[-0.035em] xl:text-5xl">
             Cada decisão de compra com contexto do início ao fim.
           </h1>
           <p className="text-fg-muted mt-5 max-w-md leading-relaxed">
@@ -70,11 +67,6 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
         <p className="text-fg-subtle text-xs">
           CotaPro · gestão do pedido ao recebimento
         </p>
-
-        <div
-          className="bg-primary-soft absolute -right-28 -bottom-28 size-80 rounded-full opacity-65"
-          aria-hidden
-        />
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col">
