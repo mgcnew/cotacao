@@ -169,6 +169,7 @@ export async function uploadProductImportAction(
           purchase_unit_id: unitId,
           pricing_unit_id: unitId,
           comparison_unit_id: unitId,
+          confirmed_at: null,
         };
       });
       const mappingBySource = new Map(
@@ -193,11 +194,6 @@ export async function uploadProductImportAction(
         if (nameDuplicate) issues.push("duplicate_name_catalog");
         if (barcodeDuplicate) issues.push("duplicate_barcode_catalog");
         const duplicateProductId = nameDuplicate ?? barcodeDuplicate ?? null;
-        const configured = Boolean(
-          mapping.category_id &&
-          mapping.purchase_unit_id &&
-          mapping.pricing_unit_id,
-        );
         return {
           company_id: company.companyId,
           batch_id: batch.id,
@@ -214,7 +210,10 @@ export async function uploadProductImportAction(
           comparison_unit_id: mapping.comparison_unit_id,
           issues: [...new Set(issues)],
           duplicate_product_id: duplicateProductId,
-          status: issues.length ? "blocked" : configured ? "ready" : "pending",
+          // A unidade inferida pela seção é apenas uma sugestão. O produto só
+          // fica pronto após a confirmação explícita da seção ou o salvamento
+          // individual, evitando publicar KG como UN silenciosamente.
+          status: issues.length ? "blocked" : "pending",
         };
       });
       for (const group of chunks(records, 250)) {
@@ -254,10 +253,19 @@ export async function applyProductImportMappingAction(formData: FormData) {
     pricing_unit_id: value("pricingUnitId"),
     comparison_unit_id: value("comparisonUnitId"),
   };
+  if (
+    !mapping.category_id ||
+    !mapping.purchase_unit_id ||
+    !mapping.pricing_unit_id
+  ) {
+    redirect(
+      `/produtos/importacoes/${batchId}?erro=${encodeURIComponent("Escolha a categoria e as unidades de compra e precificação antes de confirmar a seção.")}`,
+    );
+  }
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase
     .from("product_import_mappings")
-    .update(mapping)
+    .update({ ...mapping, confirmed_at: new Date().toISOString() })
     .eq("company_id", company.companyId)
     .eq("batch_id", batchId)
     .eq("source_category", sourceCategory);
@@ -444,7 +452,9 @@ export async function toggleProductImportItemAction(
   const supabase = await createServerSupabaseClient();
   const { data: item, error: readError } = await supabase
     .from("product_import_items")
-    .select("issues,category_id,purchase_unit_id,pricing_unit_id")
+    .select(
+      "issues,source_category,category_id,purchase_unit_id,pricing_unit_id",
+    )
     .eq("company_id", company.companyId)
     .eq("batch_id", batchId)
     .eq("id", itemId)
@@ -457,6 +467,22 @@ export async function toggleProductImportItemAction(
       message: null,
       savedAt: Date.now(),
     };
+  const mapping = ignore
+    ? { data: null, error: null }
+    : await supabase
+        .from("product_import_mappings")
+        .select("confirmed_at")
+        .eq("company_id", company.companyId)
+        .eq("batch_id", batchId)
+        .eq("source_category", item.source_category)
+        .maybeSingle();
+  if (mapping.error) {
+    return {
+      error: mapping.error.message,
+      message: null,
+      savedAt: Date.now(),
+    };
+  }
   const { error: updateError } = await supabase
       .from("product_import_items")
       .update({
@@ -464,7 +490,10 @@ export async function toggleProductImportItemAction(
           ? "ignored"
           : item.issues.length
             ? "blocked"
-            : item.category_id && item.purchase_unit_id && item.pricing_unit_id
+            : mapping.data?.confirmed_at &&
+                item.category_id &&
+                item.purchase_unit_id &&
+                item.pricing_unit_id
               ? "ready"
               : "pending",
       })

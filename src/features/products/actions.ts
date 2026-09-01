@@ -17,9 +17,9 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 /**
  * Escritas do catálogo.
  *
- * Não há RPC para produto/categoria/unidade — as 18 RPCs cobrem só operações
- * transacionais de várias tabelas. Aqui é escrita direta na tabela, e quem
- * autoriza é a RLS (`product.create` / `product.update`).
+ * Criações simples continuam usando escrita direta protegida por RLS. A
+ * correção de unidades usa uma RPC porque precisa verificar e atualizar de
+ * forma atômica se o produto ainda não entrou no fluxo operacional.
  *
  * Duas regras que valem para todo este arquivo:
  *  1. `company_id` vem SEMPRE de requireActiveCompany(), nunca do formulário —
@@ -233,6 +233,51 @@ export type ProductFormState = {
   /** Nome do último produto gravado, para confirmar na tela sem recarregar. */
   savedName?: string;
 };
+
+export type ProductUnitEditState = {
+  error: string | null;
+  savedAt?: number;
+};
+
+const productUnitsSchema = z.object({
+  purchaseUnitId: z.uuid({ error: "Escolha a unidade de compra" }),
+  pricingUnitId: z.uuid({ error: "Escolha a unidade de precificação" }),
+  comparisonUnitId: z
+    .string()
+    .optional()
+    .transform((value) => value || null)
+    .refine((value) => value === null || z.uuid().safeParse(value).success, {
+      error: "Unidade de comparação inválida",
+    }),
+});
+
+export async function updateUnusedProductUnits(
+  productId: string,
+  _previous: ProductUnitEditState,
+  formData: FormData,
+): Promise<ProductUnitEditState> {
+  const company = await requireActiveCompany();
+  const parsed = productUnitsSchema.safeParse({
+    purchaseUnitId: formData.get("purchaseUnitId"),
+    pricingUnitId: formData.get("pricingUnitId"),
+    comparisonUnitId: formData.get("comparisonUnitId"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_update_unused_product_units", {
+    p_company_id: company.companyId,
+    p_product_id: productId,
+    p_purchase_unit_id: parsed.data.purchaseUnitId,
+    p_pricing_unit_id: parsed.data.pricingUnitId,
+    p_comparison_unit_id: parsed.data.comparisonUnitId,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/produtos");
+  revalidatePath(`/produtos/historico/${productId}`);
+  return { error: null, savedAt: Date.now() };
+}
 
 const productSchema = z.object({
   name: z

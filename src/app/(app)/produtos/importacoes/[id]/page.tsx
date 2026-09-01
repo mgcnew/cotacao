@@ -96,10 +96,7 @@ export default async function ProductImportDetailPage({
     (Array.isArray(query.sucesso) ? query.sucesso[0] : query.sucesso) ?? null;
   const editable = batch.status === "draft";
   const pendingMappings = mappings.filter(
-    (mapping) =>
-      !mapping.category_id ||
-      !mapping.purchase_unit_id ||
-      !mapping.pricing_unit_id,
+    (mapping) => !mapping.confirmed_at,
   );
 
   return (
@@ -145,8 +142,9 @@ export default async function ProductImportDetailPage({
             {pendingMappings.length === 1 ? "seção pendente" : "seções pendentes"}
           </summary>
           <p className="text-fg-muted mt-1 text-xs">
-            Aplique categoria e unidades a todos os itens ainda em rascunho da
-            seção.
+            As unidades abaixo são sugestões. Confira e confirme cada seção
+            antes de publicar; depois de aplicada, ela ficará gravada e sairá
+            desta lista.
           </p>
           <div className="mt-4 grid gap-2">
             {pendingMappings.map((mapping) => (
@@ -169,6 +167,7 @@ export default async function ProductImportDetailPage({
                   <ThemedSelect
                     id={`mapping-category-${mapping.id}`}
                     name="categoryId"
+                    required
                     defaultValue={mapping.category_id ?? ""}
                     placeholder="Escolher"
                     options={categories.map((category) => ({
@@ -182,6 +181,7 @@ export default async function ProductImportDetailPage({
                   <ThemedSelect
                     id={`mapping-purchase-${mapping.id}`}
                     name="purchaseUnitId"
+                    required
                     defaultValue={mapping.purchase_unit_id ?? ""}
                     placeholder="Escolher"
                     options={units.map((unit) => ({
@@ -195,6 +195,7 @@ export default async function ProductImportDetailPage({
                   <ThemedSelect
                     id={`mapping-pricing-${mapping.id}`}
                     name="pricingUnitId"
+                    required
                     defaultValue={mapping.pricing_unit_id ?? ""}
                     placeholder="Escolher"
                     options={units.map((unit) => ({
@@ -218,7 +219,7 @@ export default async function ProductImportDetailPage({
                   />
                 </label>
                 <Button size="sm" variant="outline">
-                  Aplicar
+                  Confirmar seção
                 </Button>
               </form>
             ))}
@@ -347,24 +348,6 @@ export default async function ProductImportDetailPage({
                       label: category.label,
                     }))}
                   />
-                  <input
-                    form={formId}
-                    type="hidden"
-                    name="purchaseUnitId"
-                    value={item.purchase_unit_id ?? ""}
-                  />
-                  <input
-                    form={formId}
-                    type="hidden"
-                    name="pricingUnitId"
-                    value={item.pricing_unit_id ?? ""}
-                  />
-                  <input
-                    form={formId}
-                    type="hidden"
-                    name="comparisonUnitId"
-                    value={item.comparison_unit_id ?? ""}
-                  />
                 </div>
 
                 <div className="col-start-2 min-w-0 xl:col-start-auto xl:pt-1">
@@ -401,6 +384,61 @@ export default async function ProductImportDetailPage({
                     ignored={item.status === "ignored"}
                   />
                 </div>
+
+                {!locked ? (
+                  <details className="border-border bg-surface-sunken col-start-2 rounded-lg border px-3 py-2 xl:col-span-5">
+                    <summary className="text-fg-muted cursor-pointer text-xs font-medium">
+                      Revisar unidades deste produto
+                    </summary>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      <label className="grid gap-1 text-xs text-fg-muted">
+                        Unidade de compra
+                        <ThemedSelect
+                          id={`purchase-unit-${item.id}`}
+                          form={formId}
+                          name="purchaseUnitId"
+                          defaultValue={item.purchase_unit_id ?? ""}
+                          required
+                          placeholder="Escolher"
+                          options={units.map((unit) => ({
+                            value: unit.id,
+                            label: unit.label,
+                          }))}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs text-fg-muted">
+                        Unidade de precificação
+                        <ThemedSelect
+                          id={`pricing-unit-${item.id}`}
+                          form={formId}
+                          name="pricingUnitId"
+                          defaultValue={item.pricing_unit_id ?? ""}
+                          required
+                          placeholder="Escolher"
+                          options={units.map((unit) => ({
+                            value: unit.id,
+                            label: unit.label,
+                          }))}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs text-fg-muted">
+                        Unidade de comparação
+                        <ThemedSelect
+                          id={`comparison-unit-${item.id}`}
+                          form={formId}
+                          name="comparisonUnitId"
+                          defaultValue={item.comparison_unit_id ?? ""}
+                          placeholder="Opcional"
+                          emptyOptionLabel="Usar a de precificação"
+                          options={units.map((unit) => ({
+                            value: unit.id,
+                            label: unit.label,
+                          }))}
+                        />
+                      </label>
+                    </div>
+                  </details>
+                ) : null}
               </article>
             );
           })}

@@ -23,6 +23,10 @@ export type HistoricalNfeActionState = {
   error: string | null;
 };
 
+export type HistoricalNfeUploadResult = HistoricalNfeActionState & {
+  importId: string | null;
+};
+
 function cleanDocument(value: string | null | undefined) {
   return String(value ?? "").replace(/\D/g, "");
 }
@@ -53,35 +57,76 @@ function suggestedPricing(
   return { quantity: null, price: null };
 }
 
+/**
+ * O PostgREST limita respostas a 1.000 linhas. A associação automática precisa
+ * enxergar o catálogo inteiro, inclusive produtos no fim do alfabeto.
+ */
+async function listProductsForHistoricalMatch(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+) {
+  const data = [];
+  for (let start = 0; ; start += 1000) {
+    const page = await supabase
+      .from("products")
+      .select(
+        `
+          id, name,
+          pricing_unit:units!products_company_id_pricing_unit_id_fkey ( code, symbol ),
+          product_barcodes ( code, is_active )
+        `,
+      )
+      .eq("company_id", companyId)
+      .order("name")
+      .order("id")
+      .range(start, start + 999);
+    if (page.error) return { data: null, error: page.error };
+    data.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
+  }
+  return { data, error: null };
+}
+
 export async function uploadHistoricalNfe(
-  _previous: HistoricalNfeActionState,
   formData: FormData,
-): Promise<HistoricalNfeActionState> {
+): Promise<HistoricalNfeUploadResult> {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
   if (!permissions.has("receipt.post")) {
-    return { error: "Seu papel não permite importar histórico fiscal." };
+    return {
+      error: "Seu papel não permite importar histórico fiscal.",
+      importId: null,
+    };
   }
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    return { error: "Selecione o XML autorizado da NF-e." };
+    return { error: "Selecione o XML autorizado da NF-e.", importId: null };
   }
   if (file.size > XML_MAX_SIZE)
-    return { error: "O XML deve ter no máximo 4 MB." };
+    return { error: "O XML deve ter no máximo 4 MB.", importId: null };
   if (!file.name.toLowerCase().endsWith(".xml")) {
-    return { error: "O documento precisa ser um arquivo XML." };
+    return {
+      error: "O documento precisa ser um arquivo XML.",
+      importId: null,
+    };
   }
 
   let nfe: ReturnType<typeof parseHistoricalNfeXml>;
   try {
     nfe = parseHistoricalNfeXml(await file.text());
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "XML inválido." };
+    return {
+      error: error instanceof Error ? error.message : "XML inválido.",
+      importId: null,
+    };
   }
   const issuedAt = parsedIssuedAt(nfe.issuedAt);
   if (!issuedAt || issuedAt.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
-    return { error: "A data de emissão informada na NF-e é inválida." };
+    return {
+      error: "A data de emissão informada na NF-e é inválida.",
+      importId: null,
+    };
   }
 
   const supabase = await createServerSupabaseClient();
@@ -95,19 +140,13 @@ export async function uploadHistoricalNfe(
       .from("suppliers")
       .select("id, name, document_number")
       .eq("company_id", company.companyId),
-    supabase
-      .from("products")
-      .select(
-        `
-          id, name,
-          pricing_unit:units!products_company_id_pricing_unit_id_fkey ( code, symbol ),
-          product_barcodes ( code, is_active )
-        `,
-      )
-      .eq("company_id", company.companyId),
+    listProductsForHistoricalMatch(supabase, company.companyId),
   ]);
   if (companyResult.error || suppliersResult.error || productsResult.error) {
-    return { error: "Não foi possível preparar a conciliação desta NF-e." };
+    return {
+      error: "Não foi possível preparar a conciliação desta NF-e.",
+      importId: null,
+    };
   }
 
   const expectedRecipient = cleanDocument(companyResult.data?.document_number);
@@ -117,7 +156,10 @@ export async function uploadHistoricalNfe(
     actualRecipient &&
     expectedRecipient !== actualRecipient
   ) {
-    return { error: "O destinatário da NF-e é diferente da empresa atual." };
+    return {
+      error: "O destinatário da NF-e é diferente da empresa atual.",
+      importId: null,
+    };
   }
 
   const issuerDocument = cleanDocument(nfe.issuer.document);
@@ -137,6 +179,7 @@ export async function uploadHistoricalNfe(
   if (aliasesResult.error) {
     return {
       error: "Não foi possível carregar as associações deste fornecedor.",
+      importId: null,
     };
   }
 
@@ -235,6 +278,7 @@ export async function uploadHistoricalNfe(
       error: duplicate
         ? "Esta NF-e já foi importada ou já está vinculada a um recebimento."
         : `Não foi possível criar a importação: ${created.error.message}`,
+      importId: null,
     };
   }
 
@@ -252,11 +296,12 @@ export async function uploadHistoricalNfe(
     });
     return {
       error: `Não foi possível guardar o XML: ${uploaded.error.message}`,
+      importId: null,
     };
   }
 
   revalidatePath("/recebimentos/historico");
-  redirect(`/recebimentos/historico/${importId}`);
+  return { error: null, importId };
 }
 
 function decimal(value: FormDataEntryValue | null) {

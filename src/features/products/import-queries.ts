@@ -33,7 +33,7 @@ export async function getProductImportBatch(
     supabase
       .from("product_import_mappings")
       .select(
-        "id,source_category,category_id,purchase_unit_id,pricing_unit_id,comparison_unit_id",
+        "id,source_category,category_id,purchase_unit_id,pricing_unit_id,comparison_unit_id,confirmed_at",
       )
       .eq("company_id", companyId)
       .eq("batch_id", batchId)

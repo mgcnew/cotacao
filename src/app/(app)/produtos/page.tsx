@@ -1,4 +1,4 @@
-import { Package } from "lucide-react";
+import { Package, Pencil } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -282,22 +282,39 @@ async function ProdutosContent({
                     </TableCell>
                     {podeEditar ? (
                       <TableCell>
-                        <form
-                          action={setProductActive.bind(
-                            null,
-                            product.id,
-                            !product.isActive,
-                          )}
-                        >
-                          <Button
-                            type="submit"
-                            size="sm"
-                            variant="ghost"
-                            className="text-fg-muted whitespace-nowrap"
+                        <div className="flex items-center justify-end gap-1">
+                          {product.unitsEditable ? (
+                            <Button
+                              asChild
+                              size="icon-sm"
+                              variant="ghost"
+                              title="Editar unidades"
+                            >
+                              <Link href={`/produtos/editar/${product.id}`}>
+                                <Pencil aria-hidden />
+                                <span className="sr-only">
+                                  Editar unidades de {product.name}
+                                </span>
+                              </Link>
+                            </Button>
+                          ) : null}
+                          <form
+                            action={setProductActive.bind(
+                              null,
+                              product.id,
+                              !product.isActive,
+                            )}
                           >
-                            {product.isActive ? "Desativar" : "Reativar"}
-                          </Button>
-                        </form>
+                            <Button
+                              type="submit"
+                              size="sm"
+                              variant="ghost"
+                              className="text-fg-muted whitespace-nowrap"
+                            >
+                              {product.isActive ? "Desativar" : "Reativar"}
+                            </Button>
+                          </form>
+                        </div>
                       </TableCell>
                     ) : null}
                   </TableRow>

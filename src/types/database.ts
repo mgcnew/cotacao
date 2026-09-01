@@ -1698,6 +1698,7 @@ export type Database = {
           category_id: string | null;
           company_id: string;
           comparison_unit_id: string | null;
+          confirmed_at: string | null;
           created_at: string;
           id: string;
           pricing_unit_id: string | null;
@@ -1710,6 +1711,7 @@ export type Database = {
           category_id?: string | null;
           company_id: string;
           comparison_unit_id?: string | null;
+          confirmed_at?: string | null;
           created_at?: string;
           id?: string;
           pricing_unit_id?: string | null;
@@ -1722,6 +1724,7 @@ export type Database = {
           category_id?: string | null;
           company_id?: string;
           comparison_unit_id?: string | null;
+          confirmed_at?: string | null;
           created_at?: string;
           id?: string;
           pricing_unit_id?: string | null;
@@ -4533,6 +4536,13 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_product_units_lock_reason: {
+        Args: {
+          p_company_id: string;
+          p_product_id: string;
+        };
+        Returns: string | null;
+      };
       rpc_save_supplier_product_nfe_unit_rule: {
         Args: {
           p_company_id: string;
@@ -4552,6 +4562,16 @@ export type Database = {
           p_totals: Json | null;
         };
         Returns: undefined;
+      };
+      rpc_update_unused_product_units: {
+        Args: {
+          p_company_id: string;
+          p_comparison_unit_id?: string | null;
+          p_pricing_unit_id: string;
+          p_product_id: string;
+          p_purchase_unit_id: string;
+        };
+        Returns: Json;
       };
       rpc_mark_round_supplier_sent: {
         Args: { p_company_id: string; p_round_supplier_id: string };

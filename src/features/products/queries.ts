@@ -61,6 +61,7 @@ export type ProductListRow = {
   purchaseUnitCode: string;
   pricingUnitCode: string;
   comparisonUnitCode: string | null;
+  unitsEditable: boolean;
 };
 
 export type ProductFilterCategory = { id: string; name: string };
@@ -132,6 +133,50 @@ export async function getProduct(companyId: string, productId: string) {
 
   if (error) throw new Error(`Falha ao carregar produto: ${error.message}`);
   return data;
+}
+
+/** Dados mínimos para corrigir unidades de um produto ainda sem uso. */
+export async function getProductUnitEditContext(
+  companyId: string,
+  productId: string,
+) {
+  const supabase = await createServerSupabaseClient();
+  const [product, lock] = await Promise.all([
+    supabase
+      .from("products")
+      .select(
+        "id,name,purchase_unit_id,pricing_unit_id,comparison_unit_id",
+      )
+      .eq("company_id", companyId)
+      .eq("id", productId)
+      .maybeSingle(),
+    supabase.rpc("rpc_product_units_lock_reason", {
+      p_company_id: companyId,
+      p_product_id: productId,
+    }),
+  ]);
+
+  if (product.error) {
+    throw new Error(`Falha ao carregar produto: ${product.error.message}`);
+  }
+  if (lock.error && product.data) {
+    throw new Error(
+      `Falha ao verificar o uso do produto: ${lock.error.message}`,
+    );
+  }
+
+  return product.data
+    ? {
+        product: {
+          id: product.data.id,
+          name: product.data.name,
+          purchaseUnitId: product.data.purchase_unit_id,
+          pricingUnitId: product.data.pricing_unit_id,
+          comparisonUnitId: product.data.comparison_unit_id,
+        },
+        lockReason: lock.data,
+      }
+    : null;
 }
 
 export async function getCatalogCounts(companyId: string) {

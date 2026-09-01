@@ -54,6 +54,36 @@ export async function listHistoricalNfeImports(
   };
 }
 
+/**
+ * Catálogo completo usado pelos seletores da conciliação. Sem paginação, o
+ * limite padrão de 1.000 linhas do PostgREST oculta silenciosamente produtos.
+ */
+async function listHistoricalReconciliationProducts(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+) {
+  const data = [];
+  for (let start = 0; ; start += 1000) {
+    const page = await supabase
+      .from("products")
+      .select(
+        `
+          id, name, is_active,
+          pricing_unit_id,
+          pricing_unit:units!products_company_id_pricing_unit_id_fkey ( code, symbol )
+        `,
+      )
+      .eq("company_id", companyId)
+      .order("name")
+      .order("id")
+      .range(start, start + 999);
+    if (page.error) return { data: null, error: page.error };
+    data.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
+  }
+  return { data, error: null };
+}
+
 export async function getHistoricalNfeImport(
   companyId: string,
   importId: string,
@@ -77,17 +107,7 @@ export async function getHistoricalNfeImport(
       .select("id, name, legal_name, document_number, status")
       .eq("company_id", companyId)
       .order("name"),
-    supabase
-      .from("products")
-      .select(
-        `
-          id, name, is_active,
-          pricing_unit_id,
-          pricing_unit:units!products_company_id_pricing_unit_id_fkey ( code, symbol )
-        `,
-      )
-      .eq("company_id", companyId)
-      .order("name"),
+    listHistoricalReconciliationProducts(supabase, companyId),
   ]);
   if (history.error)
     throw new Error(`Falha ao abrir NF-e: ${history.error.message}`);
