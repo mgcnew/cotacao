@@ -58,7 +58,12 @@ const dialogContentVariants = cva(
     // dentro em vez de a página crescer atrás.
     "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[85dvh] sm:-translate-x-1/2 sm:-translate-y-1/2",
     "sm:border-border sm:rounded-xl sm:border",
-    "data-[state=open]:animate-ds-in outline-none",
+    /* No celular a caixa é a tela inteira: escalar a tela inteira lê como
+       falha de renderização, então lá é só o fade. A escala entra no `sm:`,
+       onde a caixa é de fato uma caixa. */
+    "data-[state=open]:animate-ds-fade data-[state=closed]:animate-ds-fade-out",
+    "sm:data-[state=open]:animate-ds-dialog-in sm:data-[state=closed]:animate-ds-dialog-out",
+    "outline-none",
   ],
   {
     variants: {
@@ -114,7 +119,7 @@ function DialogContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         data-slot="dialog-overlay"
-        className="data-[state=open]:animate-ds-fade fixed inset-0 z-50 bg-black/55"
+        className="data-[state=open]:animate-ds-fade data-[state=closed]:animate-ds-fade-out fixed inset-0 z-50 bg-black/55"
       />
       <DialogPrimitive.Content
         data-slot="dialog-content"

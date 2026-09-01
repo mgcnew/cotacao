@@ -174,7 +174,7 @@ export function DateTimePicker({
           align="start"
           sideOffset={5}
           collisionPadding={8}
-          className="border-border bg-popover text-popover-foreground data-[state=open]:animate-ds-in z-[100] w-[min(20rem,calc(100vw-1rem))] rounded-xl border p-3 shadow-xl outline-none"
+          className="border-border bg-popover text-popover-foreground data-[state=open]:animate-ds-in data-[state=closed]:animate-ds-out z-[100] w-[min(20rem,calc(100vw-1rem))] rounded-xl border p-3 shadow-xl outline-none"
         >
           <div className="mb-3 flex items-center justify-between gap-2">
             <Button

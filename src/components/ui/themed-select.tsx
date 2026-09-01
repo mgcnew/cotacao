@@ -86,7 +86,7 @@ export function ThemedSelect({
           collisionPadding={8}
           className={cn(
             "border-border bg-popover text-popover-foreground z-[100] min-w-[var(--radix-select-trigger-width)] max-w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border shadow-lg",
-            "data-[state=open]:animate-ds-in",
+            "data-[state=open]:animate-ds-in data-[state=closed]:animate-ds-out",
           )}
         >
           <SelectPrimitive.ScrollUpButton className="bg-popover text-fg-muted flex h-7 items-center justify-center">

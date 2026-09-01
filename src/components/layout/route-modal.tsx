@@ -99,17 +99,46 @@ export function RouteModal({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  /**
+   * O modal fecha em dois tempos, e precisa ser assim.
+   *
+   * Aqui `open` nunca virava `false`: fechar era navegar, e a navegação
+   * arrancava o componente da árvore. Para o React isso é desmontagem, não
+   * fechamento — nenhuma animação de saída chega a tocar, e a caixa some de
+   * um quadro para o outro.
+   *
+   * Agora o clique só marca `aberto = false`. O Radix mantém o elemento vivo
+   * enquanto a animação de saída roda e, quando ela termina, aí sim voltamos
+   * na história. Continua sendo `router.back()`, e não `push`: fechar é
+   * desfazer a navegação que abriu, o que devolve a lista com a rolagem onde
+   * estava — inclusive para quem abriu vindo do painel.
+   */
+  const [aberto, setAberto] = React.useState(true);
+  const voltando = React.useRef(false);
 
-  const fechar = React.useCallback(() => {
+  const voltar = React.useCallback(() => {
+    if (voltando.current) return;
+    voltando.current = true;
     router.back();
   }, [router]);
 
+  const fechar = React.useCallback(() => setAberto(false), []);
+
   const valor = React.useMemo(() => ({ fechar }), [fechar]);
+
+  // Se por algum motivo a animação não rodar — elemento oculto, `animationend`
+  // engolido —, o fechamento não pode ficar preso na tela. O prazo é folgado
+  // de propósito: ele nunca deve ser o caminho normal.
+  React.useEffect(() => {
+    if (aberto) return;
+    const prazo = window.setTimeout(voltar, 400);
+    return () => window.clearTimeout(prazo);
+  }, [aberto, voltar]);
 
   return (
     <ContextoDoModalDeRota.Provider value={valor}>
       <Dialog
-        open
+        open={aberto}
         onOpenChange={(proximo) => {
           if (!proximo) fechar();
         }}
@@ -118,6 +147,11 @@ export function RouteModal({
           size={size}
           alturaEstavel={alturaEstavel}
           impedirFechamentoAcidental={impedirFechamentoAcidental}
+          // `animationend` sobe do conteúdo do modal também — só a animação
+          // da própria caixa encerra a navegação.
+          onAnimationEnd={(evento) => {
+            if (!aberto && evento.target === evento.currentTarget) voltar();
+          }}
         >
           <DialogHeader className={acao ? "flex flex-row items-start gap-3" : undefined}>
             <div className="min-w-0 flex-1">

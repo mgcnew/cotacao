@@ -65,8 +65,20 @@
   --r-lg: 10px;
   --r-xl: 14px;
 
-  /* movimento */
+  /* movimento
+
+     Um easing só para tudo — é o que faz modal, dropdown e página parecerem
+     o mesmo sistema em vez de três efeitos avulsos.
+
+     Três durações, e a diferença entre elas é proposital:
+     - `--dur` é a reação de um controle pequeno (dropdown, seletor);
+     - `--dur-dialog` é maior porque a caixa que aparece é maior e cobre a
+       tela: a mesma velocidade de um dropdown lê como estalo;
+     - `--dur-out` é a mais curta de todas. Sair depressa é o que separa
+       "desapareceu suavemente" de "demorou para sumir". */
   --dur: 140ms;
+  --dur-dialog: 200ms;
+  --dur-out: 110ms;
   --ease: cubic-bezier(0.2, 0.6, 0.3, 1);
 
   color-scheme: light;
@@ -336,8 +348,11 @@
   --ease-ds: var(--ease);
 
   --animate-ds-in: om-in var(--dur) var(--ease);
+  --animate-ds-out: om-out var(--dur-out) var(--ease);
   --animate-ds-fade: om-fade 120ms var(--ease);
-  --animate-ds-sheet: om-sheet 180ms var(--ease);
+  --animate-ds-fade-out: om-fade-out var(--dur-out) var(--ease);
+  --animate-ds-dialog-in: om-dialog-in var(--dur-dialog) var(--ease);
+  --animate-ds-dialog-out: om-dialog-out var(--dur-out) var(--ease);
 }
 
 @keyframes om-in {
@@ -358,14 +373,55 @@
     opacity: 1;
   }
 }
-@keyframes om-sheet {
+@keyframes om-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* A saída espelha a entrada, e mais curta: o elemento recua os mesmos poucos
+   pixels de onde veio, em vez de piscar fora da tela. */
+@keyframes om-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+/* A caixa do diálogo cresce quase imperceptivelmente até o tamanho final.
+   `scale` e não deslocamento porque a caixa não vem de lugar nenhum — ela
+   surge onde está, e a escala é o que dá a impressão de aproximar.
+
+   Usa `transform`, enquanto a centralização do desktop usa a propriedade
+   `translate` (é assim que o Tailwind v4 gera `-translate-x-1/2`). São
+   propriedades distintas, então uma não sobrescreve a outra e a caixa não
+   sai do centro durante a animação. */
+@keyframes om-dialog-in {
   from {
     opacity: 0;
-    transform: translateX(18px);
+    transform: scale(0.985);
   }
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes om-dialog-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.99);
   }
 }
 
@@ -401,6 +457,35 @@
 html:has([data-slot="landing-page"]) {
   scroll-behavior: smooth;
   scroll-padding-top: 5rem;
+}
+
+/* ============================================================
+   MOVIMENTO DO APP
+
+   Quem rola no sistema não é a janela, é o `main` — a moldura fica parada.
+   Então é nele que a rolagem suave precisa morar; no `html` ela não teria
+   efeito nenhum aqui dentro.
+
+   Vale para salto com destino (âncora de divergência, foco em item pendente,
+   voltar ao topo), não para a roda do mouse: o navegador continua rolando na
+   velocidade nativa, que é o que quem trabalha rápido espera.
+   ============================================================ */
+[data-slot="app-main"] {
+  scroll-behavior: smooth;
+}
+
+/* A entrada da página, e por que é uma regra de CSS e não um componente.
+
+   O filho direto do `main` é a raiz da página. Ao navegar de verdade, o React
+   troca esse nó por outro e a animação dispara sozinha. Ao abrir um modal de
+   rota interceptada, o caminho da URL muda mas esse nó NÃO é trocado — a
+   lista continua montada atrás, que é o motivo de o modal existir. Uma versão
+   com `key={pathname}` remontaria a lista e a faria piscar por baixo do modal.
+
+   Filtrar uma tabela também não redispara: mudar `searchParams` re-renderiza
+   o mesmo nó em vez de criar outro. */
+[data-slot="app-main"] > * {
+  animation: om-in 180ms var(--ease);
 }
 
 [data-reveal] {
