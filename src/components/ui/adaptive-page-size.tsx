@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 
 const MIN_ROWS = 1;
 // Proteção contra parâmetro adulterado/viewport artificial, não limite de UI.
@@ -21,106 +21,166 @@ const VIEWPORT_BOTTOM_GAP = 24;
  */
 export function AdaptivePageSize({
   current,
+  basePath,
   minRows = MIN_ROWS,
+  fallbackRowHeight = FALLBACK_ROW_HEIGHT,
 }: {
   current: number;
+  /** Rota da lista. Modais interceptados mudam `usePathname`, mas não podem
+   * recalcular nem reescrever a paginação da tela que ficou ao fundo. */
+  basePath: string;
   minRows?: number;
+  /** Usado somente enquanto ainda não existe uma linha mensurável. */
+  fallbackRowHeight?: number;
 }) {
   const marker = useRef<HTMLSpanElement>(null);
   const lastRequested = useRef<number | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const active = pathname === basePath;
+  const latestParams = useRef("");
+  const paramsString = searchParams.toString();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (active) latestParams.current = paramsString;
+  }, [active, paramsString]);
+
+  // Trocar somente `pagina` ou `por_pagina` não altera o espaço disponível.
+  // Excluí-los impede uma segunda medição concorrente durante a navegação.
+  const layoutKey = useMemo(() => {
+    if (!active) return "inactive";
+    const params = new URLSearchParams(paramsString);
+    params.delete("pagina");
+    params.delete("por_pagina");
+    return params.toString();
+  }, [active, paramsString]);
+
+  useLayoutEffect(() => {
+    if (!active) return;
     let frame = 0;
 
-    const adjust = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const card = marker.current?.nextElementSibling;
-        if (!(card instanceof HTMLElement)) return;
+    const adjustNow = () => {
+      const card = marker.current?.nextElementSibling;
+      if (!(card instanceof HTMLElement)) return;
 
-        const cardRect = card.getBoundingClientRect();
-        if (cardRect.width === 0 || cardRect.height === 0) return;
-        const available = Math.max(
-          0,
-          window.innerHeight - cardRect.top - VIEWPORT_BOTTOM_GAP,
-        );
-        // Com poucos registros, a caixa ainda ocupa a área útil e o rodapé
-        // fica no mesmo lugar das listas cheias.
-        card.style.minHeight = `${available}px`;
-        const rows = Array.from(
-          card.querySelectorAll<HTMLElement>(
-            '[data-slot="table-body"] > [data-slot="table-row"], [data-slot="adaptive-row"]',
-          ),
-        );
-        const measuredRows = rows.filter(
-          (row) => row.getBoundingClientRect().height > 0,
-        );
-        const firstRowRect = measuredRows[0]?.getBoundingClientRect();
-        const lastRowRect = measuredRows.at(-1)?.getBoundingClientRect();
-        // A distância total também incorpora `gap` entre cards no mobile.
-        const rowHeight =
-          firstRowRect && lastRowRect
-            ? (lastRowRect.bottom - firstRowRect.top) / measuredRows.length
-            : FALLBACK_ROW_HEIGHT;
-        const headerHeight =
-          card
-            .querySelector<HTMLElement>('[data-slot="table-header"]')
-            ?.getBoundingClientRect().height ?? 0;
-        const footer = card.querySelector<HTMLElement>(
-          '[data-slot="table-pagination"]',
-        );
-        const footerHeight = footer?.getBoundingClientRect().height ?? 0;
-        // O espaço criado por `margin-top: auto` serve apenas para empurrar a
-        // paginação ao rodapé e não pode reduzir a quantidade calculada de
-        // linhas. Consideramos somente o `gap` real do contêiner (cards mobile).
-        const footerGap = footer
-          ? Number.parseFloat(window.getComputedStyle(card).rowGap) || 0
-          : 0;
-        const extraFooterHeight = Array.from(
-          card.querySelectorAll<HTMLElement>(
-            '[data-slot="table-extra-footer"]',
-          ),
-        ).reduce(
-          (sum, element) => sum + element.getBoundingClientRect().height,
-          0,
-        );
-        const chromeHeight =
-          headerHeight + footerHeight + footerGap + extraFooterHeight ||
-          FALLBACK_CHROME_HEIGHT;
-        // Arredondar aproveita a última linha quando falta apenas uma fração
-        // pequena; `floor` era o que deixava quase uma linha inteira vazia.
-        const calculated = Math.round(
-          (available - chromeHeight) / rowHeight,
-        );
-        const next = Math.min(SAFE_MAX_ROWS, Math.max(minRows, calculated));
+      const cardRect = card.getBoundingClientRect();
+      if (cardRect.width === 0) return;
 
-        if (next === current) {
-          lastRequested.current = null;
-          return;
-        }
-        if (lastRequested.current === next) return;
-        lastRequested.current = next;
+      // Conteúdos explicitamente marcados depois da tabela também precisam
+      // caber na viewport. Em Produtos, os atalhos de manutenção eram a parte
+      // esquecida que sempre criava rolagem apesar da tabela "adaptativa".
+      const trailingHeight = Array.from(
+        marker.current?.parentElement?.querySelectorAll<HTMLElement>(
+          '[data-slot="adaptive-page-trailing"]',
+        ) ?? [],
+      ).reduce((sum, element) => {
+        const style = window.getComputedStyle(element);
+        return (
+          sum +
+          element.getBoundingClientRect().height +
+          (Number.parseFloat(style.marginTop) || 0) +
+          (Number.parseFloat(style.marginBottom) || 0)
+        );
+      }, 0);
+      const available = Math.max(
+        0,
+        window.innerHeight -
+          cardRect.top -
+          VIEWPORT_BOTTOM_GAP -
+          trailingHeight,
+      );
 
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("por_pagina", String(next));
-        // Preserva a navegação em andamento. Antes, qualquer pequena diferença
-        // de altura entre duas páginas apagava `pagina` e devolvia a tabela à
-        // primeira logo após o clique. Se o novo tamanho reduzir o total de
-        // páginas, a consulta do servidor já limita ao último número válido.
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      // Altura, e não min-height: o quadro fica contido na viewport desde o
+      // primeiro paint e o rodapé da paginação não salta entre respostas RSC.
+      card.style.height = `${available}px`;
+      card.style.minHeight = "0";
+
+      const rows = Array.from(
+        card.querySelectorAll<HTMLElement>(
+          '[data-slot="table-body"] > [data-slot="table-row"], [data-slot="adaptive-row"]',
+        ),
+      );
+      const measuredRows = rows.filter(
+        (row) => row.getBoundingClientRect().height > 0,
+      );
+      const rowGap =
+        Number.parseFloat(window.getComputedStyle(card).rowGap) || 0;
+      // A maior linha, e não a média: uma observação ou aviso mais alto não
+      // pode ser compensado por linhas curtas e acabar cortado no fim.
+      const measuredRowHeight = measuredRows.reduce(
+        (largest, row) =>
+          Math.max(largest, row.getBoundingClientRect().height),
+        0,
+      );
+      const rowHeight =
+        measuredRowHeight > 0
+          ? measuredRowHeight + (measuredRows.length > 1 ? rowGap : 0)
+          : fallbackRowHeight;
+      const headerHeight =
+        card
+          .querySelector<HTMLElement>('[data-slot="table-header"]')
+          ?.getBoundingClientRect().height ?? 0;
+      const footer = card.querySelector<HTMLElement>(
+        '[data-slot="table-pagination"]',
+      );
+      const footerHeight = footer?.getBoundingClientRect().height ?? 0;
+      const footerGap = footer ? rowGap : 0;
+      const extraFooterHeight = Array.from(
+        card.querySelectorAll<HTMLElement>(
+          '[data-slot="table-extra-footer"]',
+        ),
+      ).reduce(
+        (sum, element) => sum + element.getBoundingClientRect().height,
+        0,
+      );
+      const chromeHeight =
+        headerHeight + footerHeight + footerGap + extraFooterHeight ||
+        FALLBACK_CHROME_HEIGHT;
+      // `floor` é intencional: preencher meia linha a mais contradiz a função
+      // principal deste componente, que é impedir qualquer rolagem vertical.
+      const calculated = Math.floor(
+        (available - chromeHeight) / rowHeight,
+      );
+      const next = Math.min(SAFE_MAX_ROWS, Math.max(minRows, calculated));
+
+      if (next === current) {
+        lastRequested.current = null;
+        return;
+      }
+      if (lastRequested.current === next) return;
+      lastRequested.current = next;
+
+      const params = new URLSearchParams(latestParams.current);
+      params.set("por_pagina", String(next));
+      const query = params.toString();
+      router.replace(query ? `${basePath}?${query}` : basePath, {
+        scroll: false,
       });
     };
 
-    adjust();
-    window.addEventListener("resize", adjust);
+    const scheduleAdjust = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(adjustNow);
+    };
+
+    // `useLayoutEffect` executa antes do quadro chegar à tela: a altura e o
+    // rodapé já nascem no lugar certo, sem o clarão visto com `useEffect`.
+    adjustNow();
+    window.addEventListener("resize", scheduleAdjust);
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener("resize", adjust);
+      window.removeEventListener("resize", scheduleAdjust);
     };
-  }, [current, minRows, pathname, router, searchParams]);
+  }, [
+    active,
+    basePath,
+    current,
+    fallbackRowHeight,
+    layoutKey,
+    minRows,
+    router,
+  ]);
 
   return <span ref={marker} className="block h-0" aria-hidden />;
 }

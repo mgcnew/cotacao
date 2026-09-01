@@ -472,9 +472,18 @@ html:has([data-slot="landing-page"]) {
    ============================================================ */
 [data-slot="app-main"] {
   scroll-behavior: smooth;
-  /* A rolagem do app vive no `main`, não no `body`. Reservar o trilho evita
-     que tabelas mudem alguns pixels de largura quando um modal o bloqueia. */
-  scrollbar-gutter: stable;
+  /* A rolagem continua disponível por roda, touch, teclado e recursos de
+     acessibilidade, mas o trilho não aparece nem muda de largura ao abrir um
+     modal. Firefox/Edge antigo usam propriedades próprias; Chromium e Safari
+     precisam do pseudo-elemento logo abaixo. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+[data-slot="app-main"]::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* O Radix bloqueia a janela, mas a janela não é o contêiner rolável deste app.

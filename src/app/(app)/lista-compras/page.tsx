@@ -68,7 +68,11 @@ export default async function ShoppingListPage({
           />
         ) : (
           <>
-            <AdaptivePageSize current={pagination.pageSize} minRows={1} />
+            <AdaptivePageSize
+              current={pagination.pageSize}
+              basePath="/lista-compras"
+              minRows={1}
+            />
             <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
               {visibleItems.map((item) => (
                 <form

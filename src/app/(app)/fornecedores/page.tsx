@@ -266,13 +266,13 @@ async function FornecedoresContent({
         />
       ) : (
         <>
-          <AdaptivePageSize current={pagination.pageSize} />
-          <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-[calc(100dvh-14rem)]">
+          <AdaptivePageSize
+            current={pagination.pageSize}
+            basePath="/fornecedores"
+          />
+          <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
             <Table
-              containerClassName="min-h-0 flex-1"
-              className={
-                visiveis.length === pagination.pageSize ? "h-full" : undefined
-              }
+              containerClassName="min-h-0 flex-1 overflow-y-hidden"
             >
           <TableHeader>
             <TableRow className="bg-surface-sunken hover:bg-surface-sunken">

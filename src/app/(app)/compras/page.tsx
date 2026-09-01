@@ -217,8 +217,12 @@ async function ListaDeRodadas({
       ) : (
         <>
           <div className="sm:hidden">
-            <AdaptivePageSize current={pagination.pageSize} minRows={1} />
-            <div className="flex flex-col gap-3">
+            <AdaptivePageSize
+              current={pagination.pageSize}
+              basePath="/compras"
+              minRows={1}
+            />
+            <div className="flex flex-col gap-3 overflow-hidden">
               {presentedRounds.map((item) => (
                 <RoundMobileCard key={item.round.id} {...item} />
               ))}
@@ -231,9 +235,12 @@ async function ListaDeRodadas({
             </div>
           </div>
           <div className="hidden sm:contents">
-            <AdaptivePageSize current={pagination.pageSize} />
+            <AdaptivePageSize
+              current={pagination.pageSize}
+              basePath="/compras"
+            />
             <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
-              <Table>
+              <Table containerClassName="min-h-0 flex-1 overflow-y-hidden">
               <TableHeader>
                 <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
                   {/* No celular sobram Rodada, Situação e a ação. O que some da
