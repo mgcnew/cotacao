@@ -472,6 +472,21 @@ html:has([data-slot="landing-page"]) {
    ============================================================ */
 [data-slot="app-main"] {
   scroll-behavior: smooth;
+  /* A rolagem do app vive no `main`, não no `body`. Reservar o trilho evita
+     que tabelas mudem alguns pixels de largura quando um modal o bloqueia. */
+  scrollbar-gutter: stable;
+}
+
+/* O Radix bloqueia a janela, mas a janela não é o contêiner rolável deste app.
+   Sem esta regra, o `main` mantém sua barra enquanto o DialogBody monta a sua:
+   por um quadro aparecem duas barras lado a lado ao abrir um modal. */
+body:has([data-slot="dialog-overlay"][data-state="open"])
+  [data-slot="app-main"] {
+  overflow-y: hidden;
+}
+
+[data-slot="dialog-body"] {
+  scrollbar-gutter: stable;
 }
 
 /* A entrada da página, e por que é uma regra de CSS e não um componente.
