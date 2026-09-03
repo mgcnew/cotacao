@@ -4525,6 +4525,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_list_editable_product_units: {
+        Args: { p_company_id: string };
+        Returns: Json;
+      };
       rpc_list_products_page: {
         Args: {
           p_category_id?: string;
@@ -4570,6 +4574,13 @@ export type Database = {
           p_pricing_unit_id: string;
           p_product_id: string;
           p_purchase_unit_id: string;
+        };
+        Returns: Json;
+      };
+      rpc_bulk_update_unused_product_units: {
+        Args: {
+          p_changes: Json;
+          p_company_id: string;
         };
         Returns: Json;
       };

@@ -66,6 +66,26 @@ export type ProductListRow = {
 
 export type ProductFilterCategory = { id: string; name: string };
 
+export type EditableProductUnitRow = {
+  id: string;
+  name: string;
+  categoryId: string;
+  categoryName: string;
+  isActive: boolean;
+  purchaseUnitId: string;
+  purchaseUnitCode: string;
+  pricingUnitId: string;
+  pricingUnitCode: string;
+  comparisonUnitId: string | null;
+  comparisonUnitCode: string | null;
+};
+
+export type EditableProductUnitsPayload = {
+  rows: EditableProductUnitRow[];
+  editableCount: number;
+  lockedCount: number;
+};
+
 type ProductPagePayload = {
   rows: ProductListRow[];
   total: number;
@@ -107,6 +127,41 @@ export async function listProductsPage(
     catalogTotal: Number(payload.catalogTotal),
     page: Number(payload.page),
     pageSize: Number(payload.pageSize),
+  };
+}
+
+/**
+ * Área de correção em lote.
+ *
+ * A RPC devolve um único JSON para não sofrer o teto de linhas do PostgREST:
+ * este fluxo existe justamente para corrigir catálogos importados com mais de
+ * mil produtos. A elegibilidade é decidida no banco pela mesma regra usada na
+ * edição individual.
+ */
+export async function listEditableProductUnits(
+  companyId: string,
+): Promise<EditableProductUnitsPayload> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "rpc_list_editable_product_units",
+    { p_company_id: companyId },
+  );
+
+  if (error) {
+    throw new Error(
+      `Falha ao carregar produtos editáveis: ${error.message}`,
+    );
+  }
+
+  const payload = data as unknown as EditableProductUnitsPayload | null;
+  if (!payload || !Array.isArray(payload.rows)) {
+    throw new Error("Falha ao carregar produtos editáveis: resposta inválida.");
+  }
+
+  return {
+    rows: payload.rows,
+    editableCount: Number(payload.editableCount),
+    lockedCount: Number(payload.lockedCount),
   };
 }
 

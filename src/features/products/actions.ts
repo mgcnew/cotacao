@@ -239,6 +239,13 @@ export type ProductUnitEditState = {
   savedAt?: number;
 };
 
+export type BulkProductUnitEditState = {
+  error: string | null;
+  savedAt?: number;
+  updated?: number;
+  skipped?: { productId: string; productName: string | null; reason: string }[];
+};
+
 const productUnitsSchema = z.object({
   purchaseUnitId: z.uuid({ error: "Escolha a unidade de compra" }),
   pricingUnitId: z.uuid({ error: "Escolha a unidade de precificação" }),
@@ -277,6 +284,65 @@ export async function updateUnusedProductUnits(
   revalidatePath("/produtos");
   revalidatePath(`/produtos/historico/${productId}`);
   return { error: null, savedAt: Date.now() };
+}
+
+const bulkProductUnitsSchema = z
+  .array(
+    z.object({
+      productId: z.uuid(),
+      purchaseUnitId: z.uuid(),
+      pricingUnitId: z.uuid(),
+      comparisonUnitId: z.uuid().nullable(),
+    }),
+  )
+  .min(1, { error: "Aplique pelo menos uma alteração antes de salvar" })
+  .max(2000, { error: "Atualize no máximo 2000 produtos por vez" });
+
+/** Salva uma revisão inteira em uma única transação no banco. */
+export async function updateUnusedProductUnitsBulk(
+  _previous: BulkProductUnitEditState,
+  formData: FormData,
+): Promise<BulkProductUnitEditState> {
+  const company = await requireActiveCompany();
+  const raw = formData.get("changes");
+  if (typeof raw !== "string") {
+    return { error: "As alterações não foram recebidas" };
+  }
+
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(raw);
+  } catch {
+    return { error: "As alterações recebidas são inválidas" };
+  }
+
+  const parsed = bulkProductUnitsSchema.safeParse(decoded);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "rpc_bulk_update_unused_product_units",
+    {
+      p_company_id: company.companyId,
+      p_changes: parsed.data,
+    },
+  );
+  if (error) return { error: error.message };
+
+  const result = data as unknown as {
+    updated?: number;
+    skipped?: {
+      productId: string;
+      productName: string | null;
+      reason: string;
+    }[];
+  } | null;
+  const updated = Number(result?.updated ?? 0);
+  const skipped = Array.isArray(result?.skipped) ? result.skipped : [];
+
+  revalidatePath("/produtos");
+  revalidatePath("/produtos/correcao-unidades");
+  return { error: null, savedAt: Date.now(), updated, skipped };
 }
 
 const productSchema = z.object({

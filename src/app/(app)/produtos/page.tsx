@@ -108,7 +108,7 @@ export default function ProdutosPage({ searchParams }: PageProps<"/produtos">) {
         description="Catálogo único: revenda e uso interno, separados pela finalidade."
         action={
           <Suspense fallback={null}>
-            <NovoProdutoAction />
+            <ProductCatalogActions />
           </Suspense>
         }
       />
@@ -120,18 +120,29 @@ export default function ProdutosPage({ searchParams }: PageProps<"/produtos">) {
   );
 }
 
-async function NovoProdutoAction() {
+async function ProductCatalogActions() {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
+  const canCreate = permissions.has("product.create");
+  const canUpdate = permissions.has("product.update");
 
-  return permissions.has("product.create") ? (
+  return canCreate || canUpdate ? (
     <>
-      <Button asChild size="sm" variant="outline">
-        <Link href="/produtos/importacoes">Importar planilha</Link>
-      </Button>
-      <Button asChild size="sm">
-        <Link href="/produtos/novo">Novo produto</Link>
-      </Button>
+      {canUpdate ? (
+        <Button asChild size="sm" variant="outline">
+          <Link href="/produtos/correcao-unidades">Corrigir unidades</Link>
+        </Button>
+      ) : null}
+      {canCreate ? (
+        <>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/produtos/importacoes">Importar planilha</Link>
+          </Button>
+          <Button asChild size="sm">
+            <Link href="/produtos/novo">Novo produto</Link>
+          </Button>
+        </>
+      ) : null}
     </>
   ) : null;
 }
