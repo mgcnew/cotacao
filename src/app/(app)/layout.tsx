@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { OperationalLiveUpdates } from "@/components/layout/operational-live-updates";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import {
   NotificationSlot,
@@ -48,6 +49,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
        aparecendo e sumindo, `100vh` é maior que a tela visível e deixa uma
        faixa cortada embaixo. */
     <div className="flex h-dvh overflow-hidden" data-slot="app-shell">
+      <OperationalLiveUpdates companyId={activeCompany.companyId} />
       <AppSidebar
         companyName={activeCompany.companyName}
         permissions={[...permissions]}
