@@ -42,6 +42,49 @@ export type RoundReportSupplier = {
   uncalculatedWins: number;
 };
 
+export type RoundReportRealizationItem = {
+  orderRevisionItemId: string;
+  orderId: string;
+  orderNumber: number;
+  supplierId: string;
+  supplierName: string;
+  productId: string;
+  productName: string;
+  requestedQuantity: number;
+  purchaseUnit: string;
+  pricingUnit: string;
+  receivedQuantity: number;
+  receivedPricingQuantity: number;
+  quotedPrice: number | null;
+  agreedPrice: number;
+  practicedPrice: number | null;
+  negotiatedSavingsOnReceived: number | null;
+  realizedSavings: number | null;
+  divergenceImpact: number | null;
+  receiptStatus: "pending" | "partial" | "received";
+  receiptCount: number;
+  lastReceivedAt: string | null;
+};
+
+export type RoundReportRealization = {
+  calculatedAt: string;
+  lastReceiptAt: string | null;
+  summary: {
+    orderedItemCount: number;
+    receivedItemCount: number;
+    calculableReceivedItemCount: number;
+    fullyReceivedItemCount: number;
+    partiallyReceivedItemCount: number;
+    pendingItemCount: number;
+    postedReceiptCount: number;
+    negotiatedSavingsOnReceived: number;
+    realizedSavings: number;
+    divergenceImpact: number;
+    actualCost: number;
+  };
+  items: RoundReportRealizationItem[];
+};
+
 export type RoundReport = {
   companyName: string;
   round: {
@@ -69,6 +112,8 @@ export type RoundReport = {
     packagingChoiceResult: number;
     calculablePurchasedItems: number;
   };
+  /** Posição dinâmica; o snapshot comercial acima continua imutável. */
+  realization: RoundReportRealization | null;
 };
 
 function hasRoundReportShape(value: unknown) {
@@ -87,6 +132,72 @@ function hasRoundReportShape(value: unknown) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function nullableNumber(value: unknown) {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+function normalizeRealization(value: unknown): RoundReportRealization | null {
+  if (!isRecord(value) || !isRecord(value.summary) || !Array.isArray(value.items)) {
+    return null;
+  }
+
+  const summary = value.summary;
+  return {
+    calculatedAt: String(value.calculatedAt),
+    lastReceiptAt:
+      value.lastReceiptAt === null || value.lastReceiptAt === undefined
+        ? null
+        : String(value.lastReceiptAt),
+    summary: {
+      orderedItemCount: Number(summary.orderedItemCount ?? 0),
+      receivedItemCount: Number(summary.receivedItemCount ?? 0),
+      calculableReceivedItemCount: Number(
+        summary.calculableReceivedItemCount ?? 0,
+      ),
+      fullyReceivedItemCount: Number(summary.fullyReceivedItemCount ?? 0),
+      partiallyReceivedItemCount: Number(
+        summary.partiallyReceivedItemCount ?? 0,
+      ),
+      pendingItemCount: Number(summary.pendingItemCount ?? 0),
+      postedReceiptCount: Number(summary.postedReceiptCount ?? 0),
+      negotiatedSavingsOnReceived: Number(
+        summary.negotiatedSavingsOnReceived ?? 0,
+      ),
+      realizedSavings: Number(summary.realizedSavings ?? 0),
+      divergenceImpact: Number(summary.divergenceImpact ?? 0),
+      actualCost: Number(summary.actualCost ?? 0),
+    },
+    items: value.items.filter(isRecord).map((item) => ({
+      orderRevisionItemId: String(item.orderRevisionItemId),
+      orderId: String(item.orderId),
+      orderNumber: Number(item.orderNumber),
+      supplierId: String(item.supplierId),
+      supplierName: String(item.supplierName),
+      productId: String(item.productId),
+      productName: String(item.productName),
+      requestedQuantity: Number(item.requestedQuantity),
+      purchaseUnit: String(item.purchaseUnit),
+      pricingUnit: String(item.pricingUnit),
+      receivedQuantity: Number(item.receivedQuantity),
+      receivedPricingQuantity: Number(item.receivedPricingQuantity),
+      quotedPrice: nullableNumber(item.quotedPrice),
+      agreedPrice: Number(item.agreedPrice),
+      practicedPrice: nullableNumber(item.practicedPrice),
+      negotiatedSavingsOnReceived: nullableNumber(
+        item.negotiatedSavingsOnReceived,
+      ),
+      realizedSavings: nullableNumber(item.realizedSavings),
+      divergenceImpact: nullableNumber(item.divergenceImpact),
+      receiptStatus: item.receiptStatus as RoundReportRealizationItem["receiptStatus"],
+      receiptCount: Number(item.receiptCount),
+      lastReceivedAt:
+        item.lastReceivedAt === null || item.lastReceivedAt === undefined
+          ? null
+          : String(item.lastReceivedAt),
+    })),
+  };
 }
 
 function normalizeReportOffer(value: unknown) {
@@ -169,7 +280,7 @@ export const getRoundReport = cache(
     // implantação em que o código chegue segundos antes da migration, a RPC
     // pode ainda não existir; nesse intervalo a prévia dinâmica continua
     // funcionando e não derruba a tela.
-    const [snapshot, packagingChoice] = await Promise.all([
+    const [snapshot, packagingChoice, realizationResult] = await Promise.all([
       supabase.rpc("rpc_get_purchase_round_report", {
         p_company_id: company.companyId,
         p_purchase_round_id: roundId,
@@ -180,6 +291,10 @@ export const getRoundReport = cache(
         .eq("company_id", company.companyId)
         .eq("purchase_round_id", roundId)
         .eq("status", "confirmed"),
+      supabase.rpc("rpc_get_purchase_round_realization", {
+        p_company_id: company.companyId,
+        p_purchase_round_id: roundId,
+      }),
     ]);
     if (packagingChoice.error) {
       throw new Error(
@@ -191,12 +306,22 @@ export const getRoundReport = cache(
         sum + Number(allocation.packaging_choice_result_estimated ?? 0),
       0,
     );
+    if (
+      realizationResult.error &&
+      !["42883", "PGRST202"].includes(realizationResult.error.code)
+    ) {
+      throw new Error(
+        `Falha ao calcular o resultado realizado: ${realizationResult.error.message}`,
+      );
+    }
+    const realization = normalizeRealization(realizationResult.data);
     if (!snapshot.error) {
       const report = normalizeRoundReport(snapshot.data);
       if (report) {
         return {
           ...report,
           summary: { ...report.summary, packagingChoiceResult },
+          realization,
         };
       }
     }
@@ -392,6 +517,7 @@ export const getRoundReport = cache(
         packagingChoiceResult,
         calculablePurchasedItems,
       },
+      realization,
     };
   },
 );

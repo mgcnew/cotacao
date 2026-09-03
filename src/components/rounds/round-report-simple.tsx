@@ -1,6 +1,7 @@
 import { Check, ChevronDown, CircleSlash2, UsersRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { RoundRealizationSummary } from "@/components/rounds/round-realization-report";
 import type {
   RoundReport,
   RoundReportItem,
@@ -76,6 +77,8 @@ export function RoundReportSimpleContent({ report }: { report: RoundReport }) {
         </section>
       ) : null}
 
+      <RoundRealizationSummary realization={report.realization} compact />
+
       <section className="grid grid-cols-3 gap-2">
         <SimpleMetric
           label="Valor da compra"
@@ -132,7 +135,11 @@ export function RoundReportSimpleContent({ report }: { report: RoundReport }) {
         {report.round.completedAt
           ? `Cotação concluída em ${DATE.format(new Date(report.round.completedAt))}. `
           : "Cotação ainda em andamento. "}
-        Para consultar todos os preços e cálculos, abra o relatório completo.
+        {report.realization
+          ? `Recebimentos consultados em ${DATE.format(new Date(report.realization.calculatedAt))}. `
+          : ""}
+        Para consultar os preços e cálculos por produto, abra o relatório
+        completo.
       </footer>
     </article>
   );

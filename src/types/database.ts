@@ -4529,6 +4529,13 @@ export type Database = {
         Args: { p_company_id: string };
         Returns: Json;
       };
+      rpc_get_purchase_round_realization: {
+        Args: {
+          p_company_id: string;
+          p_purchase_round_id: string;
+        };
+        Returns: Json;
+      };
       rpc_list_products_page: {
         Args: {
           p_category_id?: string;

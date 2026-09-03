@@ -1,6 +1,10 @@
 import { CheckCircle2, CircleSlash2, Store } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import {
+  RoundRealizationDetails,
+  RoundRealizationSummary,
+} from "@/components/rounds/round-realization-report";
 import type {
   RoundReport,
   RoundReportItem,
@@ -102,6 +106,8 @@ export function RoundReportContent({ report }: { report: RoundReport }) {
         </p>
       ) : null}
 
+      <RoundRealizationSummary realization={report.realization} />
+
       <section>
         <h2 className="text-fg mb-1 text-base font-semibold">
           Resultado por fornecedor
@@ -147,6 +153,8 @@ export function RoundReportContent({ report }: { report: RoundReport }) {
         </div>
       </section>
 
+      <RoundRealizationDetails realization={report.realization} />
+
       <section>
         <h2 className="text-fg mb-1 text-base font-semibold">
           Produtos cotados
@@ -172,10 +180,16 @@ export function RoundReportContent({ report }: { report: RoundReport }) {
       </section>
 
       <footer className="border-border text-fg-subtle border-t pt-3 text-xs">
-        Relatório gerado em {DATE_TIME.format(new Date(report.generatedAt))}.
-        Economia negociada considera somente propostas vencedoras com
-        quantidade convertida para a unidade de preço. A economia realizada
-        será apurada no recebimento.
+        Posição da conclusão gerada em{" "}
+        {DATE_TIME.format(new Date(report.generatedAt))}. Economia negociada
+        considera somente propostas vencedoras com quantidade convertida para
+        a unidade de preço.
+        {report.realization ? (
+          <>
+            {" "}Posição dos recebimentos consultada em{" "}
+            {DATE_TIME.format(new Date(report.realization.calculatedAt))}.
+          </>
+        ) : null}
       </footer>
     </article>
   );

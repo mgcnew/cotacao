@@ -65,8 +65,8 @@ async function Conteudo({ id, simple }: { id: string; simple: boolean }) {
           </h2>
           <p className="text-fg-muted text-xs">
             {simple
-              ? "Resumo direto dos produtos, vencedores e economia."
-              : "Resultado consolidado da cotação e economia estimada."}
+              ? "Resumo dos produtos e da economia prevista e realizada."
+              : "Resultado da conclusão e posição atual das conferências."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
