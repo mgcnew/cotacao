@@ -13,7 +13,9 @@ import type { Database } from "@/types/database";
  *
  *  1. `private.provision_company` (criação de tenant);
  *  2. `rpc_service_store_public_token` (guarda o SHA-256 do token do
- *     fornecedor — o token bruto nunca é persistido).
+ *     fornecedor — o token bruto nunca é persistido);
+ *  3. `rpc_service_rotate_receiving_display_link` (troca o token do painel
+ *     público de recebimento, também persistindo somente o hash).
  *
  * Regras de uso:
  *  - só dentro de `src/app/api/**` ou server actions;

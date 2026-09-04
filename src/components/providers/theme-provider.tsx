@@ -99,7 +99,7 @@ function AccentProvider({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * A cotação que vai por link nasce clara, sempre.
+ * Os portais que abrem por link nascem claros, sempre.
  *
  * Quem abre esse link não é usuário do sistema: é o vendedor do fornecedor,
  * no celular dele, com o tema que ele escolheu para o aparelho — e não faz
@@ -112,7 +112,9 @@ function AccentProvider({ children }: { children: React.ReactNode }) {
  * inteiro só por ter aberto um link.
  */
 function temaForcado(pathname: string): string | undefined {
-  return pathname.startsWith("/q/") ? "light" : undefined;
+  return pathname.startsWith("/q/") || pathname.startsWith("/r/")
+    ? "light"
+    : undefined;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

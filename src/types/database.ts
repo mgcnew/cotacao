@@ -1920,6 +1920,44 @@ export type Database = {
           },
         ];
       };
+      receiving_display_links: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          last_accessed_at: string | null;
+          revoked_at: string | null;
+          token_hash: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_accessed_at?: string | null;
+          revoked_at?: string | null;
+          token_hash: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_accessed_at?: string | null;
+          revoked_at?: string | null;
+          token_hash?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "receiving_display_links_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       purchase_allocations: {
         Row: {
           allocated_by: string | null;
@@ -4658,6 +4696,10 @@ export type Database = {
         Args: { p_token: string };
         Returns: Json;
       };
+      rpc_public_get_receiving_display: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
       rpc_public_get_quotation: { Args: { p_token: string }; Returns: Json };
       rpc_public_get_quotation_conversion_context: {
         Args: { p_token: string };
@@ -4674,6 +4716,10 @@ export type Database = {
       rpc_public_submit_quotation_validated: {
         Args: { p_items: Json; p_token: string };
         Returns: Json;
+      };
+      rpc_revoke_receiving_display_link: {
+        Args: { p_company_id: string };
+        Returns: boolean;
       };
       rpc_record_manual_quotation_item: {
         Args: {
@@ -4813,6 +4859,14 @@ export type Database = {
           p_round_supplier_id?: string;
           p_supplier_id: string;
           p_token_hash?: string;
+        };
+        Returns: string;
+      };
+      rpc_service_rotate_receiving_display_link: {
+        Args: {
+          p_company_id: string;
+          p_created_by: string;
+          p_token_hash: string;
         };
         Returns: string;
       };

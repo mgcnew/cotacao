@@ -2,6 +2,7 @@ import { Check, Minus } from "lucide-react";
 
 import { DemandCalendarManager } from "@/components/demand-calendar/demand-calendar-manager";
 import { PageHeader } from "@/components/layout/page-header";
+import { ReceivingDisplaySettings } from "@/components/receipts/receiving-display-settings";
 import { ThemeControls } from "@/components/theme-controls";
 import { WhatsAppConnectionSettings } from "@/components/whatsapp/connection-settings";
 import { WhatsAppTemplateSettings } from "@/components/whatsapp/template-settings";
@@ -38,6 +39,7 @@ import { getWhatsAppConnection } from "@/features/whatsapp/queries";
 import { isEvolutionProvisioningConfigured } from "@/lib/evolution/client";
 import type { WhatsAppSetupState } from "@/features/whatsapp/connection-state";
 import { getCompanyWhatsAppTemplates } from "@/features/whatsapp/templates";
+import { getReceivingDisplayLinkStatus } from "@/features/receipts/public-display";
 
 function formatCnpj(value: string | null) {
   if (!value) return "—";
@@ -98,12 +100,17 @@ export default async function ConfiguracoesPage({
     "aparencia",
     "empresa",
     "demanda",
+    "recebimento",
     "whatsapp",
     "papeis",
     "permissoes",
   ].includes(requestedTab)
     ? requestedTab
     : "aparencia";
+  const canManageReceivingDisplay = minhasPermissoes.has("role.manage");
+  const receivingDisplayLink = canManageReceivingDisplay
+    ? await getReceivingDisplayLinkStatus(company.companyId)
+    : { active: false, createdAt: null, lastAccessedAt: null };
   const evolutionConfigured = isEvolutionProvisioningConfigured();
   const whatsappState: WhatsAppSetupState = whatsapp
     ? {
@@ -147,6 +154,7 @@ export default async function ConfiguracoesPage({
           <TabsTrigger value="aparencia">Aparência</TabsTrigger>
           <TabsTrigger value="empresa">Empresa</TabsTrigger>
           <TabsTrigger value="demanda">Demanda</TabsTrigger>
+          <TabsTrigger value="recebimento">Painel de recebimento</TabsTrigger>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="papeis">Papéis</TabsTrigger>
           <TabsTrigger value="permissoes">Minhas permissões</TabsTrigger>
@@ -233,6 +241,13 @@ export default async function ConfiguracoesPage({
               minhasPermissoes.has("purchase_round.create") ||
               minhasPermissoes.has("order.create")
             }
+          />
+        </TabsContent>
+
+        <TabsContent value="recebimento" className="mt-4">
+          <ReceivingDisplaySettings
+            initialStatus={receivingDisplayLink}
+            canManage={canManageReceivingDisplay}
           />
         </TabsContent>
 
