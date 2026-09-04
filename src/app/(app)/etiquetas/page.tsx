@@ -20,7 +20,10 @@ export default async function EtiquetasPage() {
           title="Código para etiquetas"
           description="Leia a embalagem e mostre o código ao leitor do sistema de etiquetas."
         />
-        <MobileBarcodeDisplay products={products} />
+        <MobileBarcodeDisplay
+          companyId={company.companyId}
+          products={products}
+        />
       </div>
 
       <div className="border-border bg-surface mx-auto hidden max-w-lg rounded-2xl border p-8 text-center md:block">
