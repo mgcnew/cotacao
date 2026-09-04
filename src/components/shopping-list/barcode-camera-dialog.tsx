@@ -38,6 +38,30 @@ function cameraErrorMessage(error: unknown) {
   return "Não foi possível iniciar a câmera. Verifique a permissão e tente novamente.";
 }
 
+/**
+ * Pede foco contínuo ao aparelho, quando ele souber fazer isso.
+ *
+ * `focusMode` ainda não é padrão (não existe no tipo do TS e o iOS ignora),
+ * por isso a capacidade é consultada antes: sem o modo na lista, aplicar a
+ * restrição só devolveria erro. Retorna se o foco contínuo ficou de fato ativo,
+ * porque a dica exibida embaixo do vídeo muda conforme a resposta.
+ */
+async function enableContinuousFocus(stream: MediaStream | null) {
+  const track = stream?.getVideoTracks()[0];
+  if (!track?.getCapabilities) return false;
+  try {
+    const modes = (track.getCapabilities() as { focusMode?: string[] })
+      .focusMode;
+    if (!modes?.includes("continuous")) return false;
+    await track.applyConstraints({
+      advanced: [{ focusMode: "continuous" } as unknown as MediaTrackConstraintSet],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function BarcodeCameraDialog({
   onDetected,
   triggerLabel,
@@ -53,6 +77,7 @@ export function BarcodeCameraDialog({
   const [error, setError] = React.useState<string | null>(null);
   const [canUseTorch, setCanUseTorch] = React.useState(false);
   const [torchOn, setTorchOn] = React.useState(false);
+  const [continuousFocus, setContinuousFocus] = React.useState(false);
   // O conteúdo do Dialog nasce em um portal. Guardar o elemento em estado faz
   // a inicialização esperar o portal realmente montar o <video>; com uma ref
   // simples, o efeito podia rodar antes e ficar eternamente em "Iniciando".
@@ -96,8 +121,11 @@ export function BarcodeCameraDialog({
         const { BrowserMultiFormatOneDReader } = await import("@zxing/browser");
         if (disposed) return;
 
+        // 720p e não 1080p de propósito: cada tentativa converte o quadro
+        // inteiro em tons de cinza no JS, então mais pixels significam menos
+        // tentativas por segundo — e o que falha aqui é o foco, não a nitidez.
         const reader = new BrowserMultiFormatOneDReader(undefined, {
-          delayBetweenScanAttempts: 180,
+          delayBetweenScanAttempts: 120,
           delayBetweenScanSuccess: 700,
         });
         const controls = await reader.decodeFromConstraints(
@@ -107,6 +135,12 @@ export function BarcodeCameraDialog({
               facingMode: { ideal: "environment" },
               width: { ideal: 1280 },
               height: { ideal: 720 },
+              // Restrições `advanced` são "melhor esforço": onde `focusMode`
+              // não existe, o navegador descarta em vez de falhar. Pedir já na
+              // abertura evita o primeiro quadro fora de foco.
+              advanced: [
+                { focusMode: "continuous" } as unknown as MediaTrackConstraintSet,
+              ],
             },
           },
           previewElement,
@@ -149,6 +183,13 @@ export function BarcodeCameraDialog({
         setStarting(false);
         if (startTimeout !== null) window.clearTimeout(startTimeout);
         startTimeout = null;
+        // Só depois de baixar o cronômetro de partida: a câmera já está no ar,
+        // e um `applyConstraints` lento não pode virar "a câmera demorou".
+        const stream = previewElement.srcObject;
+        const focusing = await enableContinuousFocus(
+          stream instanceof MediaStream ? stream : null,
+        );
+        if (!disposed) setContinuousFocus(focusing);
       } catch (startError) {
         if (!disposed) {
           setError(cameraErrorMessage(startError));
@@ -178,6 +219,7 @@ export function BarcodeCameraDialog({
       setError(null);
       setCanUseTorch(false);
       setTorchOn(false);
+      setContinuousFocus(false);
     }
     setOpen(nextOpen);
   }
@@ -189,6 +231,15 @@ export function BarcodeCameraDialog({
     try {
       await switchTorch(next);
       setTorchOn(next);
+      // A lanterna é ligada por `applyConstraints({ advanced: [...] })`, e essa
+      // lista SUBSTITUI a anterior — o foco contínuo pedido na abertura vai
+      // junto. Por isso ele é pedido de novo a cada acionamento.
+      const stream = videoElement?.srcObject;
+      setContinuousFocus(
+        await enableContinuousFocus(
+          stream instanceof MediaStream ? stream : null,
+        ),
+      );
     } catch {
       setError("A lanterna não pôde ser acionada neste aparelho.");
     }
@@ -213,22 +264,32 @@ export function BarcodeCameraDialog({
         <DialogHeader>
           <DialogTitle>Ler código de barras</DialogTitle>
           <DialogDescription>
-            Aponte a câmera traseira para o código e mantenha o aparelho firme.
-            A imagem não é enviada ao servidor.
+            Aponte a câmera traseira para o código e preencha a imagem com ele.
+            Nada é enviado ao servidor.
           </DialogDescription>
         </DialogHeader>
-        <DialogBody>
-          <div className="bg-surface-sunken relative aspect-[4/3] overflow-hidden rounded-xl">
+        {/* No celular o diálogo é a tela inteira, e a prévia de 4:3 deixava
+            metade dela vazia. Aqui ela ocupa a altura que sobra; a caixa fixa
+            volta no desktop, onde o diálogo é uma caixa de verdade. */}
+        <DialogBody className="flex flex-col p-0 sm:px-4 sm:py-3">
+          <div className="relative min-h-56 flex-1 overflow-hidden bg-black sm:aspect-[4/3] sm:min-h-0 sm:flex-none sm:rounded-xl">
+            {/* `object-contain`, e não `cover`: o leitor decodifica o quadro
+                inteiro, então recortar a imagem só escondia área que estava
+                sendo lida — a pessoa afastava o aparelho à toa. */}
             <video
               ref={setVideoElement}
               autoPlay
               muted
               playsInline
-              className="size-full object-cover"
+              className="size-full object-contain"
               aria-label="Imagem da câmera para leitura do código de barras"
             />
-            <div className="pointer-events-none absolute inset-[18%_8%] rounded-lg border-2 border-white/90 shadow-[0_0_0_999px_rgb(0_0_0/0.28)]" />
-            <div className="bg-destructive pointer-events-none absolute top-1/2 right-[8%] left-[8%] h-0.5 shadow-[0_0_8px_rgb(255_255_255/0.8)]" />
+            {/* A moldura saiu. Ela não recortava nada — o retângulo era só
+                desenho —, mas fazia a pessoa afastar o aparelho para encaixar
+                o código nele, e código pequeno no quadro é o que falha. Fica a
+                linha do meio, que marca de verdade onde o leitor procura: ele
+                varre 25 linhas a partir do centro. */}
+            <div className="bg-destructive/80 pointer-events-none absolute inset-x-4 top-1/2 h-px -translate-y-1/2 shadow-[0_0_3px_rgb(0_0_0/0.55)]" />
             {starting ? (
               <div className="absolute inset-0 grid place-items-center bg-black/45 text-sm font-medium text-white">
                 Iniciando câmera…
@@ -236,13 +297,15 @@ export function BarcodeCameraDialog({
             ) : null}
           </div>
           {error ? (
-            <p role="alert" className="text-destructive mt-3 text-sm">
+            <p role="alert" className="text-destructive px-4 py-3 text-sm sm:px-0 sm:pb-0">
               {error}
             </p>
           ) : (
-            <p className="text-fg-subtle mt-3 text-xs">
-              Para ler melhor, deixe o código inteiro dentro do retângulo e
-              evite reflexos.
+            <p className="text-fg-subtle px-4 py-3 text-xs sm:px-0 sm:pb-0">
+              Aproxime até o código ocupar a largura da imagem e cruzar a linha.
+              {continuousFocus
+                ? " O foco se ajusta sozinho."
+                : " Se a imagem embaçar, afaste um pouco e aproxime de novo."}
             </p>
           )}
         </DialogBody>
