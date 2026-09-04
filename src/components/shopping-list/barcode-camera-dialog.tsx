@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Flashlight,
   FlashlightOff,
+  ZoomIn,
 } from "lucide-react";
 import * as React from "react";
 
@@ -44,23 +45,69 @@ function cameraErrorMessage(error: unknown) {
   return "Não foi possível iniciar a câmera. Verifique a permissão e tente novamente.";
 }
 
+/** O que este aparelho aceita mexer na câmera. Nada disso é padronizado. */
+type CameraAbilities = {
+  torch: boolean;
+  continuousFocus: boolean;
+  zoom: { min: number; max: number; step: number } | null;
+};
+
+const NO_ABILITIES: CameraAbilities = {
+  torch: false,
+  continuousFocus: false,
+  zoom: null,
+};
+
 /**
- * Pede foco contínuo ao aparelho, quando ele souber fazer isso.
+ * Lê as capacidades da trilha de vídeo.
  *
- * `focusMode` ainda não é padrão (não existe no tipo do TS e o iOS ignora),
- * por isso a capacidade é consultada antes: sem o modo na lista, aplicar a
- * restrição só devolveria erro. Retorna se o foco contínuo ficou de fato ativo,
- * porque a dica exibida embaixo do vídeo muda conforme a resposta.
+ * `focusMode`, `torch` e `zoom` não existem no tipo do TS e faltam em vários
+ * navegadores (o iOS ignora os três), por isso tudo passa por consulta antes:
+ * pedir o que o aparelho não tem só devolveria erro.
  */
-async function enableContinuousFocus(stream: MediaStream | null) {
-  const track = stream?.getVideoTracks()[0];
-  if (!track?.getCapabilities) return false;
+function readAbilities(track: MediaStreamTrack | null): CameraAbilities {
+  const capabilities = track?.getCapabilities?.() as
+    | {
+        torch?: boolean;
+        focusMode?: string[];
+        zoom?: { min: number; max: number; step?: number };
+      }
+    | undefined;
+  if (!capabilities) return NO_ABILITIES;
+  return {
+    torch: capabilities.torch === true,
+    continuousFocus: capabilities.focusMode?.includes("continuous") ?? false,
+    zoom: capabilities.zoom
+      ? {
+          min: capabilities.zoom.min,
+          max: capabilities.zoom.max,
+          step: capabilities.zoom.step || 0.1,
+        }
+      : null,
+  };
+}
+
+/**
+ * Aplica foco, lanterna e zoom SEMPRE juntos.
+ *
+ * `applyConstraints` substitui a lista `advanced` inteira: mandar só a
+ * lanterna apagava o foco contínuo pedido na abertura, e mandar só o zoom
+ * apagaria os dois. Compor a lista aqui, com o que o aparelho declara
+ * suportar, é o que evita esse jogo de um desligar o outro.
+ */
+async function applyTuning(
+  track: MediaStreamTrack | null,
+  abilities: CameraAbilities,
+  tuning: { torch: boolean; zoom: number | null },
+) {
+  const constraintSet: Record<string, unknown> = {};
+  if (abilities.continuousFocus) constraintSet.focusMode = "continuous";
+  if (abilities.torch) constraintSet.torch = tuning.torch;
+  if (abilities.zoom && tuning.zoom !== null) constraintSet.zoom = tuning.zoom;
+  if (!track || Object.keys(constraintSet).length === 0) return false;
   try {
-    const modes = (track.getCapabilities() as { focusMode?: string[] })
-      .focusMode;
-    if (!modes?.includes("continuous")) return false;
     await track.applyConstraints({
-      advanced: [{ focusMode: "continuous" } as unknown as MediaTrackConstraintSet],
+      advanced: [constraintSet as MediaTrackConstraintSet],
     });
     return true;
   } catch {
@@ -95,9 +142,9 @@ export function BarcodeCameraDialog({
   const [open, setOpen] = React.useState(false);
   const [starting, setStarting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [canUseTorch, setCanUseTorch] = React.useState(false);
+  const [abilities, setAbilities] = React.useState<CameraAbilities>(NO_ABILITIES);
   const [torchOn, setTorchOn] = React.useState(false);
-  const [continuousFocus, setContinuousFocus] = React.useState(false);
+  const [zoom, setZoom] = React.useState<number | null>(null);
   const [feedback, setFeedback] = React.useState<ScanFeedback | null>(null);
   const [scanned, setScanned] = React.useState<
     { code: string; label: string; at: number }[]
@@ -106,7 +153,15 @@ export function BarcodeCameraDialog({
   // a inicialização esperar o portal realmente montar o <video>; com uma ref
   // simples, o efeito podia rodar antes e ficar eternamente em "Iniciando".
   const [videoElement, setVideoElement] = React.useState<HTMLVideoElement | null>(null);
+  // Zoom digital muito alto devolve imagem interpolada, que lê pior que a
+  // original: o cursor cobre até 4x, onde ainda há barra de verdade. O `min`
+  // é a referência porque nem todo aparelho conta a partir de 1 — alguns
+  // reportam a escala em porcentagem.
+  const zoomCeiling = abilities.zoom
+    ? Math.min(abilities.zoom.max, abilities.zoom.min * 4)
+    : 0;
   const controlsRef = React.useRef<IScannerControls | null>(null);
+  const trackRef = React.useRef<MediaStreamTrack | null>(null);
   const onDetectedRef = React.useRef(onDetected);
   const lastCodeRef = React.useRef<{ code: string; at: number } | null>(null);
 
@@ -145,9 +200,6 @@ export function BarcodeCameraDialog({
         const { BrowserMultiFormatOneDReader } = await import("@zxing/browser");
         if (disposed) return;
 
-        // 720p e não 1080p de propósito: cada tentativa converte o quadro
-        // inteiro em tons de cinza no JS, então mais pixels significam menos
-        // tentativas por segundo — e o que falha aqui é o foco, não a nitidez.
         const reader = new BrowserMultiFormatOneDReader(undefined, {
           delayBetweenScanAttempts: 120,
           delayBetweenScanSuccess: 700,
@@ -157,8 +209,13 @@ export function BarcodeCameraDialog({
             audio: false,
             video: {
               facingMode: { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              // 1080p custa mais por tentativa (cada uma converte o quadro
+              // inteiro em tons de cinza no JS), mas resolução é o que decide
+              // se um código pequeno a uma distância que a câmera CONSEGUE
+              // focar tem barras separáveis. Tentativa rápida em imagem que
+              // não resolve o código não lê nunca.
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
               // Restrições `advanced` são "melhor esforço": onde `focusMode`
               // não existe, o navegador descarta em vez de falhar. Pedir já na
               // abertura evita o primeiro quadro fora de foco.
@@ -217,7 +274,6 @@ export function BarcodeCameraDialog({
           return;
         }
         controlsRef.current = controls;
-        setCanUseTorch(Boolean(controls.switchTorch));
         setError(null);
         setStarting(false);
         if (startTimeout !== null) window.clearTimeout(startTimeout);
@@ -225,10 +281,21 @@ export function BarcodeCameraDialog({
         // Só depois de baixar o cronômetro de partida: a câmera já está no ar,
         // e um `applyConstraints` lento não pode virar "a câmera demorou".
         const stream = previewElement.srcObject;
-        const focusing = await enableContinuousFocus(
-          stream instanceof MediaStream ? stream : null,
-        );
-        if (!disposed) setContinuousFocus(focusing);
+        const track =
+          stream instanceof MediaStream
+            ? (stream.getVideoTracks()[0] ?? null)
+            : null;
+        trackRef.current = track;
+        const found = readAbilities(track);
+        const startingZoom = found.zoom
+          ? ((track?.getSettings() as { zoom?: number } | undefined)?.zoom ??
+            found.zoom.min)
+          : null;
+        if (!disposed) {
+          setAbilities(found);
+          setZoom(startingZoom);
+        }
+        await applyTuning(track, found, { torch: false, zoom: startingZoom });
       } catch (startError) {
         if (!disposed) {
           setError(cameraErrorMessage(startError));
@@ -245,6 +312,7 @@ export function BarcodeCameraDialog({
       if (startTimeout !== null) window.clearTimeout(startTimeout);
       controlsRef.current?.stop();
       controlsRef.current = null;
+      trackRef.current = null;
       const stream = previewElement.srcObject;
       if (stream instanceof MediaStream) {
         stream.getTracks().forEach((track) => track.stop());
@@ -256,9 +324,9 @@ export function BarcodeCameraDialog({
     if (nextOpen) {
       setStarting(true);
       setError(null);
-      setCanUseTorch(false);
+      setAbilities(NO_ABILITIES);
       setTorchOn(false);
-      setContinuousFocus(false);
+      setZoom(null);
       setFeedback(null);
       setScanned([]);
     }
@@ -266,24 +334,23 @@ export function BarcodeCameraDialog({
   }
 
   async function toggleTorch() {
-    const switchTorch = controlsRef.current?.switchTorch;
-    if (!switchTorch) return;
     const next = !torchOn;
-    try {
-      await switchTorch(next);
-      setTorchOn(next);
-      // A lanterna é ligada por `applyConstraints({ advanced: [...] })`, e essa
-      // lista SUBSTITUI a anterior — o foco contínuo pedido na abertura vai
-      // junto. Por isso ele é pedido de novo a cada acionamento.
-      const stream = videoElement?.srcObject;
-      setContinuousFocus(
-        await enableContinuousFocus(
-          stream instanceof MediaStream ? stream : null,
-        ),
-      );
-    } catch {
+    const applied = await applyTuning(trackRef.current, abilities, {
+      torch: next,
+      zoom,
+    });
+    if (!applied) {
       setError("A lanterna não pôde ser acionada neste aparelho.");
+      return;
     }
+    setTorchOn(next);
+  }
+
+  function changeZoom(next: number) {
+    // Otimista: o controle acompanha o dedo, e o `applyConstraints` que vem
+    // atrás não tem como "voltar" um zoom que o aparelho declarou suportar.
+    setZoom(next);
+    void applyTuning(trackRef.current, abilities, { torch: torchOn, zoom: next });
   }
 
   return (
@@ -312,20 +379,24 @@ export function BarcodeCameraDialog({
           </DialogDescription>
         </DialogHeader>
         {/* Altura em `dvh` e não o resto da tela: a prévia esticada engolia
-            telas pequenas, e como o quadro é exibido inteiro (`object-contain`)
-            uma caixa menor mostra a mesma área de leitura, só reduzida. O que
-            sobra fica para a confirmação e a lista. */}
+            telas pequenas. O corte é só vertical, então a faixa que sobra tem
+            a largura inteira — que é a dimensão de que um código de barras
+            precisa. O resto da tela fica para a confirmação e a lista. */}
         <DialogBody className="flex flex-col p-0 sm:px-4 sm:py-3">
           <div className="relative h-[38dvh] min-h-44 shrink-0 overflow-hidden bg-black sm:aspect-[4/3] sm:h-auto sm:min-h-0 sm:rounded-xl">
-            {/* `object-contain`, e não `cover`: o leitor decodifica o quadro
-                inteiro, então recortar a imagem só escondia área que estava
-                sendo lida — a pessoa afastava o aparelho à toa. */}
+            {/* `object-cover`: em celular a trilha costuma vir em retrato, e
+                `contain` deixava a imagem espremida no meio com tarja preta
+                dos dois lados — o código nunca chegava a ocupar a largura.
+                Cobrir corta em cima e embaixo, nunca nas laterais, e o que
+                fica de fora continua sendo lido: o leitor decodifica o quadro
+                inteiro, não o recorte visível. Mostrar menos do que é lido é o
+                lado seguro do erro. */}
             <video
               ref={setVideoElement}
               autoPlay
               muted
               playsInline
-              className="size-full object-contain"
+              className="size-full object-cover"
               aria-label="Imagem da câmera para leitura do código de barras"
             />
             {/* A moldura saiu. Ela não recortava nada — o retângulo era só
@@ -334,6 +405,31 @@ export function BarcodeCameraDialog({
                 linha do meio, que marca de verdade onde o leitor procura: ele
                 varre 25 linhas a partir do centro. */}
             <div className="bg-destructive/80 pointer-events-none absolute inset-x-4 top-1/2 h-px -translate-y-1/2 shadow-[0_0_3px_rgb(0_0_0/0.55)]" />
+            {/* Zoom em vez de aproximar o aparelho: abaixo da distância mínima
+                de foco da lente a imagem não fecha por mais que o autofoco
+                tente, e é aí que o código pequeno costuma exigir chegar perto.
+                Ampliar resolve o mesmo problema sem sair da distância que a
+                câmera consegue focar. */}
+            {abilities.zoom && zoom !== null && zoomCeiling > abilities.zoom.min ? (
+              <label className="absolute inset-x-3 bottom-2 flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
+                <ZoomIn className="size-3.5 shrink-0" aria-hidden />
+                <span className="sr-only">Aproximar sem mover o aparelho</span>
+                <input
+                  type="range"
+                  min={abilities.zoom.min}
+                  max={zoomCeiling}
+                  step={abilities.zoom.step}
+                  value={zoom}
+                  onChange={(event) =>
+                    changeZoom(Number(event.target.value))
+                  }
+                  className="accent-primary min-w-0 flex-1"
+                />
+                <span className="w-9 shrink-0 text-right tabular-nums">
+                  {(zoom / abilities.zoom.min).toFixed(1)}×
+                </span>
+              </label>
+            ) : null}
             {starting ? (
               <div className="absolute inset-0 grid place-items-center bg-black/45 text-sm font-medium text-white">
                 Iniciando câmera…
@@ -370,10 +466,12 @@ export function BarcodeCameraDialog({
             </p>
           ) : (
             <p className="text-fg-subtle px-4 py-3 text-xs sm:px-0 sm:pb-0">
-              Aproxime até o código ocupar a largura da imagem e cruzar a linha.
-              {continuousFocus
-                ? " O foco se ajusta sozinho."
-                : " Se a imagem embaçar, afaste um pouco e aproxime de novo."}
+              Deixe o código ocupar a largura da imagem e cruzar a linha.
+              {abilities.zoom && zoomCeiling > abilities.zoom.min
+                ? " Se embaçar de perto, afaste e use o zoom: a lente tem uma distância mínima para focar."
+                : abilities.continuousFocus
+                  ? " O foco se ajusta sozinho."
+                  : " Se a imagem embaçar, afaste um pouco e aproxime de novo."}
             </p>
           )}
           {continuous && scanned.length > 0 ? (
@@ -400,7 +498,7 @@ export function BarcodeCameraDialog({
           ) : null}
         </DialogBody>
         <DialogFooter>
-          {canUseTorch ? (
+          {abilities.torch ? (
             <Button
               type="button"
               size="sm"
