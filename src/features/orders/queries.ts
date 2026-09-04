@@ -106,19 +106,7 @@ export async function listDirectOrderOptions(companyId: string) {
         .eq("company_id", companyId)
         .eq("status", "active")
         .order("name"),
-      supabase
-        .from("products")
-        .select(
-          `
-        id,
-        name,
-        purchase_unit:units!products_company_id_purchase_unit_id_fkey ( symbol ),
-        pricing_unit:units!products_company_id_pricing_unit_id_fkey ( symbol )
-      `,
-        )
-        .eq("company_id", companyId)
-        .eq("is_active", true)
-        .order("name"),
+      listOrderEditableProducts(companyId),
       listPendingShoppingItems(companyId),
       supabase
         .from("supplier_notices")
@@ -131,9 +119,6 @@ export async function listDirectOrderOptions(companyId: string) {
 
   if (suppliers.error) {
     throw new Error(`Falha ao listar fornecedores: ${suppliers.error.message}`);
-  }
-  if (products.error) {
-    throw new Error(`Falha ao listar produtos: ${products.error.message}`);
   }
   if (supplierNotices.error) {
     throw new Error(`Falha ao listar avisos: ${supplierNotices.error.message}`);
@@ -161,12 +146,7 @@ export async function listDirectOrderOptions(companyId: string) {
         priority: notice.priority,
       })),
     })),
-    products: (products.data ?? []).map((p) => ({
-      id: p.id,
-      name: p.name,
-      purchaseUnit: p.purchase_unit?.symbol ?? "",
-      pricingUnit: p.pricing_unit?.symbol ?? "",
-    })),
+    products,
     shoppingItems,
   };
 }
