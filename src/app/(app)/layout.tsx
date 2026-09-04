@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { OperationalLiveUpdates } from "@/components/layout/operational-live-updates";
+import { PwaInstallButton } from "@/components/layout/pwa-install-button";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import {
   NotificationSlot,
@@ -65,6 +66,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             permissions={[...permissions]}
           />
           <div className="flex-1" />
+          <PwaInstallButton />
           <ThemeToggle />
           <Suspense fallback={<NotificationSlotFallback />}>
             <NotificationSlot companyId={activeCompany.companyId} />
