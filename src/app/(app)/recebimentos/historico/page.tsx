@@ -71,23 +71,27 @@ export default async function HistoricoFiscalPage({
           />
         ) : (
           <div className="border-border bg-surface overflow-hidden rounded-xl border">
-            <Table>
-              <TableHeader>
+            {/* No celular a linha vira ficha empilhada: seis colunas com nome de
+                fornecedor e valor não cabem em 360px sem empurrar a situação
+                para fora da tela. A partir de `sm` volta a ser tabela. */}
+            <Table className="block sm:table">
+              <TableHeader className="hidden sm:table-header-group">
                 <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
                   <TableHead>NF-e</TableHead>
                   <TableHead>Fornecedor</TableHead>
-                  <TableHead className="hidden sm:table-cell">
-                    Emissão
-                  </TableHead>
+                  <TableHead>Emissão</TableHead>
                   <TableHead className="hidden md:table-cell">Itens</TableHead>
                   <TableHead>Valor</TableHead>
                   <TableHead>Situação</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="block sm:table-row-group">
                 {imports.rows.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
+                  <TableRow
+                    key={item.id}
+                    className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1.5 p-3 sm:table-row sm:p-0"
+                  >
+                    <TableCell className="col-span-2 block p-0 whitespace-normal sm:table-cell sm:p-2">
                       <Link
                         href={`/recebimentos/historico/${item.id}`}
                         className="text-fg font-medium hover:underline"
@@ -95,23 +99,31 @@ export default async function HistoricoFiscalPage({
                         {item.invoice_number}
                         {item.invoice_series ? `/${item.invoice_series}` : ""}
                       </Link>
-                      <span className="text-fg-subtle block max-w-40 truncate text-xs">
+                      <span className="text-fg-subtle block truncate text-xs sm:max-w-40">
                         {item.file_name}
                       </span>
                     </TableCell>
-                    <TableCell className="text-fg-muted">
+                    <TableCell className="text-fg-muted col-span-2 block p-0 whitespace-normal sm:table-cell sm:p-2">
                       {item.supplierName ?? item.issuer_name ?? "A associar"}
                     </TableCell>
-                    <TableCell className="text-fg-muted hidden sm:table-cell">
+                    <TableCell className="text-fg-muted col-span-2 block p-0 text-xs whitespace-normal sm:table-cell sm:p-2 sm:text-sm">
+                      <span className="sm:hidden">Emitida em </span>
                       {DATE.format(new Date(item.issued_at))}
+                      {/* A contagem de itens só tem coluna própria a partir de
+                          `md`; antes disso viaja junto da emissão. */}
+                      <span className="md:hidden">
+                        {" · "}
+                        {item.itemCount}{" "}
+                        {item.itemCount === 1 ? "item" : "itens"}
+                      </span>
                     </TableCell>
                     <TableCell className="text-fg-muted hidden tabular-nums md:table-cell">
                       {item.itemCount}
                     </TableCell>
-                    <TableCell className="text-fg tabular-nums">
+                    <TableCell className="text-fg block p-0 font-medium tabular-nums sm:table-cell sm:p-2 sm:font-normal">
                       {MONEY.format(item.invoiceTotal)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="block justify-self-end p-0 sm:table-cell sm:p-2">
                       <Badge
                         variant={
                           item.status === "posted" ? "default" : "outline"

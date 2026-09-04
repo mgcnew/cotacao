@@ -60,7 +60,9 @@ export default async function ConciliacaoNfeHistoricaPage({
         }
       />
 
-      <section className="border-border bg-surface mb-6 grid gap-4 rounded-xl border p-5 sm:grid-cols-3">
+      {/* Três dados curtos: no celular cabem dois por linha — empilhá-los custa
+          uma tela de rolagem antes de chegar aos itens. */}
+      <section className="border-border bg-surface mb-6 grid grid-cols-2 gap-4 rounded-xl border p-4 sm:grid-cols-3 sm:p-5">
         <div>
           <p className="text-fg-subtle text-xs">Data histórica</p>
           <p className="text-fg text-sm">
@@ -82,7 +84,7 @@ export default async function ConciliacaoNfeHistoricaPage({
       </section>
 
       {history.status === "posted" ? (
-        <div className="border-border bg-surface rounded-xl border p-5">
+        <div className="border-border bg-surface rounded-xl border p-4 sm:p-5">
           <h2 className="text-fg font-semibold">Importação confirmada</h2>
           <p className="text-fg-muted mt-1 text-sm">
             Os produtos e preços desta nota já aparecem no histórico do
@@ -99,7 +101,7 @@ export default async function ConciliacaoNfeHistoricaPage({
           items={data.items}
         />
       ) : (
-        <p className="border-border bg-surface text-fg-muted rounded-xl border p-5 text-sm">
+        <p className="border-border bg-surface text-fg-muted rounded-xl border p-4 text-sm sm:p-5">
           Seu papel permite visualizar, mas não confirmar esta conciliação.
         </p>
       )}

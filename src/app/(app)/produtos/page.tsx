@@ -224,14 +224,17 @@ async function ProdutosContent({
             basePath="/produtos"
           />
           <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
+            {/* Sete colunas não cabem num celular: a tabela rolaria de lado e
+                levaria o botão de ação para fora da tela. Abaixo de `sm` a
+                linha vira ficha empilhada — o nome ocupa a largura toda e o
+                que sumiu das colunas reaparece embaixo dele; a partir de `sm`
+                é tabela de novo, ganhando uma coluna a cada respiro. */}
             <Table
+              className="block sm:table"
               containerClassName="min-h-0 flex-1 overflow-y-hidden"
             >
-              <TableHeader>
+              <TableHeader className="hidden sm:table-header-group">
                 <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
-                  {/* Sete colunas não cabem num celular: a tabela rolaria de lado
-                  e levaria o botão de ação para fora da tela. O que some da
-                  linha reaparece embaixo do nome do produto. */}
                   <TableHead>Produto</TableHead>
                   <TableHead className="hidden md:table-cell">
                     Categoria
@@ -250,20 +253,29 @@ async function ProdutosContent({
                   {podeEditar ? <TableHead className="w-0" /> : null}
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="block sm:table-row-group">
                 {catalog.rows.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell className="font-medium">
+                  <TableRow
+                    key={product.id}
+                    className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 p-3 sm:table-row sm:p-0"
+                  >
+                    {/* `whitespace-normal` também na tabela: nome comprido que
+                        não quebra é o que empurrava a coluna de ações para
+                        fora da tela em telas médias. */}
+                    <TableCell className="col-span-2 block p-0 font-medium whitespace-normal sm:table-cell sm:p-2">
                       <Link
                         href={`/produtos/historico/${product.id}`}
                         className="hover:text-primary hover:underline"
                       >
                         {product.name}
                       </Link>
-                      <span className="text-fg-muted block max-w-40 text-xs font-normal whitespace-normal md:hidden">
-                        {product.categoryName} ·{" "}
-                        <span className="font-mono">
-                          {product.purchaseUnitCode}
+                      <span className="text-fg-muted block text-xs font-normal whitespace-normal md:hidden">
+                        {product.categoryName}
+                        <span className="sm:hidden">
+                          {" · "}
+                          <span className="font-mono">
+                            {product.purchaseUnitCode}
+                          </span>
                         </span>
                       </span>
                     </TableCell>
@@ -284,7 +296,7 @@ async function ProdutosContent({
                       {/* Sem unidade própria, quem compara é a de precificação. */}
                       {product.comparisonUnitCode ?? product.pricingUnitCode}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="block p-0 sm:table-cell sm:p-2">
                       <Badge
                         variant={product.isActive ? "default" : "secondary"}
                       >
@@ -292,7 +304,7 @@ async function ProdutosContent({
                       </Badge>
                     </TableCell>
                     {podeEditar ? (
-                      <TableCell>
+                      <TableCell className="block justify-self-end p-0 sm:table-cell sm:p-2">
                         <div className="flex items-center justify-end gap-1">
                           {product.unitsEditable ? (
                             <Button

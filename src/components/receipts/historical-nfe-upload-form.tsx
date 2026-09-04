@@ -99,7 +99,7 @@ export function HistoricalNfeUploadForm() {
         event.preventDefault();
         importFiles();
       }}
-      className="border-border bg-surface rounded-xl border p-5"
+      className="border-border bg-surface rounded-xl border p-4 sm:p-5"
     >
       <div className="mb-4 flex items-start gap-3">
         <span className="bg-primary-soft text-primary grid size-9 shrink-0 place-items-center rounded-lg">
@@ -123,7 +123,7 @@ export function HistoricalNfeUploadForm() {
           multiple
           disabled={isPending}
           onChange={(event) => addFiles(event.currentTarget.files)}
-          className="border-input bg-background text-fg file:bg-primary file:text-primary-fg h-10 rounded-lg border px-2 py-1 text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-xs file:font-medium"
+          className="border-input bg-background text-fg file:bg-primary file:text-primary-fg h-10 w-full min-w-0 rounded-lg border px-2 py-1 text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-xs file:font-medium"
         />
       </label>
 
@@ -132,7 +132,7 @@ export function HistoricalNfeUploadForm() {
           {files.map((item) => (
             <li
               key={item.id}
-              className="flex min-w-0 items-start gap-3 px-3 py-2.5"
+              className="flex min-w-0 items-start gap-2.5 px-3 py-2.5 sm:gap-3"
             >
               {item.status === "uploading" ? (
                 <LoaderCircle

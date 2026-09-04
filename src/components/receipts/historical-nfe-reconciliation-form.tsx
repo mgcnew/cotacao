@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
 import { FormSubmitButton } from "@/components/ui/form-submit-button";
+import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import {
@@ -363,7 +364,7 @@ export function HistoricalNfeReconciliationForm({
 
   return (
     <form action={formAction} className="space-y-5">
-      <section className="border-border bg-surface rounded-xl border p-5">
+      <section className="border-border bg-surface rounded-xl border p-4 sm:p-5">
         <label className="text-fg-muted flex flex-col gap-1.5 text-sm">
           Fornecedor da NF-e
           <SearchableSelect
@@ -398,7 +399,7 @@ export function HistoricalNfeReconciliationForm({
           return (
             <article
               key={item.id}
-              className="border-border bg-surface rounded-xl border p-4"
+              className="border-border bg-surface rounded-xl border p-3 sm:p-4"
             >
               <input type="hidden" name="itemId" value={item.id} />
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -427,8 +428,11 @@ export function HistoricalNfeReconciliationForm({
                 ) : null}
               </div>
 
-              <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(16rem,1fr)_10rem_10rem]">
-                <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
+              {/* Quantidade e preço são campos curtos: lado a lado no celular
+                  eles cabem e a nota inteira continua visível na rolagem. O
+                  seletor de produto é o único que precisa da linha toda. */}
+              <div className="mt-4 grid grid-cols-2 items-end gap-3 lg:grid-cols-[minmax(16rem,1fr)_10rem_10rem]">
+                <label className="text-fg-muted col-span-2 flex flex-col gap-1.5 text-xs lg:col-span-1">
                   Produto no sistema
                   <SearchableSelect
                     id={`historical-product-${item.id}`}
@@ -442,7 +446,7 @@ export function HistoricalNfeReconciliationForm({
                 <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
                   Quantidade{" "}
                   {selectedProduct?.pricingUnitSymbol ?? "na unidade de preço"}
-                  <input
+                  <Input
                     type="number"
                     step="any"
                     min="0.000001"
@@ -452,12 +456,11 @@ export function HistoricalNfeReconciliationForm({
                       patchDraft(item.id, { quantity: event.target.value })
                     }
                     disabled={draft.ignored}
-                    className="border-input bg-background text-fg h-8 rounded-lg border px-2.5 text-sm"
                   />
                 </label>
                 <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
                   Preço praticado
-                  <input
+                  <Input
                     type="number"
                     step="any"
                     min="0"
@@ -467,7 +470,6 @@ export function HistoricalNfeReconciliationForm({
                       patchDraft(item.id, { price: event.target.value })
                     }
                     disabled={draft.ignored}
-                    className="border-input bg-background text-fg h-8 rounded-lg border px-2.5 text-sm"
                   />
                 </label>
               </div>
@@ -495,7 +497,7 @@ export function HistoricalNfeReconciliationForm({
                     name={`conversion_unit_${item.id}`}
                     value={draft.conversion.sourceUnit}
                   />
-                  <div className="mt-3 grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)]">
+                  <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
                     <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
                       Tipo de conversão
                       <ThemedSelect
@@ -526,7 +528,7 @@ export function HistoricalNfeReconciliationForm({
                           <span className="text-fg shrink-0 text-sm">
                             1 {draft.conversion.sourceUnit} =
                           </span>
-                          <input
+                          <Input
                             type="number"
                             step="any"
                             min="0.000001"
@@ -539,7 +541,7 @@ export function HistoricalNfeReconciliationForm({
                                 event.target.value,
                               )
                             }
-                            className="border-input bg-background text-fg h-8 min-w-0 flex-1 rounded-lg border px-2.5 text-sm"
+                            className="flex-1"
                           />
                           <span className="text-fg shrink-0 text-sm">
                             {selectedProduct.pricingUnitSymbol}
@@ -592,7 +594,7 @@ export function HistoricalNfeReconciliationForm({
                   />
                   Ignorar este item
                 </label>
-                <input
+                <Input
                   name={`notes_${item.id}`}
                   defaultValue={item.notes ?? ""}
                   placeholder={
@@ -600,7 +602,6 @@ export function HistoricalNfeReconciliationForm({
                       ? "Justificativa obrigatória"
                       : "Observação opcional"
                   }
-                  className="border-input bg-background text-fg h-8 rounded-lg border px-2.5 text-sm"
                 />
               </div>
             </article>
