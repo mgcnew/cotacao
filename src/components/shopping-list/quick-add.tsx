@@ -6,7 +6,10 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
-import { BarcodeCameraDialog } from "@/components/shopping-list/barcode-camera-dialog";
+import {
+  BarcodeCameraDialog,
+  type BarcodeScanOutcome,
+} from "@/components/shopping-list/barcode-camera-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -78,14 +81,17 @@ export function ShoppingListQuickAdd({
     setQuery(product.name);
   }
 
-  function handleCameraCode(code: string) {
+  function handleCameraCode(code: string): BarcodeScanOutcome {
     const product = findProductByBarcode(products, code);
     if (!product) {
-      return `O código ${code} não está vinculado a nenhum produto cadastrado.`;
+      return {
+        ok: false,
+        message: `O código ${code} não está vinculado a nenhum produto cadastrado.`,
+      };
     }
     choose(product);
     window.setTimeout(() => formRef.current?.requestSubmit(), 0);
-    return null;
+    return { ok: true, label: product.name };
   }
 
   return (

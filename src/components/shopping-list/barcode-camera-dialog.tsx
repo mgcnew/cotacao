@@ -1,7 +1,13 @@
 "use client";
 
 import type { IScannerControls } from "@zxing/browser";
-import { Camera, Flashlight, FlashlightOff } from "lucide-react";
+import {
+  AlertCircle,
+  Camera,
+  CheckCircle2,
+  Flashlight,
+  FlashlightOff,
+} from "lucide-react";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
@@ -62,13 +68,27 @@ async function enableContinuousFocus(stream: MediaStream | null) {
   }
 }
 
+/**
+ * O que a tela dona da câmera fez com o código lido.
+ *
+ * O `label` não é enfeite: em leitura contínua o diálogo cobre a tela inteira,
+ * então a confirmação do que entrou só pode aparecer aqui dentro.
+ */
+export type BarcodeScanOutcome =
+  | { ok: true; label: string }
+  | { ok: false; message: string };
+
+type ScanFeedback = BarcodeScanOutcome & { at: number };
+
 export function BarcodeCameraDialog({
   onDetected,
+  continuous = false,
   triggerLabel,
   triggerClassName,
 }: {
-  /** Retorne uma mensagem quando o código não puder ser aceito. */
-  onDetected: (code: string) => string | null;
+  onDetected: (code: string) => BarcodeScanOutcome;
+  /** Segue lendo depois de cada acerto, em vez de fechar no primeiro. */
+  continuous?: boolean;
   triggerLabel?: string;
   triggerClassName?: string;
 }) {
@@ -78,6 +98,10 @@ export function BarcodeCameraDialog({
   const [canUseTorch, setCanUseTorch] = React.useState(false);
   const [torchOn, setTorchOn] = React.useState(false);
   const [continuousFocus, setContinuousFocus] = React.useState(false);
+  const [feedback, setFeedback] = React.useState<ScanFeedback | null>(null);
+  const [scanned, setScanned] = React.useState<
+    { code: string; label: string; at: number }[]
+  >([]);
   // O conteúdo do Dialog nasce em um portal. Guardar o elemento em estado faz
   // a inicialização esperar o portal realmente montar o <video>; com uma ref
   // simples, o efeito podia rodar antes e ficar eternamente em "Iniciando".
@@ -151,23 +175,38 @@ export function BarcodeCameraDialog({
               .trim()
               .replace(/\s+/g, "")
               .toUpperCase();
+            if (!code) return;
             const now = Date.now();
-            if (
-              !code ||
-              (lastCodeRef.current?.code === code &&
-                now - lastCodeRef.current.at < 1500)
-            ) {
-              return;
-            }
+            // Lendo em série, a embalagem fica parada na frente da câmera
+            // enquanto a pessoa alcança a próxima — e o leitor acerta de novo
+            // a cada 700ms. Por isso o instante é renovado a CADA avistamento:
+            // a janela passa a contar de quando o código saiu de vista, não de
+            // quando entrou, e segurar o mesmo item não adiciona duas vezes.
+            const previous = lastCodeRef.current;
+            const isRepeat =
+              previous?.code === code &&
+              now - previous.at < (continuous ? 2500 : 1500);
             lastCodeRef.current = { code, at: now };
+            if (isRepeat) return;
 
-            const rejection = onDetectedRef.current(code);
-            if (rejection) {
-              setError(rejection);
+            const outcome = onDetectedRef.current(code);
+            setFeedback({ ...outcome, at: now });
+            if (!outcome.ok) {
+              // Padrão diferente do acerto: dá para distinguir sem olhar.
+              navigator.vibrate?.([40, 60, 40]);
               return;
             }
 
-            navigator.vibrate?.(80);
+            navigator.vibrate?.(continuous ? 40 : 80);
+            if (continuous) {
+              setScanned((current) =>
+                [{ code, label: outcome.label, at: now }, ...current].slice(
+                  0,
+                  50,
+                ),
+              );
+              return;
+            }
             activeControls.stop();
             setOpen(false);
           },
@@ -211,7 +250,7 @@ export function BarcodeCameraDialog({
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [open, videoElement]);
+  }, [continuous, open, videoElement]);
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
@@ -220,6 +259,8 @@ export function BarcodeCameraDialog({
       setCanUseTorch(false);
       setTorchOn(false);
       setContinuousFocus(false);
+      setFeedback(null);
+      setScanned([]);
     }
     setOpen(nextOpen);
   }
@@ -264,15 +305,18 @@ export function BarcodeCameraDialog({
         <DialogHeader>
           <DialogTitle>Ler código de barras</DialogTitle>
           <DialogDescription>
-            Aponte a câmera traseira para o código e preencha a imagem com ele.
+            {continuous
+              ? "Bipe um código atrás do outro: a câmera continua aberta e cada acerto aparece na lista."
+              : "Aponte a câmera traseira para o código e preencha a imagem com ele."}{" "}
             Nada é enviado ao servidor.
           </DialogDescription>
         </DialogHeader>
-        {/* No celular o diálogo é a tela inteira, e a prévia de 4:3 deixava
-            metade dela vazia. Aqui ela ocupa a altura que sobra; a caixa fixa
-            volta no desktop, onde o diálogo é uma caixa de verdade. */}
+        {/* Altura em `dvh` e não o resto da tela: a prévia esticada engolia
+            telas pequenas, e como o quadro é exibido inteiro (`object-contain`)
+            uma caixa menor mostra a mesma área de leitura, só reduzida. O que
+            sobra fica para a confirmação e a lista. */}
         <DialogBody className="flex flex-col p-0 sm:px-4 sm:py-3">
-          <div className="relative min-h-56 flex-1 overflow-hidden bg-black sm:aspect-[4/3] sm:min-h-0 sm:flex-none sm:rounded-xl">
+          <div className="relative h-[38dvh] min-h-44 shrink-0 overflow-hidden bg-black sm:aspect-[4/3] sm:h-auto sm:min-h-0 sm:rounded-xl">
             {/* `object-contain`, e não `cover`: o leitor decodifica o quadro
                 inteiro, então recortar a imagem só escondia área que estava
                 sendo lida — a pessoa afastava o aparelho à toa. */}
@@ -297,8 +341,32 @@ export function BarcodeCameraDialog({
             ) : null}
           </div>
           {error ? (
-            <p role="alert" className="text-destructive px-4 py-3 text-sm sm:px-0 sm:pb-0">
+            <p
+              role="alert"
+              className="text-destructive px-4 py-3 text-sm sm:px-0 sm:pb-0"
+            >
               {error}
+            </p>
+          ) : feedback ? (
+            /* `key` com o instante da leitura: sem ele, dois códigos seguidos
+               trocam o texto sem nada se mexer, e no meio de uma sequência
+               rápida não dá para ter certeza de que o segundo entrou. */
+            <p
+              key={feedback.at}
+              role={feedback.ok ? "status" : "alert"}
+              aria-live="polite"
+              className={`animate-ds-in flex items-center gap-2 px-4 py-3 text-sm sm:px-0 sm:pb-0 ${
+                feedback.ok ? "text-success" : "text-destructive"
+              }`}
+            >
+              {feedback.ok ? (
+                <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+              ) : (
+                <AlertCircle className="size-4 shrink-0" aria-hidden />
+              )}
+              <span className="min-w-0">
+                {feedback.ok ? feedback.label : feedback.message}
+              </span>
             </p>
           ) : (
             <p className="text-fg-subtle px-4 py-3 text-xs sm:px-0 sm:pb-0">
@@ -308,6 +376,28 @@ export function BarcodeCameraDialog({
                 : " Se a imagem embaçar, afaste um pouco e aproxime de novo."}
             </p>
           )}
+          {continuous && scanned.length > 0 ? (
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 sm:px-0">
+              <p className="text-fg-subtle mb-1 text-xs">
+                Lidos agora ({scanned.length})
+              </p>
+              <ul className="divide-border divide-y">
+                {scanned.map((item) => (
+                  <li
+                    key={`${item.code}:${item.at}`}
+                    className="flex items-center justify-between gap-3 py-1.5"
+                  >
+                    <span className="min-w-0 truncate text-sm">
+                      {item.label}
+                    </span>
+                    <code className="text-fg-subtle shrink-0 text-xs">
+                      {item.code}
+                    </code>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </DialogBody>
         <DialogFooter>
           {canUseTorch ? (
@@ -327,8 +417,15 @@ export function BarcodeCameraDialog({
             </Button>
           ) : null}
           <DialogClose asChild>
-            <Button type="button" size="sm" variant="ghost" className="ml-auto">
-              Fechar
+            <Button
+              type="button"
+              size="sm"
+              variant={continuous && scanned.length > 0 ? "default" : "ghost"}
+              className="ml-auto"
+            >
+              {continuous && scanned.length > 0
+                ? `Concluir (${scanned.length})`
+                : "Fechar"}
             </Button>
           </DialogClose>
         </DialogFooter>

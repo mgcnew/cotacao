@@ -10,7 +10,10 @@ import {
 } from "lucide-react";
 import * as React from "react";
 
-import { BarcodeCameraDialog } from "@/components/shopping-list/barcode-camera-dialog";
+import {
+  BarcodeCameraDialog,
+  type BarcodeScanOutcome,
+} from "@/components/shopping-list/barcode-camera-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -232,21 +235,31 @@ export function MobileBarcodeDisplay({
     return true;
   }
 
-  function handleDetected(rawCode: string) {
+  function handleDetected(rawCode: string): BarcodeScanOutcome {
     const code = normalizeBarcode(rawCode);
     const product = products.find((item) =>
       barcodeMatches(item.barcodes, code),
     );
     if (!product) {
-      return `O código ${code} não pertence a nenhum produto cadastrado.`;
+      return {
+        ok: false,
+        message: `O código ${code} não pertence a nenhum produto cadastrado.`,
+      };
     }
 
     const registeredCode = findMatchingBarcode(product.barcodes, code);
     if (!registeredCode) {
-      return `O código ${code} não pertence a nenhum produto cadastrado.`;
+      return {
+        ok: false,
+        message: `O código ${code} não pertence a nenhum produto cadastrado.`,
+      };
     }
     if (!/^[\x20-\x7e]+$/.test(registeredCode)) {
-      return "Este código possui caracteres que não podem ser exibidos em CODE 128.";
+      return {
+        ok: false,
+        message:
+          "Este código possui caracteres que não podem ser exibidos em CODE 128.",
+      };
     }
     const scanned = {
       id: product.id,
@@ -254,8 +267,11 @@ export function MobileBarcodeDisplay({
       code: registeredCode,
     };
     return addLabel(scanned)
-      ? null
-      : "Não foi possível guardar esta etiqueta no aparelho.";
+      ? { ok: true, label: product.name }
+      : {
+          ok: false,
+          message: "Não foi possível guardar esta etiqueta no aparelho.",
+        };
   }
 
   function addFromInput() {
@@ -358,8 +374,11 @@ export function MobileBarcodeDisplay({
               </div>
             ) : null}
           </div>
+          {/* Contínuo: aqui a pessoa monta uma pilha de etiquetas de uma vez,
+              e reabrir a câmera a cada item custava mais que a leitura. */}
           <BarcodeCameraDialog
             onDetected={handleDetected}
+            continuous
             triggerLabel="Câmera"
           />
         </div>
