@@ -84,12 +84,32 @@ async function listHistoricalReconciliationProducts(
   return { data, error: null };
 }
 
+/** Regras também são paginadas: o aprendizado não pode parar na milésima. */
+async function listHistoricalUnitRules(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+) {
+  const data = [];
+  for (let start = 0; ; start += 1000) {
+    const page = await supabase
+      .from("supplier_product_nfe_unit_rules")
+      .select("supplier_id, product_id, xml_unit, target_unit_id, mode, factor")
+      .eq("company_id", companyId)
+      .order("id")
+      .range(start, start + 999);
+    if (page.error) return { data: null, error: page.error };
+    data.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
+  }
+  return { data, error: null };
+}
+
 export async function getHistoricalNfeImport(
   companyId: string,
   importId: string,
 ) {
   const supabase = await createServerSupabaseClient();
-  const [history, items, suppliers, products] = await Promise.all([
+  const [history, items, suppliers, products, unitRules] = await Promise.all([
     supabase
       .from("historical_nfe_imports")
       .select("*")
@@ -108,6 +128,7 @@ export async function getHistoricalNfeImport(
       .eq("company_id", companyId)
       .order("name"),
     listHistoricalReconciliationProducts(supabase, companyId),
+    listHistoricalUnitRules(supabase, companyId),
   ]);
   if (history.error)
     throw new Error(`Falha ao abrir NF-e: ${history.error.message}`);
@@ -118,19 +139,13 @@ export async function getHistoricalNfeImport(
     throw new Error(`Falha ao listar fornecedores: ${suppliers.error.message}`);
   if (products.error)
     throw new Error(`Falha ao listar produtos: ${products.error.message}`);
-  const unitRules = history.data.supplier_id
-    ? await supabase
-        .from("supplier_product_nfe_unit_rules")
-        .select("product_id, xml_unit, target_unit_id, mode, factor")
-        .eq("company_id", companyId)
-        .eq("supplier_id", history.data.supplier_id)
-    : { data: [], error: null };
   if (unitRules.error) {
     throw new Error(
       `Falha ao carregar conversões aprendidas: ${unitRules.error.message}`,
     );
   }
   type UnitRuleRow = {
+    supplier_id: string;
     product_id: string;
     xml_unit: string;
     target_unit_id: string;
@@ -182,6 +197,7 @@ export async function getHistoricalNfeImport(
       pricingUnitSymbol: product.pricing_unit?.symbol ?? "",
       pricingUnitId: product.pricing_unit_id,
       unitRules: (rulesByProduct.get(product.id) ?? []).map((rule) => ({
+        supplierId: rule.supplier_id,
         xmlUnit: rule.xml_unit,
         targetUnitId: rule.target_unit_id,
         mode: rule.mode,

@@ -3,8 +3,9 @@
 import { useActionState, useMemo, useState } from "react";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { FormSubmitButton } from "@/components/ui/form-submit-button";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   postHistoricalNfe,
   type HistoricalNfeActionState,
@@ -25,6 +26,7 @@ type Product = {
   pricingUnitSymbol: string;
   pricingUnitId: string;
   unitRules: {
+    supplierId: string;
     xmlUnit: string;
     targetUnitId: string;
     mode: string;
@@ -55,6 +57,12 @@ type Draft = {
   quantity: string;
   price: string;
   ignored: boolean;
+  conversion: {
+    sourceUnit: string;
+    mode: "fixed_factor" | "manual_quantity";
+    factor: string;
+    learned: boolean;
+  } | null;
 };
 
 const INITIAL_STATE: HistoricalNfeActionState = { error: null };
@@ -64,51 +72,140 @@ const MONEY = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
-function pricingFor(item: Item, product: Product) {
+const VARIABLE_WEIGHT_UNITS = new Set(["KG", "KGM", "G", "GR"]);
+
+function sourceQuantity(item: Item, unit: string) {
+  const normalized = normalizedNfeUnit(unit);
+  if (normalized === normalizedNfeUnit(item.commercial_unit)) {
+    return item.commercialQuantity;
+  }
+  if (normalized === normalizedNfeUnit(item.tributary_unit)) {
+    return item.tributaryQuantity;
+  }
+  return null;
+}
+
+function pricingFor(item: Item, product: Product, supplierId: string) {
   const wanted = new Set(
     [product.pricingUnitCode, product.pricingUnitSymbol]
       .map(normalizedNfeUnit)
       .filter(Boolean),
+  );
+  const applicableRules = product.unitRules.filter(
+    (rule) => rule.supplierId === supplierId,
   );
   let quantity: number | null = null;
   if (wanted.has(normalizedNfeUnit(item.commercial_unit))) {
     quantity = item.commercialQuantity;
   } else if (wanted.has(normalizedNfeUnit(item.tributary_unit))) {
     quantity = item.tributaryQuantity;
+    const sourceUnit = item.commercial_unit;
+    if (
+      sourceUnit &&
+      item.commercialQuantity > 0 &&
+      normalizedNfeUnit(sourceUnit) !==
+        normalizedNfeUnit(item.tributary_unit)
+    ) {
+      const variable = VARIABLE_WEIGHT_UNITS.has(
+        normalizedNfeUnit(product.pricingUnitCode || product.pricingUnitSymbol),
+      );
+      const inferredFactor = item.tributaryQuantity / item.commercialQuantity;
+      const saved = applicableRules.find(
+        (rule) =>
+          rule.targetUnitId === product.pricingUnitId &&
+          normalizedNfeUnit(rule.xmlUnit) === normalizedNfeUnit(sourceUnit),
+      );
+      const factorMatches =
+        saved?.factor != null &&
+        Math.abs(saved.factor - inferredFactor) <=
+          Math.max(Math.abs(inferredFactor), 1) * 0.000001;
+      return {
+        quantity: quantity > 0 ? String(quantity) : "",
+        price: quantity > 0 ? String(item.netProductTotal / quantity) : "",
+        conversion: {
+          sourceUnit,
+          mode: variable
+            ? ("manual_quantity" as const)
+            : ("fixed_factor" as const),
+          factor: variable ? "" : String(inferredFactor),
+          learned: variable
+            ? saved?.mode === "manual_quantity"
+            : saved?.mode === "fixed_factor" && factorMatches,
+        },
+      };
+    }
   } else {
-    const rule = product.unitRules.find(
+    const rule = applicableRules.find(
       (candidate) =>
         candidate.targetUnitId === product.pricingUnitId &&
-        candidate.mode === "fixed_factor" &&
-        candidate.factor &&
         [item.commercial_unit, item.tributary_unit]
           .map(normalizedNfeUnit)
           .includes(normalizedNfeUnit(candidate.xmlUnit)),
     );
-    if (rule?.factor) {
-      const sourceQuantity =
-        normalizedNfeUnit(rule.xmlUnit) ===
-        normalizedNfeUnit(item.commercial_unit)
-          ? item.commercialQuantity
-          : item.tributaryQuantity;
-      quantity = sourceQuantity * rule.factor;
+    const currentSourceUnit = rule
+      ? [item.commercial_unit, item.tributary_unit].find(
+          (unit) =>
+            normalizedNfeUnit(unit) === normalizedNfeUnit(rule.xmlUnit),
+        ) ?? rule.xmlUnit
+      : null;
+    if (rule?.mode === "fixed_factor" && rule.factor) {
+      const source = sourceQuantity(item, currentSourceUnit ?? rule.xmlUnit);
+      quantity = source === null ? null : source * rule.factor;
+    }
+    if (rule) {
+      return {
+        quantity: quantity && quantity > 0 ? String(quantity) : "",
+        price:
+          quantity && quantity > 0
+            ? String(item.netProductTotal / quantity)
+            : "",
+        conversion: {
+          sourceUnit: currentSourceUnit ?? rule.xmlUnit,
+          mode: rule.mode as "fixed_factor" | "manual_quantity",
+          factor: rule.factor === null ? "" : String(rule.factor),
+          learned: true,
+        },
+      };
     }
   }
   return {
     quantity: quantity && quantity > 0 ? String(quantity) : "",
     price:
       quantity && quantity > 0 ? String(item.netProductTotal / quantity) : "",
+    conversion:
+      quantity === null
+        ? {
+            sourceUnit:
+              item.commercial_unit ?? item.tributary_unit ?? "",
+            mode: VARIABLE_WEIGHT_UNITS.has(
+              normalizedNfeUnit(
+                product.pricingUnitCode || product.pricingUnitSymbol,
+              ),
+            )
+              ? ("manual_quantity" as const)
+              : ("fixed_factor" as const),
+            factor: "",
+            learned: false,
+          }
+        : null,
   };
 }
 
-function initialDraft(item: Item, products: Product[]): Draft {
+function initialDraft(
+  item: Item,
+  products: Product[],
+  supplierId: string,
+): Draft {
   const selected = products.find((product) => product.id === item.product_id);
-  const suggested = selected ? pricingFor(item, selected) : null;
+  const suggested = selected ? pricingFor(item, selected, supplierId) : null;
   return {
     productId: item.product_id ?? "",
-    quantity: item.pricingQuantity?.toString() ?? suggested?.quantity ?? "",
-    price: item.practicedPrice?.toString() ?? suggested?.price ?? "",
+    quantity:
+      item.pricingQuantity?.toString() ?? suggested?.quantity ?? "",
+    price:
+      item.practicedPrice?.toString() ?? suggested?.price ?? "",
     ignored: item.reconciliation_status === "ignored",
+    conversion: suggested?.conversion ?? null,
   };
 }
 
@@ -135,7 +232,10 @@ export function HistoricalNfeReconciliationForm({
   const [supplierId, setSupplierId] = useState(initialSupplierId);
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
     Object.fromEntries(
-      items.map((item) => [item.id, initialDraft(item, products)]),
+      items.map((item) => [
+        item.id,
+        initialDraft(item, products, initialSupplierId),
+      ]),
     ),
   );
   const selectedSupplier = suppliers.find(
@@ -155,15 +255,109 @@ export function HistoricalNfeReconciliationForm({
   function chooseProduct(item: Item, productId: string) {
     const product = products.find((candidate) => candidate.id === productId);
     if (!product) {
-      patchDraft(item.id, { productId: "", quantity: "", price: "" });
+      patchDraft(item.id, {
+        productId: "",
+        quantity: "",
+        price: "",
+        conversion: null,
+      });
       return;
     }
-    const pricing = pricingFor(item, product);
+    const pricing = pricingFor(item, product, supplierId);
     patchDraft(item.id, {
       productId,
       quantity: pricing.quantity,
       price: pricing.price,
       ignored: false,
+      conversion: pricing.conversion,
+    });
+  }
+
+  function changeSupplier(nextSupplierId: string) {
+    setSupplierId(nextSupplierId);
+    setDrafts((current) =>
+      Object.fromEntries(
+        items.map((item) => {
+          const currentDraft = current[item.id];
+          const product = products.find(
+            (candidate) => candidate.id === currentDraft.productId,
+          );
+          if (!product) return [item.id, currentDraft];
+          const pricing = pricingFor(item, product, nextSupplierId);
+          return [
+            item.id,
+            {
+              ...currentDraft,
+              quantity: pricing.quantity,
+              price: pricing.price,
+              conversion: pricing.conversion,
+            },
+          ];
+        }),
+      ),
+    );
+  }
+
+  function changeConversion(
+    item: Item,
+    mode: "fixed_factor" | "manual_quantity",
+    factor: string,
+  ) {
+    setDrafts((current) => {
+      const draft = current[item.id];
+      if (!draft.conversion) return current;
+      const parsedFactor = Number(factor.replace(",", "."));
+      const source = sourceQuantity(item, draft.conversion.sourceUnit);
+      const product = products.find(
+        (candidate) => candidate.id === draft.productId,
+      );
+      const wanted = new Set(
+        [product?.pricingUnitCode, product?.pricingUnitSymbol]
+          .map(normalizedNfeUnit)
+          .filter(Boolean),
+      );
+      const quantityFromXml = wanted.has(
+        normalizedNfeUnit(item.commercial_unit),
+      )
+        ? item.commercialQuantity
+        : wanted.has(normalizedNfeUnit(item.tributary_unit))
+          ? item.tributaryQuantity
+          : null;
+      const converted =
+        mode === "fixed_factor" &&
+        Number.isFinite(parsedFactor) &&
+        parsedFactor > 0 &&
+        source !== null
+          ? source * parsedFactor
+          : null;
+      return {
+        ...current,
+        [item.id]: {
+          ...draft,
+          quantity:
+            mode === "manual_quantity"
+              ? quantityFromXml && quantityFromXml > 0
+                ? String(quantityFromXml)
+                : ""
+              : converted === null
+                ? ""
+                : String(converted),
+          price:
+            mode === "manual_quantity"
+              ? quantityFromXml && quantityFromXml > 0
+                ? String(item.netProductTotal / quantityFromXml)
+                : ""
+              : converted === null
+                ? ""
+                : String(item.netProductTotal / converted),
+          conversion: {
+            ...draft.conversion,
+            mode,
+            factor: mode === "fixed_factor" ? factor : "",
+            learned: false,
+          },
+        },
+      };
     });
   }
 
@@ -177,7 +371,7 @@ export function HistoricalNfeReconciliationForm({
             name="supplierId"
             options={suppliers}
             value={supplierId}
-            onValueChange={setSupplierId}
+            onValueChange={changeSupplier}
             placeholder="Digite o nome ou CNPJ…"
             emptyMessage="Nenhum fornecedor encontrado. Cadastre-o antes de concluir."
             required
@@ -216,6 +410,11 @@ export function HistoricalNfeReconciliationForm({
                     {NUMBER.format(item.commercialQuantity)}{" "}
                     {item.commercial_unit ?? ""} ×{" "}
                     {MONEY.format(item.commercialUnitPrice)}
+                    {normalizedNfeUnit(item.tributary_unit) !==
+                      normalizedNfeUnit(item.commercial_unit) ||
+                    item.tributaryQuantity !== item.commercialQuantity
+                      ? ` · tributável: ${NUMBER.format(item.tributaryQuantity)} ${item.tributary_unit ?? ""}`
+                      : ""}
                     {item.supplier_code
                       ? ` · código ${item.supplier_code}`
                       : ""}
@@ -272,6 +471,108 @@ export function HistoricalNfeReconciliationForm({
                   />
                 </label>
               </div>
+              {!draft.ignored && selectedProduct && draft.conversion ? (
+                <div className="border-primary/25 bg-primary-soft mt-3 rounded-lg border p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-fg text-sm font-medium">
+                        Conversão para {selectedProduct.pricingUnitSymbol}
+                      </p>
+                      <p className="text-fg-muted mt-0.5 text-xs">
+                        A NF-e informou {draft.conversion.sourceUnit}; defina
+                        como chegar à unidade usada no preço.
+                      </p>
+                    </div>
+                    <span className="bg-surface text-primary rounded-full px-2 py-1 text-xs font-medium">
+                      {draft.conversion.learned
+                        ? "Conversão aprendida"
+                        : "Revisar uma vez"}
+                    </span>
+                  </div>
+
+                  <input
+                    type="hidden"
+                    name={`conversion_unit_${item.id}`}
+                    value={draft.conversion.sourceUnit}
+                  />
+                  <div className="mt-3 grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)]">
+                    <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
+                      Tipo de conversão
+                      <ThemedSelect
+                        id={`conversion-mode-${item.id}`}
+                        name={`conversion_mode_${item.id}`}
+                        value={draft.conversion.mode}
+                        onValueChange={(value) =>
+                          changeConversion(
+                            item,
+                            value as "fixed_factor" | "manual_quantity",
+                            draft.conversion?.factor ?? "",
+                          )
+                        }
+                        options={[
+                          { value: "fixed_factor", label: "Quantidade fixa" },
+                          {
+                            value: "manual_quantity",
+                            label: "Varia em cada nota",
+                          },
+                        ]}
+                      />
+                    </label>
+
+                    {draft.conversion.mode === "fixed_factor" ? (
+                      <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
+                        Quantidade por {draft.conversion.sourceUnit}
+                        <span className="flex items-center gap-2">
+                          <span className="text-fg shrink-0 text-sm">
+                            1 {draft.conversion.sourceUnit} =
+                          </span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0.000001"
+                            name={`conversion_factor_${item.id}`}
+                            value={draft.conversion.factor}
+                            onChange={(event) =>
+                              changeConversion(
+                                item,
+                                "fixed_factor",
+                                event.target.value,
+                              )
+                            }
+                            className="border-input bg-background text-fg h-8 min-w-0 flex-1 rounded-lg border px-2.5 text-sm"
+                          />
+                          <span className="text-fg shrink-0 text-sm">
+                            {selectedProduct.pricingUnitSymbol}
+                          </span>
+                        </span>
+                      </label>
+                    ) : (
+                      <div className="text-fg-muted self-end rounded-lg border border-dashed px-3 py-2 text-xs">
+                        O total em {selectedProduct.pricingUnitSymbol} será lido
+                        da NF-e quando existir; caso contrário, informe a
+                        quantidade desta nota acima.
+                        <input
+                          type="hidden"
+                          name={`conversion_factor_${item.id}`}
+                          value=""
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="text-fg-muted mt-3 flex items-start gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      name={`save_conversion_${item.id}`}
+                      defaultChecked
+                      className="mt-0.5 size-4"
+                    />
+                    {draft.conversion.learned
+                      ? "Confirmar que esta regra continua válida para este fornecedor."
+                      : "Guardar para as próximas notas deste fornecedor e produto."}
+                  </label>
+                </div>
+              ) : null}
               {!draft.ignored && draft.productId && !draft.quantity ? (
                 <p className="text-warning mt-2 text-xs">
                   A unidade da nota não corresponde à unidade de preço do

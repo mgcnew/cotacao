@@ -4257,6 +4257,16 @@ export type Database = {
         };
         Returns: undefined;
       };
+      rpc_post_historical_nfe_import_with_rules: {
+        Args: {
+          p_company_id: string;
+          p_import_id: string;
+          p_items: Json;
+          p_supplier_id: string;
+          p_unit_rules?: Json;
+        };
+        Returns: undefined;
+      };
       rpc_analytics_supplier_performance: {
         Args: {
           p_company_id: string;

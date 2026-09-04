@@ -12,6 +12,7 @@ import {
   matchNfeItem,
   nfeQuantityForUnit,
   normalizedBarcode,
+  normalizedNfeUnit,
 } from "@/features/receipts/nfe";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -43,6 +44,13 @@ function parsedIssuedAt(value: string | null) {
 function suggestedPricing(
   item: HistoricalNfeItem,
   pricingUnits: Array<string | null | undefined>,
+  pricingUnitId?: string,
+  unitRules: {
+    xml_unit: string;
+    target_unit_id: string;
+    mode: string;
+    factor: number | null;
+  }[] = [],
 ) {
   for (const unit of pricingUnits) {
     if (!unit) continue;
@@ -52,6 +60,26 @@ function suggestedPricing(
         quantity,
         price: item.netProductTotal / quantity,
       };
+    }
+  }
+  const fixedRule = unitRules.find(
+    (rule) =>
+      rule.target_unit_id === pricingUnitId &&
+      rule.mode === "fixed_factor" &&
+      rule.factor &&
+      [item.commercialUnit, item.tributaryUnit]
+        .map(normalizedNfeUnit)
+        .includes(normalizedNfeUnit(rule.xml_unit)),
+  );
+  if (fixedRule?.factor) {
+    const sourceQuantity =
+      normalizedNfeUnit(fixedRule.xml_unit) ===
+      normalizedNfeUnit(item.commercialUnit)
+        ? item.commercialQuantity
+        : item.tributaryQuantity;
+    const quantity = sourceQuantity * Number(fixedRule.factor);
+    if (quantity > 0) {
+      return { quantity, price: item.netProductTotal / quantity };
     }
   }
   return { quantity: null, price: null };
@@ -71,13 +99,55 @@ async function listProductsForHistoricalMatch(
       .from("products")
       .select(
         `
-          id, name,
+          id, name, pricing_unit_id,
           pricing_unit:units!products_company_id_pricing_unit_id_fkey ( code, symbol ),
           product_barcodes ( code, is_active )
         `,
       )
       .eq("company_id", companyId)
       .order("name")
+      .order("id")
+      .range(start, start + 999);
+    if (page.error) return { data: null, error: page.error };
+    data.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
+  }
+  return { data, error: null };
+}
+
+async function listSupplierAliasesForHistoricalMatch(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+  supplierId: string,
+) {
+  const data = [];
+  for (let start = 0; ; start += 1000) {
+    const page = await supabase
+      .from("supplier_product_aliases")
+      .select("product_id, supplier_code, supplier_name, barcode")
+      .eq("company_id", companyId)
+      .eq("supplier_id", supplierId)
+      .order("id")
+      .range(start, start + 999);
+    if (page.error) return { data: null, error: page.error };
+    data.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
+  }
+  return { data, error: null };
+}
+
+async function listSupplierUnitRulesForHistoricalMatch(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+  supplierId: string,
+) {
+  const data = [];
+  for (let start = 0; ; start += 1000) {
+    const page = await supabase
+      .from("supplier_product_nfe_unit_rules")
+      .select("product_id, xml_unit, target_unit_id, mode, factor")
+      .eq("company_id", companyId)
+      .eq("supplier_id", supplierId)
       .order("id")
       .range(start, start + 999);
     if (page.error) return { data: null, error: page.error };
@@ -169,14 +239,24 @@ export async function uploadHistoricalNfe(
       cleanDocument(supplier.document_number) === issuerDocument,
   );
   const supplier = exactSuppliers.length === 1 ? exactSuppliers[0] : null;
-  const aliasesResult = supplier
-    ? await supabase
-        .from("supplier_product_aliases")
-        .select("product_id, supplier_code, supplier_name, barcode")
-        .eq("company_id", company.companyId)
-        .eq("supplier_id", supplier.id)
-    : { data: [], error: null };
-  if (aliasesResult.error) {
+  const [aliasesResult, unitRulesResult] = supplier
+    ? await Promise.all([
+        listSupplierAliasesForHistoricalMatch(
+          supabase,
+          company.companyId,
+          supplier.id,
+        ),
+        listSupplierUnitRulesForHistoricalMatch(
+          supabase,
+          company.companyId,
+          supplier.id,
+        ),
+      ])
+    : [
+        { data: [], error: null },
+        { data: [], error: null },
+      ];
+  if (aliasesResult.error || unitRulesResult.error) {
     return {
       error: "Não foi possível carregar as associações deste fornecedor.",
       importId: null,
@@ -208,6 +288,15 @@ export async function uploadHistoricalNfe(
       .map((barcode) => barcode.code),
     aliases: aliasesByProduct.get(product.id) ?? [],
   }));
+  const unitRulesByProduct = new Map<
+    string,
+    NonNullable<typeof unitRulesResult.data>
+  >();
+  for (const rule of unitRulesResult.data ?? []) {
+    const current = unitRulesByProduct.get(rule.product_id) ?? [];
+    current.push(rule);
+    unitRulesByProduct.set(rule.product_id, current);
+  }
 
   const items = nfe.items.map((item) => {
     const match = matchNfeItem(item, matchOptions);
@@ -217,10 +306,12 @@ export async function uploadHistoricalNfe(
         )
       : null;
     const pricing = product
-      ? suggestedPricing(item, [
-          product.pricing_unit?.symbol,
-          product.pricing_unit?.code,
-        ])
+      ? suggestedPricing(
+          item,
+          [product.pricing_unit?.symbol, product.pricing_unit?.code],
+          product.pricing_unit_id,
+          unitRulesByProduct.get(product.id) ?? [],
+        )
       : { quantity: null, price: null };
     return {
       product_id: product?.id ?? null,
@@ -329,6 +420,7 @@ export async function postHistoricalNfe(
     return { error: "A NF-e não possui itens para conciliar." };
 
   const items: Json[] = [];
+  const unitRules: Json[] = [];
   for (const id of itemIds) {
     const ignored = formData.get(`ignored_${id}`) === "on";
     const notes = String(formData.get(`notes_${id}`) ?? "").trim();
@@ -363,6 +455,29 @@ export async function postHistoricalNfe(
       practiced_price: price,
       notes: notes || null,
     });
+
+    if (formData.get(`save_conversion_${id}`) === "on") {
+      const xmlUnit = String(
+        formData.get(`conversion_unit_${id}`) ?? "",
+      ).trim();
+      const mode = String(formData.get(`conversion_mode_${id}`) ?? "");
+      const factor = decimal(formData.get(`conversion_factor_${id}`));
+      if (
+        !xmlUnit ||
+        !["fixed_factor", "manual_quantity"].includes(mode) ||
+        (mode === "fixed_factor" && (factor === null || factor <= 0))
+      ) {
+        return {
+          error: "Confira as conversões que devem ficar gravadas.",
+        };
+      }
+      unitRules.push({
+        item_id: id,
+        xml_unit: xmlUnit,
+        mode,
+        factor: mode === "fixed_factor" ? factor : null,
+      });
+    }
   }
 
   const supabase = await createServerSupabaseClient();
@@ -403,12 +518,16 @@ export async function postHistoricalNfe(
     }
   }
 
-  const posted = await supabase.rpc("rpc_post_historical_nfe_import", {
-    p_company_id: company.companyId,
-    p_import_id: importId,
-    p_supplier_id: supplierId,
-    p_items: items,
-  });
+  const posted = await supabase.rpc(
+    "rpc_post_historical_nfe_import_with_rules",
+    {
+      p_company_id: company.companyId,
+      p_import_id: importId,
+      p_supplier_id: supplierId,
+      p_items: items,
+      p_unit_rules: unitRules,
+    },
+  );
   if (posted.error) {
     return {
       error: `Não foi possível confirmar a importação: ${posted.error.message}`,
