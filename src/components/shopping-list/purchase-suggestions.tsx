@@ -17,9 +17,35 @@ import type { PurchaseSuggestion } from "@/features/shopping-list/suggestions";
 const NUMBER = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 3,
 });
+const DATE = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+const CADENCE_LABEL: Record<1 | 2 | 4, string> = {
+  1: "Toda semana",
+  2: "A cada 2 semanas",
+  4: "A cada 4 semanas",
+};
 
 function quantity(value: number, unit: string) {
   return `${NUMBER.format(value)} ${unit}`;
+}
+
+function historySource(suggestion: PurchaseSuggestion) {
+  const parts = [];
+  if (suggestion.historicalNfeCount > 0) {
+    parts.push(
+      `${suggestion.historicalNfeCount} ${suggestion.historicalNfeCount === 1 ? "NF-e histórica" : "NF-e históricas"}`,
+    );
+  }
+  if (suggestion.receiptCount > 0) {
+    parts.push(
+      `${suggestion.receiptCount} ${suggestion.receiptCount === 1 ? "recebimento" : "recebimentos"}`,
+    );
+  }
+  return parts.join(" e ");
 }
 
 function SubmitButton({
@@ -89,12 +115,10 @@ function SuggestionCard({
             {suggestion.productName}
           </h3>
           <p className="text-fg-muted mt-1 text-xs">
-            Ritmo observado:{" "}
-            {quantity(
-              suggestion.historicalWeeklyQuantity,
-              suggestion.purchaseUnit,
-            )}{" "}
-            por semana
+            {CADENCE_LABEL[suggestion.cadenceWeeks]}
+            {suggestion.preferredSupplierName
+              ? ` · mais frequente com ${suggestion.preferredSupplierName}`
+              : ""}
           </p>
         </div>
         <span
@@ -110,26 +134,38 @@ function SuggestionCard({
         </span>
       </div>
 
-      <div className="bg-primary-soft/60 mt-3 rounded-lg px-3 py-2.5">
-        <p className="text-fg-muted text-xs">
-          Sugestão para completar a semana
-        </p>
-        <p className="text-primary mt-0.5 text-lg font-bold">
-          {quantity(suggestion.suggestedQuantity, suggestion.purchaseUnit)}
-        </p>
-        {suggestion.demandAdjustmentPercent !== 0 ? (
-          <p className="text-fg-muted mt-1 text-xs">
-            Meta ajustada para{" "}
-            {quantity(
-              suggestion.expectedWeeklyQuantity,
-              suggestion.purchaseUnit,
-            )}{" "}
-            ({suggestion.demandAdjustmentPercent > 0 ? "+" : ""}
-            {NUMBER.format(suggestion.demandAdjustmentPercent)}% pelo
-            calendário)
+      {suggestion.suggestedQuantity !== null ? (
+        <div className="bg-primary-soft/60 mt-3 rounded-lg px-3 py-2.5">
+          <p className="text-fg-muted text-xs">
+            Sugestão para este ciclo de compra
           </p>
-        ) : null}
-      </div>
+          <p className="text-primary mt-0.5 text-lg font-bold">
+            {quantity(suggestion.suggestedQuantity, suggestion.purchaseUnit)}
+          </p>
+          {suggestion.demandAdjustmentPercent !== 0 &&
+          suggestion.expectedCycleQuantity !== null ? (
+            <p className="text-fg-muted mt-1 text-xs">
+              Meta ajustada para{" "}
+              {quantity(
+                suggestion.expectedCycleQuantity,
+                suggestion.purchaseUnit,
+              )}{" "}
+              ({suggestion.demandAdjustmentPercent > 0 ? "+" : ""}
+              {NUMBER.format(suggestion.demandAdjustmentPercent)}% pelo
+              calendário)
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="bg-warning-soft text-warning mt-3 rounded-lg px-3 py-2.5">
+          <p className="text-sm font-semibold">Compra recorrente prevista</p>
+          <p className="mt-1 text-xs leading-relaxed">
+            A frequência é confiável, mas a NF-e não permite converter a
+            quantidade com segurança para {suggestion.purchaseUnit}. Informe a
+            quantidade antes de adicionar à lista.
+          </p>
+        </div>
+      )}
 
       {suggestion.demandContexts.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -155,27 +191,42 @@ function SuggestionCard({
         </summary>
         <div className="text-fg-muted mt-2 grid gap-1.5 text-xs sm:grid-cols-2">
           <p>
-            Semanas com compra: {suggestion.activeWeeks} de{" "}
+            Semanas com compra: {suggestion.activeWeeks} em{" "}
             {suggestion.observedWeeks}
+            {" semanas observadas"}
           </p>
           <p>
-            Oscilação do histórico: {NUMBER.format(suggestion.variationPercent)}
-            %
+            Regularidade da frequência:{" "}
+            {NUMBER.format(suggestion.cadenceConfidencePercent)}%
           </p>
           <p>
-            Base histórica:{" "}
-            {quantity(
-              suggestion.historicalWeeklyQuantity,
-              suggestion.purchaseUnit,
-            )}
+            Base: {suggestion.historyEventCount} compras (
+            {historySource(suggestion)})
           </p>
           <p>
-            Meta desta semana:{" "}
-            {quantity(
-              suggestion.expectedWeeklyQuantity,
-              suggestion.purchaseUnit,
-            )}
+            Próxima ocorrência estimada:{" "}
+            {DATE.format(new Date(`${suggestion.nextExpectedDate}T12:00:00`))}
           </p>
+          {suggestion.historicalCycleQuantity !== null ? (
+            <>
+              <p>
+                Quantidade típica por ciclo:{" "}
+                {quantity(
+                  suggestion.historicalCycleQuantity,
+                  suggestion.purchaseUnit,
+                )}
+              </p>
+              <p>
+                Oscilação das quantidades:{" "}
+                {NUMBER.format(suggestion.variationPercent)}%
+              </p>
+            </>
+          ) : (
+            <p className="sm:col-span-2">
+              Quantidade não estimada: unidade fiscal diferente da unidade de
+              compra.
+            </p>
+          )}
           <p>
             Já recebido nesta semana:{" "}
             {quantity(
@@ -215,7 +266,7 @@ function SuggestionCard({
             <input
               type="hidden"
               name="suggestedQuantity"
-              value={suggestion.suggestedQuantity}
+              value={suggestion.suggestedQuantity ?? ""}
             />
             <label className="text-fg-muted flex min-w-0 flex-1 flex-col gap-1 text-xs">
               Quantidade a adicionar ({suggestion.purchaseUnit})
@@ -225,7 +276,12 @@ function SuggestionCard({
                 inputMode="decimal"
                 min="0.001"
                 step="0.001"
-                defaultValue={suggestion.suggestedQuantity}
+                defaultValue={suggestion.suggestedQuantity ?? undefined}
+                placeholder={
+                  suggestion.suggestedQuantity === null
+                    ? "Informe a quantidade"
+                    : undefined
+                }
                 required
                 className="h-8"
               />
@@ -243,7 +299,7 @@ function SuggestionCard({
             <input
               type="hidden"
               name="suggestedQuantity"
-              value={suggestion.suggestedQuantity}
+              value={suggestion.suggestedQuantity ?? ""}
             />
             <SubmitButton variant="ghost">
               <X aria-hidden /> Não nesta semana
@@ -270,7 +326,8 @@ export function PurchaseSuggestions({
 }) {
   if (suggestions.length === 0) return null;
   const highConfidenceCount = suggestions.filter(
-    (suggestion) => suggestion.confidence === "high",
+    (suggestion) =>
+      suggestion.confidence === "high" && suggestion.suggestedQuantity !== null,
   ).length;
 
   return (
@@ -289,8 +346,9 @@ export function PurchaseSuggestions({
             Sugestões pelo histórico
           </h2>
           <p className="text-fg-muted mt-1 max-w-3xl text-xs leading-relaxed">
-            Usa as últimas 8 semanas recebidas e desconta o que já chegou, está
-            em pedido, cotação ou nesta lista. Nada é comprado automaticamente.
+            Combina recebimentos e NF-e históricas, identifica ciclos de até um
+            mês e desconta o que já está coberto. Nada é comprado
+            automaticamente.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

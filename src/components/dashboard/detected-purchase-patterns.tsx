@@ -67,8 +67,11 @@ function PatternRow({ pattern }: { pattern: DetectedPurchasePattern }) {
               {PURCHASE_WEEKDAYS[pattern.weekday].toLowerCase()}
             </p>
             <p className="text-fg-subtle mt-1 text-[11px]">
-              Detectado em {pattern.orderCount} pedidos · próxima ocorrência
-              estimada em{" "}
+              Detectado em {pattern.orderCount} datas de compra
+              {pattern.historicalNfeCount > 0
+                ? `, com ${pattern.historicalNfeCount} NF-e históricas`
+                : ""}{" "}
+              · próxima ocorrência estimada em{" "}
               {DATE.format(new Date(`${pattern.nextOccurrence}T12:00:00`))}
             </p>
           </div>

@@ -219,7 +219,8 @@ export async function acceptHighConfidencePurchaseSuggestions(
   // Recalcula no servidor no momento da aprovação. Assim, uma tela antiga não
   // adiciona uma necessidade que já foi coberta por outro usuário ou pedido.
   const suggestions = (await listPurchaseSuggestions(company.companyId)).filter(
-    (suggestion) => suggestion.confidence === "high",
+    (suggestion) =>
+      suggestion.confidence === "high" && suggestion.suggestedQuantity !== null,
   );
   if (suggestions.length === 0) {
     return { error: "As sugestões já foram revisadas ou cobertas." };
@@ -228,11 +229,13 @@ export async function acceptHighConfidencePurchaseSuggestions(
   const supabase = await createServerSupabaseClient();
   let savedCount = 0;
   for (const suggestion of suggestions) {
+    const suggestedQuantity = suggestion.suggestedQuantity;
+    if (suggestedQuantity === null) continue;
     const { error } = await supabase.rpc("rpc_accept_purchase_suggestion", {
       p_company_id: company.companyId,
       p_product_id: suggestion.productId,
-      p_quantity: suggestion.suggestedQuantity,
-      p_suggested_quantity: suggestion.suggestedQuantity,
+      p_quantity: suggestedQuantity,
+      p_suggested_quantity: suggestedQuantity,
     });
     if (error) {
       return {
@@ -253,8 +256,17 @@ export async function acceptHighConfidencePurchaseSuggestions(
 
 const suggestionSchema = z.object({
   productId: z.uuid(),
-  suggestedQuantity: z.coerce.number().positive(),
+  suggestedQuantity: z.number().positive().nullable(),
 });
+
+function optionalPositiveDecimal(value: FormDataEntryValue | null) {
+  const normalized = String(value ?? "")
+    .trim()
+    .replace(",", ".");
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.NaN;
+}
 
 export async function acceptPurchaseSuggestion(
   _previous: PurchaseSuggestionState,
@@ -265,9 +277,9 @@ export async function acceptPurchaseSuggestion(
     .extend({ quantity: z.coerce.number().positive() })
     .safeParse({
       productId: formData.get("productId"),
-      suggestedQuantity: String(
-        formData.get("suggestedQuantity") ?? "",
-      ).replace(",", "."),
+      suggestedQuantity: optionalPositiveDecimal(
+        formData.get("suggestedQuantity"),
+      ),
       quantity: String(formData.get("quantity") ?? "").replace(",", "."),
     });
   if (!parsed.success) return { error: "Informe uma quantidade válida." };
@@ -295,9 +307,8 @@ export async function dismissPurchaseSuggestion(
   const company = await requireManage();
   const parsed = suggestionSchema.safeParse({
     productId: formData.get("productId"),
-    suggestedQuantity: String(formData.get("suggestedQuantity") ?? "").replace(
-      ",",
-      ".",
+    suggestedQuantity: optionalPositiveDecimal(
+      formData.get("suggestedQuantity"),
     ),
   });
   if (!parsed.success) return { error: "Sugestão inválida." };

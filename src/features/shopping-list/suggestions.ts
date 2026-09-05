@@ -11,20 +11,31 @@ export type PurchaseSuggestion = {
   productId: string;
   productName: string;
   purchaseUnit: string;
-  historicalWeeklyQuantity: number;
-  expectedWeeklyQuantity: number;
+  historicalCycleQuantity: number | null;
+  expectedCycleQuantity: number | null;
   demandAdjustmentPercent: number;
   demandContexts: { name: string; adjustmentPercent: number }[];
   currentWeekReceivedQuantity: number;
   openOrderQuantity: number;
   openQuotationQuantity: number;
   shoppingListQuantity: number;
-  suggestedQuantity: number;
+  suggestedQuantity: number | null;
   activeWeeks: number;
   observedWeeks: number;
   variationPercent: number;
   confidence: "high" | "medium";
   lastReceivedAt: string | null;
+  cadenceWeeks: 1 | 2 | 4;
+  cadenceConfidencePercent: number;
+  historyEventCount: number;
+  historicalNfeCount: number;
+  receiptCount: number;
+  quantityEventCount: number;
+  quantityReliable: boolean;
+  currentCycleHasPurchase: boolean;
+  nextExpectedDate: string;
+  preferredSupplierId: string | null;
+  preferredSupplierName: string | null;
 };
 
 export async function listPurchaseSuggestions(
@@ -64,7 +75,7 @@ export async function listPurchaseSuggestionsWithClient(
   const [baselines, events] = await Promise.all([
     supabase.rpc("rpc_get_purchase_demand_baselines", {
       p_company_id: companyId,
-      p_history_weeks: 8,
+      p_history_weeks: 52,
       p_limit: 100,
     }),
     supabase
@@ -121,13 +132,18 @@ export async function listPurchaseSuggestionsWithClient(
           ),
         ),
       );
-      const historicalWeeklyQuantity = Number(row.historical_weekly_quantity);
-      const expectedWeeklyQuantity = Number(
-        (
-          historicalWeeklyQuantity *
-          (1 + demandAdjustmentPercent / 100)
-        ).toFixed(3),
-      );
+      const historicalCycleQuantity = row.quantity_reliable
+        ? Number(row.historical_weekly_quantity)
+        : null;
+      const expectedCycleQuantity =
+        historicalCycleQuantity === null
+          ? null
+          : Number(
+              (
+                historicalCycleQuantity *
+                (1 + demandAdjustmentPercent / 100)
+              ).toFixed(3),
+            );
       const currentWeekReceivedQuantity = Number(
         row.current_week_received_quantity,
       );
@@ -144,33 +160,49 @@ export async function listPurchaseSuggestionsWithClient(
         productId: row.product_id,
         productName: row.product_name,
         purchaseUnit: row.purchase_unit,
-        historicalWeeklyQuantity,
-        expectedWeeklyQuantity,
+        historicalCycleQuantity,
+        expectedCycleQuantity,
         demandAdjustmentPercent,
         demandContexts: contexts,
         currentWeekReceivedQuantity,
         openOrderQuantity,
         openQuotationQuantity,
         shoppingListQuantity,
-        suggestedQuantity: Number(
-          Math.max(expectedWeeklyQuantity - covered, 0).toFixed(3),
-        ),
+        suggestedQuantity:
+          expectedCycleQuantity === null
+            ? null
+            : Number(Math.max(expectedCycleQuantity - covered, 0).toFixed(3)),
         activeWeeks: row.active_weeks,
         observedWeeks: row.observed_weeks,
         variationPercent: Number(row.variation_percent),
         confidence:
           row.confidence === "high" ? ("high" as const) : ("medium" as const),
         lastReceivedAt: row.last_received_at ?? null,
+        cadenceWeeks: row.cadence_weeks as 1 | 2 | 4,
+        cadenceConfidencePercent: Number(row.cadence_confidence_percent),
+        historyEventCount: row.history_event_count,
+        historicalNfeCount: row.historical_nfe_count,
+        receiptCount: row.receipt_count,
+        quantityEventCount: row.quantity_event_count,
+        quantityReliable: row.quantity_reliable,
+        currentCycleHasPurchase: row.current_cycle_has_purchase,
+        nextExpectedDate: row.next_expected_date,
+        preferredSupplierId: row.preferred_supplier_id,
+        preferredSupplierName: row.preferred_supplier_name,
       };
     })
-    .filter((suggestion) => suggestion.suggestedQuantity > 0)
+    .filter(
+      (suggestion) =>
+        suggestion.suggestedQuantity === null ||
+        suggestion.suggestedQuantity > 0,
+    )
     .sort(
       (left, right) =>
         Number(right.demandAdjustmentPercent !== 0) -
           Number(left.demandAdjustmentPercent !== 0) ||
         Number(right.confidence === "high") -
           Number(left.confidence === "high") ||
-        right.suggestedQuantity - left.suggestedQuantity,
+        (right.suggestedQuantity ?? 0) - (left.suggestedQuantity ?? 0),
     )
     .slice(0, 12);
 }

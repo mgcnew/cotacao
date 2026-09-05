@@ -330,7 +330,7 @@ export async function acceptDetectedPurchasePattern(
     interval_weeks: pattern.intervalWeeks,
     anchor_date: pattern.anchorDate,
     reminder_days_before: 1,
-    notes: `Padrão sugerido após ${pattern.orderCount} pedidos (${pattern.confidencePercent}% de regularidade).`,
+    notes: `Padrão sugerido após ${pattern.orderCount} datas de compra (${pattern.confidencePercent}% de regularidade${pattern.historicalNfeCount > 0 ? `; ${pattern.historicalNfeCount} NF-e históricas` : ""}).`,
   });
   if (error) {
     return { error: `Não foi possível criar o lembrete: ${error.message}` };

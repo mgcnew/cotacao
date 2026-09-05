@@ -8,6 +8,12 @@ const NUMBER = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 3,
 });
 
+const CADENCE_LABEL: Record<1 | 2 | 4, string> = {
+  1: "toda semana",
+  2: "a cada 2 semanas",
+  4: "a cada 4 semanas",
+};
+
 function quantity(value: number, unit: string) {
   return `${NUMBER.format(value)} ${unit}`;
 }
@@ -79,14 +85,10 @@ export function HistoricalReplenishments({
                   </span>
                 </div>
                 <p className="text-fg-muted mt-0.5 text-xs">
-                  Ritmo de{" "}
-                  {quantity(
-                    suggestion.historicalWeeklyQuantity,
-                    suggestion.purchaseUnit,
-                  )}{" "}
-                  por semana
-                  {suggestion.demandAdjustmentPercent !== 0
-                    ? ` · meta ajustada ${quantity(suggestion.expectedWeeklyQuantity, suggestion.purchaseUnit)}`
+                  Compra {CADENCE_LABEL[suggestion.cadenceWeeks]} · baseada em{" "}
+                  {suggestion.historyEventCount} ocorrências
+                  {suggestion.historicalNfeCount > 0
+                    ? `, ${suggestion.historicalNfeCount} do histórico fiscal`
                     : ""}
                   {covered > 0
                     ? ` · ${quantity(covered, suggestion.purchaseUnit)} já coberto`
@@ -96,10 +98,12 @@ export function HistoricalReplenishments({
               <div className="sm:text-right">
                 <p className="text-fg-subtle text-[11px]">Falta estimada</p>
                 <strong className="text-primary text-sm tabular-nums">
-                  {quantity(
-                    suggestion.suggestedQuantity,
-                    suggestion.purchaseUnit,
-                  )}
+                  {suggestion.suggestedQuantity === null
+                    ? "Confirmar quantidade"
+                    : quantity(
+                        suggestion.suggestedQuantity,
+                        suggestion.purchaseUnit,
+                      )}
                 </strong>
               </div>
             </li>

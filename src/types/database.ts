@@ -4137,6 +4137,19 @@ export type Database = {
       };
     };
     Views: {
+      v_purchase_demand_events: {
+        Row: {
+          company_id: string | null;
+          occurred_at: string | null;
+          product_id: string | null;
+          purchase_quantity: number | null;
+          quantity_reliable: boolean | null;
+          source: string | null;
+          source_document_id: string | null;
+          supplier_id: string | null;
+        };
+        Relationships: [];
+      };
       v_purchase_price_history: {
         Row: {
           access_key: string | null;
@@ -4659,17 +4672,28 @@ export type Database = {
         };
         Returns: {
           active_weeks: number;
+          cadence_confidence_percent: number;
+          cadence_weeks: number;
           category_id: string;
           confidence: string;
+          current_cycle_has_purchase: boolean;
           current_week_received_quantity: number;
-          historical_weekly_quantity: number;
+          historical_nfe_count: number;
+          historical_weekly_quantity: number | null;
+          history_event_count: number;
           last_received_at: string | null;
+          next_expected_date: string;
           observed_weeks: number;
           open_order_quantity: number;
           open_quotation_quantity: number;
+          preferred_supplier_id: string | null;
+          preferred_supplier_name: string | null;
           product_id: string;
           product_name: string;
           purchase_unit: string;
+          quantity_event_count: number;
+          quantity_reliable: boolean;
+          receipt_count: number;
           shopping_list_quantity: number;
           variation_percent: number;
         }[];
@@ -4702,7 +4726,7 @@ export type Database = {
           p_company_id: string;
           p_product_id: string;
           p_quantity: number;
-          p_suggested_quantity?: number;
+          p_suggested_quantity?: number | null;
         };
         Returns: string;
       };
@@ -4710,7 +4734,7 @@ export type Database = {
         Args: {
           p_company_id: string;
           p_product_id: string;
-          p_suggested_quantity?: number;
+          p_suggested_quantity?: number | null;
         };
         Returns: string;
       };
