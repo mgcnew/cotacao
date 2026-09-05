@@ -33,21 +33,10 @@ export default async function ConciliacaoNfeHistoricaPage({
         title={`NF-e ${history.invoice_number}${history.invoice_series ? `/${history.invoice_series}` : ""}`}
         description={`${history.issuer_name ?? "Fornecedor"} · emitida em ${DATE_TIME.format(new Date(history.issued_at))}`}
         action={
+          /* Os atalhos de cadastro saíram daqui e foram para dentro do
+             formulário, ao lado do campo onde a falta aparece: no celular,
+             quatro botões empurravam a nota para baixo da dobra. */
           <>
-            {history.status === "draft" ? (
-              <>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/fornecedores/novo" target="_blank">
-                    Cadastrar fornecedor
-                  </Link>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/produtos/novo" target="_blank">
-                    Cadastrar produto
-                  </Link>
-                </Button>
-              </>
-            ) : null}
             {data.downloadUrl ? (
               <Button asChild size="sm" variant="outline">
                 <a href={data.downloadUrl}>Baixar XML</a>
