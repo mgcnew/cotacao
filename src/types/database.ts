@@ -2592,6 +2592,7 @@ export type Database = {
           status: string;
           storage_path: string;
           supplier_id: string | null;
+          supplier_legal_entity_id: string | null;
           updated_at: string;
           uploaded_by: string | null;
           void_reason: string | null;
@@ -2618,6 +2619,7 @@ export type Database = {
           status?: string;
           storage_path: string;
           supplier_id?: string | null;
+          supplier_legal_entity_id?: string | null;
           updated_at?: string;
           uploaded_by?: string | null;
           void_reason?: string | null;
@@ -2644,6 +2646,7 @@ export type Database = {
           status?: string;
           storage_path?: string;
           supplier_id?: string | null;
+          supplier_legal_entity_id?: string | null;
           updated_at?: string;
           uploaded_by?: string | null;
           void_reason?: string | null;
@@ -2656,6 +2659,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "companies";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "historical_nfe_imports_legal_entity_fk";
+            columns: ["company_id", "supplier_legal_entity_id"];
+            isOneToOne: false;
+            referencedRelation: "supplier_legal_entities";
+            referencedColumns: ["company_id", "id"];
           },
           {
             foreignKeyName: "historical_nfe_imports_company_id_supplier_id_fkey";
@@ -2784,10 +2794,20 @@ export type Database = {
           created_at: string;
           file_name: string;
           file_size: number;
+          fiscal_totals: Json | null;
           id: string;
+          invoice_number: string | null;
+          invoice_series: string | null;
+          invoice_total: number | null;
+          issued_at: string | null;
+          issuer_document: string | null;
+          issuer_name: string | null;
           kind: string;
+          recipient_document: string | null;
+          recipient_name: string | null;
           receipt_id: string;
           storage_path: string;
+          supplier_legal_entity_id: string | null;
           uploaded_by: string | null;
         };
         Insert: {
@@ -2796,10 +2816,20 @@ export type Database = {
           created_at?: string;
           file_name: string;
           file_size: number;
+          fiscal_totals?: Json | null;
           id?: string;
+          invoice_number?: string | null;
+          invoice_series?: string | null;
+          invoice_total?: number | null;
+          issued_at?: string | null;
+          issuer_document?: string | null;
+          issuer_name?: string | null;
           kind?: string;
+          recipient_document?: string | null;
+          recipient_name?: string | null;
           receipt_id: string;
           storage_path: string;
+          supplier_legal_entity_id?: string | null;
           uploaded_by?: string | null;
         };
         Update: {
@@ -2808,10 +2838,20 @@ export type Database = {
           created_at?: string;
           file_name?: string;
           file_size?: number;
+          fiscal_totals?: Json | null;
           id?: string;
+          invoice_number?: string | null;
+          invoice_series?: string | null;
+          invoice_total?: number | null;
+          issued_at?: string | null;
+          issuer_document?: string | null;
+          issuer_name?: string | null;
           kind?: string;
+          recipient_document?: string | null;
+          recipient_name?: string | null;
           receipt_id?: string;
           storage_path?: string;
+          supplier_legal_entity_id?: string | null;
           uploaded_by?: string | null;
         };
         Relationships: [
@@ -2820,6 +2860,49 @@ export type Database = {
             columns: ["company_id", "receipt_id"];
             isOneToOne: false;
             referencedRelation: "receipts";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "receipt_documents_legal_entity_fk";
+            columns: ["company_id", "supplier_legal_entity_id"];
+            isOneToOne: false;
+            referencedRelation: "supplier_legal_entities";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
+      receipt_item_documents: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          receipt_document_id: string;
+          receipt_item_id: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          receipt_document_id: string;
+          receipt_item_id: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          receipt_document_id?: string;
+          receipt_item_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "receipt_item_documents_company_id_receipt_document_id_fkey";
+            columns: ["company_id", "receipt_document_id"];
+            isOneToOne: false;
+            referencedRelation: "receipt_documents";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "receipt_item_documents_company_id_receipt_item_id_fkey";
+            columns: ["company_id", "receipt_item_id"];
+            isOneToOne: true;
+            referencedRelation: "receipt_items";
             referencedColumns: ["company_id", "id"];
           },
         ];
@@ -3338,6 +3421,56 @@ export type Database = {
           },
           {
             foreignKeyName: "supplier_categories_company_id_supplier_id_fkey";
+            columns: ["company_id", "supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
+      supplier_legal_entities: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          created_by: string | null;
+          document_number: string;
+          id: string;
+          is_active: boolean;
+          is_primary: boolean;
+          legal_name: string | null;
+          source: string;
+          supplier_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          document_number: string;
+          id?: string;
+          is_active?: boolean;
+          is_primary?: boolean;
+          legal_name?: string | null;
+          source?: string;
+          supplier_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          document_number?: string;
+          id?: string;
+          is_active?: boolean;
+          is_primary?: boolean;
+          legal_name?: string | null;
+          source?: string;
+          supplier_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "supplier_legal_entities_company_id_supplier_id_fkey";
             columns: ["company_id", "supplier_id"];
             isOneToOne: false;
             referencedRelation: "suppliers";
@@ -4012,6 +4145,8 @@ export type Database = {
           historical_import_id: string | null;
           invoice_number: string | null;
           invoice_series: string | null;
+          issuer_document: string | null;
+          issuer_name: string | null;
           occurred_at: string | null;
           practiced_price: number | null;
           pricing_quantity: number | null;
@@ -4222,6 +4357,40 @@ export type Database = {
       };
     };
     Functions: {
+      rpc_link_historical_nfe_issuer: {
+        Args: {
+          p_adopt_as_primary?: boolean;
+          p_company_id: string;
+          p_import_id: string;
+          p_supplier_id: string;
+        };
+        Returns: string;
+      };
+      rpc_link_receipt_issuer: {
+        Args: {
+          p_access_key: string;
+          p_adopt_as_primary?: boolean;
+          p_company_id: string;
+          p_receipt_id: string;
+        };
+        Returns: string;
+      };
+      rpc_refresh_receipt_nfe_totals: {
+        Args: { p_company_id: string; p_receipt_id: string };
+        Returns: Json;
+      };
+      rpc_post_draft_receipt_with_documents: {
+        Args: {
+          p_company_id: string;
+          p_invoice_number?: string;
+          p_invoice_series?: string;
+          p_invoice_total?: number;
+          p_items: Json;
+          p_notes?: string;
+          p_receipt_id: string;
+        };
+        Returns: Json;
+      };
       rpc_create_historical_nfe_import: {
         Args: {
           p_access_key: string;

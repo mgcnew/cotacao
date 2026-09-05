@@ -72,29 +72,43 @@ export default async function ConferenciaPage({
                 </strong>
               </span>
               <span>
-                Total da NF-e:{" "}
+                Total fiscal:{" "}
                 <strong>{MONEY.format(receipt.nfeTotals.invoice)}</strong>
               </span>
             </div>
           ) : null}
           {receipt.documents.length ? (
             <div className="border-border mt-4 border-t pt-4">
-              <p className="text-fg mb-2 text-sm font-medium">XML da NF-e</p>
-              <div className="flex flex-wrap gap-2">
-                {receipt.documents.map((document) =>
-                  document.downloadUrl ? (
-                    <Button
-                      key={document.id}
-                      asChild
-                      size="sm"
-                      variant="outline"
-                    >
-                      <a href={document.downloadUrl}>
-                        Baixar {document.fileName}
+              <p className="text-fg mb-2 text-sm font-medium">
+                {receipt.documents.length === 1
+                  ? "NF-e desta entrega"
+                  : `${receipt.documents.length} NF-e desta entrega`}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {receipt.documents.map((document) => (
+                  <div
+                    key={document.id}
+                    className="bg-surface-sunken rounded-lg px-3 py-2 text-sm"
+                  >
+                    <p className="text-fg font-medium">
+                      {document.issuerName ?? "Emitente não identificado"}
+                    </p>
+                    <p className="text-fg-muted mt-0.5 text-xs">
+                      NF-e {document.invoiceNumber ?? "sem número"}
+                      {document.invoiceTotal !== null
+                        ? ` · ${MONEY.format(document.invoiceTotal)}`
+                        : ""}
+                    </p>
+                    {document.downloadUrl ? (
+                      <a
+                        href={document.downloadUrl}
+                        className="text-primary mt-2 inline-block text-xs font-medium hover:underline"
+                      >
+                        Baixar XML
                       </a>
-                    </Button>
-                  ) : null,
-                )}
+                    ) : null}
+                  </div>
+                ))}
               </div>
             </div>
           ) : null}

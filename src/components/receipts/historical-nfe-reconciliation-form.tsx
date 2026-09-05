@@ -104,8 +104,7 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
     if (
       sourceUnit &&
       item.commercialQuantity > 0 &&
-      normalizedNfeUnit(sourceUnit) !==
-        normalizedNfeUnit(item.tributary_unit)
+      normalizedNfeUnit(sourceUnit) !== normalizedNfeUnit(item.tributary_unit)
     ) {
       const variable = VARIABLE_WEIGHT_UNITS.has(
         normalizedNfeUnit(product.pricingUnitCode || product.pricingUnitSymbol),
@@ -144,10 +143,9 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
           .includes(normalizedNfeUnit(candidate.xmlUnit)),
     );
     const currentSourceUnit = rule
-      ? [item.commercial_unit, item.tributary_unit].find(
-          (unit) =>
-            normalizedNfeUnit(unit) === normalizedNfeUnit(rule.xmlUnit),
-        ) ?? rule.xmlUnit
+      ? ([item.commercial_unit, item.tributary_unit].find(
+          (unit) => normalizedNfeUnit(unit) === normalizedNfeUnit(rule.xmlUnit),
+        ) ?? rule.xmlUnit)
       : null;
     if (rule?.mode === "fixed_factor" && rule.factor) {
       const source = sourceQuantity(item, currentSourceUnit ?? rule.xmlUnit);
@@ -176,8 +174,7 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
     conversion:
       quantity === null
         ? {
-            sourceUnit:
-              item.commercial_unit ?? item.tributary_unit ?? "",
+            sourceUnit: item.commercial_unit ?? item.tributary_unit ?? "",
             mode: VARIABLE_WEIGHT_UNITS.has(
               normalizedNfeUnit(
                 product.pricingUnitCode || product.pricingUnitSymbol,
@@ -201,10 +198,8 @@ function initialDraft(
   const suggested = selected ? pricingFor(item, selected, supplierId) : null;
   return {
     productId: item.product_id ?? "",
-    quantity:
-      item.pricingQuantity?.toString() ?? suggested?.quantity ?? "",
-    price:
-      item.practicedPrice?.toString() ?? suggested?.price ?? "",
+    quantity: item.pricingQuantity?.toString() ?? suggested?.quantity ?? "",
+    price: item.practicedPrice?.toString() ?? suggested?.price ?? "",
     ignored: item.reconciliation_status === "ignored",
     conversion: suggested?.conversion ?? null,
   };
@@ -213,6 +208,7 @@ function initialDraft(
 export function HistoricalNfeReconciliationForm({
   importId,
   issuerDocument,
+  initialIssuerLinked,
   initialSupplierId,
   suppliers,
   products,
@@ -220,6 +216,7 @@ export function HistoricalNfeReconciliationForm({
 }: {
   importId: string;
   issuerDocument: string | null;
+  initialIssuerLinked: boolean;
   initialSupplierId: string;
   suppliers: Supplier[];
   products: Product[];
@@ -244,6 +241,9 @@ export function HistoricalNfeReconciliationForm({
   );
   const canAdoptDocument = Boolean(
     issuerDocument && selectedSupplier && !selectedSupplier.documentNumber,
+  );
+  const issuerAlreadyLinked = Boolean(
+    initialIssuerLinked && supplierId === initialSupplierId,
   );
 
   function patchDraft(itemId: string, patch: Partial<Draft>) {
@@ -378,15 +378,26 @@ export function HistoricalNfeReconciliationForm({
             required
           />
         </label>
-        {canAdoptDocument ? (
+        {issuerAlreadyLinked ? (
+          <p className="bg-success-soft text-success mt-3 rounded-lg px-3 py-2 text-sm">
+            Empresa emitente reconhecida pelo CNPJ {issuerDocument}.
+          </p>
+        ) : canAdoptDocument ? (
           <label className="text-fg-muted mt-3 flex items-start gap-2 text-sm">
             <input
               type="checkbox"
               name="adoptSupplierDocument"
               className="mt-0.5 size-4"
             />
-            Usar o CNPJ {issuerDocument} da NF-e para completar este fornecedor.
+            Vincular o CNPJ {issuerDocument} e defini-lo como empresa principal
+            deste fornecedor.
           </label>
+        ) : issuerDocument && selectedSupplier ? (
+          <p className="bg-primary-soft text-primary mt-3 rounded-lg px-3 py-2 text-sm">
+            Ao confirmar, o CNPJ {issuerDocument} ficará salvo como outra
+            empresa emitente deste fornecedor. Nas próximas notas o vínculo será
+            automático.
+          </p>
         ) : null}
       </section>
 

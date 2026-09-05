@@ -145,7 +145,10 @@ export async function getReceiptConference(
       id, order_id, status, received_at, invoice_number, invoice_series,
       invoice_total, nfe_totals, notes, checked_at,
       receipt_documents (
-        id, file_name, access_key, storage_path, created_at
+        id, file_name, access_key, storage_path, created_at,
+        issuer_document, issuer_name, invoice_number, invoice_series,
+        invoice_total, supplier_legal_entity_id,
+        supplier_legal_entities ( legal_name, document_number )
       )
     `,
     )
@@ -168,6 +171,18 @@ export async function getReceiptConference(
         fileName: document.file_name,
         accessKey: document.access_key,
         createdAt: document.created_at,
+        issuerDocument:
+          document.supplier_legal_entities?.document_number ??
+          document.issuer_document,
+        issuerName:
+          document.supplier_legal_entities?.legal_name ?? document.issuer_name,
+        invoiceNumber: document.invoice_number,
+        invoiceSeries: document.invoice_series,
+        invoiceTotal:
+          document.invoice_total === null
+            ? null
+            : Number(document.invoice_total),
+        issuerLinked: Boolean(document.supplier_legal_entity_id),
         downloadUrl: signed.data?.signedUrl ?? null,
       };
     }),

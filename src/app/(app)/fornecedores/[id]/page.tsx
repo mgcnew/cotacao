@@ -218,6 +218,41 @@ async function AbaCadastro({ id, emModal }: { id: string; emModal: boolean }) {
         ) : null}
       </section>
 
+      {supplier.supplier_legal_entities.length > 0 ? (
+        <section className="border-border bg-surface mb-6 rounded-xl border p-5">
+          <h2 className="text-fg text-sm font-semibold">Empresas emitentes</h2>
+          <p className="text-fg-muted mt-1 text-sm">
+            CNPJs reconhecidos nos XMLs deste fornecedor comercial.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {supplier.supplier_legal_entities
+              .filter((entity) => entity.is_active)
+              .sort(
+                (left, right) =>
+                  Number(right.is_primary) - Number(left.is_primary),
+              )
+              .map((entity) => (
+                <div
+                  key={entity.id}
+                  className="bg-surface-sunken rounded-lg px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-fg text-sm font-medium">
+                      {entity.legal_name ?? "Razão social não informada"}
+                    </p>
+                    {entity.is_primary ? (
+                      <Badge variant="secondary">Principal</Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-fg-muted mt-0.5 font-mono text-xs">
+                    {formatCnpj(entity.document_number)}
+                  </p>
+                </div>
+              ))}
+          </div>
+        </section>
+      ) : null}
+
       <section>
         <h2 className="text-fg mb-1 text-sm font-semibold">
           Categorias atendidas

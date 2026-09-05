@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { isValidCnpj } from "@/features/company/cnpj";
 import {
   parseHistoricalNfeXml,
   type HistoricalNfeItem,
@@ -200,19 +199,30 @@ export async function uploadHistoricalNfe(
   }
 
   const supabase = await createServerSupabaseClient();
-  const [companyResult, suppliersResult, productsResult] = await Promise.all([
-    supabase
-      .from("companies")
-      .select("document_number")
-      .eq("id", company.companyId)
-      .maybeSingle(),
-    supabase
-      .from("suppliers")
-      .select("id, name, document_number")
-      .eq("company_id", company.companyId),
-    listProductsForHistoricalMatch(supabase, company.companyId),
-  ]);
-  if (companyResult.error || suppliersResult.error || productsResult.error) {
+  const [companyResult, suppliersResult, legalEntitiesResult, productsResult] =
+    await Promise.all([
+      supabase
+        .from("companies")
+        .select("document_number")
+        .eq("id", company.companyId)
+        .maybeSingle(),
+      supabase
+        .from("suppliers")
+        .select("id, name, document_number")
+        .eq("company_id", company.companyId),
+      supabase
+        .from("supplier_legal_entities")
+        .select("id, supplier_id, document_number")
+        .eq("company_id", company.companyId)
+        .eq("is_active", true),
+      listProductsForHistoricalMatch(supabase, company.companyId),
+    ]);
+  if (
+    companyResult.error ||
+    suppliersResult.error ||
+    legalEntitiesResult.error ||
+    productsResult.error
+  ) {
     return {
       error: "Não foi possível preparar a conciliação desta NF-e.",
       importId: null,
@@ -233,12 +243,21 @@ export async function uploadHistoricalNfe(
   }
 
   const issuerDocument = cleanDocument(nfe.issuer.document);
-  const exactSuppliers = (suppliersResult.data ?? []).filter(
-    (supplier) =>
-      issuerDocument &&
-      cleanDocument(supplier.document_number) === issuerDocument,
+  const exactEntities = (legalEntitiesResult.data ?? []).filter(
+    (entity) => issuerDocument && entity.document_number === issuerDocument,
   );
-  const supplier = exactSuppliers.length === 1 ? exactSuppliers[0] : null;
+  const recognizedSupplierId =
+    exactEntities.length === 1 ? exactEntities[0].supplier_id : null;
+  const legacySupplier = (suppliersResult.data ?? []).find(
+    (candidate) =>
+      issuerDocument &&
+      cleanDocument(candidate.document_number) === issuerDocument,
+  );
+  const supplier = recognizedSupplierId
+    ? ((suppliersResult.data ?? []).find(
+        (candidate) => candidate.id === recognizedSupplierId,
+      ) ?? null)
+    : (legacySupplier ?? null);
   const [aliasesResult, unitRulesResult] = supplier
     ? await Promise.all([
         listSupplierAliasesForHistoricalMatch(
@@ -373,6 +392,25 @@ export async function uploadHistoricalNfe(
     };
   }
 
+  if (supplier) {
+    const linked = await supabase.rpc("rpc_link_historical_nfe_issuer", {
+      p_company_id: company.companyId,
+      p_import_id: importId,
+      p_supplier_id: supplier.id,
+      p_adopt_as_primary: false,
+    });
+    if (linked.error) {
+      await supabase.rpc("rpc_discard_historical_nfe_import", {
+        p_company_id: company.companyId,
+        p_import_id: importId,
+      });
+      return {
+        error: `Não foi possível reconhecer o emitente: ${linked.error.message}`,
+        importId: null,
+      };
+    }
+  }
+
   const uploaded = await supabase.storage
     .from("historical-nfe-documents")
     .upload(storagePath, new Uint8Array(await file.arrayBuffer()), {
@@ -481,41 +519,16 @@ export async function postHistoricalNfe(
   }
 
   const supabase = await createServerSupabaseClient();
-  const importResult = await supabase
-    .from("historical_nfe_imports")
-    .select("issuer_document, status")
-    .eq("company_id", company.companyId)
-    .eq("id", importId)
-    .maybeSingle();
-  if (
-    importResult.error ||
-    !importResult.data ||
-    importResult.data.status !== "draft"
-  ) {
-    return { error: "Importação não encontrada ou já concluída." };
-  }
-
-  if (formData.get("adoptSupplierDocument") === "on") {
-    const issuerDocument = cleanDocument(importResult.data.issuer_document);
-    if (!permissions.has("supplier.update") || !isValidCnpj(issuerDocument)) {
-      return {
-        error: "Não foi possível usar o CNPJ da nota neste fornecedor.",
-      };
-    }
-    const adopted = await supabase
-      .from("suppliers")
-      .update({ document_number: issuerDocument })
-      .eq("company_id", company.companyId)
-      .eq("id", supplierId)
-      .is("document_number", null);
-    if (adopted.error) {
-      return {
-        error:
-          adopted.error.code === "23505"
-            ? "O CNPJ da nota já pertence a outro fornecedor."
-            : `Não foi possível atualizar o fornecedor: ${adopted.error.message}`,
-      };
-    }
+  const linkedIssuer = await supabase.rpc("rpc_link_historical_nfe_issuer", {
+    p_company_id: company.companyId,
+    p_import_id: importId,
+    p_supplier_id: supplierId,
+    p_adopt_as_primary: formData.get("adoptSupplierDocument") === "on",
+  });
+  if (linkedIssuer.error) {
+    return {
+      error: `Não foi possível vincular a empresa emitente: ${linkedIssuer.error.message}`,
+    };
   }
 
   const posted = await supabase.rpc(

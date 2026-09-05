@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   postDraftReceipt,
   type ReceiptActionState,
@@ -94,7 +95,7 @@ function Submit() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending}>
-      {pending ? "Finalizando…" : "Finalizar conferência"}
+      {pending ? "Confirmando entrega…" : "Confirmar esta entrega"}
     </Button>
   );
 }
@@ -218,7 +219,7 @@ export function ReceiptConferenceForm({
         <input type="hidden" name="orderId" value={orderId} />
 
         <section className="border-border bg-surface rounded-xl border p-4">
-          <h2 className="text-fg text-sm font-semibold">Nota fiscal</h2>
+          <h2 className="text-fg text-sm font-semibold">Documentos fiscais</h2>
           <p className="text-fg-muted mt-1 mb-4 text-sm">
             Estes dados identificam a entrega. A soma calculada usa quantidade
             de precificação × preço de cada produto.
@@ -385,6 +386,13 @@ export function ReceiptConferenceForm({
                 }`}
               >
                 <input type="hidden" name="itemId" value={item.id} />
+                {imported || (xmlImport?.documents.length ?? 0) <= 1 ? (
+                  <input
+                    type="hidden"
+                    name={`xml_${item.id}`}
+                    value={imported?.receiptAccessKey ?? ""}
+                  />
+                ) : null}
                 <input
                   type="hidden"
                   name={`nome_${item.id}`}
@@ -428,6 +436,26 @@ export function ReceiptConferenceForm({
                       .map((xmlItem) => xmlItem.description)
                       .join(", ")}
                   </p>
+                ) : null}
+                {!imported && (xmlImport?.documents.length ?? 0) > 1 ? (
+                  <div className="mb-3 max-w-md">
+                    <label
+                      htmlFor={`xml_${item.id}`}
+                      className="text-fg-muted mb-1 block text-xs"
+                    >
+                      NF-e de origem, caso este produto tenha chegado
+                    </label>
+                    <ThemedSelect
+                      id={`xml_${item.id}`}
+                      name={`xml_${item.id}`}
+                      defaultValue=""
+                      emptyOptionLabel="Não veio nesta entrega"
+                      options={xmlImport!.documents.map((document) => ({
+                        value: document.nfe.accessKey!,
+                        label: `NF-e ${document.nfe.number} · ${document.nfe.issuer.name ?? "emitente não identificado"}`,
+                      }))}
+                    />
+                  </div>
                 ) : null}
                 <div
                   className={`grid gap-3 ${item.sameUnit ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}
@@ -541,8 +569,9 @@ export function ReceiptConferenceForm({
         <ErrorLine error={state.error} />
         <div className="border-border bg-surface sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 shadow-lg">
           <p className="text-fg-subtle text-xs">
-            Finalizar atualiza o saldo e abre divergências de preço ou excesso
-            automaticamente.
+            Se ainda houver saldo, o pedido ficará parcialmente recebido e
+            aceitará uma nova chegada depois. Preço diferente ou excesso abre
+            divergência automaticamente.
           </p>
           <Submit />
         </div>

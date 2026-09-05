@@ -67,7 +67,7 @@ export async function getSupplier(companyId: string, supplierId: string) {
   const { data, error } = await supabase
     .from("suppliers")
     .select(
-      "id, name, legal_name, document_number, status, purchase_limit, notes",
+      "id, name, legal_name, document_number, status, purchase_limit, notes, supplier_legal_entities ( id, document_number, legal_name, is_primary, is_active )",
     )
     .eq("company_id", companyId)
     .eq("id", supplierId)

@@ -95,6 +95,7 @@ export default async function ConciliacaoNfeHistoricaPage({
         <HistoricalNfeReconciliationForm
           importId={history.id}
           issuerDocument={history.issuer_document}
+          initialIssuerLinked={Boolean(history.supplier_legal_entity_id)}
           initialSupplierId={history.supplier_id ?? ""}
           suppliers={data.suppliers}
           products={data.products}

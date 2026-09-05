@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { isValidCnpj } from "@/features/company/cnpj";
 import {
   getPermissions,
   requireActiveCompany,
@@ -21,12 +20,16 @@ export type ReceiptNfeUploadState = {
   error: string | null;
   saved?: boolean;
   accessKey?: string;
+  issuerLinked?: boolean;
+  issuerDocument?: string;
+  issuerName?: string;
 };
 
 export type ReceiptNfeAssistState = {
   error: string | null;
   message?: string;
   documentNumber?: string;
+  legalEntityId?: string;
   rule?: {
     id: string;
     xmlUnit: string;
@@ -166,9 +169,7 @@ export async function uploadReceiptNfe(
   const [receiptResult, companyResult] = await Promise.all([
     supabase
       .from("receipts")
-      .select(
-        "id, status, orders!inner ( suppliers!inner ( document_number ) )",
-      )
+      .select("id, status, orders!inner ( supplier_id )")
       .eq("company_id", company.companyId)
       .eq("id", receiptId)
       .maybeSingle(),
@@ -185,14 +186,17 @@ export async function uploadReceiptNfe(
     return { error: "A chegada não existe ou já foi conferida." };
   }
 
-  const issuerDocument = xmlDocument(xmlSection(info, "emit"));
-  const recipientDocument = xmlDocument(xmlSection(info, "dest"));
+  const issuer = xmlSection(info, "emit");
+  const recipient = xmlSection(info, "dest");
+  const identification = xmlSection(info, "ide");
+  const issuerDocument = xmlDocument(issuer);
+  const issuerName = issuer ? xmlValue(issuer, "xNome") : null;
+  const recipientDocument = xmlDocument(recipient);
+  const recipientName = recipient ? xmlValue(recipient, "xNome") : null;
   const expectedRecipient = companyResult.data?.document_number?.replace(
     /\D/g,
     "",
   );
-  const expectedIssuer =
-    receiptResult.data.orders.suppliers.document_number?.replace(/\D/g, "");
   if (
     expectedRecipient &&
     recipientDocument &&
@@ -200,21 +204,35 @@ export async function uploadReceiptNfe(
   ) {
     return { error: "O destinatário da NF-e é diferente da empresa atual." };
   }
-  if (
-    expectedIssuer &&
-    issuerDocument &&
-    expectedIssuer.slice(0, 8) !== issuerDocument.slice(0, 8)
-  ) {
-    return { error: "O emitente da NF-e é diferente do fornecedor do pedido." };
-  }
   const fiscalTotals = nfeFiscalTotals(info);
   if (!fiscalTotals) {
     return { error: "O XML não informou os totais fiscais da NF-e." };
   }
 
+  const knownIssuer = issuerDocument
+    ? await supabase
+        .from("supplier_legal_entities")
+        .select("id, supplier_id, suppliers!inner ( name )")
+        .eq("company_id", company.companyId)
+        .eq("document_number", issuerDocument)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (knownIssuer.error) {
+    return { error: "Não foi possível reconhecer a empresa emitente." };
+  }
+  if (
+    knownIssuer.data &&
+    knownIssuer.data.supplier_id !== receiptResult.data.orders.supplier_id
+  ) {
+    return {
+      error:
+        `O CNPJ desta NF-e já está vinculado ao fornecedor comercial "${knownIssuer.data.suppliers.name}".`,
+    };
+  }
+
   const existing = await supabase
     .from("receipt_documents")
-    .select("id")
+    .select("id, supplier_legal_entity_id")
     .eq("company_id", company.companyId)
     .eq("receipt_id", receiptId)
     .eq("kind", "nfe_xml")
@@ -226,10 +244,40 @@ export async function uploadReceiptNfe(
     };
   }
   if (existing.data) {
-    const savedTotals = await supabase.rpc("rpc_save_receipt_nfe_totals", {
+    const refreshedDocument = await supabase
+      .from("receipt_documents")
+      .update({
+        supplier_legal_entity_id:
+          knownIssuer.data?.id ?? existing.data.supplier_legal_entity_id,
+        issuer_document: issuerDocument,
+        issuer_name: issuerName,
+        recipient_document: recipientDocument,
+        recipient_name: recipientName,
+        invoice_number: identification
+          ? xmlValue(identification, "nNF")
+          : null,
+        invoice_series: identification
+          ? xmlValue(identification, "serie")
+          : null,
+        issued_at: identification
+          ? (xmlValue(identification, "dhEmi") ??
+            xmlValue(identification, "dEmi"))
+          : null,
+        invoice_total: fiscalTotals.invoice,
+        fiscal_totals: fiscalTotals,
+      })
+      .eq("company_id", company.companyId)
+      .eq("id", existing.data.id);
+    if (refreshedDocument.error) {
+      return {
+        error:
+          "O XML já estava anexado, mas seus dados não puderam ser atualizados: " +
+          refreshedDocument.error.message,
+      };
+    }
+    const savedTotals = await supabase.rpc("rpc_refresh_receipt_nfe_totals", {
       p_company_id: company.companyId,
       p_receipt_id: receiptId,
-      p_totals: fiscalTotals,
     });
     if (savedTotals.error) {
       return {
@@ -238,7 +286,16 @@ export async function uploadReceiptNfe(
           savedTotals.error.message,
       };
     }
-    return { error: null, saved: true, accessKey };
+    return {
+      error: null,
+      saved: true,
+      accessKey,
+      issuerLinked: Boolean(
+        knownIssuer.data?.id ?? existing.data.supplier_legal_entity_id,
+      ),
+      issuerDocument: issuerDocument ?? undefined,
+      issuerName: issuerName ?? undefined,
+    };
   }
 
   const storagePath =
@@ -269,6 +326,23 @@ export async function uploadReceiptNfe(
       storage_path: storagePath,
       file_size: file.size,
       uploaded_by: user.id,
+      supplier_legal_entity_id: knownIssuer.data?.id ?? null,
+      issuer_document: issuerDocument,
+      issuer_name: issuerName,
+      recipient_document: recipientDocument,
+      recipient_name: recipientName,
+      invoice_number: identification
+        ? xmlValue(identification, "nNF")
+        : null,
+      invoice_series: identification
+        ? xmlValue(identification, "serie")
+        : null,
+      issued_at: identification
+        ? (xmlValue(identification, "dhEmi") ??
+            xmlValue(identification, "dEmi"))
+        : null,
+      invoice_total: fiscalTotals.invoice,
+      fiscal_totals: fiscalTotals,
     });
   if (metadataError && !/duplicate/i.test(metadataError.message)) {
     if (!alreadyUploaded) {
@@ -279,10 +353,9 @@ export async function uploadReceiptNfe(
     };
   }
 
-  const savedTotals = await supabase.rpc("rpc_save_receipt_nfe_totals", {
+  const savedTotals = await supabase.rpc("rpc_refresh_receipt_nfe_totals", {
     p_company_id: company.companyId,
     p_receipt_id: receiptId,
-    p_totals: fiscalTotals,
   });
   if (savedTotals.error) {
     return {
@@ -292,7 +365,14 @@ export async function uploadReceiptNfe(
     };
   }
 
-  return { error: null, saved: true, accessKey };
+  return {
+    error: null,
+    saved: true,
+    accessKey,
+    issuerLinked: Boolean(knownIssuer.data),
+    issuerDocument: issuerDocument ?? undefined,
+    issuerName: issuerName ?? undefined,
+  };
 }
 
 export async function deleteReceiptNfe(
@@ -347,19 +427,10 @@ export async function deleteReceiptNfe(
         deletion.error.message,
     };
   }
-  const remaining = await supabase
-    .from("receipt_documents")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", company.companyId)
-    .eq("receipt_id", receiptId)
-    .eq("kind", "nfe_xml");
-  if (!remaining.error && (remaining.count ?? 0) === 0) {
-    await supabase.rpc("rpc_save_receipt_nfe_totals", {
-      p_company_id: company.companyId,
-      p_receipt_id: receiptId,
-      p_totals: null,
-    });
-  }
+  await supabase.rpc("rpc_refresh_receipt_nfe_totals", {
+    p_company_id: company.companyId,
+    p_receipt_id: receiptId,
+  });
   return { error: null, saved: false, accessKey };
 }
 
@@ -471,95 +542,48 @@ export async function saveSupplierProductNfeUnitRule(
   };
 }
 
-export async function adoptSupplierDocumentFromNfe(
+export async function linkReceiptIssuerFromNfe(
   formData: FormData,
 ): Promise<ReceiptNfeAssistState> {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
-  if (!permissions.has("receipt.post") || !permissions.has("supplier.update")) {
-    return {
-      error: "Seu papel não permite atualizar o cadastro do fornecedor.",
-    };
+  if (!permissions.has("receipt.post")) {
+    return { error: "Seu papel não permite vincular a empresa emitente." };
   }
 
   const receiptId = String(formData.get("receiptId") ?? "");
   const accessKey = String(formData.get("accessKey") ?? "");
+  const adoptAsPrimary = formData.get("adoptAsPrimary") === "on";
   if (!receiptId || !/^\d{44}$/.test(accessKey)) {
-    return { error: "Não foi possível identificar a NF-e anexada." };
+    return { error: "Não foi possível identificar a NF-e." };
+  }
+  if (adoptAsPrimary && !permissions.has("supplier.update")) {
+    return {
+      error: "Seu papel não permite alterar a empresa principal do fornecedor.",
+    };
   }
 
   const supabase = await createServerSupabaseClient();
-  const [documentResult, receiptResult] = await Promise.all([
-    supabase
-      .from("receipt_documents")
-      .select("storage_path")
-      .eq("company_id", company.companyId)
-      .eq("receipt_id", receiptId)
-      .eq("kind", "nfe_xml")
-      .eq("access_key", accessKey)
-      .maybeSingle(),
-    supabase
-      .from("receipts")
-      .select(
-        "status, orders!inner ( supplier_id, suppliers!inner ( document_number ) )",
-      )
-      .eq("company_id", company.companyId)
-      .eq("id", receiptId)
-      .maybeSingle(),
-  ]);
-  if (documentResult.error || receiptResult.error) {
-    return { error: "Não foi possível validar a NF-e e o fornecedor." };
-  }
-  if (!documentResult.data || !receiptResult.data) {
-    return { error: "NF-e ou recebimento não encontrado." };
-  }
-  if (receiptResult.data.status !== "draft") {
-    return { error: "A conferência já foi finalizada." };
-  }
-  if (receiptResult.data.orders.suppliers.document_number) {
-    return { error: "O fornecedor já possui CNPJ cadastrado." };
-  }
-
-  const downloaded = await supabase.storage
-    .from("receipt-documents")
-    .download(documentResult.data.storage_path);
-  if (downloaded.error || !downloaded.data) {
-    return { error: "Não foi possível reler o XML armazenado." };
-  }
-  const xml = await downloaded.data.text();
-  const info = xmlSection(xml, "infNFe");
-  const issuerDocument = xmlDocument(info ? xmlSection(info, "emit") : null);
-  if (!issuerDocument || !isValidCnpj(issuerDocument)) {
-    return { error: "O XML não contém um CNPJ de emitente válido." };
-  }
-
-  const { data: updated, error: updateError } = await supabase
-    .from("suppliers")
-    .update({ document_number: issuerDocument })
-    .eq("company_id", company.companyId)
-    .eq("id", receiptResult.data.orders.supplier_id)
-    .is("document_number", null)
-    .select("id")
-    .maybeSingle();
-  if (updateError) {
+  const { data, error } = await supabase.rpc("rpc_link_receipt_issuer", {
+    p_company_id: company.companyId,
+    p_receipt_id: receiptId,
+    p_access_key: accessKey,
+    p_adopt_as_primary: adoptAsPrimary,
+  });
+  if (error) {
     return {
-      error:
-        updateError.code === "23505"
-          ? "Este CNPJ já pertence a outro fornecedor."
-          : `Não foi possível atualizar o fornecedor: ${updateError.message}`,
+      error: `Não foi possível vincular a empresa emitente: ${error.message}`,
     };
   }
-  if (!updated) {
-    return { error: "O fornecedor já foi atualizado por outra pessoa." };
-  }
 
-  revalidatePath(`/fornecedores/${updated.id}`);
-  revalidatePath("/fornecedores");
   revalidatePath(`/recebimentos/${receiptId}`);
+  revalidatePath("/fornecedores", "layout");
   return {
     error: null,
-    message: "CNPJ da NF-e adicionado ao cadastro do fornecedor.",
-    documentNumber: issuerDocument,
+    legalEntityId: String(data),
+    message: adoptAsPrimary
+      ? "Empresa emitente vinculada e definida como principal."
+      : "Empresa emitente vinculada. As próximas NF-e serão reconhecidas automaticamente.",
   };
 }
 
@@ -662,6 +686,7 @@ export async function postDraftReceipt(
     logistic_quantity_received: string;
     pricing_quantity_received: string;
     practiced_price: string;
+    receipt_access_key?: string;
     notes?: string;
   }[] = [];
 
@@ -699,6 +724,8 @@ export async function postDraftReceipt(
       logistic_quantity_received: logistic,
       pricing_quantity_received: pricing,
       practiced_price: price,
+      receipt_access_key:
+        String(formData.get(`xml_${id}`) ?? "").trim() || undefined,
       notes: String(formData.get(`obs_${id}`) ?? "").trim() || undefined,
     });
   }
@@ -715,17 +742,20 @@ export async function postDraftReceipt(
     return { error: "Valor total da nota inválido." };
   }
 
-  const { error } = await supabase.rpc("rpc_post_draft_receipt", {
-    p_company_id: company.companyId,
-    p_receipt_id: receiptId,
-    p_items: items,
-    p_invoice_number:
-      String(formData.get("invoiceNumber") ?? "").trim() || undefined,
-    p_invoice_series:
-      String(formData.get("invoiceSeries") ?? "").trim() || undefined,
-    p_invoice_total: invoiceTotal ? Number(invoiceTotal) : undefined,
-    p_notes: String(formData.get("notes") ?? "").trim() || undefined,
-  });
+  const { error } = await supabase.rpc(
+    "rpc_post_draft_receipt_with_documents",
+    {
+      p_company_id: company.companyId,
+      p_receipt_id: receiptId,
+      p_items: items,
+      p_invoice_number:
+        String(formData.get("invoiceNumber") ?? "").trim() || undefined,
+      p_invoice_series:
+        String(formData.get("invoiceSeries") ?? "").trim() || undefined,
+      p_invoice_total: invoiceTotal ? Number(invoiceTotal) : undefined,
+      p_notes: String(formData.get("notes") ?? "").trim() || undefined,
+    },
+  );
 
   if (error) {
     if (error.message.includes("Permissão")) {

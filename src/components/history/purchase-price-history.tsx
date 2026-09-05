@@ -115,6 +115,11 @@ export function PurchasePriceHistory({
                         NF {row.invoice_number}
                       </span>
                     ) : null}
+                    {row.issuer_name ? (
+                      <span className="text-fg-subtle block max-w-48 truncate text-xs">
+                        Emitente: {row.issuer_name}
+                      </span>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}

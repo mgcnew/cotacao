@@ -12,12 +12,13 @@ import {
 import * as React from "react";
 
 import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import {
-  adoptSupplierDocumentFromNfe,
   deleteReceiptNfe,
   learnSupplierProductAlias,
+  linkReceiptIssuerFromNfe,
   saveSupplierProductNfeUnitRule,
   uploadReceiptNfe,
 } from "@/features/receipts/actions";
@@ -74,13 +75,23 @@ export type ImportedNfeItem = {
   warnings: string[];
   conversionNotes: string[];
   manualConfirmationRequired: boolean;
+  receiptAccessKey: string;
 };
+
+export type ImportedNfeDocument = {
+  fileName: string;
+  nfe: ParsedNfe;
+  issuerLinked: boolean;
+};
+
+export type SourcedNfeItem = NfeItem & { receiptAccessKey: string };
 
 export type NfeImportPayload = {
   fileName: string;
   nfe: ParsedNfe;
+  documents: ImportedNfeDocument[];
   items: Record<string, ImportedNfeItem>;
-  unmatched: NfeItem[];
+  unmatched: SourcedNfeItem[];
   warnings: string[];
 };
 
@@ -89,6 +100,80 @@ type ConversionDraft = {
   mode: "fixed_factor" | "manual_quantity";
   factor: string;
 };
+
+const FISCAL_TOTAL_KEYS = [
+  "products",
+  "freight",
+  "insurance",
+  "discount",
+  "other",
+  "importTax",
+  "ipi",
+  "returnedIpi",
+  "icmsSt",
+  "fcpSt",
+  "monophaseRetainedIcms",
+  "services",
+  "desoneratedIcms",
+  "estimatedTaxes",
+  "invoice",
+  "composedTotal",
+  "residual",
+] as const;
+
+function aggregateNfeDocuments(documents: ImportedNfeDocument[]): ParsedNfe {
+  const first = documents[0].nfe;
+  const fiscalTotals = { ...first.fiscalTotals };
+  for (const key of FISCAL_TOTAL_KEYS) {
+    fiscalTotals[key] = documents.reduce(
+      (sum, document) => sum + document.nfe.fiscalTotals[key],
+      0,
+    );
+  }
+  return {
+    ...first,
+    accessKey: documents.length === 1 ? first.accessKey : null,
+    number: documents.map((document) => document.nfe.number).join(", "),
+    series: null,
+    issuer: {
+      document: null,
+      name:
+        documents.length === 1
+          ? first.issuer.name
+          : `${documents.length} empresas emitentes`,
+    },
+    total: fiscalTotals.invoice,
+    fiscalTotals,
+    items: documents.flatMap((document) => document.nfe.items),
+  };
+}
+
+function payloadWithoutDocument(
+  payload: NfeImportPayload,
+  accessKey: string,
+): NfeImportPayload | null {
+  const documents = payload.documents.filter(
+    (document) => document.nfe.accessKey !== accessKey,
+  );
+  if (!documents.length) return null;
+  return {
+    ...payload,
+    fileName: documents.map((document) => document.fileName).join(", "),
+    nfe: aggregateNfeDocuments(documents),
+    documents,
+    items: Object.fromEntries(
+      Object.entries(payload.items).filter(
+        ([, item]) => item.receiptAccessKey !== accessKey,
+      ),
+    ),
+    unmatched: payload.unmatched.filter(
+      (item) => item.receiptAccessKey !== accessKey,
+    ),
+    warnings: payload.warnings.filter(
+      (warning) => !warning.startsWith(`[${accessKey}]`),
+    ),
+  };
+}
 
 function formatDocument(document: string | null) {
   if (!document) return "não informado";
@@ -298,7 +383,9 @@ export function NfeImportPanel({
 }) {
   const [error, setError] = React.useState<string | null>(null);
   const [reading, setReading] = React.useState(false);
-  const [removing, setRemoving] = React.useState(false);
+  const [removingAccessKey, setRemovingAccessKey] = React.useState<
+    string | null
+  >(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [associationSelections, setAssociationSelections] = React.useState<
     Record<string, string>
@@ -306,10 +393,11 @@ export function NfeImportPanel({
   const [associatingLine, setAssociatingLine] = React.useState<string | null>(
     null,
   );
-  const [updatingSupplier, setUpdatingSupplier] = React.useState(false);
-  const [adoptedSupplierDocument, setAdoptedSupplierDocument] = React.useState<
+  const [linkingAccessKey, setLinkingAccessKey] = React.useState<
     string | null
   >(null);
+  const [hasPrimarySupplierDocument, setHasPrimarySupplierDocument] =
+    React.useState(Boolean(supplierDocument));
   const [conversionDrafts, setConversionDrafts] = React.useState<
     Record<string, ConversionDraft>
   >({});
@@ -533,16 +621,31 @@ export function NfeImportPanel({
     );
   }
 
-  async function associateItem(xmlItem: NfeItem) {
+  function sourcedItemKey(xmlItem: SourcedNfeItem) {
+    return `${xmlItem.receiptAccessKey}:${xmlItem.lineNumber}`;
+  }
+
+  async function associateItem(xmlItem: SourcedNfeItem) {
     if (!value) return;
-    const orderItemId = associationSelections[xmlItem.lineNumber];
+    const sourceKey = sourcedItemKey(xmlItem);
+    const orderItemId = associationSelections[sourceKey];
     const orderItem = items.find((item) => item.id === orderItemId);
     if (!orderItem) {
       setError("Escolha o produto correspondente no pedido.");
       return;
     }
+    const previous = value.items[orderItem.id];
+    if (
+      previous &&
+      previous.receiptAccessKey !== xmlItem.receiptAccessKey
+    ) {
+      setError(
+        `"${orderItem.productName}" já está associado a outra NF-e nesta chegada. Confirme as notas em recebimentos parciais separados para preservar a origem fiscal.`,
+      );
+      return;
+    }
 
-    setAssociatingLine(xmlItem.lineNumber);
+    setAssociatingLine(sourceKey);
     setError(null);
     setMessage(null);
     const associationData = new FormData();
@@ -561,7 +664,6 @@ export function NfeImportPanel({
       return;
     }
 
-    const previous = value.items[orderItem.id];
     const xmlItems = [...(previous?.xmlItems ?? []), xmlItem];
     onChange({
       ...value,
@@ -570,6 +672,7 @@ export function NfeImportPanel({
         [orderItem.id]: {
           ...importedItemValues(xmlItems, itemWithCurrentRules(orderItem)),
           xmlItems,
+          receiptAccessKey: xmlItem.receiptAccessKey,
           match: {
             orderItemId: orderItem.id,
             method: "supplier-name",
@@ -578,175 +681,233 @@ export function NfeImportPanel({
         },
       },
       unmatched: value.unmatched.filter(
-        (item) => item.lineNumber !== xmlItem.lineNumber,
+        (item) => sourcedItemKey(item) !== sourceKey,
       ),
     });
     setMessage(result.message ?? "Associação salva.");
     setAssociatingLine(null);
   }
 
-  async function adoptSupplierDocument() {
-    if (!value?.nfe.accessKey) return;
-    setUpdatingSupplier(true);
+  async function linkIssuer(
+    document: ImportedNfeDocument,
+    adoptAsPrimary: boolean,
+  ) {
+    const accessKey = document.nfe.accessKey;
+    if (!value || !accessKey) return;
+    setLinkingAccessKey(accessKey);
     setError(null);
     setMessage(null);
     const documentData = new FormData();
     documentData.set("receiptId", receiptId);
-    documentData.set("accessKey", value.nfe.accessKey);
-    const result = await adoptSupplierDocumentFromNfe(documentData);
+    documentData.set("accessKey", accessKey);
+    if (adoptAsPrimary) documentData.set("adoptAsPrimary", "on");
+    const result = await linkReceiptIssuerFromNfe(documentData);
     if (result.error) {
       setError(result.error);
     } else {
-      setAdoptedSupplierDocument(result.documentNumber ?? null);
-      setMessage(result.message ?? "Fornecedor atualizado.");
-      if (value) {
-        onChange({
-          ...value,
-          warnings: value.warnings.filter(
-            (warning) => !warning.startsWith("Cadastre o CNPJ do fornecedor"),
-          ),
-        });
-      }
+      onChange({
+        ...value,
+        documents: value.documents.map((candidate) =>
+          candidate.nfe.accessKey === accessKey
+            ? { ...candidate, issuerLinked: true }
+            : candidate,
+        ),
+        warnings: value.warnings.filter(
+          (warning) => !warning.startsWith(`[${accessKey}]`),
+        ),
+      });
+      if (adoptAsPrimary) setHasPrimarySupplierDocument(true);
+      setMessage(result.message ?? "Empresa emitente vinculada.");
     }
-    setUpdatingSupplier(false);
+    setLinkingAccessKey(null);
   }
 
-  async function removeXml() {
-    if (!value?.nfe.accessKey) return;
-    setRemoving(true);
+  async function removeXml(accessKey: string) {
+    if (!value) return;
+    setRemovingAccessKey(accessKey);
     setError(null);
     const removalData = new FormData();
     removalData.set("receiptId", receiptId);
-    removalData.set("accessKey", value.nfe.accessKey);
+    removalData.set("accessKey", accessKey);
     const removal = await deleteReceiptNfe(removalData);
     if (removal.error) {
       setError(removal.error);
     } else {
-      onChange(null);
+      onChange(payloadWithoutDocument(value, accessKey));
     }
-    setRemoving(false);
+    setRemovingAccessKey(null);
   }
 
-  async function importXml(file: File | undefined) {
-    if (!file) return;
+  async function importXml(
+    file: File,
+    current: NfeImportPayload | null,
+  ): Promise<NfeImportPayload> {
+    if (file.size > XML_MAX_SIZE) {
+      throw new Error("O XML deve ter no máximo 4 MB.");
+    }
+    if (!file.name.toLowerCase().endsWith(".xml")) {
+      throw new Error("Selecione o arquivo XML da NF-e.");
+    }
+
+    const nfe = parseNfeXml(await file.text());
+    const expectedRecipient = digits(companyDocument);
+    if (
+      expectedRecipient &&
+      nfe.recipient.document &&
+      expectedRecipient !== nfe.recipient.document
+    ) {
+      throw new Error(
+        "A NF-e é destinada ao documento " +
+          formatDocument(nfe.recipient.document) +
+          ", diferente da empresa atual (" +
+          formatDocument(expectedRecipient) +
+          ").",
+      );
+    }
+    if (
+      current?.documents.some(
+        (document) => document.nfe.accessKey === nfe.accessKey,
+      )
+    ) {
+      throw new Error(`A NF-e ${nfe.number} já foi adicionada.`);
+    }
+
+    const grouped = new Map<
+      string,
+      { xmlItems: NfeItem[]; match: NfeItemMatch }
+    >();
+    const unmatched: SourcedNfeItem[] = [];
+    for (const xmlItem of nfe.items) {
+      const match = matchNfeItem(xmlItem, items);
+      if (!match) {
+        unmatched.push({
+          ...xmlItem,
+          receiptAccessKey: nfe.accessKey!,
+        });
+        continue;
+      }
+      const currentGroup = grouped.get(match.orderItemId);
+      if (currentGroup) {
+        currentGroup.xmlItems.push(xmlItem);
+        if (match.confidence > currentGroup.match.confidence) {
+          currentGroup.match = match;
+        }
+      } else {
+        grouped.set(match.orderItemId, { xmlItems: [xmlItem], match });
+      }
+    }
+
+    const importedItems: Record<string, ImportedNfeItem> = {};
+    for (const item of items) {
+      const group = grouped.get(item.id);
+      if (!group) continue;
+      if (
+        current?.items[item.id] &&
+        current.items[item.id].receiptAccessKey !== nfe.accessKey
+      ) {
+        throw new Error(
+          `O produto "${item.productName}" aparece em mais de uma NF-e nesta chegada. Confira uma nota por vez para manter a origem fiscal exata.`,
+        );
+      }
+      importedItems[item.id] = {
+        ...importedItemValues(group.xmlItems, itemWithCurrentRules(item)),
+        xmlItems: group.xmlItems,
+        match: group.match,
+        receiptAccessKey: nfe.accessKey!,
+      };
+    }
+    const uploadData = new FormData();
+    uploadData.set("receiptId", receiptId);
+    uploadData.set("file", file);
+    const upload = await uploadReceiptNfe(uploadData);
+    if (upload.error) throw new Error(upload.error);
+
+    const warnings: string[] = [];
+    if (!expectedRecipient) {
+      warnings.push(
+        `[${nfe.accessKey}] Cadastre o CNPJ da empresa para validar automaticamente o destinatário.`,
+      );
+    } else if (!nfe.recipient.document) {
+      warnings.push(
+        `[${nfe.accessKey}] O XML não informou o documento do destinatário.`,
+      );
+    }
+    if (!nfe.issuer.document) {
+      warnings.push(
+        `[${nfe.accessKey}] O XML não informou o CNPJ do emitente.`,
+      );
+    } else if (!upload.issuerLinked) {
+      warnings.push(
+        `[${nfe.accessKey}] Confirme uma vez que ${nfe.issuer.name ?? "a empresa emitente"} (${formatDocument(nfe.issuer.document)}) pertence a este fornecedor comercial.`,
+      );
+    }
+
+    const document: ImportedNfeDocument = {
+      fileName: file.name,
+      nfe,
+      issuerLinked: Boolean(upload.issuerLinked),
+    };
+    const documents = [...(current?.documents ?? []), document];
+    return {
+      fileName: documents.map((entry) => entry.fileName).join(", "),
+      nfe: aggregateNfeDocuments(documents),
+      documents,
+      items: { ...(current?.items ?? {}), ...importedItems },
+      unmatched: [...(current?.unmatched ?? []), ...unmatched],
+      warnings: [...(current?.warnings ?? []), ...warnings],
+    };
+  }
+
+  async function importFiles(files: Iterable<File> | null) {
+    if (!files) return;
+    const selectedFiles = Array.from(files);
+    if (!selectedFiles.length) return;
     setReading(true);
     setError(null);
     setMessage(null);
+    let next = value;
     try {
-      if (file.size > XML_MAX_SIZE) {
-        throw new Error("O XML deve ter no máximo 4 MB.");
+      for (const file of selectedFiles) {
+        next = await importXml(file, next);
+        onChange(next);
       }
-      if (!file.name.toLowerCase().endsWith(".xml")) {
-        throw new Error("Selecione o arquivo XML da NF-e.");
-      }
-
-      const nfe = parseNfeXml(await file.text());
-      const expectedRecipient = digits(companyDocument);
-      const expectedIssuer = digits(supplierDocument);
-      const issuerBranchDiffers = Boolean(
-        expectedIssuer &&
-        nfe.issuer.document &&
-        expectedIssuer !== nfe.issuer.document &&
-        expectedIssuer.slice(0, 8) === nfe.issuer.document.slice(0, 8),
-      );
-      if (
-        expectedRecipient &&
-        nfe.recipient.document &&
-        expectedRecipient !== nfe.recipient.document
-      ) {
-        throw new Error(
-          "A NF-e é destinada ao documento " +
-            formatDocument(nfe.recipient.document) +
-            ", diferente da empresa atual (" +
-            formatDocument(expectedRecipient) +
-            ").",
-        );
-      }
-      if (
-        expectedIssuer &&
-        nfe.issuer.document &&
-        expectedIssuer.slice(0, 8) !== nfe.issuer.document.slice(0, 8)
-      ) {
-        throw new Error(
-          "O emitente da NF-e (" +
-            formatDocument(nfe.issuer.document) +
-            ") é diferente do fornecedor deste pedido (" +
-            formatDocument(expectedIssuer) +
-            ").",
-        );
-      }
-
-      const grouped = new Map<
-        string,
-        { xmlItems: NfeItem[]; match: NfeItemMatch }
-      >();
-      const unmatched: NfeItem[] = [];
-      for (const xmlItem of nfe.items) {
-        const match = matchNfeItem(xmlItem, items);
-        if (!match) {
-          unmatched.push(xmlItem);
-          continue;
-        }
-        const current = grouped.get(match.orderItemId);
-        if (current) {
-          current.xmlItems.push(xmlItem);
-          if (match.confidence > current.match.confidence)
-            current.match = match;
-        } else {
-          grouped.set(match.orderItemId, { xmlItems: [xmlItem], match });
-        }
-      }
-
-      const importedItems: Record<string, ImportedNfeItem> = {};
-      for (const item of items) {
-        const group = grouped.get(item.id);
-        if (!group) continue;
-        importedItems[item.id] = {
-          ...importedItemValues(group.xmlItems, itemWithCurrentRules(item)),
-          xmlItems: group.xmlItems,
-          match: group.match,
-        };
-      }
-      const uploadData = new FormData();
-      uploadData.set("receiptId", receiptId);
-      uploadData.set("file", file);
-      const upload = await uploadReceiptNfe(uploadData);
-      if (upload.error) throw new Error(upload.error);
-
-      const warnings: string[] = [];
-      if (!expectedRecipient) {
-        warnings.push(
-          "Cadastre o CNPJ da empresa para validar automaticamente o destinatário.",
-        );
-      } else if (!nfe.recipient.document) {
-        warnings.push("O XML não informou o documento do destinatário.");
-      }
-      if (!expectedIssuer) {
-        warnings.push(
-          "Cadastre o CNPJ do fornecedor para validar automaticamente o emitente.",
-        );
-      } else if (!nfe.issuer.document) {
-        warnings.push("O XML não informou o documento do emitente.");
-      } else if (issuerBranchDiffers) {
-        warnings.push(
-          "A nota foi emitida por outro estabelecimento da mesma raiz de CNPJ do fornecedor.",
-        );
-      }
-
-      onChange({
-        fileName: file.name,
-        nfe,
-        items: importedItems,
-        unmatched,
-        warnings,
-      });
     } catch (cause) {
-      onChange(null);
       setError(
         cause instanceof Error ? cause.message : "Não foi possível ler o XML.",
       );
     } finally {
       setReading(false);
+    }
+  }
+
+  async function loadExistingDocuments() {
+    const available = existingDocuments.filter(
+      (document) => document.downloadUrl,
+    );
+    if (!available.length) return;
+    setReading(true);
+    setError(null);
+    try {
+      const files = await Promise.all(
+        available.map(async (document) => {
+          const response = await fetch(document.downloadUrl!);
+          if (!response.ok) {
+            throw new Error("Não foi possível reler os XMLs anexados.");
+          }
+          return new File([await response.blob()], document.fileName, {
+            type: "application/xml",
+          });
+        }),
+      );
+      setReading(false);
+      await importFiles(files);
+    } catch (cause) {
+      setReading(false);
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível reler os XMLs anexados.",
+      );
     }
   }
 
@@ -762,38 +923,33 @@ export function NfeImportPanel({
             </h2>
           </div>
           <p className="text-fg-muted mt-1 text-sm">
-            Preenche a nota e associa os produtos. Revise os campos antes de
-            finalizar a conferência.
+            Adicione uma ou várias notas desta chegada. O CNPJ de cada emitente
+            será reconhecido pelo próprio XML.
           </p>
         </div>
-        {value ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={removing}
-            onClick={() => void removeXml()}
-          >
-            <X className="size-4" aria-hidden />
-            {removing ? "Removendo…" : "Remover XML"}
-          </Button>
-        ) : (
-          <label
-            htmlFor={inputId}
-            className="border-input bg-background hover:bg-muted text-fg inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium"
-          >
-            <Upload className="size-4" aria-hidden />
-            {reading ? "Lendo XML…" : "Selecionar XML"}
-            <input
-              id={inputId}
-              type="file"
-              accept=".xml,application/xml,text/xml"
-              className="sr-only"
-              disabled={reading}
-              onChange={(event) => void importXml(event.target.files?.[0])}
-            />
-          </label>
-        )}
+        <label
+          htmlFor={inputId}
+          className="border-input bg-background hover:bg-muted text-fg inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium"
+        >
+          <Upload className="size-4" aria-hidden />
+          {reading
+            ? "Lendo XML…"
+            : value
+              ? "Adicionar mais XMLs"
+              : "Selecionar XMLs"}
+          <input
+            id={inputId}
+            type="file"
+            multiple
+            accept=".xml,application/xml,text/xml"
+            className="sr-only"
+            disabled={reading}
+            onChange={(event) => {
+              void importFiles(event.target.files);
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
       </div>
       <div className="mt-3">
         <ErrorLine error={error} />
@@ -806,6 +962,15 @@ export function NfeImportPanel({
             campos, selecione o mesmo arquivo.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={reading}
+              onClick={() => void loadExistingDocuments()}
+            >
+              {reading ? "Carregando…" : "Retomar conciliação"}
+            </Button>
             {existingDocuments.map((document) =>
               document.downloadUrl ? (
                 <a
@@ -828,56 +993,90 @@ export function NfeImportPanel({
           >
             <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
             <span>
-              <strong>NF-e {value.nfe.number}</strong> carregada de{" "}
-              {value.nfe.issuer.name ?? "fornecedor não identificado"}.{" "}
-              {matchedCount}{" "}
+              <strong>
+                {value.documents.length}{" "}
+                {value.documents.length === 1
+                  ? "NF-e carregada"
+                  : "NF-e carregadas"}
+              </strong>
+              . {matchedCount}{" "}
               {matchedCount === 1 ? "produto associado" : "produtos associados"}
               .
             </span>
           </div>
-          {!supplierDocument &&
-          !adoptedSupplierDocument &&
-          digits(value.nfe.issuer.document).length === 14 ? (
-            <div className="border-border bg-surface-sunken flex flex-col gap-3 rounded-lg border px-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-fg font-medium">
-                  Completar cadastro do fornecedor
-                </p>
-                <p className="text-fg-muted text-xs">
-                  CNPJ identificado no XML:{" "}
-                  {formatDocument(value.nfe.issuer.document)}
-                </p>
-              </div>
-              {canUpdateSupplier ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={updatingSupplier}
-                  onClick={() => void adoptSupplierDocument()}
+          <div className="space-y-2">
+            {value.documents.map((document) => {
+              const accessKey = document.nfe.accessKey!;
+              const canLink =
+                digits(document.nfe.issuer.document).length === 14;
+              const adoptAsPrimary =
+                !hasPrimarySupplierDocument && canUpdateSupplier;
+              return (
+                <div
+                  key={accessKey}
+                  className="border-border bg-surface-sunken flex flex-col gap-3 rounded-lg border px-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
                 >
-                  {updatingSupplier ? "Atualizando…" : "Usar CNPJ da nota"}
-                </Button>
-              ) : (
-                <span className="text-fg-subtle text-xs">
-                  É necessária permissão para editar fornecedores.
-                </span>
-              )}
-            </div>
-          ) : null}
-          {adoptedSupplierDocument ? (
-            <p className="bg-success-soft text-success rounded-lg px-3 py-2 text-sm">
-              CNPJ {formatDocument(adoptedSupplierDocument)} salvo no
-              fornecedor.
-            </p>
-          ) : null}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-fg font-medium">
+                        NF-e {document.nfe.number} ·{" "}
+                        {document.nfe.issuer.name ??
+                          "Emitente não identificado"}
+                      </p>
+                      <Badge
+                        variant={document.issuerLinked ? "secondary" : "outline"}
+                      >
+                        {document.issuerLinked
+                          ? "Emitente reconhecido"
+                          : "Confirmar emitente"}
+                      </Badge>
+                    </div>
+                    <p className="text-fg-muted mt-1 text-xs">
+                      {formatDocument(document.nfe.issuer.document)} ·{" "}
+                      {MONEY.format(document.nfe.total)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!document.issuerLinked ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!canLink || linkingAccessKey === accessKey}
+                        onClick={() => void linkIssuer(document, adoptAsPrimary)}
+                      >
+                        {linkingAccessKey === accessKey
+                          ? "Vinculando…"
+                          : adoptAsPrimary
+                            ? "Vincular e usar como principal"
+                            : "Vincular ao fornecedor"}
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={removingAccessKey === accessKey}
+                      onClick={() => void removeXml(accessKey)}
+                    >
+                      <X className="size-4" aria-hidden />
+                      {removingAccessKey === accessKey
+                        ? "Removendo…"
+                        : "Remover"}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           {value.warnings.length || value.unmatched.length ? (
             <div className="bg-warning-soft text-warning rounded-lg px-3 py-2 text-sm">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
                 <div>
                   {value.warnings.map((warning) => (
-                    <p key={warning}>{warning}</p>
+                    <p key={warning}>
+                      {warning.replace(/^\[\d{44}\]\s*/, "")}
+                    </p>
                   ))}
                   {value.unmatched.length ? (
                     <p>
@@ -957,7 +1156,7 @@ export function NfeImportPanel({
               <div className="space-y-2">
                 {value.unmatched.map((xmlItem) => (
                   <div
-                    key={xmlItem.lineNumber}
+                    key={sourcedItemKey(xmlItem)}
                     className="border-border bg-surface grid gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,1fr)_auto] sm:items-end"
                   >
                     <div className="min-w-0">
@@ -971,12 +1170,14 @@ export function NfeImportPanel({
                       </p>
                     </div>
                     <ThemedSelect
-                      id={`nfe-association-${xmlItem.lineNumber}`}
-                      value={associationSelections[xmlItem.lineNumber] ?? ""}
+                      id={`nfe-association-${sourcedItemKey(xmlItem)}`}
+                      value={
+                        associationSelections[sourcedItemKey(xmlItem)] ?? ""
+                      }
                       onValueChange={(selected) =>
                         setAssociationSelections((current) => ({
                           ...current,
-                          [xmlItem.lineNumber]: selected,
+                          [sourcedItemKey(xmlItem)]: selected,
                         }))
                       }
                       placeholder="Escolher produto do pedido"
@@ -989,12 +1190,12 @@ export function NfeImportPanel({
                       type="button"
                       size="sm"
                       disabled={
-                        !associationSelections[xmlItem.lineNumber] ||
-                        associatingLine === xmlItem.lineNumber
+                        !associationSelections[sourcedItemKey(xmlItem)] ||
+                        associatingLine === sourcedItemKey(xmlItem)
                       }
                       onClick={() => void associateItem(xmlItem)}
                     >
-                      {associatingLine === xmlItem.lineNumber
+                      {associatingLine === sourcedItemKey(xmlItem)
                         ? "Associando…"
                         : "Associar"}
                     </Button>
@@ -1003,9 +1204,9 @@ export function NfeImportPanel({
               </div>
             </div>
           ) : null}
-          <p className="text-fg-subtle break-all text-xs">
-            Arquivo: {value.fileName} · chave{" "}
-            {value.nfe.accessKey ?? "não informada"}
+          <p className="text-fg-subtle text-xs">
+            Cada XML permanece separado para preservar CNPJ, impostos e valor
+            fiscal de cada empresa emitente.
           </p>
         </div>
       ) : null}
