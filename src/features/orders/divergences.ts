@@ -8,7 +8,11 @@
 export const ORDER_DIVERGENCE_TYPES = [
   { value: "quantity", label: "Quantidade", hint: "não tenho tudo isso" },
   { value: "price", label: "Preço", hint: "o valor combinado mudou" },
-  { value: "delivery_date", label: "Data de entrega", hint: "não consigo na data" },
+  {
+    value: "delivery_date",
+    label: "Data de entrega",
+    hint: "não consigo na data",
+  },
   { value: "availability", label: "Disponibilidade", hint: "item em falta" },
   { value: "specification", label: "Especificação", hint: "produto diferente" },
   { value: "other", label: "Outro", hint: "" },
@@ -49,4 +53,11 @@ export const COMMERCIAL_DIVERGENCE_STATUS_LABEL: Record<string, string> = {
   to_dispute: "Em contestação",
   resolved: "Resolvida",
   justified: "Justificada",
+};
+
+export const COMMERCIAL_DIVERGENCE_TYPE_LABEL: Record<string, string> = {
+  price: "Preço diferente do combinado",
+  quantity: "Quantidade acima do combinado",
+  specification: "Produto diferente do combinado",
+  other: "Outra divergência no recebimento",
 };

@@ -13,10 +13,14 @@ export type PendingCommercialDivergence = {
   productName: string;
   receiptId: string | null;
   invoiceNumber: string | null;
+  purchaseUnit: string | null;
+  pricingUnit: string | null;
   agreedPrice: number | null;
   practicedPrice: number | null;
-  quantity: number | null;
-  financialImpact: number;
+  agreedQuantity: number | null;
+  receivedQuantity: number | null;
+  pricingQuantity: number | null;
+  financialImpact: number | null;
 };
 
 function jsonNumber(value: unknown, key: string): number | null {
@@ -69,7 +73,13 @@ export async function listPendingCommercialDivergences(
       .in("id", supplierIds),
     supabase
       .from("order_revision_items")
-      .select("id, product_name_snapshot")
+      .select(
+        `
+          id, product_name_snapshot,
+          purchase_unit:units!order_revision_items_company_id_purchase_unit_id_fkey ( symbol ),
+          pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( symbol )
+        `,
+      )
       .eq("company_id", companyId)
       .in("id", revisionItemIds),
     supabase
@@ -109,10 +119,7 @@ export async function listPendingCommercialDivergences(
     (suppliers.data ?? []).map((row) => [row.id, row.name]),
   );
   const productByItemId = new Map(
-    (revisionItems.data ?? []).map((row) => [
-      row.id,
-      row.product_name_snapshot,
-    ]),
+    (revisionItems.data ?? []).map((row) => [row.id, row]),
   );
   const receiptItemById = new Map(
     (receiptItems.data ?? []).map((row) => [row.id, row]),
@@ -137,21 +144,39 @@ export async function listPendingCommercialDivergences(
         supplierName:
           supplierById.get(row.supplier_id) ?? "Fornecedor não identificado",
         productName:
-          productByItemId.get(row.order_revision_item_id) ??
-          "Produto não identificado",
+          productByItemId.get(row.order_revision_item_id)
+            ?.product_name_snapshot ?? "Produto não identificado",
         receiptId,
         invoiceNumber: receiptId
           ? (invoiceByReceiptId.get(receiptId) ?? null)
           : null,
-        agreedPrice: jsonNumber(row.agreed_value, "price"),
+        purchaseUnit:
+          productByItemId.get(row.order_revision_item_id)?.purchase_unit
+            ?.symbol ?? null,
+        pricingUnit:
+          productByItemId.get(row.order_revision_item_id)?.pricing_unit
+            ?.symbol ?? null,
+        agreedPrice:
+          row.type === "price" ? jsonNumber(row.agreed_value, "price") : null,
         practicedPrice:
-          jsonNumber(row.realized_value, "price") ??
-          (receiptItem ? Number(receiptItem.practiced_price) : null),
-        quantity: receiptItem
+          row.type === "price"
+            ? (jsonNumber(row.realized_value, "price") ??
+              (receiptItem ? Number(receiptItem.practiced_price) : null))
+            : null,
+        agreedQuantity:
+          row.type === "quantity"
+            ? jsonNumber(row.agreed_value, "pending_quantity")
+            : null,
+        receivedQuantity:
+          row.type === "quantity"
+            ? jsonNumber(row.realized_value, "received_quantity")
+            : null,
+        pricingQuantity: receiptItem
           ? Number(receiptItem.pricing_quantity_received)
           : null,
-        financialImpact: Number(row.financial_impact ?? 0),
+        financialImpact:
+          row.financial_impact === null ? null : Number(row.financial_impact),
       };
     })
-    .sort((a, b) => b.financialImpact - a.financialImpact);
+    .sort((a, b) => (b.financialImpact ?? 0) - (a.financialImpact ?? 0));
 }

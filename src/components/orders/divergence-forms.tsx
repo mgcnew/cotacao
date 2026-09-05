@@ -175,12 +175,14 @@ export function ResolveDivergenceForm({
   commercial = false,
   financialImpact = 0,
   commercialStatus = "pending",
+  commercialType = "price",
 }: {
   divergenceId: string;
   orderId: string;
   commercial?: boolean;
   financialImpact?: number;
   commercialStatus?: string;
+  commercialType?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [decision, setDecision] = React.useState("");
@@ -190,24 +192,38 @@ export function ResolveDivergenceForm({
   );
 
   const options = commercial
-    ? financialImpact < 0
-      ? [{ value: "accepted", label: "Registrar como ganho" }]
-      : commercialStatus === "to_dispute"
+    ? commercialType === "quantity"
+      ? commercialStatus === "to_dispute"
         ? [
-            { value: "resolved", label: "Correção recebida — resolver" },
+            { value: "resolved", label: "Quantidade corrigida — resolver" },
             { value: "justified", label: "Fornecedor justificou — aceitar" },
-            { value: "accepted", label: "Aceitar o valor cobrado" },
+            { value: "accepted", label: "Aceitar a quantidade recebida" },
           ]
         : [
             { value: "to_dispute", label: "Contestar com o fornecedor" },
-            { value: "accepted", label: "Aceitar o valor cobrado" },
+            { value: "accepted", label: "Aceitar a quantidade recebida" },
             { value: "justified", label: "Diferença já justificada" },
-            { value: "resolved", label: "Valor já corrigido ou estornado" },
+            { value: "resolved", label: "Quantidade já corrigida" },
           ]
+      : financialImpact < 0
+        ? [{ value: "accepted", label: "Registrar como ganho" }]
+        : commercialStatus === "to_dispute"
+          ? [
+              { value: "resolved", label: "Correção recebida — resolver" },
+              { value: "justified", label: "Fornecedor justificou — aceitar" },
+              { value: "accepted", label: "Aceitar o valor cobrado" },
+            ]
+          : [
+              { value: "to_dispute", label: "Contestar com o fornecedor" },
+              { value: "accepted", label: "Aceitar o valor cobrado" },
+              { value: "justified", label: "Diferença já justificada" },
+              { value: "resolved", label: "Valor já corrigido ou estornado" },
+            ]
     : ORDER_DIVERGENCE_RESOLUTIONS;
   const noteRequired =
     commercial &&
     (financialImpact > 0 ||
+      (commercialType === "quantity" && decision === "accepted") ||
       decision === "to_dispute" ||
       decision === "resolved");
 
@@ -262,9 +278,11 @@ export function ResolveDivergenceForm({
 
       <p className="text-fg-subtle text-xs">
         {commercial
-          ? financialImpact < 0
-            ? "O valor menor fica registrado como ganho e sai das pendências."
-            : "Contestar mantém o caso em acompanhamento. Aceitar ou justificar encerra a pendência e preserva o histórico."
+          ? commercialType === "quantity"
+            ? "Contestar mantém o excesso em acompanhamento. Aceitar, justificar ou corrigir encerra a pendência e preserva o histórico."
+            : financialImpact < 0
+              ? "O valor menor fica registrado como ganho e sai das pendências."
+              : "Contestar mantém o caso em acompanhamento. Aceitar ou justificar encerra a pendência e preserva o histórico."
           : "Registra a decisão. Mudar quantidade ou preço do pedido exige uma nova revisão."}
       </p>
 

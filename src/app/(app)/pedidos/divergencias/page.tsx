@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DialogBody } from "@/components/ui/dialog";
 import { listPendingCommercialDivergences } from "@/features/orders/commercial-divergences";
+import { COMMERCIAL_DIVERGENCE_TYPE_LABEL } from "@/features/orders/divergences";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
@@ -22,6 +23,14 @@ const DATE = new Intl.DateTimeFormat("pt-BR", {
   month: "short",
   year: "numeric",
 });
+const QUANTITY = new Intl.NumberFormat("pt-BR", {
+  maximumFractionDigits: 3,
+});
+
+function quantity(value: number | null, unit: string | null) {
+  if (value === null) return "—";
+  return `${QUANTITY.format(value)}${unit ? ` ${unit}` : ""}`;
+}
 
 export default async function CommercialDivergencesPage() {
   return <CommercialDivergencesContent />;
@@ -44,7 +53,7 @@ export async function CommercialDivergencesContent({
   const rows = await listPendingCommercialDivergences(company.companyId);
   const canManage = permissions.has("commercial_divergence.manage");
   const exposure = rows.reduce(
-    (sum, row) => sum + Math.max(row.financialImpact, 0),
+    (sum, row) => sum + Math.max(row.financialImpact ?? 0, 0),
     0,
   );
   const disputes = rows.filter((row) => row.status === "to_dispute").length;
@@ -73,7 +82,7 @@ export async function CommercialDivergencesContent({
         </div>
       </div>
 
-      <div className="border-border bg-surface-sunken mb-5 grid gap-3 rounded-xl border p-4 text-sm md:grid-cols-2">
+      <div className="border-border bg-surface-sunken mb-5 grid gap-3 rounded-xl border p-4 text-sm md:grid-cols-3">
         <div>
           <p className="text-success font-medium">Preço menor que o pedido</p>
           <p className="text-fg-muted mt-1 text-xs leading-relaxed">
@@ -88,6 +97,13 @@ export async function CommercialDivergencesContent({
           <p className="text-fg-muted mt-1 text-xs leading-relaxed">
             Conteste para acompanhar a cobrança, aceite com justificativa ou
             encerre depois de receber correção, crédito ou estorno.
+          </p>
+        </div>
+        <div>
+          <p className="text-warning font-medium">Quantidade acima do pedido</p>
+          <p className="text-fg-muted mt-1 text-xs leading-relaxed">
+            Confira o excedente recebido e decida se será aceito, contestado ou
+            corrigido pelo fornecedor.
           </p>
         </div>
       </div>
@@ -105,100 +121,138 @@ export async function CommercialDivergencesContent({
         />
       ) : (
         <ul className="space-y-3">
-          {rows.map((row) => (
-            <li
-              key={row.id}
-              className="border-border bg-surface rounded-xl border p-4 shadow-xs"
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-fg font-semibold">{row.productName}</p>
-                    <Badge
-                      variant={
-                        row.status === "to_dispute" ? "destructive" : "outline"
-                      }
-                    >
-                      {row.status === "to_dispute"
-                        ? "Em contestação"
-                        : "A decidir"}
-                    </Badge>
+          {rows.map((row) => {
+            const quantityDifference =
+              row.agreedQuantity !== null && row.receivedQuantity !== null
+                ? row.receivedQuantity - row.agreedQuantity
+                : null;
+            return (
+              <li
+                key={row.id}
+                className="border-border bg-surface rounded-xl border p-4 shadow-xs"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-fg font-semibold">{row.productName}</p>
+                      <span className="text-fg-muted text-xs">
+                        {COMMERCIAL_DIVERGENCE_TYPE_LABEL[row.type] ??
+                          "Divergência no recebimento"}
+                      </span>
+                      <Badge
+                        variant={
+                          row.status === "to_dispute"
+                            ? "destructive"
+                            : "outline"
+                        }
+                      >
+                        {row.status === "to_dispute"
+                          ? "Em contestação"
+                          : "A decidir"}
+                      </Badge>
+                    </div>
+                    <p className="text-fg-muted mt-1 text-xs">
+                      {row.supplierName}
+                      {row.orderNumber ? ` · Pedido #${row.orderNumber}` : ""}
+                      {row.invoiceNumber ? ` · NF ${row.invoiceNumber}` : ""}
+                      {` · ${DATE.format(new Date(row.createdAt))}`}
+                    </p>
                   </div>
-                  <p className="text-fg-muted mt-1 text-xs">
-                    {row.supplierName}
-                    {row.orderNumber ? ` · Pedido #${row.orderNumber}` : ""}
-                    {row.invoiceNumber ? ` · NF ${row.invoiceNumber}` : ""}
-                    {` · ${DATE.format(new Date(row.createdAt))}`}
-                  </p>
+                  <div className="shrink-0 sm:text-right">
+                    {row.type === "quantity" ? (
+                      <>
+                        <p className="text-destructive text-lg font-semibold tabular-nums">
+                          {quantity(quantityDifference, row.purchaseUnit)}
+                        </p>
+                        <p className="text-fg-subtle text-[11px]">
+                          acima do combinado
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p
+                          className={
+                            (row.financialImpact ?? 0) > 0
+                              ? "text-destructive text-lg font-semibold tabular-nums"
+                              : "text-success text-lg font-semibold tabular-nums"
+                          }
+                        >
+                          {row.financialImpact === null
+                            ? "—"
+                            : MONEY.format(row.financialImpact)}
+                        </p>
+                        <p className="text-fg-subtle text-[11px]">
+                          impacto total
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="shrink-0 sm:text-right">
-                  <p
-                    className={
-                      row.financialImpact > 0
-                        ? "text-destructive text-lg font-semibold tabular-nums"
-                        : "text-success text-lg font-semibold tabular-nums"
-                    }
-                  >
-                    {MONEY.format(row.financialImpact)}
-                  </p>
-                  <p className="text-fg-subtle text-[11px]">impacto total</p>
-                </div>
-              </div>
 
-              <dl className="border-border mt-3 grid grid-cols-3 divide-x rounded-lg border py-2 text-center">
-                <div className="min-w-0 px-2">
-                  <dt className="text-fg-subtle text-[11px]">Combinado</dt>
-                  <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">
-                    {row.agreedPrice === null
-                      ? "—"
-                      : MONEY.format(row.agreedPrice)}
-                  </dd>
-                </div>
-                <div className="border-border min-w-0 px-2">
-                  <dt className="text-fg-subtle text-[11px]">Na nota</dt>
-                  <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">
-                    {row.practicedPrice === null
-                      ? "—"
-                      : MONEY.format(row.practicedPrice)}
-                  </dd>
-                </div>
-                <div className="border-border min-w-0 px-2">
-                  <dt className="text-fg-subtle text-[11px]">Quantidade</dt>
-                  <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">
-                    {row.quantity === null
-                      ? "—"
-                      : row.quantity.toLocaleString("pt-BR")}
-                  </dd>
-                </div>
-              </dl>
+                <dl className="border-border mt-3 grid grid-cols-3 divide-x rounded-lg border py-2 text-center">
+                  <div className="min-w-0 px-2">
+                    <dt className="text-fg-subtle text-[11px]">Combinado</dt>
+                    <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">
+                      {row.type === "quantity"
+                        ? quantity(row.agreedQuantity, row.purchaseUnit)
+                        : row.agreedPrice === null
+                          ? "—"
+                          : MONEY.format(row.agreedPrice)}
+                    </dd>
+                  </div>
+                  <div className="border-border min-w-0 px-2">
+                    <dt className="text-fg-subtle text-[11px]">
+                      {row.type === "quantity" ? "Recebido" : "Na nota"}
+                    </dt>
+                    <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">
+                      {row.type === "quantity"
+                        ? quantity(row.receivedQuantity, row.purchaseUnit)
+                        : row.practicedPrice === null
+                          ? "—"
+                          : MONEY.format(row.practicedPrice)}
+                    </dd>
+                  </div>
+                  <div className="border-border min-w-0 px-2">
+                    <dt className="text-fg-subtle text-[11px]">
+                      {row.type === "quantity" ? "Excedente" : "Quantidade"}
+                    </dt>
+                    <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">
+                      {row.type === "quantity"
+                        ? quantity(quantityDifference, row.purchaseUnit)
+                        : quantity(row.pricingQuantity, row.pricingUnit)}
+                    </dd>
+                  </div>
+                </dl>
 
-              <div className="mt-3 flex flex-wrap items-start justify-between gap-2">
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild size="xs" variant="outline">
-                    <Link href={`/pedidos/${row.orderId}#divergencias-preco`}>
-                      <Scale aria-hidden /> Ver pedido
-                    </Link>
-                  </Button>
-                  {row.receiptId ? (
+                <div className="mt-3 flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button asChild size="xs" variant="outline">
-                      <Link href={`/recebimentos/${row.receiptId}`}>
-                        <ReceiptText aria-hidden /> Ver recebimento
+                      <Link href={`/pedidos/${row.orderId}#divergencias-preco`}>
+                        <Scale aria-hidden /> Ver pedido
                       </Link>
                     </Button>
+                    {row.receiptId ? (
+                      <Button asChild size="xs" variant="outline">
+                        <Link href={`/recebimentos/${row.receiptId}`}>
+                          <ReceiptText aria-hidden /> Ver recebimento
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
+                  {canManage ? (
+                    <ResolveDivergenceForm
+                      divergenceId={row.id}
+                      orderId={row.orderId}
+                      commercial
+                      financialImpact={row.financialImpact ?? 0}
+                      commercialStatus={row.status}
+                      commercialType={row.type}
+                    />
                   ) : null}
                 </div>
-                {canManage ? (
-                  <ResolveDivergenceForm
-                    divergenceId={row.id}
-                    orderId={row.orderId}
-                    commercial
-                    financialImpact={row.financialImpact}
-                    commercialStatus={row.status}
-                  />
-                ) : null}
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </>

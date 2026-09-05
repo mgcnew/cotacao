@@ -23,6 +23,7 @@ import {
   ORDER_DIVERGENCE_STATUS_LABEL,
   ORDER_DIVERGENCE_TYPE_LABEL,
   COMMERCIAL_DIVERGENCE_STATUS_LABEL,
+  COMMERCIAL_DIVERGENCE_TYPE_LABEL,
 } from "@/features/orders/divergences";
 import { buildOrderMessage } from "@/features/orders/message";
 import {
@@ -86,10 +87,17 @@ function formatarDia(iso: string): string {
   return DATA.format(new Date(ano, mes - 1, dia));
 }
 
-function priceFromJson(value: unknown): number | null {
+function numberFromJson(value: unknown, key: string): number | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const price = Number((value as Record<string, unknown>).price);
-  return Number.isFinite(price) ? price : null;
+  const raw = (value as Record<string, unknown>)[key];
+  const parsed = Number(raw);
+  return raw !== null && raw !== undefined && Number.isFinite(parsed)
+    ? parsed
+    : null;
+}
+
+function priceFromJson(value: unknown): number | null {
+  return numberFromJson(value, "price");
 }
 
 /** Situações em que o pedido já saiu daqui, mas ainda pode ser revisado. */
@@ -471,12 +479,13 @@ export async function PedidoContent({
       {divergences.length > 0 ? (
         <section id="divergencias-preco" className="mb-6 scroll-mt-20">
           <h2 className="text-fg mb-1 text-sm font-semibold">
-            Divergências de preço
+            Divergências do recebimento
           </h2>
           <p className="text-fg-muted mb-3 text-sm">
             Preço menor é ganho e será reconhecido automaticamente. Preço maior
             precisa ser aceito com motivo, contestado ou encerrado após a
-            correção.
+            correção. Quantidades acima do combinado também precisam de uma
+            decisão.
           </p>
           <ul className="flex flex-col gap-2">
             {divergences.map((d) => (
@@ -486,9 +495,8 @@ export async function PedidoContent({
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-fg font-medium">
-                    {d.type === "price"
-                      ? "Preço diferente do combinado"
-                      : d.type}
+                    {COMMERCIAL_DIVERGENCE_TYPE_LABEL[d.type] ??
+                      "Divergência no recebimento"}
                   </span>
                   <span className="flex flex-wrap items-center gap-3">
                     {d.financial_impact !== null ? (
@@ -513,6 +521,7 @@ export async function PedidoContent({
                         commercial
                         financialImpact={Number(d.financial_impact ?? 0)}
                         commercialStatus={d.status}
+                        commercialType={d.type}
                       />
                     ) : null}
                   </span>
@@ -521,6 +530,18 @@ export async function PedidoContent({
                   <p className="text-fg-muted text-xs tabular-nums">
                     Combinado {MONEY.format(priceFromJson(d.agreed_value) ?? 0)}{" "}
                     · nota {MONEY.format(priceFromJson(d.realized_value) ?? 0)}
+                  </p>
+                ) : d.type === "quantity" ? (
+                  <p className="text-fg-muted text-xs tabular-nums">
+                    Combinado{" "}
+                    {QTY.format(
+                      numberFromJson(d.agreed_value, "pending_quantity") ?? 0,
+                    )}{" "}
+                    · recebido{" "}
+                    {QTY.format(
+                      numberFromJson(d.realized_value, "received_quantity") ??
+                        0,
+                    )}
                   </p>
                 ) : null}
               </li>

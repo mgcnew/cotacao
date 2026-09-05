@@ -1202,7 +1202,7 @@ export async function resolveCommercialDivergence(
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!["accepted", "to_dispute", "resolved", "justified"].includes(status)) {
-    return { error: "Escolha o que fazer com a diferença de preço." };
+    return { error: "Escolha o que fazer com esta divergência." };
   }
 
   const supabase = await createServerSupabaseClient();
@@ -1228,7 +1228,10 @@ export async function resolveCommercialDivergence(
   }
   if (
     notes.length < 3 &&
-    (impact > 0 || status === "to_dispute" || status === "resolved")
+    (impact > 0 ||
+      (divergence.type === "quantity" && status === "accepted") ||
+      status === "to_dispute" ||
+      status === "resolved")
   ) {
     return {
       error:
