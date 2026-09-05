@@ -49,7 +49,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
        `dvh` e não `vh` por causa do celular: com a barra do navegador
        aparecendo e sumindo, `100vh` é maior que a tela visível e deixa uma
        faixa cortada embaixo. */
-    <div className="flex h-dvh overflow-hidden" data-slot="app-shell">
+    <div
+      className="flex h-dvh min-h-dvh max-h-dvh shrink-0 overflow-hidden"
+      data-slot="app-shell"
+    >
       <OperationalLiveUpdates companyId={activeCompany.companyId} />
       <AppSidebar
         companyName={activeCompany.companyName}

@@ -459,6 +459,20 @@ html:has([data-slot="landing-page"]) {
   scroll-padding-top: 5rem;
 }
 
+/* A área autenticada tem uma moldura fixa e somente o `app-main` deve rolar.
+   Travar também `html` e `body` evita que páginas muito longas transfiram a
+   rolagem para a janela (scroll chaining/ajustes de viewport do navegador) e
+   levem cabeçalho e menu junto. A regra é só de tela para não limitar a altura
+   dos relatórios impressos. */
+@media screen {
+  html:has([data-slot="app-shell"]),
+  body:has([data-slot="app-shell"]) {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
 /* ============================================================
    MOVIMENTO DO APP
 
@@ -472,6 +486,7 @@ html:has([data-slot="landing-page"]) {
    ============================================================ */
 [data-slot="app-main"] {
   scroll-behavior: smooth;
+  overscroll-behavior: contain;
   /* A rolagem continua disponível por roda, touch, teclado e recursos de
      acessibilidade, mas o trilho não aparece nem muda de largura ao abrir um
      modal. Firefox/Edge antigo usam propriedades próprias; Chromium e Safari
