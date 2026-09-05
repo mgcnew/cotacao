@@ -238,7 +238,7 @@ export function DateTimePicker({
                       : "text-fg hover:bg-surface-muted",
                     isToday && !chosen && "border-primary/45 text-primary",
                     chosen &&
-                      "bg-primary text-primary-foreground hover:bg-primary/85",
+                      "bg-primary-solid text-primary-solid-fg hover:bg-primary-solid/85",
                   )}
                 >
                   {day.getDate()}

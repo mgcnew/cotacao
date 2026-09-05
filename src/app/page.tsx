@@ -619,7 +619,7 @@ export default function HomePage() {
       <section className="mx-auto max-w-5xl px-4 py-20 sm:px-6 sm:py-28">
         <ScrollReveal>
           <div className="border-primary-line bg-primary-soft rounded-2xl border px-6 py-12 text-center sm:px-12">
-            <span className="bg-primary text-primary-fg mx-auto grid size-11 place-items-center rounded-xl">
+            <span className="bg-primary-solid text-primary-solid-fg mx-auto grid size-11 place-items-center rounded-xl">
               <History className="size-5" aria-hidden />
             </span>
             <h2 className="text-fg mx-auto mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">

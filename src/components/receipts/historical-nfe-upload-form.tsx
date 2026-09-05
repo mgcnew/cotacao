@@ -123,7 +123,7 @@ export function HistoricalNfeUploadForm() {
           multiple
           disabled={isPending}
           onChange={(event) => addFiles(event.currentTarget.files)}
-          className="border-input bg-background text-fg file:bg-primary file:text-primary-fg h-10 w-full min-w-0 rounded-lg border px-2 py-1 text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-xs file:font-medium"
+          className="border-input bg-background text-fg file:bg-primary-solid file:text-primary-solid-fg h-10 w-full min-w-0 rounded-lg border px-2 py-1 text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-xs file:font-medium"
         />
       </label>
 

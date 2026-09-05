@@ -150,7 +150,7 @@ export function FilterBar({
             <Button type="button" variant="outline">
               <Filter aria-hidden /> Filtros
               {active.length ? (
-                <span className="bg-primary text-primary-fg ml-1 grid min-w-5 place-items-center rounded-full px-1.5 text-[11px] leading-5">
+                <span className="bg-primary-solid text-primary-solid-fg ml-1 grid min-w-5 place-items-center rounded-full px-1.5 text-[11px] leading-5">
                   {active.length}
                 </span>
               ) : null}

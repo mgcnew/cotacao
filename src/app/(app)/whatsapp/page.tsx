@@ -226,7 +226,7 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
             </form>
             <div className="flex max-w-full gap-1 overflow-x-auto pb-0.5 text-xs">
               {[["open", "Abertas"], ["unread", "Não lidas"], ["waiting_supplier", "Fornecedor"], ["waiting_buyer", "Comprador"], ["promotions", "Promoções"]].map(([value, label]) => (
-                <Link key={value} href={inboxHref(recorte, { filtro: value })} className={cn("rounded-full px-2.5 py-1 whitespace-nowrap", filter === value ? "bg-primary text-primary-fg" : "bg-surface-muted text-fg-muted hover:text-fg")}>{label}</Link>
+                <Link key={value} href={inboxHref(recorte, { filtro: value })} className={cn("rounded-full px-2.5 py-1 whitespace-nowrap", filter === value ? "bg-primary-solid text-primary-solid-fg" : "bg-surface-muted text-fg-muted hover:text-fg")}>{label}</Link>
               ))}
             </div>
             {canSend && contacts.length ? (
@@ -264,7 +264,7 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Sea
                   </span>
                   <span className="mt-0.5 flex min-w-0 items-start gap-2">
                     <span className="text-fg-muted line-clamp-2 min-w-0 flex-1 wrap-anywhere text-xs">{conversation.last_message_preview ?? "Conversa iniciada"}</span>
-                    {conversation.unread_count ? <span className="bg-primary text-primary-fg grid min-w-5 place-items-center rounded-full px-1.5 text-[11px] leading-5 font-semibold">{conversation.unread_count}</span> : null}
+                    {conversation.unread_count ? <span className="bg-primary-solid text-primary-solid-fg grid min-w-5 place-items-center rounded-full px-1.5 text-[11px] leading-5 font-semibold">{conversation.unread_count}</span> : null}
                   </span>
                   <span className="text-fg-muted mt-1 block text-xs">{conversation.awaiting_side === "supplier" ? "Aguardando fornecedor" : conversation.awaiting_side === "buyer" ? "Aguardando comprador" : "Sem pendência"}</span>
                 </span>

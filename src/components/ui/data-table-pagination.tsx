@@ -116,7 +116,7 @@ export function DataTablePagination({
                 className={cn(
                   "grid size-7 place-items-center rounded-md text-xs font-medium transition-colors",
                   number === page
-                    ? "bg-primary text-primary-fg"
+                    ? "bg-primary-solid text-primary-solid-fg"
                     : "text-fg-muted hover:bg-surface-muted hover:text-fg",
                 )}
               >

@@ -633,7 +633,7 @@ export function HistoricalNfeReconciliationForm({
               onClick={() => setFilter(option.key)}
               className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
                 filter === option.key
-                  ? "bg-primary text-primary-fg"
+                  ? "bg-primary-solid text-primary-solid-fg"
                   : "bg-surface-muted text-fg-muted hover:text-fg"
               }`}
             >

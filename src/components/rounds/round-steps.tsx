@@ -103,7 +103,7 @@ export function RoundSteps({ passos }: { passos: PassoRodada[] }) {
                   passo.estado === "feito"
                     ? "bg-success text-surface"
                     : selecionado
-                      ? "bg-primary text-primary-fg"
+                      ? "bg-primary-solid text-primary-solid-fg"
                       : "bg-surface-muted text-fg-subtle",
                 )}
               >
