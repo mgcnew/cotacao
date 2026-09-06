@@ -1036,7 +1036,10 @@ export function NfeImportPanel({
 
   const matchedCount = value ? Object.keys(value.items).length : 0;
   return (
-    <section className="border-border bg-surface rounded-xl border p-4">
+    <section
+      id="xml-nfe"
+      className="border-border bg-surface scroll-mt-4 rounded-xl border p-4"
+    >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -1081,8 +1084,8 @@ export function NfeImportPanel({
       {!value && existingDocuments.length ? (
         <div className="bg-surface-sunken text-fg-muted mt-3 rounded-lg px-3 py-2 text-sm">
           <p>
-            Este recebimento já possui XML anexado. Para preencher novamente os
-            campos, selecione o mesmo arquivo.
+            Este recebimento já possui XML anexado. Retome a conciliação para
+            preencher os produtos sem selecionar o arquivo novamente.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <Button

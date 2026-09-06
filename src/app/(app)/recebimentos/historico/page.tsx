@@ -131,7 +131,9 @@ export default async function HistoricoFiscalPage({
                       >
                         {item.status === "posted"
                           ? "No histórico"
-                          : "Conciliar"}
+                          : item.status === "transferred"
+                            ? "Em recebimento"
+                            : "Conciliar"}
                       </Badge>
                     </TableCell>
                   </TableRow>

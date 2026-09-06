@@ -163,6 +163,36 @@ export async function getHistoricalNfeImport(
     .createSignedUrl(history.data.storage_path, 600, {
       download: history.data.file_name,
     });
+  const eligibleReceipts =
+    history.data.status === "posted" && history.data.supplier_id
+      ? await supabase
+          .from("receipts")
+          .select(
+            "id, received_at, orders!inner ( id, order_number, supplier_id )",
+          )
+          .eq("company_id", companyId)
+          .eq("status", "draft")
+          .eq("orders.supplier_id", history.data.supplier_id)
+          .order("received_at", { ascending: false })
+      : { data: [], error: null };
+  if (eligibleReceipts.error) {
+    throw new Error(
+      `Falha ao procurar recebimentos compatíveis: ${eligibleReceipts.error.message}`,
+    );
+  }
+  const transferredReceipt = history.data.transferred_receipt_id
+    ? await supabase
+        .from("receipts")
+        .select("id, status, orders!inner ( id, order_number )")
+        .eq("company_id", companyId)
+        .eq("id", history.data.transferred_receipt_id)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (transferredReceipt.error) {
+    throw new Error(
+      `Falha ao localizar o recebimento vinculado: ${transferredReceipt.error.message}`,
+    );
+  }
   return {
     history: {
       ...history.data,
@@ -204,6 +234,24 @@ export async function getHistoricalNfeImport(
         factor: rule.factor === null ? null : Number(rule.factor),
       })),
     })),
+    eligibleReceipts: (eligibleReceipts.data ?? []).map((receipt) => ({
+      id: receipt.id,
+      name: `Pedido #${receipt.orders.order_number}`,
+      description: receipt.received_at
+        ? `Chegada registrada em ${new Intl.DateTimeFormat("pt-BR", {
+            dateStyle: "short",
+            timeStyle: "short",
+          }).format(new Date(receipt.received_at))}`
+        : "Aguardando conferência",
+    })),
+    transferredReceipt: transferredReceipt.data
+      ? {
+          id: transferredReceipt.data.id,
+          status: transferredReceipt.data.status,
+          orderId: transferredReceipt.data.orders.id,
+          orderNumber: transferredReceipt.data.orders.order_number,
+        }
+      : null,
     downloadUrl: signed.data?.signedUrl ?? null,
   };
 }

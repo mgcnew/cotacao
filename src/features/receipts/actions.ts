@@ -225,8 +225,7 @@ export async function uploadReceiptNfe(
     knownIssuer.data.supplier_id !== receiptResult.data.orders.supplier_id
   ) {
     return {
-      error:
-        `O CNPJ desta NF-e já está vinculado ao fornecedor comercial "${knownIssuer.data.suppliers.name}".`,
+      error: `O CNPJ desta NF-e já está vinculado ao fornecedor comercial "${knownIssuer.data.suppliers.name}".`,
     };
   }
 
@@ -253,9 +252,7 @@ export async function uploadReceiptNfe(
         issuer_name: issuerName,
         recipient_document: recipientDocument,
         recipient_name: recipientName,
-        invoice_number: identification
-          ? xmlValue(identification, "nNF")
-          : null,
+        invoice_number: identification ? xmlValue(identification, "nNF") : null,
         invoice_series: identification
           ? xmlValue(identification, "serie")
           : null,
@@ -331,15 +328,11 @@ export async function uploadReceiptNfe(
       issuer_name: issuerName,
       recipient_document: recipientDocument,
       recipient_name: recipientName,
-      invoice_number: identification
-        ? xmlValue(identification, "nNF")
-        : null,
-      invoice_series: identification
-        ? xmlValue(identification, "serie")
-        : null,
+      invoice_number: identification ? xmlValue(identification, "nNF") : null,
+      invoice_series: identification ? xmlValue(identification, "serie") : null,
       issued_at: identification
         ? (xmlValue(identification, "dhEmi") ??
-            xmlValue(identification, "dEmi"))
+          xmlValue(identification, "dEmi"))
         : null,
       invoice_total: fiscalTotals.invoice,
       fiscal_totals: fiscalTotals,
@@ -393,7 +386,7 @@ export async function deleteReceiptNfe(
   const supabase = await createServerSupabaseClient();
   const document = await supabase
     .from("receipt_documents")
-    .select("id, storage_path")
+    .select("id, storage_path, storage_bucket, historical_import_id")
     .eq("company_id", company.companyId)
     .eq("receipt_id", receiptId)
     .eq("kind", "nfe_xml")
@@ -406,8 +399,28 @@ export async function deleteReceiptNfe(
   }
   if (!document.data) return { error: null, saved: false, accessKey };
 
+  if (document.data.historical_import_id) {
+    const restored = await supabase.rpc(
+      "rpc_restore_transferred_historical_nfe",
+      {
+        p_company_id: company.companyId,
+        p_receipt_id: receiptId,
+        p_access_key: accessKey,
+      },
+    );
+    if (restored.error) {
+      return {
+        error:
+          "Não foi possível devolver a NF-e ao histórico: " +
+          restored.error.message,
+      };
+    }
+    revalidatePath("/recebimentos/historico");
+    return { error: null, saved: false, accessKey };
+  }
+
   const storage = await supabase.storage
-    .from("receipt-documents")
+    .from(document.data.storage_bucket)
     .remove([document.data.storage_path]);
   if (storage.error) {
     return {

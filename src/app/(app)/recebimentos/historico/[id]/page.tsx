@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { HistoricalNfeReconciliationForm } from "@/components/receipts/historical-nfe-reconciliation-form";
+import { HistoricalNfeTransferForm } from "@/components/receipts/historical-nfe-transfer-form";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,7 +68,11 @@ export default async function ConciliacaoNfeHistoricaPage({
         <div>
           <p className="text-fg-subtle text-xs">Situação</p>
           <Badge variant={history.status === "posted" ? "default" : "outline"}>
-            {history.status === "posted" ? "No histórico" : "A conciliar"}
+            {history.status === "posted"
+              ? "No histórico"
+              : history.status === "transferred"
+                ? "Em recebimento"
+                : "A conciliar"}
           </Badge>
         </div>
       </section>
@@ -79,6 +84,54 @@ export default async function ConciliacaoNfeHistoricaPage({
             Os produtos e preços desta nota já aparecem no histórico do
             fornecedor e dos produtos associados.
           </p>
+          {permissions.has("receipt.post") ? (
+            <div className="border-border mt-5 border-t pt-5">
+              <h3 className="text-fg text-sm font-medium">
+                Esta NF-e pertence a um pedido do sistema?
+              </h3>
+              <p className="text-fg-muted mt-1 text-xs">
+                Transfira para o recebimento para conferir o pedido sem contar a
+                mesma compra duas vezes.
+              </p>
+              {data.eligibleReceipts.length ? (
+                <HistoricalNfeTransferForm
+                  importId={history.id}
+                  receipts={data.eligibleReceipts}
+                />
+              ) : (
+                <div className="bg-surface-sunken mt-3 rounded-lg p-3">
+                  <p className="text-fg-muted text-xs">
+                    Não há chegada aguardando conferência para este fornecedor.
+                    Primeiro registre a chegada do pedido e volte a esta nota.
+                  </p>
+                  <Button asChild size="sm" variant="outline" className="mt-3">
+                    <Link href="/recebimentos">Ir para recebimentos</Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : history.status === "transferred" ? (
+        <div className="border-border bg-surface rounded-xl border p-4 sm:p-5">
+          <h2 className="text-fg font-semibold">
+            NF-e transferida para recebimento
+          </h2>
+          <p className="text-fg-muted mt-1 text-sm">
+            Esta nota não é mais contada separadamente no histórico. Os valores
+            serão efetivados pela conferência
+            {data.transferredReceipt
+              ? ` do pedido #${data.transferredReceipt.orderNumber}`
+              : " do pedido vinculado"}
+            .
+          </p>
+          {data.transferredReceipt ? (
+            <Button asChild size="sm" className="mt-4">
+              <Link href={`/recebimentos/${data.transferredReceipt.id}`}>
+                Abrir conferência
+              </Link>
+            </Button>
+          ) : null}
         </div>
       ) : permissions.has("receipt.post") ? (
         <HistoricalNfeReconciliationForm

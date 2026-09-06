@@ -23,6 +23,8 @@ export type HistoricalNfeActionState = {
   error: string | null;
 };
 
+export type HistoricalNfeTransferState = HistoricalNfeActionState;
+
 export type HistoricalNfeUploadResult = HistoricalNfeActionState & {
   importId: string | null;
 };
@@ -551,4 +553,45 @@ export async function postHistoricalNfe(
   revalidatePath("/produtos", "layout");
   revalidatePath("/fornecedores", "layout");
   redirect("/recebimentos/historico");
+}
+
+export async function transferHistoricalNfeToReceipt(
+  importId: string,
+  _previous: HistoricalNfeTransferState,
+  formData: FormData,
+): Promise<HistoricalNfeTransferState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.post")) {
+    return { error: "Seu papel não permite transferir esta NF-e." };
+  }
+
+  const receiptId = String(formData.get("receiptId") ?? "");
+  if (!receiptId) {
+    return { error: "Escolha o recebimento correspondente." };
+  }
+  if (formData.get("confirmTransfer") !== "on") {
+    return { error: "Confirme que esta NF-e pertence ao pedido escolhido." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc(
+    "rpc_transfer_historical_nfe_to_receipt",
+    {
+      p_company_id: company.companyId,
+      p_import_id: importId,
+      p_receipt_id: receiptId,
+    },
+  );
+  if (error) {
+    return {
+      error: `Não foi possível transferir a NF-e: ${error.message}`,
+    };
+  }
+
+  revalidatePath("/recebimentos/historico");
+  revalidatePath(`/recebimentos/historico/${importId}`);
+  revalidatePath("/recebimentos");
+  revalidatePath(`/recebimentos/${receiptId}`);
+  redirect(`/recebimentos/${receiptId}#xml-nfe`);
 }

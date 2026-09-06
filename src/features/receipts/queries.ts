@@ -145,7 +145,7 @@ export async function getReceiptConference(
       id, order_id, status, received_at, invoice_number, invoice_series,
       invoice_total, nfe_totals, notes, checked_at,
       receipt_documents (
-        id, file_name, access_key, storage_path, created_at,
+        id, file_name, access_key, storage_path, storage_bucket, created_at,
         issuer_document, issuer_name, invoice_number, invoice_series,
         invoice_total, supplier_legal_entity_id,
         supplier_legal_entities ( legal_name, document_number )
@@ -162,7 +162,7 @@ export async function getReceiptConference(
   const documents = await Promise.all(
     (receipt.receipt_documents ?? []).map(async (document) => {
       const signed = await supabase.storage
-        .from("receipt-documents")
+        .from(document.storage_bucket)
         .createSignedUrl(document.storage_path, 600, {
           download: document.file_name,
         });
