@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { requireActiveCompany } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { roundMoney } from "@/lib/money";
 
 export type NegotiationState = { error: string | null; savedAt?: number };
 
@@ -15,7 +16,9 @@ const schema = z.object({
     .string()
     .trim()
     .min(1, { error: "Informe o novo preço" })
-    .transform((v) => Number(v.replace(/\./g, "").replace(",", ".")))
+    .transform((v) =>
+      roundMoney(Number(v.replace(/\./g, "").replace(",", "."))),
+    )
     .refine((v) => Number.isFinite(v) && v >= 0, {
       error: "Preço inválido",
     }),

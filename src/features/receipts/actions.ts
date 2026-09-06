@@ -9,6 +9,7 @@ import {
   requireUser,
 } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { roundedMoneyString, roundMoney } from "@/lib/money";
 
 export type ReceiptActionState = {
   error: string | null;
@@ -260,7 +261,7 @@ export async function uploadReceiptNfe(
           ? (xmlValue(identification, "dhEmi") ??
             xmlValue(identification, "dEmi"))
           : null,
-        invoice_total: fiscalTotals.invoice,
+        invoice_total: roundMoney(fiscalTotals.invoice),
         fiscal_totals: fiscalTotals,
       })
       .eq("company_id", company.companyId)
@@ -334,7 +335,7 @@ export async function uploadReceiptNfe(
         ? (xmlValue(identification, "dhEmi") ??
           xmlValue(identification, "dEmi"))
         : null,
-      invoice_total: fiscalTotals.invoice,
+      invoice_total: roundMoney(fiscalTotals.invoice),
       fiscal_totals: fiscalTotals,
     });
   if (metadataError && !/duplicate/i.test(metadataError.message)) {
@@ -607,6 +608,11 @@ function decimal(value: FormDataEntryValue | null): string {
     .replace(",", ".");
 }
 
+function moneyDecimal(value: FormDataEntryValue | null): string {
+  const normalized = decimal(value);
+  return normalized ? roundedMoneyString(normalized) : "";
+}
+
 export async function registerOrderArrival(
   _previous: ReceiptActionState,
   formData: FormData,
@@ -623,7 +629,7 @@ export async function registerOrderArrival(
   if (parsedReceivedAt && Number.isNaN(parsedReceivedAt.getTime())) {
     return { error: "Data e hora de chegada inválidas." };
   }
-  const invoiceTotal = decimal(formData.get("invoiceTotal"));
+  const invoiceTotal = moneyDecimal(formData.get("invoiceTotal"));
   if (
     invoiceTotal &&
     (!Number.isFinite(Number(invoiceTotal)) || Number(invoiceTotal) < 0)
@@ -708,7 +714,7 @@ export async function postDraftReceipt(
     const pricing = sameUnitIds.has(id)
       ? logistic
       : decimal(formData.get(`prec_${id}`));
-    const price = decimal(formData.get(`preco_${id}`));
+    const price = moneyDecimal(formData.get(`preco_${id}`));
     const name = String(formData.get(`nome_${id}`) ?? "este item");
     if (
       formData.get(`manual_required_${id}`) === "1" &&
@@ -747,7 +753,7 @@ export async function postDraftReceipt(
     return { error: "Informe ao menos um produto recebido." };
   }
 
-  const invoiceTotal = decimal(formData.get("invoiceTotal"));
+  const invoiceTotal = moneyDecimal(formData.get("invoiceTotal"));
   if (
     invoiceTotal &&
     (!Number.isFinite(Number(invoiceTotal)) || Number(invoiceTotal) < 0)

@@ -21,6 +21,7 @@ import { getWhatsAppConnection } from "@/features/whatsapp/queries";
 import { getCompanyWhatsAppTemplates } from "@/features/whatsapp/templates";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import { roundedMoneyString } from "@/lib/money";
 
 export type OrderActionState = {
   error: string | null;
@@ -42,6 +43,11 @@ function toDecimal(raw: unknown): string {
     .trim()
     .replace(/\./g, "")
     .replace(",", ".");
+}
+
+function toMoneyDecimal(raw: unknown): string {
+  const value = toDecimal(raw);
+  return value ? roundedMoneyString(value) : "";
 }
 
 type ItemRow = {
@@ -96,7 +102,7 @@ function readItemRows(formData: FormData): ItemRow[] {
         allocationId: (allocationIds[index] ?? "").trim(),
         shoppingItemId: (shoppingItemIds[index] ?? "").trim(),
         quantity: toDecimal(quantities[index]),
-        price: toDecimal(prices[index]),
+        price: toMoneyDecimal(prices[index]),
         notes: (notes[index] ?? "").trim(),
       }))
       // Linha em branco é linha que a pessoa abriu e não usou.
@@ -1084,7 +1090,7 @@ export async function postReceipt(
   for (const id of itemIds) {
     const logistic = toDecimal(formData.get(`log_${id}`));
     const pricing = toDecimal(formData.get(`prec_${id}`));
-    const price = toDecimal(formData.get(`preco_${id}`));
+    const price = toMoneyDecimal(formData.get(`preco_${id}`));
     const nome = String(formData.get(`nome_${id}`) ?? "este item");
 
     // Item não recebido nesta remessa: some do payload em vez de ir zerado.

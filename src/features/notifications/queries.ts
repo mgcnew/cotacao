@@ -1,6 +1,14 @@
 import "server-only";
 
+import { roundMoney, sameMoney } from "@/lib/money";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+const MONEY = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 /**
  * Notificações do usuário.
@@ -44,6 +52,21 @@ function divergenceMessage(metadata: Record<string, unknown>) {
   return `${count} ${count === 1 ? "ponto precisa" : "pontos precisam"} ser conferido${count === 1 ? "" : "s"} antes da entrega.`;
 }
 
+function isCentEquivalentPriceNotification(notification: {
+  type: string;
+  metadata: unknown;
+}) {
+  if (notification.type !== "commercial_divergence.detected") return false;
+  const metadata = metadataRecord(notification.metadata);
+  const agreed = Number(metadata.agreed_price);
+  const practiced = Number(metadata.practiced_price);
+  return (
+    Number.isFinite(agreed) &&
+    Number.isFinite(practiced) &&
+    sameMoney(agreed, practiced)
+  );
+}
+
 export async function listNotifications(
   companyId: string,
   limit = 20,
@@ -62,7 +85,11 @@ export async function listNotifications(
   if (error)
     throw new Error(`Falha ao carregar notificações: ${error.message}`);
 
-  const notifications = data ?? [];
+  // Proteção também no leitor: notificações antigas geradas apenas por casas
+  // além dos centavos não voltam a aparecer, mesmo antes da regularização SQL.
+  const notifications = (data ?? []).filter(
+    (notification) => !isCentEquivalentPriceNotification(notification),
+  );
   const roundSupplierIds = notifications
     .filter(
       (notification) =>
@@ -158,7 +185,7 @@ export async function listNotifications(
         title = favorable
           ? "Ganho identificado no recebimento"
           : "Preço da nota maior que o combinado";
-        message = `Preço combinado: ${String(metadata.agreed_price ?? "não informado")}. Preço na nota: ${String(metadata.practiced_price ?? "não informado")}.`;
+        message = `Preço combinado: ${Number.isFinite(agreed) ? MONEY.format(roundMoney(agreed)) : "não informado"}. Preço na nota: ${Number.isFinite(practiced) ? MONEY.format(roundMoney(practiced)) : "não informado"}.`;
         if (favorable) priority = "normal";
         if (actionUrl?.startsWith("/pedidos/")) {
           actionUrl = `${actionUrl}#divergencias-preco`;

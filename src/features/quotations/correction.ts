@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { requireActiveCompany } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { roundMoney } from "@/lib/money";
 
 export type CorrectionState = { error: string | null; savedAt?: number };
 
@@ -86,7 +87,9 @@ export async function correctResponseItem(
 
   let price: number | undefined;
   if (fornece && parsed.data.price) {
-    price = Number(parsed.data.price.replace(/\./g, "").replace(",", "."));
+    price = roundMoney(
+      Number(parsed.data.price.replace(/\./g, "").replace(",", ".")),
+    );
     if (!Number.isFinite(price) || price < 0) {
       return { error: "Preço inválido." };
     }
@@ -103,18 +106,20 @@ export async function correctResponseItem(
   }
 
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc("rpc_correct_quotation_item_with_conversion", {
-    p_company_id: company.companyId,
-    p_quotation_response_item_id: parsed.data.responseItemId,
-    p_quoted_price: price,
-    p_is_available: fornece,
-    p_does_not_supply: !fornece,
-    p_notes: parsed.data.notes,
-    p_reason: parsed.data.reason,
-    p_conversion_attribute_definition_id:
-      parsed.data.conversionDefinitionId,
-    p_conversion_factor: conversionFactor,
-  });
+  const { error } = await supabase.rpc(
+    "rpc_correct_quotation_item_with_conversion",
+    {
+      p_company_id: company.companyId,
+      p_quotation_response_item_id: parsed.data.responseItemId,
+      p_quoted_price: price,
+      p_is_available: fornece,
+      p_does_not_supply: !fornece,
+      p_notes: parsed.data.notes,
+      p_reason: parsed.data.reason,
+      p_conversion_attribute_definition_id: parsed.data.conversionDefinitionId,
+      p_conversion_factor: conversionFactor,
+    },
+  );
 
   if (error) {
     if (error.message.includes("Permissão")) {
@@ -161,7 +166,7 @@ export async function recordManualQuotationItem(
 
   // "12,50" é como se digita preço em português.
   const preco = precoBruto
-    ? Number(precoBruto.replace(/\./g, "").replace(",", "."))
+    ? roundMoney(Number(precoBruto.replace(/\./g, "").replace(",", ".")))
     : null;
 
   if (!doesNotSupply && (preco === null || !Number.isFinite(preco))) {
@@ -179,18 +184,20 @@ export async function recordManualQuotationItem(
   }
 
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc("rpc_record_manual_quotation_item_with_conversion", {
-    p_company_id: company.companyId,
-    p_supplier_quotation_item_id: supplierQuotationItemId,
-    p_quoted_price: doesNotSupply ? undefined : (preco ?? undefined),
-    p_does_not_supply: doesNotSupply,
-    p_notes: String(formData.get("notes") ?? "").trim() || undefined,
-    p_conversion_attribute_definition_id:
-      conversionDefinitionId || undefined,
-    p_conversion_factor: doesNotSupply
-      ? undefined
-      : (conversionFactor ?? undefined),
-  });
+  const { error } = await supabase.rpc(
+    "rpc_record_manual_quotation_item_with_conversion",
+    {
+      p_company_id: company.companyId,
+      p_supplier_quotation_item_id: supplierQuotationItemId,
+      p_quoted_price: doesNotSupply ? undefined : (preco ?? undefined),
+      p_does_not_supply: doesNotSupply,
+      p_notes: String(formData.get("notes") ?? "").trim() || undefined,
+      p_conversion_attribute_definition_id: conversionDefinitionId || undefined,
+      p_conversion_factor: doesNotSupply
+        ? undefined
+        : (conversionFactor ?? undefined),
+    },
+  );
 
   if (error) {
     if (error.message.includes("Permissão")) {
@@ -200,7 +207,9 @@ export async function recordManualQuotationItem(
       return { error: "Este item já tem resposta — use a correção." };
     }
     if (error.message.includes("em andamento")) {
-      return { error: "A rodada precisa estar em andamento para lançar preço." };
+      return {
+        error: "A rodada precisa estar em andamento para lançar preço.",
+      };
     }
     return { error: `Não foi possível lançar: ${error.message}` };
   }

@@ -15,6 +15,7 @@ import {
 } from "@/features/receipts/nfe";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { roundMoney } from "@/lib/money";
 import type { Json } from "@/types/database";
 
 const XML_MAX_SIZE = 4 * 1024 * 1024;
@@ -59,7 +60,7 @@ function suggestedPricing(
     if (quantity !== null && quantity > 0) {
       return {
         quantity,
-        price: item.netProductTotal / quantity,
+        price: roundMoney(item.netProductTotal / quantity),
       };
     }
   }
@@ -80,7 +81,7 @@ function suggestedPricing(
         : item.tributaryQuantity;
     const quantity = sourceQuantity * Number(fixedRule.factor);
     if (quantity > 0) {
-      return { quantity, price: item.netProductTotal / quantity };
+      return { quantity, price: roundMoney(item.netProductTotal / quantity) };
     }
   }
   return { quantity: null, price: null };
@@ -354,7 +355,8 @@ export async function uploadHistoricalNfe(
       item_other: item.itemOther,
       net_product_total: item.netProductTotal,
       pricing_quantity: pricing.quantity,
-      practiced_price: pricing.price,
+      practiced_price:
+        pricing.price === null ? null : roundMoney(pricing.price),
       match_method: match?.method ?? null,
       match_confidence: match?.confidence ?? null,
     };
@@ -377,7 +379,7 @@ export async function uploadHistoricalNfe(
     p_issuer_name: nfe.issuer.name,
     p_recipient_document: nfe.recipient.document,
     p_recipient_name: nfe.recipient.name,
-    p_invoice_total: nfe.total,
+    p_invoice_total: roundMoney(nfe.total),
     p_fiscal_totals: nfe.fiscalTotals as unknown as Json,
     p_file_name: safeFileName,
     p_storage_path: storagePath,
@@ -492,7 +494,7 @@ export async function postHistoricalNfe(
       ignored: false,
       product_id: productId,
       pricing_quantity: quantity,
-      practiced_price: price,
+      practiced_price: roundMoney(price),
       notes: notes || null,
     });
 

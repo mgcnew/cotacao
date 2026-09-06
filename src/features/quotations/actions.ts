@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { roundedMoneyString } from "@/lib/money";
 
 export type SubmitQuotationState = {
   error: string | null;
@@ -79,7 +80,10 @@ export async function submitQuotation(
       };
     }
 
-    const price = rawPrice ? toNumericString(rawPrice) : undefined;
+    const normalizedPrice = rawPrice ? toNumericString(rawPrice) : undefined;
+    const price = normalizedPrice
+      ? roundedMoneyString(normalizedPrice)
+      : undefined;
     if (
       price !== undefined &&
       (!Number.isFinite(Number(price)) || Number(price) <= 0)
@@ -130,10 +134,13 @@ export async function submitQuotation(
   }
 
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc("rpc_public_submit_quotation_validated", {
-    p_token: token,
-    p_items: items,
-  });
+  const { error } = await supabase.rpc(
+    "rpc_public_submit_quotation_validated",
+    {
+      p_token: token,
+      p_items: items,
+    },
+  );
 
   if (error) {
     if (error.message.includes("já foi respondido")) {

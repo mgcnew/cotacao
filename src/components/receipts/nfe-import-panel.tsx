@@ -40,6 +40,7 @@ import {
   preferredFixedConversionEntry,
   type FixedConversionEntry,
 } from "@/features/receipts/unit-conversion";
+import { roundMoney, sameMoney } from "@/lib/money";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -329,19 +330,21 @@ export function importedItemValues(
     0,
   );
   let practicedPrice =
-    pricingQuantity && pricingQuantity > 0 ? itemTotal / pricingQuantity : null;
+    pricingQuantity && pricingQuantity > 0
+      ? roundMoney(itemTotal / pricingQuantity)
+      : null;
   if (practicedPrice === null) {
     const prices = xmlItems.map((xmlItem) =>
       nfePriceForUnit(xmlItem, orderItem.pricingUnit),
     );
     if (prices.every((price): price is number => price !== null)) {
-      practicedPrice = prices[0] ?? null;
+      practicedPrice = prices[0] === undefined ? null : roundMoney(prices[0]);
     }
   }
 
   if (practicedPrice === null) {
     warnings.push("Confira manualmente o preço por unidade de precificação.");
-  } else if (Math.abs(practicedPrice - orderItem.agreedPrice) > 0.005) {
+  } else if (!sameMoney(practicedPrice, orderItem.agreedPrice)) {
     warnings.push(
       "Preço da nota " +
         MONEY.format(practicedPrice) +

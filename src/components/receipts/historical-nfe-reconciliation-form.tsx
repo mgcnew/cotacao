@@ -30,6 +30,7 @@ import {
   preferredFixedConversionEntry,
   type FixedConversionEntry,
 } from "@/features/receipts/unit-conversion";
+import { roundMoney } from "@/lib/money";
 
 type Supplier = {
   id: string;
@@ -160,7 +161,10 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
       );
       return {
         quantity: quantity > 0 ? String(quantity) : "",
-        price: quantity > 0 ? String(item.netProductTotal / quantity) : "",
+        price:
+          quantity > 0
+            ? String(roundMoney(item.netProductTotal / quantity))
+            : "",
         conversion: {
           sourceUnit,
           mode: variable
@@ -210,7 +214,7 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
         quantity: quantity && quantity > 0 ? String(quantity) : "",
         price:
           quantity && quantity > 0
-            ? String(item.netProductTotal / quantity)
+            ? String(roundMoney(item.netProductTotal / quantity))
             : "",
         conversion: {
           sourceUnit: currentSourceUnit ?? rule.xmlUnit,
@@ -235,7 +239,9 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
   return {
     quantity: quantity && quantity > 0 ? String(quantity) : "",
     price:
-      quantity && quantity > 0 ? String(item.netProductTotal / quantity) : "",
+      quantity && quantity > 0
+        ? String(roundMoney(item.netProductTotal / quantity))
+        : "",
     conversion:
       quantity === null
         ? {
@@ -591,11 +597,11 @@ export function HistoricalNfeReconciliationForm({
           price:
             mode === "manual_quantity"
               ? quantityFromXml && quantityFromXml > 0
-                ? String(item.netProductTotal / quantityFromXml)
+                ? String(roundMoney(item.netProductTotal / quantityFromXml))
                 : ""
               : converted === null
                 ? ""
-                : String(item.netProductTotal / converted),
+                : String(roundMoney(item.netProductTotal / converted)),
           // Escolher "varia em cada nota" já é a resposta inteira; digitar um
           // fator ainda não é, então esse continua aberto até sair do campo.
           conversionOpen:

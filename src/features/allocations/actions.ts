@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getAllocationBoard } from "@/features/allocations/queries";
 import { carregarRodadaBasica } from "@/features/rounds/central";
 import { requireActiveCompany, requireUser } from "@/lib/auth/dal";
+import { roundMoney } from "@/lib/money";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type AllocationState = { error: string | null; savedAt?: number };
@@ -112,7 +113,10 @@ export async function allocateItem(
   if (priceError) {
     return { error: `Falha ao carregar o preço: ${priceError.message}` };
   }
-  if (priceRow?.current_price === null || priceRow?.current_price === undefined) {
+  if (
+    priceRow?.current_price === null ||
+    priceRow?.current_price === undefined
+  ) {
     return { error: "Esta resposta não tem preço para alocar." };
   }
 
@@ -129,7 +133,7 @@ export async function allocateItem(
 
   const payload = {
     allocated_quantity: parsed.data.quantity,
-    selected_price: Number(priceRow.current_price),
+    selected_price: roundMoney(Number(priceRow.current_price)),
     decision_reason: parsed.data.reason,
   };
 
@@ -166,7 +170,10 @@ export async function allocateItem(
       });
 
   if (error) {
-    if (error.code === "42501" || error.message.includes("row-level security")) {
+    if (
+      error.code === "42501" ||
+      error.message.includes("row-level security")
+    ) {
       return { error: "Seu papel não permite decidir a compra." };
     }
     return { error: `Não foi possível alocar: ${error.message}` };
@@ -189,7 +196,9 @@ export async function allocateBestPrices(
 ): Promise<RecommendationState> {
   const company = await requireActiveCompany();
   const user = await requireUser();
-  const parsed = z.uuid({ error: "Rodada inválida" }).safeParse(formData.get("roundId"));
+  const parsed = z
+    .uuid({ error: "Rodada inválida" })
+    .safeParse(formData.get("roundId"));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const roundId = parsed.data;
@@ -198,7 +207,9 @@ export async function allocateBestPrices(
     getAllocationBoard(company.companyId, roundId),
   ]);
   if (!round || round.status !== "active") {
-    return { error: "A rodada precisa estar em andamento para aplicar a sugestão." };
+    return {
+      error: "A rodada precisa estar em andamento para aplicar a sugestão.",
+    };
   }
 
   const supabase = await createServerSupabaseClient();
@@ -213,24 +224,34 @@ export async function allocateBestPrices(
         .in("id", itemIds)
     : { data: [], error: null };
 
-  if (openError) return { error: `Falha ao conferir os itens: ${openError.message}` };
+  if (openError)
+    return { error: `Falha ao conferir os itens: ${openError.message}` };
   const openIds = new Set((openItems ?? []).map((item) => item.id));
 
   const rows = board.rows.flatMap((row) => {
-    if (!openIds.has(row.itemId) || (board.allocationsByItem.get(row.itemId)?.length ?? 0) > 0) return [];
+    if (
+      !openIds.has(row.itemId) ||
+      (board.allocationsByItem.get(row.itemId)?.length ?? 0) > 0
+    )
+      return [];
 
     const candidatesWithNormalization = board.suppliers
       .filter((supplier) => supplier.removed_at === null)
       .flatMap((supplier) => {
         const cell = row.cells.get(supplier.id);
-        return cell && !cell.doesNotSupply && cell.responseItemId && cell.currentPrice !== null
-          ? [{
-              supplierId: supplier.supplier_id,
-              responseItemId: cell.responseItemId,
-              price: cell.currentPrice,
-              normalizedPrice: cell.normalizedPrice,
-              name: supplier.suppliers.name,
-            }]
+        return cell &&
+          !cell.doesNotSupply &&
+          cell.responseItemId &&
+          cell.currentPrice !== null
+          ? [
+              {
+                supplierId: supplier.supplier_id,
+                responseItemId: cell.responseItemId,
+                price: cell.currentPrice,
+                normalizedPrice: cell.normalizedPrice,
+                name: supplier.suppliers.name,
+              },
+            ]
           : [];
       });
     const useNormalized =
@@ -254,20 +275,22 @@ export async function allocateBestPrices(
 
     const best = candidates[0];
     if (!best) return [];
-    return [{
-      company_id: company.companyId,
-      purchase_round_id: roundId,
-      quotation_item_id: row.itemId,
-      supplier_id: best.supplierId,
-      quotation_response_item_id: best.responseItemId,
-      allocated_quantity: row.requestedQuantity,
-      selected_price: best.price,
-      benchmark_price_at_decision: best.price,
-      decision_reason: useNormalized
-        ? "Sugestão automática: menor preço na unidade de comparação"
-        : "Sugestão automática: menor preço vigente",
-      allocated_by: user.id,
-    }];
+    return [
+      {
+        company_id: company.companyId,
+        purchase_round_id: roundId,
+        quotation_item_id: row.itemId,
+        supplier_id: best.supplierId,
+        quotation_response_item_id: best.responseItemId,
+        allocated_quantity: row.requestedQuantity,
+        selected_price: roundMoney(best.price),
+        benchmark_price_at_decision: roundMoney(best.price),
+        decision_reason: useNormalized
+          ? "Sugestão automática: menor preço na unidade de comparação"
+          : "Sugestão automática: menor preço vigente",
+        allocated_by: user.id,
+      },
+    ];
   });
 
   if (rows.length === 0) {
@@ -276,7 +299,10 @@ export async function allocateBestPrices(
 
   const { error } = await supabase.from("purchase_allocations").insert(rows);
   if (error) {
-    if (error.code === "42501" || error.message.includes("row-level security")) {
+    if (
+      error.code === "42501" ||
+      error.message.includes("row-level security")
+    ) {
       return { error: "Seu papel não permite decidir a compra." };
     }
     return { error: `Não foi possível aplicar a sugestão: ${error.message}` };
