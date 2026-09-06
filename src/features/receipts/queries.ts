@@ -94,8 +94,28 @@ export async function listReceivingBoard(companyId: string) {
   };
 }
 
-export async function listRecentPostedReceipts(companyId: string, limit = 30) {
+export const RECENT_RECEIPTS_PAGE_SIZE = 10;
+
+export async function listRecentPostedReceipts(
+  companyId: string,
+  requestedPage = 1,
+  pageSize = RECENT_RECEIPTS_PAGE_SIZE,
+) {
   const supabase = await createServerSupabaseClient();
+  const count = await supabase
+    .from("receipts")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", companyId)
+    .eq("status", "posted");
+  if (count.error)
+    throw new Error(`Falha ao contar conferências: ${count.error.message}`);
+  const total = count.count ?? 0;
+  const page = Math.min(
+    Math.max(requestedPage, 1),
+    Math.max(Math.ceil(total / pageSize), 1),
+  );
+  const start = (page - 1) * pageSize;
+
   const { data, error } = await supabase
     .from("receipts")
     .select(
@@ -108,11 +128,11 @@ export async function listRecentPostedReceipts(companyId: string, limit = 30) {
     .eq("company_id", companyId)
     .eq("status", "posted")
     .order("checked_at", { ascending: false })
-    .limit(limit);
+    .range(start, start + pageSize - 1);
 
   if (error) throw new Error(`Falha ao listar conferências: ${error.message}`);
 
-  return (data ?? []).map((receipt) => ({
+  const rows = (data ?? []).map((receipt) => ({
     id: receipt.id,
     orderId: receipt.order_id,
     orderNumber: receipt.orders.order_number,
@@ -131,6 +151,8 @@ export async function listRecentPostedReceipts(companyId: string, limit = 30) {
     itemCount: receipt.receipt_items?.length ?? 0,
     notes: receipt.notes,
   }));
+
+  return { rows, pagination: { page, pageSize, total } };
 }
 
 export async function getReceiptConference(

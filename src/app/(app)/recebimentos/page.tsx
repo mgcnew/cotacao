@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { ArrivalDialog } from "@/components/receipts/arrival-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { getCompany } from "@/features/company/queries";
 import {
   listReceivingBoard,
@@ -26,14 +27,23 @@ function formatDay(iso: string) {
   return DATE.format(new Date(year, month - 1, day));
 }
 
-export default async function RecebimentosPage() {
+export default async function RecebimentosPage({
+  searchParams,
+}: PageProps<"/recebimentos">) {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
   if (!permissions.has("receipt.view")) redirect("/dashboard");
 
+  const params = await searchParams;
+  const rawPage = Number(
+    Array.isArray(params.pagina) ? params.pagina[0] : params.pagina,
+  );
   const [board, history, companyDetails] = await Promise.all([
     listReceivingBoard(company.companyId),
-    listRecentPostedReceipts(company.companyId),
+    listRecentPostedReceipts(
+      company.companyId,
+      Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
+    ),
     getCompany(company.companyId),
   ]);
   const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -89,9 +99,9 @@ export default async function RecebimentosPage() {
           hint="Pedidos confirmados ainda por chegar"
         />
         <Metric
-          label="Conferidas recentemente"
-          value={String(history.length)}
-          hint="Últimos registros finalizados"
+          label="Conferidas"
+          value={String(history.pagination.total)}
+          hint="Entradas já efetivadas"
           tone="good"
         />
       </div>
@@ -273,44 +283,50 @@ export default async function RecebimentosPage() {
         </div>
       </section>
 
-      {history.length ? (
+      {history.rows.length ? (
         <section className="hidden sm:block">
           <h2 className="text-fg mb-3 font-semibold">
             Conferidos recentemente
           </h2>
-          <div className="border-border bg-surface divide-border divide-y rounded-xl border">
-            {history.map((receipt) => (
-              <div
-                key={receipt.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
-              >
-                <div>
-                  <Link
-                    href={`/pedidos/${receipt.orderId}`}
-                    className="text-fg font-medium hover:underline"
-                  >
-                    Pedido #{receipt.orderNumber} · {receipt.supplierName}
-                  </Link>
-                  <p className="text-fg-subtle text-xs">
-                    {receipt.checkedAt
-                      ? dateTimeFormatter.format(new Date(receipt.checkedAt))
-                      : dateTimeFormatter.format(
-                          new Date(receipt.receivedAt!),
-                        )}{" "}
-                    · {receipt.itemCount}{" "}
-                    {receipt.itemCount === 1 ? "item" : "itens"}
-                    {receipt.invoiceNumber
-                      ? ` · NF ${receipt.invoiceNumber}`
-                      : ""}
-                  </p>
+          <div className="border-border bg-surface overflow-hidden rounded-xl border">
+            <div className="divide-border divide-y">
+              {history.rows.map((receipt) => (
+                <div
+                  key={receipt.id}
+                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+                >
+                  <div>
+                    <Link
+                      href={`/pedidos/${receipt.orderId}`}
+                      className="text-fg font-medium hover:underline"
+                    >
+                      Pedido #{receipt.orderNumber} · {receipt.supplierName}
+                    </Link>
+                    <p className="text-fg-subtle text-xs">
+                      {receipt.checkedAt
+                        ? dateTimeFormatter.format(new Date(receipt.checkedAt))
+                        : dateTimeFormatter.format(
+                            new Date(receipt.receivedAt!),
+                          )}{" "}
+                      · {receipt.itemCount}{" "}
+                      {receipt.itemCount === 1 ? "item" : "itens"}
+                      {receipt.invoiceNumber
+                        ? ` · NF ${receipt.invoiceNumber}`
+                        : ""}
+                    </p>
+                  </div>
+                  <span className="text-fg-muted tabular-nums">
+                    {MONEY.format(
+                      receipt.invoiceTotal ?? receipt.calculatedTotal,
+                    )}
+                  </span>
                 </div>
-                <span className="text-fg-muted tabular-nums">
-                  {MONEY.format(
-                    receipt.invoiceTotal ?? receipt.calculatedTotal,
-                  )}
-                </span>
-              </div>
-            ))}
+              ))}
+            </div>
+            <DataTablePagination
+              {...history.pagination}
+              allowPageSize={false}
+            />
           </div>
         </section>
       ) : null}
