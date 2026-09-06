@@ -153,7 +153,8 @@
 }
 
 .dark {
-  /* Carvão levemente frio: mais profundidade sem cair no preto puro.
+  /* Carvão neutro: a interface escura usa diferenças pequenas de
+     luminosidade para organizar o conteúdo, sem uma dominante azul.
 
      A escada abaixo é o coração deste tema, e ela foi refeita. Antes o cartão
      ficava 3 pontos de L* acima da página e a borda dele, 12 acima do cartão:
@@ -163,68 +164,55 @@
      é o TOM, e a borda voltou a ser o que borda deve ser: uma aresta que você
      acha quando procura e não enxerga quando não está procurando.
 
-     L*:  canvas 3,3 · chrome 6,2 · cartão 9,7 · elevado 12,2 · borda 16,1 */
-  --bg: #0a0c11;
-  /* Nem branco puro: sobre carvão, texto quase branco "sangra" (halação) e é
-     o que arde depois de horas. 13,9:1 continua muito acima do AAA (7:1). */
-  --fg: #e3e6ec;
-  --fg-muted: #a4a8b4;
-  /* Era 4,1:1 — abaixo do mínimo AA para texto pequeno. Agora 4,6:1. */
-  --fg-subtle: #7f8391;
-  --surface: #171b23;
-  --surface-muted: #222731;
-  --surface-elevated: #1c2029;
-  --surface-sunken: #0d1015;
-  --border-color: #232833;
-  --border-strong: #333947;
-  --input-bg: #131720;
+     A sequência é canvas → chrome → cartão → elevado; a borda apenas
+     confirma a separação que o tom já produziu. */
+  --bg: #101011;
+  /* Nem branco puro: sobre carvão, texto branco puro "sangra" (halação) e
+     cansa depois de horas; este tom preserva contraste alto sem esse efeito. */
+  --fg: #ededf0;
+  --fg-muted: #a0a0a7;
+  --fg-subtle: #82828a;
+  --surface: #1a1a1c;
+  --surface-muted: #242427;
+  --surface-elevated: #1f1f22;
+  --surface-sunken: #141416;
+  --border-color: #2a2a2e;
+  --border-strong: #3a3a40;
+  --input-bg: #18181b;
 
   --brand: #6366f1;
 
-  /* Semânticas mais claras e menos saturadas do que a versão anterior.
-     Elas aparecem 9 vezes em cada 10 como TEXTO sobre o próprio tom suave
-     (`bg-success-soft text-success`), e o matiz cheio ali é justamente a
-     "fonte na cor da pílula": vibra, cansa e ainda tinha o pior contraste do
-     tema (destrutivo dava 4,3:1 sobre o próprio fundo). Clarear inverte as
-     duas coisas de uma vez — fica mais calmo E mais legível (6,2 a 7,7:1).
-     Os poucos usos sólidos são barra de progresso e bolinha, sem texto. */
-  --success: #5cd39b;
-  --warning: #f0c264;
-  --destructive: #ff9086;
-  --info: #87b9f8;
-  --neutral: #a4a8b4;
+  /* Cor é informação: tons menos saturados e fundos suaves evitam que
+     sucesso, alerta e erro disputem atenção com a tarefa principal. */
+  --success: #79c99f;
+  --warning: #d8b36b;
+  --destructive: #e58b84;
+  --info: #82acd8;
+  --neutral: #a0a0a7;
 
-  --primary-soft: color-mix(in oklab, var(--primary) 16%, var(--surface));
-  --primary-line: color-mix(in oklab, var(--primary) 28%, var(--border-color));
-  --success-soft: color-mix(in oklab, var(--success) 14%, var(--surface));
-  --warning-soft: color-mix(in oklab, var(--warning) 14%, var(--surface));
+  --primary-soft: color-mix(in oklab, var(--primary) 9%, var(--surface));
+  --primary-line: color-mix(in oklab, var(--primary) 22%, var(--border-color));
+  --success-soft: color-mix(in oklab, var(--success) 8%, var(--surface));
+  --warning-soft: color-mix(in oklab, var(--warning) 8%, var(--surface));
   --destructive-soft: color-mix(
     in oklab,
-    var(--destructive) 14%,
+    var(--destructive) 8%,
     var(--surface)
   );
-  --info-soft: color-mix(in oklab, var(--info) 14%, var(--surface));
+  --info-soft: color-mix(in oklab, var(--info) 8%, var(--surface));
 
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.2);
   --shadow-sm:
-    0 1px 2px rgba(0, 0, 0, 0.38), 0 8px 20px -18px rgba(0, 0, 0, 0.9);
+    0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 20px -18px rgba(0, 0, 0, 0.72);
   --shadow-md:
     0 22px 60px -24px rgba(0, 0, 0, 0.88), 0 8px 24px -18px rgba(0, 0, 0, 0.75),
     inset 0 1px 0 rgba(255, 255, 255, 0.02);
-
-  /* Vidro só é consumido pelo modal em desktop. */
-  --glass-surface: color-mix(
-    in oklab,
-    var(--surface-elevated) 76%,
-    transparent
-  );
-  --glass-line: color-mix(in oklab, white 7%, var(--border-color));
 
   color-scheme: dark;
 
   /* A borda do campo é a única que ainda fala em voz normal. Se tudo recua
      junto, o formulário some — e é justamente nele que se quer olhar. */
-  --input: #2c323f;
+  --input: #343438;
 
   --destructive-foreground: #0a0a0c;
 }
@@ -611,53 +599,104 @@ body:has([data-slot="dialog-overlay"][data-state="open"])
   scrollbar-color: var(--border-strong) transparent;
 }
 
-/* Quatro planos, do fundo para a frente: canvas → chrome → cartão → elevado.
-   O menu e o topo ficam ENTRE o canvas e o cartão, não colados no cartão: o
-   plano mais claro da tela passa a ser o conteúdo, que é onde se trabalha. */
-.dark [data-slot="app-header"],
+/* O menu fica entre o canvas e o cartão. O topbar compartilha o canvas com
+   a área principal, sem uma linha artificial separando os dois. */
 .dark [data-slot="app-sidebar"] {
   background: color-mix(in oklab, var(--surface) 55%, var(--bg));
 }
 
-/* Os brilhos internos de 1px saíram daqui, do cartão, do campo e do botão
-   contornado. Cada um sozinho é elegante; em toda a tela ao mesmo tempo eram
-   uma segunda borda branca por cima da borda — e é essa multiplicação de fios
-   que disputa o olhar. A separação agora vem do tom, que não precisa de linha
-   nenhuma para ser vista. */
+/* Cartões ficam planos como na referência: a diferença de superfície faz a
+   hierarquia e a sombra não compete com bordas, texto e dados. */
 .dark [data-slot="metric"],
-.dark [data-slot="card"] {
-  box-shadow: var(--shadow-xs);
+.dark [data-slot="card"],
+.dark [data-slot="dashboard-metric"] {
+  box-shadow: none;
+}
+
+/* O ícone vira a assinatura visual do indicador. A moldura fina usa a cor
+   semântica do próprio ícone em baixa intensidade, preservando o significado
+   sem criar mais uma mancha colorida no dashboard. */
+.dark [data-slot="dashboard-metric-icon"] {
+  border: 1px solid color-mix(in oklab, currentColor 24%, var(--border-color));
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, currentColor 5%, var(--surface-sunken));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.dark [data-slot="dashboard-metric-icon"] svg {
+  stroke-width: 1.75;
+}
+
+.dark [data-slot="dashboard-metric"]:is(a, button):hover {
+  transform: none;
+  border-color: var(--border-strong);
+  background: var(--surface-elevated);
+  box-shadow: none;
+}
+
+/* Feedback continua inequívoco pelo ícone e pela borda, mas o texto volta à
+   hierarquia normal da tela. Isso reduz grandes blocos de verde/vermelho. */
+.dark [data-slot="form-feedback"] {
+  color: var(--fg-muted);
+  border: 1px solid var(--border-color);
+}
+
+.dark [data-slot="form-feedback"][data-tone="error"] {
+  border-color: color-mix(
+    in oklab,
+    var(--destructive) 24%,
+    var(--border-color)
+  );
+  background: color-mix(in oklab, var(--destructive) 6%, var(--surface));
+}
+
+.dark [data-slot="form-feedback"][data-tone="success"] {
+  border-color: color-mix(in oklab, var(--success) 22%, var(--border-color));
+  background: color-mix(in oklab, var(--success) 6%, var(--surface));
+}
+
+.dark [data-slot="form-feedback"][data-tone="error"] svg {
+  color: var(--destructive);
+}
+
+.dark [data-slot="form-feedback"][data-tone="success"] svg {
+  color: var(--success);
 }
 
 .dark [data-slot="table-header"] {
-  background: color-mix(in oklab, var(--surface-muted) 72%, transparent);
+  background: color-mix(in oklab, var(--surface-muted) 42%, var(--surface));
 }
 
 .dark [data-slot="dialog-overlay"] {
-  /* Transparente o bastante para o vidro ter algo para refratar. */
-  background: rgba(3, 5, 9, 0.56);
+  background: rgba(0, 0, 0, 0.52);
+}
+
+/* Cabeçalho e rodapé se separam pelo plano, não por mais duas linhas. A
+   borda transparente preserva as medidas do componente entre os temas. */
+.dark [data-slot="dialog-header"],
+.dark [data-slot="dialog-footer"] {
+  border-color: transparent;
+  background: color-mix(in oklab, var(--surface) 64%, var(--surface-elevated));
 }
 
 @media (min-width: 640px) {
   .dark [data-slot="dialog-content"] {
-    border-color: var(--glass-line);
-    background: var(--glass-surface);
+    border-color: var(--border-color);
+    background: var(--surface-elevated);
     background-clip: padding-box;
-    box-shadow:
-      var(--shadow-md),
-      inset 0 1px 0 rgba(255, 255, 255, 0.065),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.012);
+    box-shadow: var(--shadow-md);
   }
 
-  @supports (backdrop-filter: blur(1px)) {
-    .dark [data-slot="dialog-content"] {
-      backdrop-filter: blur(20px) saturate(124%);
+  /* A página atrá está travada enquanto o modal abre, portanto um blur
+     pequeno e fixo pode ser composto pela GPU sem recálculo de rolagem. Ele
+     não é aplicado no mobile, onde bateria e GPU são mais limitadas. */
+  @supports (
+    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+  ) {
+    .dark [data-slot="dialog-overlay"] {
+      -webkit-backdrop-filter: blur(3px);
+      backdrop-filter: blur(3px);
     }
-  }
-
-  .dark [data-slot="dialog-header"],
-  .dark [data-slot="dialog-footer"] {
-    background: color-mix(in oklab, var(--surface) 38%, transparent);
   }
 }
 

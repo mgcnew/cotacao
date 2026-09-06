@@ -57,7 +57,7 @@ const dialogContentVariants = cva(
     // Desktop: caixa centrada, com teto de altura para o conteúdo rolar por
     // dentro em vez de a página crescer atrás.
     "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[85dvh] sm:-translate-x-1/2 sm:-translate-y-1/2",
-    "sm:border-border sm:rounded-xl sm:border",
+    "sm:border-border sm:overflow-hidden sm:rounded-xl sm:border",
     /* No celular a caixa é a tela inteira: escalar a tela inteira lê como
        falha de renderização, então lá é só o fade. A escala entra no `sm:`,
        onde a caixa é de fato uma caixa. */
@@ -123,7 +123,6 @@ function DialogContent({
       />
       <DialogPrimitive.Content
         data-slot="dialog-content"
-        data-visual="glass"
         data-size={size ?? "md"}
         className={cn(
           dialogContentVariants({ size }),

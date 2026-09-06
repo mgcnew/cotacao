@@ -18,6 +18,8 @@ export function ErrorLine({ error }: { error: string | null | undefined }) {
   if (!error) return null;
   return (
     <p
+      data-slot="form-feedback"
+      data-tone="error"
       role="alert"
       className="bg-destructive-soft text-destructive flex items-start gap-2 rounded-md px-3 py-2 text-sm"
     >
@@ -35,6 +37,8 @@ export function SuccessLine({
   if (!message) return null;
   return (
     <p
+      data-slot="form-feedback"
+      data-tone="success"
       role="status"
       aria-live="polite"
       className="bg-success-soft text-success flex items-start gap-2 rounded-md px-3 py-2 text-sm"

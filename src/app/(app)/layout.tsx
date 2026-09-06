@@ -62,7 +62,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header
           data-slot="app-header"
-          className="border-border bg-surface flex h-14 shrink-0 items-center gap-2 border-b px-4 sm:gap-4 sm:px-6"
+          className="bg-background flex h-14 shrink-0 items-center gap-2 px-4 sm:gap-4 sm:px-6"
         >
           <MobileNav
             companyName={activeCompany.companyName}

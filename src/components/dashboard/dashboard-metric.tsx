@@ -41,6 +41,7 @@ export function DashboardMetric({
     <>
       <div className="flex items-start justify-between gap-3">
         <span
+          data-slot="dashboard-metric-icon"
           className={cn("grid size-9 place-items-center rounded-xl", iconClass)}
         >
           <Icon className="size-4" aria-hidden />
@@ -69,11 +70,18 @@ export function DashboardMetric({
     "hover:border-primary-line hover:-translate-y-0.5 hover:shadow-sm focus-visible:border-ring focus-visible:ring-ring/40 outline-none focus-visible:ring-3";
 
   return href ? (
-    <Link href={href} className={cn(className, interactiveClassName)}>
+    <Link
+      data-slot="dashboard-metric"
+      data-tone={tone}
+      href={href}
+      className={cn(className, interactiveClassName)}
+    >
       {content}
     </Link>
   ) : onClick ? (
     <button
+      data-slot="dashboard-metric"
+      data-tone={tone}
       type="button"
       onClick={onClick}
       className={cn(className, interactiveClassName, "w-full")}
@@ -82,6 +90,8 @@ export function DashboardMetric({
       {content}
     </button>
   ) : (
-    <div className={className}>{content}</div>
+    <div data-slot="dashboard-metric" data-tone={tone} className={className}>
+      {content}
+    </div>
   );
 }
