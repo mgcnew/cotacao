@@ -29,7 +29,10 @@ export function isValidCnpj(value: string): boolean {
   if (d.length !== 14) return false;
   if (/^(\d)\1{13}$/.test(d)) return false;
 
-  const first = checkDigit(d.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  const first = checkDigit(
+    d.slice(0, 12),
+    [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+  );
   if (first !== Number(d[12])) return false;
 
   const second = checkDigit(

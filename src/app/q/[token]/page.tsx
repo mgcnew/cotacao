@@ -1,5 +1,6 @@
-import { Building2, Link2Off, PackageSearch, ShieldCheck } from "lucide-react";
+import { Link2Off, PackageSearch, ShieldCheck } from "lucide-react";
 
+import { CompanyAvatar } from "@/components/company/company-avatar";
 import { QuotationResponseForm } from "@/components/quotations/quotation-response-form";
 import { getPublicQuotation } from "@/features/quotations/public";
 
@@ -60,9 +61,10 @@ export default async function CotacaoPublicaPage({
           </div>
           <div className="grid gap-3 p-4 text-sm sm:grid-cols-2 sm:p-5">
             <div className="flex items-start gap-2.5">
-              <Building2
-                className="text-fg-subtle mt-0.5 size-4 shrink-0"
-                aria-hidden
+              <CompanyAvatar
+                name={quotation.company.name}
+                logoPath={quotation.company.logo_path}
+                className="size-8 rounded-lg"
               />
               <div>
                 <p className="text-fg-subtle text-xs">Comprador</p>

@@ -32,6 +32,7 @@ export type ActivityEntry = {
  */
 const EVENT_LABEL: Record<string, string> = {
   "company.provisioned": "Empresa criada",
+  "company.profile_updated": "Perfil da empresa atualizado",
   "quotation.sent": "Cotação enviada ao fornecedor",
   "quotation.response_submitted": "Fornecedor respondeu a cotação",
   "quotation.response_corrected": "Resposta de fornecedor corrigida",

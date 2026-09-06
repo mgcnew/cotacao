@@ -180,8 +180,8 @@ export default async function ConfiguracoesPage({
             <CardHeader>
               <CardTitle className="text-base">{dados.name}</CardTitle>
               <CardDescription>
-                Alterar estes dados exige permissão administrativa e entra na
-                fase de Configurações.
+                Administradores podem alterar estes dados pelo menu da empresa
+                no canto superior direito.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">

@@ -5087,13 +5087,28 @@ export type Database = {
         Args: never;
         Returns: {
           company_id: string;
+          company_document_number: string | null;
+          company_legal_name: string | null;
+          company_logo_path: string | null;
           company_name: string;
           company_status: string;
+          company_timezone: string;
           member_id: string;
           permissions: string[];
           role_id: string;
           role_name: string;
         }[];
+      };
+      rpc_update_company_profile: {
+        Args: {
+          p_company_id: string;
+          p_document_number?: string | null;
+          p_legal_name?: string | null;
+          p_logo_path?: string | null;
+          p_name: string;
+          p_timezone?: string;
+        };
+        Returns: Json;
       };
       rpc_update_draft_order_revision: {
         Args: {

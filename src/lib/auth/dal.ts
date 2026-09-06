@@ -33,6 +33,10 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 export type CompanyMembership = {
   companyId: string;
   companyName: string;
+  companyLegalName: string | null;
+  companyDocumentNumber: string | null;
+  companyLogoPath: string | null;
+  companyTimezone: string;
   companyStatus: string;
   memberId: string;
   roleId: string;
@@ -113,6 +117,10 @@ export const getMemberships = cache(async (): Promise<CompanyMembership[]> => {
   return (data ?? []).map((row) => ({
     companyId: row.company_id,
     companyName: row.company_name,
+    companyLegalName: row.company_legal_name,
+    companyDocumentNumber: row.company_document_number,
+    companyLogoPath: row.company_logo_path,
+    companyTimezone: row.company_timezone,
     companyStatus: row.company_status,
     memberId: row.member_id,
     roleId: row.role_id,

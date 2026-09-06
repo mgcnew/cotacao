@@ -19,7 +19,11 @@ export type PublicOrderItem = {
 };
 
 export type PublicOrder = {
-  company: { name: string; legal_name: string | null };
+  company: {
+    name: string;
+    legal_name: string | null;
+    logo_path: string | null;
+  };
   supplier: { id: string; name: string };
   order: { id: string; order_number: number; status: string };
   revision: {

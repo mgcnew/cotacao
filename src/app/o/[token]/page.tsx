@@ -1,5 +1,6 @@
-import { Building2, CalendarDays, Link2Off, PackageCheck } from "lucide-react";
+import { CalendarDays, Link2Off, PackageCheck } from "lucide-react";
 
+import { CompanyAvatar } from "@/components/company/company-avatar";
 import { ConfirmOrderForm } from "@/components/orders/confirm-order-form";
 import { ReportDivergenceForm } from "@/components/orders/divergence-forms";
 import { getPublicOrder } from "@/features/orders/public";
@@ -83,9 +84,10 @@ export default async function PedidoPublicoPage({
           </div>
           <div className="grid gap-3 p-4 text-sm sm:grid-cols-2 sm:p-5">
             <div className="flex items-start gap-2.5">
-              <Building2
-                className="text-fg-subtle mt-0.5 size-4 shrink-0"
-                aria-hidden
+              <CompanyAvatar
+                name={data.company.name}
+                logoPath={data.company.logo_path}
+                className="size-8 rounded-lg"
               />
               <div>
                 <p className="text-fg-subtle text-xs">Comprador</p>
@@ -140,9 +142,15 @@ export default async function PedidoPublicoPage({
                   ) : null}
                   {item.packaging_presentation ? (
                     <div className="border-primary/20 bg-primary-soft mt-2 inline-flex flex-col rounded-lg border px-2.5 py-1.5 text-xs">
-                      <span className="text-fg-muted">Apresentação confirmada na cotação</span>
+                      <span className="text-fg-muted">
+                        Apresentação confirmada na cotação
+                      </span>
                       <strong className="text-primary mt-0.5 tabular-nums">
-                        {QTY.format(item.packaging_presentation.quantity_per_package)} {item.packaging_presentation.comparison_unit_symbol} por pacote
+                        {QTY.format(
+                          item.packaging_presentation.quantity_per_package,
+                        )}{" "}
+                        {item.packaging_presentation.comparison_unit_symbol} por
+                        pacote
                       </strong>
                     </div>
                   ) : null}

@@ -37,7 +37,11 @@ export type PublicQuotationItem = {
 };
 
 export type PublicQuotation = {
-  company: { name: string; legal_name: string | null };
+  company: {
+    name: string;
+    legal_name: string | null;
+    logo_path: string | null;
+  };
   supplier: { id: string; name: string };
   purchase_round: { id: string; title: string };
   items: PublicQuotationItem[];
