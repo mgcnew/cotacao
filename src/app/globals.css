@@ -180,6 +180,13 @@
   --border-strong: #3a3a40;
   --input-bg: #18181b;
 
+  /* A Geist é variável, portanto aceita pesos intermediários. No fundo
+     escuro o alto contraste faz 600/700 parecerem mais pesados do que no
+     claro; reduzir apenas os destaques preserva a hierarquia sem apagar o
+     texto comum nem enfraquecer controles em medium. */
+  --font-weight-semibold: 560;
+  --font-weight-bold: 650;
+
   --brand: #6366f1;
 
   /* Cor é informação: tons menos saturados e fundos suaves evitam que
