@@ -23,6 +23,13 @@ import {
   type HistoricalNfeActionState,
 } from "@/features/receipts/historical-actions";
 import { normalizedNfeUnit } from "@/features/receipts/nfe";
+import {
+  canonicalConversionFactor,
+  entryValueFromCanonicalFactor,
+  isWeightNfeUnit,
+  preferredFixedConversionEntry,
+  type FixedConversionEntry,
+} from "@/features/receipts/unit-conversion";
 
 type Supplier = {
   id: string;
@@ -87,6 +94,8 @@ type Draft = {
     sourceUnit: string;
     mode: "fixed_factor" | "manual_quantity";
     factor: string;
+    entry: FixedConversionEntry;
+    entryValue: string;
     learned: boolean;
   } | null;
 };
@@ -100,8 +109,6 @@ const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
-
-const VARIABLE_WEIGHT_UNITS = new Set(["KG", "KGM", "G", "GR"]);
 
 function sourceQuantity(item: Item, unit: string) {
   const normalized = normalizedNfeUnit(unit);
@@ -134,8 +141,8 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
       item.commercialQuantity > 0 &&
       normalizedNfeUnit(sourceUnit) !== normalizedNfeUnit(item.tributary_unit)
     ) {
-      const variable = VARIABLE_WEIGHT_UNITS.has(
-        normalizedNfeUnit(product.pricingUnitCode || product.pricingUnitSymbol),
+      const variable = isWeightNfeUnit(
+        product.pricingUnitCode || product.pricingUnitSymbol,
       );
       const inferredFactor = item.tributaryQuantity / item.commercialQuantity;
       const saved = applicableRules.find(
@@ -147,6 +154,10 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
         saved?.factor != null &&
         Math.abs(saved.factor - inferredFactor) <=
           Math.max(Math.abs(inferredFactor), 1) * 0.000001;
+      const entry = preferredFixedConversionEntry(
+        sourceUnit,
+        product.pricingUnitSymbol,
+      );
       return {
         quantity: quantity > 0 ? String(quantity) : "",
         price: quantity > 0 ? String(item.netProductTotal / quantity) : "",
@@ -156,6 +167,16 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
             ? ("manual_quantity" as const)
             : ("fixed_factor" as const),
           factor: variable ? "" : String(inferredFactor),
+          entry,
+          entryValue: variable
+            ? ""
+            : String(
+                entryValueFromCanonicalFactor({
+                  entry,
+                  factor: inferredFactor,
+                  sourceQuantity: item.commercialQuantity,
+                }) ?? "",
+              ),
           learned: variable
             ? saved?.mode === "manual_quantity"
             : saved?.mode === "fixed_factor" && factorMatches,
@@ -180,6 +201,11 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
       quantity = source === null ? null : source * rule.factor;
     }
     if (rule) {
+      const entry = preferredFixedConversionEntry(
+        currentSourceUnit ?? rule.xmlUnit,
+        product.pricingUnitSymbol,
+      );
+      const source = sourceQuantity(item, currentSourceUnit ?? rule.xmlUnit);
       return {
         quantity: quantity && quantity > 0 ? String(quantity) : "",
         price:
@@ -190,6 +216,17 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
           sourceUnit: currentSourceUnit ?? rule.xmlUnit,
           mode: rule.mode as "fixed_factor" | "manual_quantity",
           factor: rule.factor === null ? "" : String(rule.factor),
+          entry,
+          entryValue:
+            rule.factor === null
+              ? ""
+              : String(
+                  entryValueFromCanonicalFactor({
+                    entry,
+                    factor: rule.factor,
+                    sourceQuantity: source,
+                  }) ?? "",
+                ),
           learned: true,
         },
       };
@@ -203,7 +240,7 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
       quantity === null
         ? {
             sourceUnit: item.commercial_unit ?? item.tributary_unit ?? "",
-            mode: VARIABLE_WEIGHT_UNITS.has(
+            mode: isWeightNfeUnit(
               normalizedNfeUnit(
                 product.pricingUnitCode || product.pricingUnitSymbol,
               ),
@@ -211,6 +248,11 @@ function pricingFor(item: Item, product: Product, supplierId: string) {
               ? ("manual_quantity" as const)
               : ("fixed_factor" as const),
             factor: "",
+            entry: preferredFixedConversionEntry(
+              item.commercial_unit ?? item.tributary_unit ?? "",
+              product.pricingUnitSymbol,
+            ),
+            entryValue: "",
             learned: false,
           }
         : null,
@@ -221,6 +263,36 @@ function parsedDecimal(value: string) {
   const normalized = value.trim().replace(",", ".");
   const parsed = Number(normalized);
   return normalized && Number.isFinite(parsed) ? parsed : null;
+}
+
+function conversionEntryLabel(
+  entry: FixedConversionEntry,
+  sourceUnit: string,
+  targetUnit: string,
+) {
+  if (entry === "target_to_source") {
+    return `Peso ou medida de cada ${targetUnit}`;
+  }
+  if (entry === "invoice_total") return "Equivalência desta nota";
+  return `Quantidade de ${targetUnit} por ${sourceUnit}`;
+}
+
+function conversionEquation(
+  entry: FixedConversionEntry,
+  value: string,
+  sourceUnit: string,
+  targetUnit: string,
+  sourceTotal: number | null,
+) {
+  const parsed = parsedDecimal(value);
+  const formatted = parsed === null ? "—" : NUMBER.format(parsed);
+  if (entry === "target_to_source") {
+    return `1 ${targetUnit} = ${formatted} ${sourceUnit}`;
+  }
+  if (entry === "invoice_total") {
+    return `${NUMBER.format(sourceTotal ?? 0)} ${sourceUnit} = ${formatted} ${targetUnit}`;
+  }
+  return `1 ${sourceUnit} = ${formatted} ${targetUnit}`;
 }
 
 /** A conversão já tem resposta? É o que decide se ela pode ficar recolhida. */
@@ -338,7 +410,8 @@ export function HistoricalNfeReconciliationForm({
       );
       if (pending.length) {
         const positions = pending.map(
-          (item) => items.findIndex((candidate) => candidate.id === item.id) + 1,
+          (item) =>
+            items.findIndex((candidate) => candidate.id === item.id) + 1,
         );
         const flagged = pending.map((item) => item.id);
         // A recusa deixa na tela exatamente o que falta, e aberto. Aqui e não
@@ -386,8 +459,7 @@ export function HistoricalNfeReconciliationForm({
   }, [state]);
 
   const problems = useMemo(
-    () =>
-      new Map(items.map((item) => [item.id, itemProblem(drafts[item.id])])),
+    () => new Map(items.map((item) => [item.id, itemProblem(drafts[item.id])])),
     [drafts, items],
   );
   const pendingCount = items.filter((item) => problems.get(item.id)).length;
@@ -473,13 +545,18 @@ export function HistoricalNfeReconciliationForm({
   function changeConversion(
     item: Item,
     mode: "fixed_factor" | "manual_quantity",
-    factor: string,
+    entry: FixedConversionEntry,
+    entryValue: string,
   ) {
     setDrafts((current) => {
       const draft = current[item.id];
       if (!draft.conversion) return current;
-      const parsedFactor = Number(factor.replace(",", "."));
       const source = sourceQuantity(item, draft.conversion.sourceUnit);
+      const factor = canonicalConversionFactor({
+        entry,
+        value: parsedDecimal(entryValue),
+        sourceQuantity: source,
+      });
       const product = products.find(
         (candidate) => candidate.id === draft.productId,
       );
@@ -496,11 +573,8 @@ export function HistoricalNfeReconciliationForm({
           ? item.tributaryQuantity
           : null;
       const converted =
-        mode === "fixed_factor" &&
-        Number.isFinite(parsedFactor) &&
-        parsedFactor > 0 &&
-        source !== null
-          ? source * parsedFactor
+        mode === "fixed_factor" && factor !== null && source !== null
+          ? source * factor
           : null;
       return {
         ...current,
@@ -530,7 +604,9 @@ export function HistoricalNfeReconciliationForm({
           conversion: {
             ...draft.conversion,
             mode,
-            factor: mode === "fixed_factor" ? factor : "",
+            factor: mode === "fixed_factor" && factor ? String(factor) : "",
+            entry,
+            entryValue: mode === "fixed_factor" ? entryValue : "",
             learned: false,
           },
         },
@@ -753,264 +829,376 @@ export function HistoricalNfeReconciliationForm({
               {/* `hidden` outra vez, e pelo mesmo motivo do filtro: recolhido,
                   o item continua sendo enviado com o que já foi respondido. */}
               <div id={`item-body-${item.id}`} hidden={!draft.open}>
-              {draft.ignored ? null : (
-                <>
-                  {/* Quantidade e preço são campos curtos: lado a lado no
+                {draft.ignored ? null : (
+                  <>
+                    {/* Quantidade e preço são campos curtos: lado a lado no
                       celular eles cabem e a nota inteira continua visível na
                       rolagem. O seletor de produto é o único que precisa da
                       linha toda. */}
-                  <div className="mt-4 grid grid-cols-2 items-end gap-3 lg:grid-cols-[minmax(16rem,1fr)_10rem_10rem]">
-                    {/* `label` com `htmlFor`, e não envolvendo o campo: o
+                    <div className="mt-4 grid grid-cols-2 items-end gap-3 lg:grid-cols-[minmax(16rem,1fr)_10rem_10rem]">
+                      {/* `label` com `htmlFor`, e não envolvendo o campo: o
                         atalho de cadastro é um link, e dentro de um `label`
                         clicar nele também acionaria o campo. */}
-                    <div className="col-span-2 flex flex-col gap-1.5 lg:col-span-1">
-                      <span className="flex items-center justify-between gap-2 text-xs">
-                        <label
-                          htmlFor={`historical-product-${item.id}`}
-                          className="text-fg-muted"
-                        >
-                          Produto no sistema
-                        </label>
-                        {draft.productId ? null : (
-                          <Link
-                            href="/produtos/novo"
-                            target="_blank"
-                            className="text-primary underline-offset-4 hover:underline"
+                      <div className="col-span-2 flex flex-col gap-1.5 lg:col-span-1">
+                        <span className="flex items-center justify-between gap-2 text-xs">
+                          <label
+                            htmlFor={`historical-product-${item.id}`}
+                            className="text-fg-muted"
                           >
-                            Cadastrar produto
-                          </Link>
-                        )}
-                      </span>
-                      <SearchableSelect
-                        id={`historical-product-${item.id}`}
-                        name={`product_${item.id}`}
-                        options={products}
-                        value={draft.productId}
-                        onValueChange={(value) => chooseProduct(item, value)}
-                        placeholder="Digite para associar…"
-                      />
+                            Produto no sistema
+                          </label>
+                          {draft.productId ? null : (
+                            <Link
+                              href="/produtos/novo"
+                              target="_blank"
+                              className="text-primary underline-offset-4 hover:underline"
+                            >
+                              Cadastrar produto
+                            </Link>
+                          )}
+                        </span>
+                        <SearchableSelect
+                          id={`historical-product-${item.id}`}
+                          name={`product_${item.id}`}
+                          options={products}
+                          value={draft.productId}
+                          onValueChange={(value) => chooseProduct(item, value)}
+                          placeholder="Digite para associar…"
+                        />
+                      </div>
+                      <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
+                        Quantidade{" "}
+                        {selectedProduct?.pricingUnitSymbol ??
+                          "na unidade de preço"}
+                        <Input
+                          type="number"
+                          step="any"
+                          min="0.000001"
+                          name={`quantity_${item.id}`}
+                          value={draft.quantity}
+                          onChange={(event) =>
+                            patchDraft(item.id, {
+                              quantity: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
+                        Preço praticado
+                        <Input
+                          type="number"
+                          step="any"
+                          min="0"
+                          name={`price_${item.id}`}
+                          value={draft.price}
+                          onChange={(event) =>
+                            patchDraft(item.id, { price: event.target.value })
+                          }
+                        />
+                      </label>
                     </div>
-                    <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
-                      Quantidade{" "}
-                      {selectedProduct?.pricingUnitSymbol ??
-                        "na unidade de preço"}
-                      <Input
-                        type="number"
-                        step="any"
-                        min="0.000001"
-                        name={`quantity_${item.id}`}
-                        value={draft.quantity}
-                        onChange={(event) =>
-                          patchDraft(item.id, { quantity: event.target.value })
-                        }
-                      />
-                    </label>
-                    <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
-                      Preço praticado
-                      <Input
-                        type="number"
-                        step="any"
-                        min="0"
-                        name={`price_${item.id}`}
-                        value={draft.price}
-                        onChange={(event) =>
-                          patchDraft(item.id, { price: event.target.value })
-                        }
-                      />
-                    </label>
-                  </div>
 
-                  {selectedProduct && draft.conversion ? (
-                    <div className="border-primary/25 bg-primary-soft mt-3 rounded-lg border p-3">
-                      <input
-                        type="hidden"
-                        name={`conversion_unit_${item.id}`}
-                        value={draft.conversion.sourceUnit}
-                      />
-                      {/* `hidden`, e não desmontar: recolhida, a conversão
+                    {selectedProduct && draft.conversion ? (
+                      <div className="border-primary/25 bg-primary-soft mt-3 rounded-lg border p-3">
+                        <input
+                          type="hidden"
+                          name={`conversion_unit_${item.id}`}
+                          value={draft.conversion.sourceUnit}
+                        />
+                        {/* `hidden`, e não desmontar: recolhida, a conversão
                           continua no formulário e o que foi respondido segue
                           sendo enviado. */}
-                      <div hidden={!draft.conversionOpen}>
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <p className="text-fg text-sm font-medium">
-                              Conversão para {selectedProduct.pricingUnitSymbol}
-                            </p>
-                            <p className="text-fg-muted mt-0.5 text-xs">
-                              A NF-e informou {draft.conversion.sourceUnit};
-                              defina como chegar à unidade usada no preço.
-                            </p>
+                        <div hidden={!draft.conversionOpen}>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-fg text-sm font-medium">
+                                Conversão para{" "}
+                                {selectedProduct.pricingUnitSymbol}
+                              </p>
+                              <p className="text-fg-muted mt-0.5 text-xs">
+                                A NF-e informou {draft.conversion.sourceUnit};
+                                defina como chegar à unidade usada no preço.
+                              </p>
+                            </div>
+                            <span className="bg-surface text-primary rounded-full px-2 py-1 text-xs font-medium">
+                              {draft.conversion.learned
+                                ? "Conversão aprendida"
+                                : "Revisar uma vez"}
+                            </span>
                           </div>
-                          <span className="bg-surface text-primary rounded-full px-2 py-1 text-xs font-medium">
-                            {draft.conversion.learned
-                              ? "Conversão aprendida"
-                              : "Revisar uma vez"}
-                          </span>
-                        </div>
 
-                        <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
-                          <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
-                            Tipo de conversão
-                            <ThemedSelect
-                              id={`conversion-mode-${item.id}`}
-                              name={`conversion_mode_${item.id}`}
-                              value={draft.conversion.mode}
-                              onValueChange={(value) =>
-                                changeConversion(
-                                  item,
-                                  value as "fixed_factor" | "manual_quantity",
-                                  draft.conversion?.factor ?? "",
-                                )
-                              }
-                              options={[
-                                {
-                                  value: "fixed_factor",
-                                  label: "Quantidade fixa",
-                                },
-                                {
-                                  value: "manual_quantity",
-                                  label: "Varia em cada nota",
-                                },
-                              ]}
-                            />
-                          </label>
-
-                          {draft.conversion.mode === "fixed_factor" ? (
+                          <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
                             <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
-                              Quantidade por {draft.conversion.sourceUnit}
-                              <span className="flex items-center gap-2">
-                                <span className="text-fg shrink-0 text-sm">
-                                  1 {draft.conversion.sourceUnit} =
-                                </span>
-                                <Input
-                                  type="number"
-                                  step="any"
-                                  min="0.000001"
+                              Tipo de conversão
+                              <ThemedSelect
+                                id={`conversion-mode-${item.id}`}
+                                name={`conversion_mode_${item.id}`}
+                                value={draft.conversion.mode}
+                                onValueChange={(value) =>
+                                  changeConversion(
+                                    item,
+                                    value as "fixed_factor" | "manual_quantity",
+                                    draft.conversion?.entry ??
+                                      "source_to_target",
+                                    draft.conversion?.entryValue ?? "",
+                                  )
+                                }
+                                options={[
+                                  {
+                                    value: "fixed_factor",
+                                    label: "Relação fixa entre as unidades",
+                                  },
+                                  {
+                                    value: "manual_quantity",
+                                    label: "Quantidade varia em cada nota",
+                                  },
+                                ]}
+                              />
+                            </label>
+
+                            {draft.conversion.mode === "fixed_factor" ? (
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
+                                  Como prefere informar
+                                  <ThemedSelect
+                                    id={`conversion-entry-${item.id}`}
+                                    value={draft.conversion.entry}
+                                    onValueChange={(value) => {
+                                      const entry =
+                                        value as FixedConversionEntry;
+                                      const source = sourceQuantity(
+                                        item,
+                                        draft.conversion?.sourceUnit ?? "",
+                                      );
+                                      const currentFactor = parsedDecimal(
+                                        draft.conversion?.factor ?? "",
+                                      );
+                                      const entryValue =
+                                        entryValueFromCanonicalFactor({
+                                          entry,
+                                          factor: currentFactor,
+                                          sourceQuantity: source,
+                                        });
+                                      changeConversion(
+                                        item,
+                                        "fixed_factor",
+                                        entry,
+                                        entryValue === null
+                                          ? ""
+                                          : String(entryValue),
+                                      );
+                                    }}
+                                    options={[
+                                      ...(isWeightNfeUnit(
+                                        draft.conversion.sourceUnit,
+                                      ) &&
+                                      !isWeightNfeUnit(
+                                        selectedProduct.pricingUnitSymbol,
+                                      )
+                                        ? [
+                                            {
+                                              value: "target_to_source",
+                                              label: `Peso de cada ${selectedProduct.pricingUnitSymbol}`,
+                                            },
+                                          ]
+                                        : []),
+                                      {
+                                        value: "invoice_total",
+                                        label:
+                                          "Total correspondente nesta nota",
+                                      },
+                                      {
+                                        value: "source_to_target",
+                                        label: `Conversão direta por ${draft.conversion.sourceUnit}`,
+                                      },
+                                    ]}
+                                  />
+                                </label>
+                                <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
+                                  {conversionEntryLabel(
+                                    draft.conversion.entry,
+                                    draft.conversion.sourceUnit,
+                                    selectedProduct.pricingUnitSymbol,
+                                  )}
+                                  <Input
+                                    type="number"
+                                    step="any"
+                                    min="0.000001"
+                                    value={draft.conversion.entryValue}
+                                    onChange={(event) =>
+                                      changeConversion(
+                                        item,
+                                        "fixed_factor",
+                                        draft.conversion?.entry ??
+                                          "source_to_target",
+                                        event.target.value,
+                                      )
+                                    }
+                                    onBlur={() => settleConversion(item.id)}
+                                    placeholder={
+                                      draft.conversion.entry ===
+                                      "target_to_source"
+                                        ? "Ex.: 0,4"
+                                        : draft.conversion.entry ===
+                                            "invoice_total"
+                                          ? "Ex.: 100"
+                                          : "Ex.: 2,5"
+                                    }
+                                  />
+                                  <span className="text-fg-subtle">
+                                    {conversionEquation(
+                                      draft.conversion.entry,
+                                      draft.conversion.entryValue,
+                                      draft.conversion.sourceUnit,
+                                      selectedProduct.pricingUnitSymbol,
+                                      sourceQuantity(
+                                        item,
+                                        draft.conversion.sourceUnit,
+                                      ),
+                                    )}
+                                  </span>
+                                </label>
+                                <input
+                                  type="hidden"
                                   name={`conversion_factor_${item.id}`}
                                   value={draft.conversion.factor}
-                                  onChange={(event) =>
-                                    changeConversion(
-                                      item,
-                                      "fixed_factor",
-                                      event.target.value,
-                                    )
-                                  }
-                                  onBlur={() => settleConversion(item.id)}
-                                  className="flex-1"
                                 />
-                                <span className="text-fg shrink-0 text-sm">
-                                  {selectedProduct.pricingUnitSymbol}
-                                </span>
+                                {draft.quantity && draft.price ? (
+                                  <p className="bg-surface-muted text-fg col-span-full rounded-lg px-3 py-2 text-xs">
+                                    Prévia: esta nota será registrada como{" "}
+                                    <strong>
+                                      {NUMBER.format(
+                                        parsedDecimal(draft.quantity) ?? 0,
+                                      )}{" "}
+                                      {selectedProduct.pricingUnitSymbol}
+                                    </strong>{" "}
+                                    a{" "}
+                                    <strong>
+                                      {MONEY.format(
+                                        parsedDecimal(draft.price) ?? 0,
+                                      )}
+                                      /{selectedProduct.pricingUnitSymbol}
+                                    </strong>
+                                    .
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <div className="text-fg-muted self-end rounded-lg border border-dashed px-3 py-2 text-xs">
+                                O total em {selectedProduct.pricingUnitSymbol}{" "}
+                                será lido da NF-e quando existir; caso
+                                contrário, informe a quantidade desta nota
+                                acima.
+                                <input
+                                  type="hidden"
+                                  name={`conversion_factor_${item.id}`}
+                                  value=""
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          <label className="text-fg-muted mt-3 flex items-start gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              name={`save_conversion_${item.id}`}
+                              checked={draft.saveConversion}
+                              onChange={(event) =>
+                                patchDraft(item.id, {
+                                  saveConversion: event.target.checked,
+                                })
+                              }
+                              className="mt-0.5 size-4"
+                            />
+                            {draft.conversion.learned
+                              ? "Confirmar que esta regra continua válida para este fornecedor."
+                              : "Guardar para as próximas notas deste fornecedor e produto."}
+                          </label>
+                        </div>
+
+                        {draft.conversionOpen ? null : (
+                          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                            <p className="text-fg min-w-0 text-xs">
+                              {draft.conversion.mode === "fixed_factor"
+                                ? conversionEquation(
+                                    draft.conversion.entry,
+                                    draft.conversion.entryValue,
+                                    draft.conversion.sourceUnit,
+                                    selectedProduct.pricingUnitSymbol,
+                                    sourceQuantity(
+                                      item,
+                                      draft.conversion.sourceUnit,
+                                    ),
+                                  )
+                                : `Quantidade em ${selectedProduct.pricingUnitSymbol} lida de cada nota`}
+                              <span className="text-fg-muted">
+                                {draft.conversion.learned
+                                  ? " · aprendida"
+                                  : " · revisar uma vez"}
+                                {draft.saveConversion ? " · será guardada" : ""}
                               </span>
-                            </label>
-                          ) : (
-                            <div className="text-fg-muted self-end rounded-lg border border-dashed px-3 py-2 text-xs">
-                              O total em {selectedProduct.pricingUnitSymbol}{" "}
-                              será lido da NF-e quando existir; caso contrário,
-                              informe a quantidade desta nota acima.
-                              <input
-                                type="hidden"
-                                name={`conversion_factor_${item.id}`}
-                                value=""
-                              />
-                            </div>
-                          )}
-                        </div>
-
-                        <label className="text-fg-muted mt-3 flex items-start gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            name={`save_conversion_${item.id}`}
-                            checked={draft.saveConversion}
-                            onChange={(event) =>
-                              patchDraft(item.id, {
-                                saveConversion: event.target.checked,
-                              })
-                            }
-                            className="mt-0.5 size-4"
-                          />
-                          {draft.conversion.learned
-                            ? "Confirmar que esta regra continua válida para este fornecedor."
-                            : "Guardar para as próximas notas deste fornecedor e produto."}
-                        </label>
+                            </p>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                patchDraft(item.id, { conversionOpen: true })
+                              }
+                            >
+                              Alterar
+                            </Button>
+                          </div>
+                        )}
                       </div>
+                    ) : null}
 
-                      {draft.conversionOpen ? null : (
-                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                          <p className="text-fg min-w-0 text-xs">
-                            {draft.conversion.mode === "fixed_factor"
-                              ? `1 ${draft.conversion.sourceUnit} = ${NUMBER.format(
-                                  parsedDecimal(draft.conversion.factor) ?? 0,
-                                )} ${selectedProduct.pricingUnitSymbol}`
-                              : `Quantidade em ${selectedProduct.pricingUnitSymbol} lida de cada nota`}
-                            <span className="text-fg-muted">
-                              {draft.conversion.learned
-                                ? " · aprendida"
-                                : " · revisar uma vez"}
-                              {draft.saveConversion ? " · será guardada" : ""}
-                            </span>
-                          </p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              patchDraft(item.id, { conversionOpen: true })
-                            }
-                          >
-                            Alterar
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
+                    {draft.productId && !draft.quantity ? (
+                      <p className="text-warning mt-2 text-xs">
+                        A unidade da nota não corresponde à unidade de preço do
+                        produto. Informe a quantidade convertida.
+                      </p>
+                    ) : null}
+                  </>
+                )}
 
-                  {draft.productId && !draft.quantity ? (
-                    <p className="text-warning mt-2 text-xs">
-                      A unidade da nota não corresponde à unidade de preço do
-                      produto. Informe a quantidade convertida.
-                    </p>
-                  ) : null}
-                </>
-              )}
-
-              <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr] sm:items-center">
-                <label className="text-fg-muted flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    name={`ignored_${item.id}`}
-                    checked={draft.ignored}
+                <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr] sm:items-center">
+                  <label className="text-fg-muted flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      name={`ignored_${item.id}`}
+                      checked={draft.ignored}
+                      onChange={(event) =>
+                        patchDraft(item.id, { ignored: event.target.checked })
+                      }
+                      className="size-4"
+                    />
+                    Ignorar este item
+                  </label>
+                  <Input
+                    name={`notes_${item.id}`}
+                    value={draft.notes}
                     onChange={(event) =>
-                      patchDraft(item.id, { ignored: event.target.checked })
+                      patchDraft(item.id, { notes: event.target.value })
                     }
-                    className="size-4"
+                    placeholder={
+                      draft.ignored
+                        ? "Por que fica fora do histórico"
+                        : "Observação opcional"
+                    }
+                    aria-label={
+                      draft.ignored
+                        ? `Justificativa para ignorar o item ${index + 1}`
+                        : `Observação do item ${index + 1}`
+                    }
                   />
-                  Ignorar este item
-                </label>
-                <Input
-                  name={`notes_${item.id}`}
-                  value={draft.notes}
-                  onChange={(event) =>
-                    patchDraft(item.id, { notes: event.target.value })
-                  }
-                  placeholder={
-                    draft.ignored
-                      ? "Por que fica fora do histórico"
-                      : "Observação opcional"
-                  }
-                  aria-label={
-                    draft.ignored
-                      ? `Justificativa para ignorar o item ${index + 1}`
-                      : `Observação do item ${index + 1}`
-                  }
-                />
-              </div>
+                </div>
 
-              {flagged && problem ? (
-                <p role="alert" className="text-destructive mt-2 text-xs">
-                  {problem}
-                </p>
-              ) : null}
+                {flagged && problem ? (
+                  <p role="alert" className="text-destructive mt-2 text-xs">
+                    {problem}
+                  </p>
+                ) : null}
               </div>
             </article>
           );

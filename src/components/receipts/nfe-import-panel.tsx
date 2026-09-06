@@ -33,6 +33,13 @@ import {
   type NfeItemMatch,
   type ParsedNfe,
 } from "@/features/receipts/nfe";
+import {
+  canonicalConversionFactor,
+  entryValueFromCanonicalFactor,
+  isWeightNfeUnit,
+  preferredFixedConversionEntry,
+  type FixedConversionEntry,
+} from "@/features/receipts/unit-conversion";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -98,7 +105,8 @@ export type NfeImportPayload = {
 type ConversionDraft = {
   xmlUnit: string;
   mode: "fixed_factor" | "manual_quantity";
-  factor: string;
+  entry: FixedConversionEntry;
+  entryValue: string;
 };
 
 const FISCAL_TOTAL_KEYS = [
@@ -195,6 +203,19 @@ function quantityForXmlUnit(item: NfeItem, unit: string) {
     return item.tributaryQuantity;
   }
   return null;
+}
+
+function totalForXmlUnit(items: NfeItem[], unit: string) {
+  const values = items.map((item) => quantityForXmlUnit(item, unit));
+  return values.every((value): value is number => value !== null)
+    ? values.reduce((sum, value) => sum + value, 0)
+    : null;
+}
+
+function parsedDecimal(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  const parsed = Number(normalized);
+  return normalized && Number.isFinite(parsed) ? parsed : null;
 }
 
 function convertedQuantity(
@@ -393,9 +414,9 @@ export function NfeImportPanel({
   const [associatingLine, setAssociatingLine] = React.useState<string | null>(
     null,
   );
-  const [linkingAccessKey, setLinkingAccessKey] = React.useState<
-    string | null
-  >(null);
+  const [linkingAccessKey, setLinkingAccessKey] = React.useState<string | null>(
+    null,
+  );
   const [hasPrimarySupplierDocument, setHasPrimarySupplierDocument] =
     React.useState(Boolean(supplierDocument));
   const [conversionDrafts, setConversionDrafts] = React.useState<
@@ -438,7 +459,13 @@ export function NfeImportPanel({
     const draft = conversionDrafts[key] ?? {
       xmlUnit: availableUnits[0] ?? "",
       mode: "fixed_factor",
-      factor: "",
+      entry: preferredFixedConversionEntry(
+        availableUnits[0] ?? "",
+        targetKind === "purchase"
+          ? orderItem.purchaseUnit
+          : orderItem.pricingUnit,
+      ),
+      entryValue: "",
     };
     const targetUnit =
       targetKind === "purchase"
@@ -454,7 +481,14 @@ export function NfeImportPanel({
     data.set("targetKind", targetKind);
     data.set("targetUnit", targetUnit);
     data.set("mode", draft.mode);
-    if (draft.factor) data.set("factor", draft.factor);
+    const factor = canonicalConversionFactor({
+      entry: draft.entry,
+      value: parsedDecimal(draft.entryValue),
+      sourceQuantity: totalForXmlUnit(imported.xmlItems, draft.xmlUnit),
+    });
+    if (draft.mode === "fixed_factor" && factor !== null) {
+      data.set("factor", String(factor));
+    }
     const result = await saveSupplierProductNfeUnitRule(data);
     if (result.error || !result.rule) {
       setError(result.error ?? "Não foi possível salvar a conversão.");
@@ -500,16 +534,27 @@ export function NfeImportPanel({
   ) {
     const key = `${orderItem.id}:${targetKind}`;
     const units = sourceUnits(imported.xmlItems);
-    const fallback: ConversionDraft = {
-      xmlUnit: units[0] ?? "",
-      mode: "fixed_factor",
-      factor: "",
-    };
-    const draft = conversionDrafts[key] ?? fallback;
     const targetUnit =
       targetKind === "purchase"
         ? orderItem.purchaseUnit
         : orderItem.pricingUnit;
+    const fallback: ConversionDraft = {
+      xmlUnit: units[0] ?? "",
+      mode: "fixed_factor",
+      entry: preferredFixedConversionEntry(units[0] ?? "", targetUnit),
+      entryValue: "",
+    };
+    const draft = conversionDrafts[key] ?? fallback;
+    const sourceTotal = totalForXmlUnit(imported.xmlItems, draft.xmlUnit);
+    const canonicalFactor = canonicalConversionFactor({
+      entry: draft.entry,
+      value: parsedDecimal(draft.entryValue),
+      sourceQuantity: sourceTotal,
+    });
+    const convertedTotal =
+      sourceTotal !== null && canonicalFactor !== null
+        ? sourceTotal * canonicalFactor
+        : null;
     return (
       <div
         key={key}
@@ -529,7 +574,7 @@ export function NfeImportPanel({
             KG).
           </p>
         ) : null}
-        <div className="mt-3 grid gap-3 sm:grid-cols-[10rem_minmax(12rem,1fr)_10rem_auto] sm:items-end">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-[9rem_13rem_minmax(11rem,1fr)_10rem_auto] xl:items-end">
           <div>
             <label className="text-fg-muted mb-1 block text-xs">
               Unidade na nota
@@ -540,7 +585,12 @@ export function NfeImportPanel({
               onValueChange={(xmlUnit) =>
                 setConversionDrafts((current) => ({
                   ...current,
-                  [key]: { ...draft, xmlUnit },
+                  [key]: {
+                    ...draft,
+                    xmlUnit,
+                    entry: preferredFixedConversionEntry(xmlUnit, targetUnit),
+                    entryValue: "",
+                  },
                 }))
               }
               options={units.map((unit) => ({ value: unit, label: unit }))}
@@ -565,7 +615,7 @@ export function NfeImportPanel({
               options={[
                 {
                   value: "fixed_factor",
-                  label: `Cada embalagem equivale a uma quantidade fixa de ${targetUnit}`,
+                  label: `Relação fixa entre a nota e ${targetUnit}`,
                 },
                 ...(targetKind === "purchase" && !orderItem.sameUnit
                   ? [
@@ -579,26 +629,92 @@ export function NfeImportPanel({
             />
           </div>
           {draft.mode === "fixed_factor" ? (
-            <div>
-              <label className="text-fg-muted mb-1 block text-xs">
-                1 {draft.xmlUnit} equivale a
-              </label>
-              <div className="flex items-center gap-2">
+            <>
+              <div>
+                <label className="text-fg-muted mb-1 block text-xs">
+                  Como prefere informar
+                </label>
+                <ThemedSelect
+                  id={`conversion-entry-${key}`}
+                  value={draft.entry}
+                  onValueChange={(value) => {
+                    const entry = value as FixedConversionEntry;
+                    const previousFactor = canonicalConversionFactor({
+                      entry: draft.entry,
+                      value: parsedDecimal(draft.entryValue),
+                      sourceQuantity: sourceTotal,
+                    });
+                    const entryValue = entryValueFromCanonicalFactor({
+                      entry,
+                      factor: previousFactor,
+                      sourceQuantity: sourceTotal,
+                    });
+                    setConversionDrafts((current) => ({
+                      ...current,
+                      [key]: {
+                        ...draft,
+                        entry,
+                        entryValue:
+                          entryValue === null ? "" : String(entryValue),
+                      },
+                    }));
+                  }}
+                  options={[
+                    ...(isWeightNfeUnit(draft.xmlUnit) &&
+                    !isWeightNfeUnit(targetUnit)
+                      ? [
+                          {
+                            value: "target_to_source",
+                            label: `Peso de cada ${targetUnit}`,
+                          },
+                        ]
+                      : []),
+                    {
+                      value: "invoice_total",
+                      label: "Total correspondente nesta nota",
+                    },
+                    {
+                      value: "source_to_target",
+                      label: `Conversão direta por ${draft.xmlUnit}`,
+                    },
+                  ]}
+                />
+              </div>
+              <div>
+                <label className="text-fg-muted mb-1 block text-xs">
+                  {draft.entry === "target_to_source"
+                    ? `Peso ou medida de cada ${targetUnit}`
+                    : draft.entry === "invoice_total"
+                      ? `Total em ${targetUnit} nesta nota`
+                      : `Quantidade de ${targetUnit} por ${draft.xmlUnit}`}
+                </label>
                 <input
-                  className="border-input bg-background text-fg h-9 min-w-0 rounded-lg border px-3 text-sm"
+                  className="border-input bg-background text-fg h-9 w-full min-w-0 rounded-lg border px-3 text-sm"
                   inputMode="decimal"
-                  value={draft.factor}
+                  value={draft.entryValue}
                   onChange={(event) =>
                     setConversionDrafts((current) => ({
                       ...current,
-                      [key]: { ...draft, factor: event.target.value },
+                      [key]: { ...draft, entryValue: event.target.value },
                     }))
                   }
-                  placeholder="Ex.: 12"
+                  placeholder={
+                    draft.entry === "target_to_source"
+                      ? "Ex.: 0,4"
+                      : draft.entry === "invoice_total"
+                        ? "Ex.: 100"
+                        : "Ex.: 2,5"
+                  }
                 />
-                <span className="text-fg-muted text-xs">{targetUnit}</span>
+                <p className="text-fg-subtle mt-1 text-xs">
+                  {draft.entry === "target_to_source"
+                    ? `1 ${targetUnit} = ${draft.entryValue || "—"} ${draft.xmlUnit}`
+                    : draft.entry === "invoice_total"
+                      ? `${QTY.format(sourceTotal ?? 0)} ${draft.xmlUnit} = ${draft.entryValue || "—"} ${targetUnit}`
+                      : `1 ${draft.xmlUnit} = ${draft.entryValue || "—"} ${targetUnit}`}
+                </p>
               </div>
-            </div>
+            </>
           ) : (
             <p className="text-fg-muted text-xs">
               O saldo pedido será sugerido e exigirá confirmação.
@@ -610,13 +726,23 @@ export function NfeImportPanel({
             disabled={
               savingConversion === key ||
               !draft.xmlUnit ||
-              (draft.mode === "fixed_factor" && !draft.factor)
+              (draft.mode === "fixed_factor" && canonicalFactor === null)
             }
             onClick={() => void saveConversion(orderItem, imported, targetKind)}
           >
             {savingConversion === key ? "Salvando…" : "Salvar e aplicar"}
           </Button>
         </div>
+        {draft.mode === "fixed_factor" && convertedTotal !== null ? (
+          <p className="bg-surface-muted text-fg mt-3 rounded-lg px-3 py-2 text-xs">
+            Prévia: {QTY.format(sourceTotal ?? 0)} {draft.xmlUnit} serão
+            registrados como{" "}
+            <strong>
+              {QTY.format(convertedTotal)} {targetUnit}
+            </strong>
+            .
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -635,10 +761,7 @@ export function NfeImportPanel({
       return;
     }
     const previous = value.items[orderItem.id];
-    if (
-      previous &&
-      previous.receiptAccessKey !== xmlItem.receiptAccessKey
-    ) {
+    if (previous && previous.receiptAccessKey !== xmlItem.receiptAccessKey) {
       setError(
         `"${orderItem.productName}" já está associado a outra NF-e nesta chegada. Confirme as notas em recebimentos parciais separados para preservar a origem fiscal.`,
       );
@@ -1024,7 +1147,9 @@ export function NfeImportPanel({
                           "Emitente não identificado"}
                       </p>
                       <Badge
-                        variant={document.issuerLinked ? "secondary" : "outline"}
+                        variant={
+                          document.issuerLinked ? "secondary" : "outline"
+                        }
                       >
                         {document.issuerLinked
                           ? "Emitente reconhecido"
@@ -1042,7 +1167,9 @@ export function NfeImportPanel({
                         type="button"
                         size="sm"
                         disabled={!canLink || linkingAccessKey === accessKey}
-                        onClick={() => void linkIssuer(document, adoptAsPrimary)}
+                        onClick={() =>
+                          void linkIssuer(document, adoptAsPrimary)
+                        }
                       >
                         {linkingAccessKey === accessKey
                           ? "Vinculando…"
@@ -1074,9 +1201,7 @@ export function NfeImportPanel({
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
                 <div>
                   {value.warnings.map((warning) => (
-                    <p key={warning}>
-                      {warning.replace(/^\[\d{44}\]\s*/, "")}
-                    </p>
+                    <p key={warning}>{warning.replace(/^\[\d{44}\]\s*/, "")}</p>
                   ))}
                   {value.unmatched.length ? (
                     <p>
