@@ -172,7 +172,8 @@ export function RoundRow({
         </span>
         <span className="text-fg-muted block max-w-36 text-xs whitespace-normal tabular-nums sm:hidden">
           {round.totalItems} {round.totalItems === 1 ? "produto" : "produtos"} ·{" "}
-          {round.suppliersResponded} com retorno · {round.suppliersFinalized} concluíram
+          {round.suppliersResponded} com retorno · {round.suppliersFinalized}{" "}
+          concluíram
         </span>
       </TableCell>
       <TableCell className="text-fg-muted hidden text-xs tabular-nums lg:table-cell">
@@ -241,7 +242,6 @@ export function RoundMobileCard({
   if (editando) {
     return (
       <form
-        data-slot="adaptive-row"
         action={formAction}
         className="border-border bg-surface flex flex-col gap-3 rounded-xl border p-4 shadow-xs"
       >
@@ -294,10 +294,7 @@ export function RoundMobileCard({
   }
 
   return (
-    <article
-      data-slot="adaptive-row"
-      className="border-border bg-surface rounded-xl border p-4 shadow-xs"
-    >
+    <article className="border-border bg-surface rounded-xl border p-4 shadow-xs">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="flex min-w-0 items-start gap-1">

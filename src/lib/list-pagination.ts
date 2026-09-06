@@ -1,4 +1,10 @@
-export const PAGE_SIZE_OPTIONS = [10, 20, 30] as const;
+export const PAGE_SIZE_OPTIONS = [10, 20, 30, 50] as const;
+
+/** Vinte cabe inteiro na maioria dos monitores e, onde não cabe, sobra uma
+ * rolagem curta dentro da própria tabela — com o rodapé sempre à vista. É um
+ * número, não uma medição: o servidor devolve a mesma página para todo mundo,
+ * então um link de `?pagina=3` mostra os mesmos registros em qualquer tela. */
+export const DEFAULT_PAGE_SIZE = 20;
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -27,7 +33,7 @@ export function parseListPagination(
       ? range.default
       : acceptedRequestedSize
         ? requestedSize
-        : 10;
+        : DEFAULT_PAGE_SIZE;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const requestedPage = Number(first(params.pagina));
   const page = Math.min(

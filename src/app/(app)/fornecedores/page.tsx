@@ -7,7 +7,6 @@ import { FilterDialog } from "@/components/layout/filter-dialog";
 import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
 import { PageHeader } from "@/components/layout/page-header";
 import { TableSkeleton } from "@/components/layout/page-skeleton";
-import { AdaptivePageSize } from "@/components/ui/adaptive-page-size";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
@@ -23,7 +22,10 @@ import {
 import { formatCnpj } from "@/features/company/cnpj";
 import { listSuppliers } from "@/features/suppliers/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
-import { normalizeListSearch, parseListPagination } from "@/lib/list-pagination";
+import {
+  normalizeListSearch,
+  parseListPagination,
+} from "@/lib/list-pagination";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "Ativo",
@@ -104,7 +106,7 @@ export default function FornecedoresPage({
   searchParams,
 }: PageProps<"/fornecedores">) {
   return (
-    <div className="w-full">
+    <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
         title="Fornecedores"
         description="Cadastro, contatos e situação da rede de fornecimento."
@@ -196,9 +198,7 @@ async function FornecedoresContent({
       `${supplier.name} ${supplier.legal_name ?? ""} ${supplier.document_number ?? ""} ${contacts ?? ""}`,
     ).includes(needle);
   });
-  const pagination = parseListPagination(params, filtrados.length, {
-    pageSizeRange: { min: 1, max: 100, default: 10 },
-  });
+  const pagination = parseListPagination(params, filtrados.length);
   const visiveis = filtrados.slice(pagination.start, pagination.end);
   const filtrosAtivos =
     Number(Boolean(busca)) +
@@ -234,7 +234,8 @@ async function FornecedoresContent({
             />
           </FilterDialog>
           <span className="text-fg-subtle text-xs sm:ml-auto">
-            {counts.ativos} de {counts.total} ativos · {counts.contatos} contatos
+            {counts.ativos} de {counts.total} ativos · {counts.contatos}{" "}
+            contatos
             {counts.avisos > 0 ? ` · ${counts.avisos} avisos abertos` : ""}
           </span>
         </div>
@@ -266,111 +267,114 @@ async function FornecedoresContent({
         />
       ) : (
         <>
-          <AdaptivePageSize
-            current={pagination.pageSize}
-            basePath="/fornecedores"
-          />
-          <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
+          <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-0 sm:flex-1">
             <Table
-              containerClassName="min-h-0 flex-1 overflow-y-hidden"
+              containerClassName="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              containerProps={{
+                key: pagination.page,
+                role: "region",
+                "aria-label": "Lista de fornecedores",
+                tabIndex: 0,
+              }}
             >
-          <TableHeader>
-            <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
-              {/* No celular sobram Fornecedor e Situação. CNPJ e contato
+              <TableHeader className="[&_th]:bg-surface-sunken [&_th]:sticky [&_th]:top-0 [&_th]:z-10">
+                <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
+                  {/* No celular sobram Fornecedor e Situação. CNPJ e contato
                   reaparecem embaixo do nome — e o contato é o que mais importa
                   ver ali: sem ele o fornecedor não entra em rodada. */}
-              <TableHead>Fornecedor</TableHead>
-              <TableHead className="hidden lg:table-cell">CNPJ</TableHead>
-              <TableHead className="hidden sm:table-cell">
-                Contato principal
-              </TableHead>
-              <TableHead>Situação</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visiveis.map((supplier) => {
-              const principal = supplier.supplier_contacts?.find(
-                (c) => c.is_primary && c.is_active,
-              );
-              return (
-                <TableRow key={supplier.id}>
-                  <TableCell>
-                    <IntentPrefetchLink
-                      href={`/fornecedores/${supplier.id}`}
-                      className="text-fg hover:text-primary font-medium"
-                    >
-                      {supplier.name}
-                    </IntentPrefetchLink>
-                    {supplier.legal_name ? (
-                      <span className="text-fg-subtle block text-xs">
-                        {supplier.legal_name}
-                      </span>
-                    ) : null}
-                    {supplier.openNoticeCount > 0 ? (
-                      <span
-                        className={
-                          supplier.hasImportantNotice
-                            ? "text-warning mt-1 flex items-center gap-1 text-xs font-medium"
-                            : "text-fg-muted mt-1 flex items-center gap-1 text-xs"
-                        }
-                      >
-                        {supplier.hasImportantNotice ? (
-                          <AlertTriangle className="size-3.5" aria-hidden />
-                        ) : (
-                          <Bell className="size-3.5" aria-hidden />
-                        )}
-                        {supplier.openNoticeCount}{" "}
-                        {supplier.openNoticeCount === 1
-                          ? "aviso em aberto"
-                          : "avisos em aberto"}
-                      </span>
-                    ) : null}
-                    <span className="text-fg-muted block max-w-40 text-xs whitespace-normal sm:hidden">
-                      {principal
-                        ? `${principal.name}${
-                            principal.whatsapp ?? principal.phone
-                              ? ` · ${principal.whatsapp ?? principal.phone}`
-                              : ""
-                          }`
-                        : "sem contato — não entra em rodada"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
-                    {formatCnpj(supplier.document_number) || "—"}
-                  </TableCell>
-                  <TableCell className="text-fg-muted hidden sm:table-cell">
-                    {principal ? (
-                      <>
-                        {principal.name}
-                        <span className="text-fg-subtle block text-xs">
-                          {principal.whatsapp ?? principal.phone ?? "—"}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-fg-subtle">
-                        sem contato — não entra em rodada
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        supplier.status === "active" ? "default" : "secondary"
-                      }
-                    >
-                      {STATUS_LABEL[supplier.status] ?? supplier.status}
-                    </Badge>
-                  </TableCell>
+                  <TableHead>Fornecedor</TableHead>
+                  <TableHead className="hidden lg:table-cell">CNPJ</TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    Contato principal
+                  </TableHead>
+                  <TableHead>Situação</TableHead>
                 </TableRow>
-              );
-            })}
-          </TableBody>
+              </TableHeader>
+              <TableBody>
+                {visiveis.map((supplier) => {
+                  const principal = supplier.supplier_contacts?.find(
+                    (c) => c.is_primary && c.is_active,
+                  );
+                  return (
+                    <TableRow key={supplier.id}>
+                      <TableCell>
+                        <IntentPrefetchLink
+                          href={`/fornecedores/${supplier.id}`}
+                          className="text-fg hover:text-primary font-medium"
+                        >
+                          {supplier.name}
+                        </IntentPrefetchLink>
+                        {supplier.legal_name ? (
+                          <span className="text-fg-subtle block text-xs">
+                            {supplier.legal_name}
+                          </span>
+                        ) : null}
+                        {supplier.openNoticeCount > 0 ? (
+                          <span
+                            className={
+                              supplier.hasImportantNotice
+                                ? "text-warning mt-1 flex items-center gap-1 text-xs font-medium"
+                                : "text-fg-muted mt-1 flex items-center gap-1 text-xs"
+                            }
+                          >
+                            {supplier.hasImportantNotice ? (
+                              <AlertTriangle className="size-3.5" aria-hidden />
+                            ) : (
+                              <Bell className="size-3.5" aria-hidden />
+                            )}
+                            {supplier.openNoticeCount}{" "}
+                            {supplier.openNoticeCount === 1
+                              ? "aviso em aberto"
+                              : "avisos em aberto"}
+                          </span>
+                        ) : null}
+                        <span className="text-fg-muted block max-w-40 text-xs whitespace-normal sm:hidden">
+                          {principal
+                            ? `${principal.name}${
+                                (principal.whatsapp ?? principal.phone)
+                                  ? ` · ${principal.whatsapp ?? principal.phone}`
+                                  : ""
+                              }`
+                            : "sem contato — não entra em rodada"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-fg-muted hidden font-mono text-xs lg:table-cell">
+                        {formatCnpj(supplier.document_number) || "—"}
+                      </TableCell>
+                      <TableCell className="text-fg-muted hidden sm:table-cell">
+                        {principal ? (
+                          <>
+                            {principal.name}
+                            <span className="text-fg-subtle block text-xs">
+                              {principal.whatsapp ?? principal.phone ?? "—"}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-fg-subtle">
+                            sem contato — não entra em rodada
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            supplier.status === "active"
+                              ? "default"
+                              : "secondary"
+                          }
+                        >
+                          {STATUS_LABEL[supplier.status] ?? supplier.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
             </Table>
             <DataTablePagination
               page={pagination.page}
               pageSize={pagination.pageSize}
               total={filtrados.length}
-              allowPageSize={false}
             />
           </div>
         </>

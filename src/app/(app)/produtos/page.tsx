@@ -6,7 +6,6 @@ import { EmptyState } from "@/components/layout/empty-state";
 import { FilterDialog } from "@/components/layout/filter-dialog";
 import { PageHeader } from "@/components/layout/page-header";
 import { TableSkeleton } from "@/components/layout/page-skeleton";
-import { AdaptivePageSize } from "@/components/ui/adaptive-page-size";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
@@ -102,7 +101,7 @@ function ProductFilterFields({
 
 export default function ProdutosPage({ searchParams }: PageProps<"/produtos">) {
   return (
-    <div className="w-full">
+    <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
         title="Produtos"
         description="Catálogo único: revenda e uso interno, separados pela finalidade."
@@ -160,9 +159,6 @@ async function ProdutosContent({
   const requestedPagination = parseListPagination(
     parametros,
     Number.MAX_SAFE_INTEGER,
-    {
-      pageSizeRange: { min: 1, max: 100, default: 10 },
-    },
   );
   const [catalog, permissions] = await Promise.all([
     listProductsPage(company.companyId, filters, {
@@ -219,11 +215,7 @@ async function ProdutosContent({
         />
       ) : (
         <>
-          <AdaptivePageSize
-            current={catalog.pageSize}
-            basePath="/produtos"
-          />
-          <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
+          <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-0 sm:flex-1">
             {/* Sete colunas não cabem num celular: a tabela rolaria de lado e
                 levaria o botão de ação para fora da tela. Abaixo de `sm` a
                 linha vira ficha empilhada — o nome ocupa a largura toda e o
@@ -231,9 +223,17 @@ async function ProdutosContent({
                 é tabela de novo, ganhando uma coluna a cada respiro. */}
             <Table
               className="block sm:table"
-              containerClassName="min-h-0 flex-1 overflow-y-hidden"
+              containerClassName="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              containerProps={{
+                key: catalog.page,
+                role: "region",
+                "aria-label": "Catálogo de produtos",
+                tabIndex: 0,
+              }}
             >
-              <TableHeader className="hidden sm:table-header-group">
+              {/* Preso ao topo porque agora são as linhas que rolam: sem isto
+                  os rótulos das colunas somem logo na primeira rolagem. */}
+              <TableHeader className="hidden sm:table-header-group [&_th]:bg-surface-sunken [&_th]:sticky [&_th]:top-0 [&_th]:z-10">
                 <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
                   <TableHead>Produto</TableHead>
                   <TableHead className="hidden md:table-cell">
@@ -348,7 +348,6 @@ async function ProdutosContent({
               page={catalog.page}
               pageSize={catalog.pageSize}
               total={catalog.total}
-              allowPageSize={false}
             />
           </div>
         </>
@@ -373,10 +372,7 @@ function CatalogMaintenance({
   units?: number;
 }) {
   return (
-    <p
-      data-slot="adaptive-page-trailing"
-      className="text-fg-subtle border-border mt-8 border-t pt-4 text-xs"
-    >
+    <p className="text-fg-subtle border-border mt-8 border-t pt-4 text-xs">
       Manutenção do catálogo:{" "}
       <Link
         href="/produtos/categorias"

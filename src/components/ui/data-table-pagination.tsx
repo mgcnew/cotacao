@@ -57,7 +57,7 @@ export function DataTablePagination({
   return (
     <footer
       data-slot="table-pagination"
-      className="border-border bg-surface-sunken mt-auto flex flex-col gap-3 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+      className="border-border bg-surface-sunken mt-auto flex shrink-0 flex-col gap-3 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="text-fg-muted flex flex-wrap items-center gap-3 text-xs">
         <span className="tabular-nums">

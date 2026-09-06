@@ -14,7 +14,6 @@ import { FilterDialog } from "@/components/layout/filter-dialog";
 import { NewRoundDialog } from "@/components/rounds/round-dialogs";
 import { RoundFilterFields } from "@/components/rounds/round-filter-bar";
 import { RoundMobileCard, RoundRow } from "@/components/rounds/round-row";
-import { AdaptivePageSize } from "@/components/ui/adaptive-page-size";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
@@ -65,7 +64,7 @@ export default async function ComprasPage({
   const podeCriar = permissions.has("purchase_round.create");
 
   return (
-    <div className="w-full">
+    <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
         title="Compras"
         description="Cada rodada reúne produtos, convida fornecedores, recebe preços e vira pedido."
@@ -130,9 +129,7 @@ async function ListaDeRodadas({
   const podeEditarRodada = permissions.has("purchase_round.update");
   const rounds = await listRoundsWithProgress(companyId, filters);
   const resumo = summarizeRounds(rounds);
-  const pagination = parseListPagination(paginationParams, rounds.length, {
-    pageSizeRange: { min: 1, max: 100, default: 10 },
-  });
+  const pagination = parseListPagination(paginationParams, rounds.length);
   const visibleRounds = rounds.slice(pagination.start, pagination.end);
   const presentedRounds = visibleRounds.map((round) => {
     const id = round.purchase_round_id ?? "";
@@ -217,12 +214,7 @@ async function ListaDeRodadas({
       ) : (
         <>
           <div className="sm:hidden">
-            <AdaptivePageSize
-              current={pagination.pageSize}
-              basePath="/compras"
-              minRows={1}
-            />
-            <div className="flex flex-col gap-3 overflow-hidden">
+            <div className="flex flex-col gap-3">
               {presentedRounds.map((item) => (
                 <RoundMobileCard key={item.round.id} {...item} />
               ))}
@@ -230,48 +222,52 @@ async function ListaDeRodadas({
                 page={pagination.page}
                 pageSize={pagination.pageSize}
                 total={rounds.length}
-                allowPageSize={false}
               />
             </div>
           </div>
           <div className="hidden sm:contents">
-            <AdaptivePageSize
-              current={pagination.pageSize}
-              basePath="/compras"
-            />
-            <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
-              <Table containerClassName="min-h-0 flex-1 overflow-y-hidden">
-              <TableHeader>
-                <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
-                  {/* No celular sobram Rodada, Situação e a ação. O que some da
+            <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-0 sm:flex-1">
+              <Table
+                containerClassName="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                containerProps={{
+                  key: pagination.page,
+                  role: "region",
+                  "aria-label": "Lista de rodadas",
+                  tabIndex: 0,
+                }}
+              >
+                <TableHeader className="[&_th]:bg-surface-sunken [&_th]:sticky [&_th]:top-0 [&_th]:z-10">
+                  <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
+                    {/* No celular sobram Rodada, Situação e a ação. O que some da
                   linha reaparece embaixo do título, para a tabela não rolar de
                   lado e levar o botão para fora da tela. */}
-                  <TableHead>Rodada</TableHead>
-                  <TableHead className="hidden lg:table-cell">Criada</TableHead>
-                  <TableHead className="hidden text-right sm:table-cell">
-                    Produtos
-                  </TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    Retorno / conclusão
-                  </TableHead>
-                  <TableHead className="hidden text-right lg:table-cell">
-                    Pedidos
-                  </TableHead>
-                  <TableHead>Situação</TableHead>
-                  <TableHead className="text-right">Próximo passo</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {presentedRounds.map((item) => (
-                  <RoundRow key={item.round.id} {...item} />
-                ))}
-              </TableBody>
+                    <TableHead>Rodada</TableHead>
+                    <TableHead className="hidden lg:table-cell">
+                      Criada
+                    </TableHead>
+                    <TableHead className="hidden text-right sm:table-cell">
+                      Produtos
+                    </TableHead>
+                    <TableHead className="hidden md:table-cell">
+                      Retorno / conclusão
+                    </TableHead>
+                    <TableHead className="hidden text-right lg:table-cell">
+                      Pedidos
+                    </TableHead>
+                    <TableHead>Situação</TableHead>
+                    <TableHead className="text-right">Próximo passo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {presentedRounds.map((item) => (
+                    <RoundRow key={item.round.id} {...item} />
+                  ))}
+                </TableBody>
               </Table>
               <DataTablePagination
                 page={pagination.page}
                 pageSize={pagination.pageSize}
                 total={rounds.length}
-                allowPageSize={false}
               />
             </div>
           </div>

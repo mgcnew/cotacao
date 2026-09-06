@@ -101,9 +101,17 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             os formulários põem os campos em grade (`sm:grid-cols-2`,
             `lg:grid-cols-3`) para que nenhum deles fique sozinho esticado de
             ponta a ponta. */}
+        {/* Coluna flex para que uma tela possa travar a lista na viewport com
+            `sm:flex-1 sm:min-h-0`: o rodapé da paginação encosta no fim da
+            janela e só as linhas rolam, por dentro. Quem não adere não sente
+            diferença — um filho de altura natural continua se comportando
+            como antes, e o `overflow-y-auto` segue valendo para o celular,
+            onde a página inteira volta a rolar. O `py-6` daqui é o respiro de
+            baixo; antes esse mesmo 24 estava copiado à mão no JS que media a
+            tabela. */}
         <main
           data-slot="app-main"
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-6"
         >
           {children}
         </main>

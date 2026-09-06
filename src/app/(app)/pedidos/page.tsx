@@ -72,7 +72,11 @@ export default async function PedidosPage({
   const podeCriar = permissions.has("order.create");
 
   return (
-    <div className="w-full">
+    // Da largura `sm` para cima a tela ocupa a altura da janela e quem rola é
+    // só a faixa de linhas, com o rodapé da paginação sempre à vista. No
+    // celular volta a ser fluxo normal: rolagem aninhada em toque encadeia,
+    // atrapalha o recolher da barra do navegador e afasta a paginação do dedo.
+    <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
         title="Pedidos"
         description="Da geração ao recebimento. O pedido é enviado ao fornecedor, confirmado por ele, e só então a mercadoria pode dar entrada."
@@ -201,7 +205,7 @@ async function ListaDePedidos({
   return (
     <>
       {orders.length > 0 ? (
-        <div className="mb-4 grid grid-cols-2 gap-2 sm:mb-6 sm:gap-3 lg:grid-cols-4">
+        <div className="mb-4 grid shrink-0 grid-cols-2 gap-2 sm:mb-6 sm:gap-3 lg:grid-cols-4">
           <Metric
             label={filtrando ? "Pedidos nesta seleção" : "Pedidos"}
             value={String(summary.quantity)}
@@ -250,8 +254,8 @@ async function ListaDePedidos({
           }
         />
       ) : (
-        <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs">
-          <div className="bg-surface-sunken text-fg-muted hidden grid-cols-[minmax(5rem,.7fr)_minmax(9rem,1.4fr)_7rem_4rem_7rem_minmax(8rem,1fr)_8rem] gap-3 border-b px-4 py-2 text-xs font-medium sm:grid">
+        <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-0 sm:flex-1">
+          <div className="bg-surface-sunken text-fg-muted hidden shrink-0 grid-cols-[minmax(5rem,.7fr)_minmax(9rem,1.4fr)_7rem_4rem_7rem_minmax(8rem,1fr)_8rem] gap-3 border-b px-4 py-2 text-xs font-medium sm:grid">
             <span>Pedido</span>
             <span>Fornecedor</span>
             <span>Entrega</span>
@@ -260,7 +264,19 @@ async function ListaDePedidos({
             <span>Situação</span>
             <span className="text-right">Próximo passo</span>
           </div>
-          <div className="divide-border divide-y">
+          {/* `key` na página: sem ela o React reaproveita este nó ao navegar
+                e o `scrollTop` fica onde estava — você chegaria na página 2 já
+                no meio dela. `overscroll-contain` impede que chegar ao fim da
+                lista continue rolando a página atrás. `tabIndex` porque o
+                Chrome não dá foco a caixa rolável, e sem ele quem navega por
+                teclado não alcança as linhas de baixo. */}
+          <div
+            key={page}
+            role="region"
+            aria-label="Lista de pedidos"
+            tabIndex={0}
+            className="divide-border min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain focus-visible:outline-none"
+          >
             {presentedOrders.map((item) => (
               <OrderResponsiveRow key={item.order.id} {...item} />
             ))}
