@@ -1,4 +1,4 @@
-import { Package, Pencil } from "lucide-react";
+import { MoreHorizontal, Package, Pencil } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -9,6 +9,16 @@ import { TableSkeleton } from "@/components/layout/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import {
+  DropdownMenu,
+  DropdownMenuBadge,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -119,31 +129,85 @@ export default function ProdutosPage({ searchParams }: PageProps<"/produtos">) {
   );
 }
 
+/**
+ * Uma ação primária e um `⋯` com o resto.
+ *
+ * "Novo produto" é a razão de existir desta tela: dentro do menu custaria dois
+ * cliques na ação mais frequente e o olho perderia onde pousar. As outras são
+ * ocasionais — importar, corrigir, manter categorias e unidades — e três
+ * botões de contorno na mesma linha competiam com ela sem precisar.
+ *
+ * A permissão é lida item a item, e não no menu inteiro: quem só consulta
+ * continua chegando a categorias e unidades, que são navegação, não edição.
+ */
 async function ProductCatalogActions() {
   const company = await requireActiveCompany();
-  const permissions = await getPermissions(company.companyId);
+  const [permissions, counts] = await Promise.all([
+    getPermissions(company.companyId),
+    getCatalogCounts(company.companyId),
+  ]);
   const canCreate = permissions.has("product.create");
   const canUpdate = permissions.has("product.update");
 
-  return canCreate || canUpdate ? (
+  return (
     <>
-      {canUpdate ? (
-        <Button asChild size="sm" variant="outline">
-          <Link href="/produtos/correcao-unidades">Corrigir unidades</Link>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="icon-sm"
+            variant="outline"
+            aria-label="Mais ações do catálogo"
+          >
+            <MoreHorizontal aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Catálogo</DropdownMenuLabel>
+            <DropdownMenuItem asChild>
+              <Link href="/produtos/categorias">
+                Categorias
+                <DropdownMenuBadge>{counts.categories}</DropdownMenuBadge>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/produtos/unidades">
+                Unidades
+                <DropdownMenuBadge>{counts.units}</DropdownMenuBadge>
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+
+          {canCreate || canUpdate ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Ferramentas</DropdownMenuLabel>
+                {canCreate ? (
+                  <DropdownMenuItem asChild>
+                    <Link href="/produtos/importacoes">Importar planilha</Link>
+                  </DropdownMenuItem>
+                ) : null}
+                {canUpdate ? (
+                  <DropdownMenuItem asChild>
+                    <Link href="/produtos/correcao-unidades">
+                      Corrigir unidades
+                    </Link>
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuGroup>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {canCreate ? (
+        <Button asChild size="sm">
+          <Link href="/produtos/novo">Novo produto</Link>
         </Button>
       ) : null}
-      {canCreate ? (
-        <>
-          <Button asChild size="sm" variant="outline">
-            <Link href="/produtos/importacoes">Importar planilha</Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href="/produtos/novo">Novo produto</Link>
-          </Button>
-        </>
-      ) : null}
     </>
-  ) : null;
+  );
 }
 
 async function ProdutosContent({
@@ -176,7 +240,7 @@ async function ProdutosContent({
   return (
     <>
       {catalog.catalogTotal > 0 ? (
-        <div className="mb-4 flex items-center">
+        <div className="mb-4 flex shrink-0 items-center">
           <FilterDialog basePath="/produtos" ativos={filtrosAtivos}>
             <ProductFilterFields
               busca={filters.busca}
@@ -207,9 +271,17 @@ async function ProdutosContent({
           description="Cadastre o primeiro produto com a unidade de compra, a de precificação e a de comparação. Se a categoria ou a unidade que você precisa ainda não existir, dá para criá-la ali mesmo."
           action={
             podeCriar ? (
-              <Button asChild size="sm">
-                <Link href="/produtos/novo">Cadastrar produto</Link>
-              </Button>
+              // A importação também aparece aqui, e não só no `⋯`: numa conta
+              // recém-criada ela é o caminho mais provável, e escondida no
+              // menu sumiria justo de quem mais precisa dela.
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button asChild size="sm">
+                  <Link href="/produtos/novo">Cadastrar produto</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/produtos/importacoes">Importar planilha</Link>
+                </Button>
+              </div>
             ) : null
           }
         />
@@ -352,53 +424,6 @@ async function ProdutosContent({
           </div>
         </>
       )}
-
-      {/* Categorias e unidades saíram do cabeçalho: são manutenção de catálogo,
-          não o que se vem fazer aqui todo dia — e o cadastro de produto já cria
-          a que faltar. Continuam alcançáveis porque é por Categorias que se
-          chega aos atributos, que não cabem no fluxo do produto. */}
-      <Suspense fallback={<CatalogMaintenance />}>
-        <CatalogMaintenanceWithCounts companyId={company.companyId} />
-      </Suspense>
     </>
-  );
-}
-
-function CatalogMaintenance({
-  categories,
-  units,
-}: {
-  categories?: number;
-  units?: number;
-}) {
-  return (
-    <p className="text-fg-subtle border-border mt-8 border-t pt-4 text-xs">
-      Manutenção do catálogo:{" "}
-      <Link
-        href="/produtos/categorias"
-        className="hover:text-fg underline-offset-4 hover:underline"
-      >
-        categorias
-      </Link>{" "}
-      {categories === undefined ? null : <>({categories})</>} ·{" "}
-      <Link
-        href="/produtos/unidades"
-        className="hover:text-fg underline-offset-4 hover:underline"
-      >
-        unidades
-      </Link>{" "}
-      {units === undefined ? null : <>({units})</>}
-    </p>
-  );
-}
-
-async function CatalogMaintenanceWithCounts({
-  companyId,
-}: {
-  companyId: string;
-}) {
-  const counts = await getCatalogCounts(companyId);
-  return (
-    <CatalogMaintenance categories={counts.categories} units={counts.units} />
   );
 }
