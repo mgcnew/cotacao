@@ -296,7 +296,7 @@ async function ProdutosContent({
                 é tabela de novo, ganhando uma coluna a cada respiro. */}
             <Table
               className="block sm:table"
-              containerClassName="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              containerClassName="sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain"
               containerProps={{
                 key: catalog.page,
                 role: "region",

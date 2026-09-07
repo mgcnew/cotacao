@@ -564,13 +564,20 @@ html:has([data-slot="landing-page"]) {
    polegar sem encolher a área de clique. */
 [data-slot="table-container"],
 [data-slot="list-scroll"] {
-  /* Reserva o trilho mesmo sem rolagem. Sem isto a barra some na última página
-     — que quase sempre é a curta — e a coluna da direita pula de largura a cada
-     vez que se vira a página. Mesmo motivo do `dialog-body` logo abaixo. */
-  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklab, var(--border-strong) 65%, transparent)
     transparent;
+}
+
+/* Reserva o trilho mesmo sem rolagem, para a coluna da direita não pular de
+   largura ao virar para a última página — que quase sempre é a curta. Só a
+   partir de `sm`, onde a lista rola por dentro e a barra ocupa espaço: no
+   celular quem rola é a página. Mesmo motivo do `dialog-body` acima. */
+@media (min-width: 40rem) {
+  [data-slot="table-container"],
+  [data-slot="list-scroll"] {
+    scrollbar-gutter: stable;
+  }
 }
 
 [data-slot="table-container"]:hover,

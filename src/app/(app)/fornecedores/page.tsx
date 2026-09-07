@@ -269,7 +269,7 @@ async function FornecedoresContent({
         <>
           <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-0 sm:flex-1">
             <Table
-              containerClassName="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              containerClassName="sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain"
               containerProps={{
                 key: pagination.page,
                 role: "region",

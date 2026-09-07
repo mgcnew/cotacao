@@ -72,7 +72,7 @@ export default async function ShoppingListPage({
                 role="region"
                 aria-label="Itens da lista de compras"
                 tabIndex={0}
-                className="min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-none"
+                className="sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain focus-visible:outline-none"
               >
                 {visibleItems.map((item) => (
                   <form

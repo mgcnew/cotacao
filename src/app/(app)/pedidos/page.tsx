@@ -269,14 +269,20 @@ async function ListaDePedidos({
                 no meio dela. `overscroll-contain` impede que chegar ao fim da
                 lista continue rolando a página atrás. `tabIndex` porque o
                 Chrome não dá foco a caixa rolável, e sem ele quem navega por
-                teclado não alcança as linhas de baixo. */}
+                teclado não alcança as linhas de baixo.
+
+                Tudo isso a partir de `sm`, junto com a trava de altura. No
+                celular a faixa não tem o que rolar por dentro, e um
+                `overscroll-contain` numa caixa sem rolagem própria engole o
+                gesto em vez de repassá-lo: o dedo sobre a tabela não movia
+                nada, só fora dela. */}
           <div
             key={page}
             data-slot="list-scroll"
             role="region"
             aria-label="Lista de pedidos"
             tabIndex={0}
-            className="divide-border min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain focus-visible:outline-none"
+            className="divide-border divide-y sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain focus-visible:outline-none"
           >
             {presentedOrders.map((item) => (
               <OrderResponsiveRow key={item.order.id} {...item} />
