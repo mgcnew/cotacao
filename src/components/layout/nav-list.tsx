@@ -9,6 +9,7 @@ import {
   NAV_GROUPS,
   type NavItem,
 } from "@/components/layout/nav-items";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -30,12 +31,15 @@ export function NavLink({
   onNavigate?: () => void;
 }) {
   const Icon = item.icon;
-  return (
+  const link = (
     <Link
       href={item.href}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
-      title={collapsed ? item.label : undefined}
+      // Recolhido, o rótulo some da tela e o ícone é `aria-hidden`: sem este
+      // nome o item ficaria anônimo. Antes quem o dava era o `title`, que a
+      // dica com tema não repõe — ela descreve, não nomeia.
+      aria-label={collapsed ? item.label : undefined}
       className={cn(
         "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
         "transition-colors duration-(--dur) ease-(--ease-ds)",
@@ -49,6 +53,10 @@ export function NavLink({
       {!collapsed && <span className="truncate">{item.label}</span>}
     </Link>
   );
+
+  // Só recolhido: com o rótulo ao lado do ícone, a dica repetiria o que já
+  // está escrito.
+  return collapsed ? <Tooltip content={item.label}>{link}</Tooltip> : link;
 }
 
 /** Itens que o usuário pode ver, segundo as permissões da empresa ativa. */

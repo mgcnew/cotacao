@@ -6,6 +6,7 @@ import * as React from "react";
 import { CotaProMark } from "@/components/brand/cotapro-logo";
 import { GlobalSearch } from "@/components/layout/global-search";
 import { NavLink, useVisibleNav } from "@/components/layout/nav-list";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -99,27 +100,47 @@ export function AppSidebar({ companyName, permissions }: Props) {
             active={isActive(item.href)}
           />
         ))}
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
-          className={cn(
-            "text-fg-subtle hover:bg-surface-muted hover:text-fg-muted",
-            "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
-            "transition-colors duration-(--dur)",
-            collapsed && "justify-center px-0",
-          )}
-        >
-          <ChevronLeft
-            className={cn(
-              "size-4 shrink-0 transition-transform duration-(--dur)",
-              collapsed && "rotate-180",
-            )}
-            aria-hidden
-          />
-          {!collapsed && <span>Recolher</span>}
-        </button>
+        <ExpandToggle
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((v) => !v)}
+        />
       </div>
     </aside>
   );
+}
+
+/** Vizinho dos itens de menu, e recolhido fica só com o ícone: ganha a mesma
+ * dica, senão seria o único da coluna sem explicação ao passar o ponteiro. */
+function ExpandToggle({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const rotulo = collapsed ? "Expandir menu" : "Recolher menu";
+  const botao = (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={rotulo}
+      className={cn(
+        "text-fg-subtle hover:bg-surface-muted hover:text-fg-muted",
+        "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
+        "transition-colors duration-(--dur)",
+        collapsed && "justify-center px-0",
+      )}
+    >
+      <ChevronLeft
+        className={cn(
+          "size-4 shrink-0 transition-transform duration-(--dur)",
+          collapsed && "rotate-180",
+        )}
+        aria-hidden
+      />
+      {!collapsed && <span>Recolher</span>}
+    </button>
+  );
+
+  return collapsed ? <Tooltip content={rotulo}>{botao}</Tooltip> : botao;
 }

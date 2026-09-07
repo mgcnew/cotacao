@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 
 /** Atalho binário do topo; a opção "seguir o sistema" continua nas configurações. */
 export function ThemeToggle() {
@@ -18,17 +19,18 @@ export function ThemeToggle() {
   const label = dark ? "Ativar modo claro" : "Ativar modo escuro";
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      disabled={!mounted}
-      aria-label={label}
-      title={label}
-      onClick={() => setTheme(dark ? "light" : "dark")}
-      className="text-fg-muted"
-    >
-      {dark ? <Sun aria-hidden /> : <Moon aria-hidden />}
-    </Button>
+    <Tooltip content={label} side="bottom">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        disabled={!mounted}
+        aria-label={label}
+        onClick={() => setTheme(dark ? "light" : "dark")}
+        className="text-fg-muted"
+      >
+        {dark ? <Sun aria-hidden /> : <Moon aria-hidden />}
+      </Button>
+    </Tooltip>
   );
 }

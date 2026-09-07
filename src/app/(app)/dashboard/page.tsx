@@ -4,7 +4,6 @@ import {
   MessageCircle,
   MessageSquareText,
   PackageCheck,
-  Plus,
   ShoppingCart,
   TrendingDown,
   TriangleAlert,
@@ -22,6 +21,7 @@ import { FirstSteps } from "@/components/dashboard/first-steps";
 import { HistoricalReplenishments } from "@/components/dashboard/historical-replenishments";
 import { RecurringPurchases } from "@/components/dashboard/recurring-purchases";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   CardSkeleton,
   ListSkeleton,
@@ -85,30 +85,19 @@ export default async function DashboardPage() {
             {TODAY.format(new Date())}
           </div>
           <div className="flex flex-wrap gap-2">
-            {permissions.has("purchase_round.create") ? (
-              <Button asChild size="sm">
-                <Link href="/compras/nova">
-                  <Plus aria-hidden /> Nova rodada
-                </Link>
-              </Button>
-            ) : null}
-            {permissions.has("order.create") ? (
-              <Button asChild size="sm" variant="outline">
-                <Link href="/pedidos/novo">Novo pedido</Link>
-              </Button>
-            ) : null}
             {permissions.has("purchase_round.view") ? (
-              <Button
-                asChild
-                size="icon-sm"
-                variant="outline"
-                title="WhatsApp Compras"
-                className="hidden md:inline-flex"
-              >
-                <Link href="/whatsapp" aria-label="Abrir WhatsApp Compras">
-                  <MessageCircle aria-hidden />
-                </Link>
-              </Button>
+              <Tooltip content="WhatsApp Compras" side="bottom">
+                <Button
+                  asChild
+                  size="icon-sm"
+                  variant="outline"
+                  className="hidden md:inline-flex"
+                >
+                  <Link href="/whatsapp" aria-label="Abrir WhatsApp Compras">
+                    <MessageCircle aria-hidden />
+                  </Link>
+                </Button>
+              </Tooltip>
             ) : null}
           </div>
         </div>
@@ -495,7 +484,9 @@ async function Financial({ companyId }: { companyId: string }) {
               <DashboardMetric
                 icon={PackageCheck}
                 label="Ganho estimado nas embalagens"
-                value={MONEY.format(financial.economiaEscolhaEmbalagensEstimada)}
+                value={MONEY.format(
+                  financial.economiaEscolhaEmbalagensEstimada,
+                )}
                 hint="Custo por unidade do vencedor contra a melhor alternativa"
                 tone={
                   financial.economiaEscolhaEmbalagensEstimada > 0
@@ -545,7 +536,9 @@ async function Financial({ companyId }: { companyId: string }) {
               <DashboardMetric
                 icon={PackageCheck}
                 label="Ganho realizado nas embalagens"
-                value={MONEY.format(financial.economiaEscolhaEmbalagensRealizada)}
+                value={MONEY.format(
+                  financial.economiaEscolhaEmbalagensRealizada,
+                )}
                 hint="Vantagem proporcional às embalagens efetivamente recebidas"
                 tone={
                   financial.economiaEscolhaEmbalagensRealizada > 0

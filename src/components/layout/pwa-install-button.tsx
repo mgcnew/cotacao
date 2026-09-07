@@ -4,6 +4,7 @@ import { Download, Share } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogBody,
@@ -82,18 +83,19 @@ export function PwaInstallButton() {
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => void install()}
-        className="text-fg-muted px-2"
-        title="Instalar CotaPro"
-        aria-label="Instalar CotaPro neste aparelho"
-      >
-        <Download aria-hidden />
-        <span className="hidden xl:inline">Instalar</span>
-      </Button>
+      <Tooltip content="Instalar CotaPro" side="bottom">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => void install()}
+          className="text-fg-muted px-2"
+          aria-label="Instalar CotaPro neste aparelho"
+        >
+          <Download aria-hidden />
+          <span className="hidden xl:inline">Instalar</span>
+        </Button>
+      </Tooltip>
 
       <Dialog open={showIosHelp} onOpenChange={setShowIosHelp}>
         <DialogContent size="sm">

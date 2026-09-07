@@ -12,6 +12,7 @@ import {
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogBody,
@@ -122,8 +123,7 @@ async function applyTuning(
  * então a confirmação do que entrou só pode aparecer aqui dentro.
  */
 export type BarcodeScanOutcome =
-  | { ok: true; label: string }
-  | { ok: false; message: string };
+  { ok: true; label: string } | { ok: false; message: string };
 
 type ScanFeedback = BarcodeScanOutcome & { at: number };
 
@@ -142,7 +142,8 @@ export function BarcodeCameraDialog({
   const [open, setOpen] = React.useState(false);
   const [starting, setStarting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [abilities, setAbilities] = React.useState<CameraAbilities>(NO_ABILITIES);
+  const [abilities, setAbilities] =
+    React.useState<CameraAbilities>(NO_ABILITIES);
   const [torchOn, setTorchOn] = React.useState(false);
   const [zoom, setZoom] = React.useState<number | null>(null);
   const [feedback, setFeedback] = React.useState<ScanFeedback | null>(null);
@@ -152,7 +153,8 @@ export function BarcodeCameraDialog({
   // O conteúdo do Dialog nasce em um portal. Guardar o elemento em estado faz
   // a inicialização esperar o portal realmente montar o <video>; com uma ref
   // simples, o efeito podia rodar antes e ficar eternamente em "Iniciando".
-  const [videoElement, setVideoElement] = React.useState<HTMLVideoElement | null>(null);
+  const [videoElement, setVideoElement] =
+    React.useState<HTMLVideoElement | null>(null);
   // Zoom digital muito alto devolve imagem interpolada, que lê pior que a
   // original: o cursor cobre até 4x, onde ainda há barra de verdade. O `min`
   // é a referência porque nem todo aparelho conta a partir de 1 — alguns
@@ -191,7 +193,9 @@ export function BarcodeCameraDialog({
 
       startTimeout = window.setTimeout(() => {
         if (disposed) return;
-        setError("A câmera demorou para responder. Feche, confira a permissão do navegador e tente novamente.");
+        setError(
+          "A câmera demorou para responder. Feche, confira a permissão do navegador e tente novamente.",
+        );
         setStarting(false);
       }, 12_000);
 
@@ -220,7 +224,9 @@ export function BarcodeCameraDialog({
               // não existe, o navegador descarta em vez de falhar. Pedir já na
               // abertura evita o primeiro quadro fora de foco.
               advanced: [
-                { focusMode: "continuous" } as unknown as MediaTrackConstraintSet,
+                {
+                  focusMode: "continuous",
+                } as unknown as MediaTrackConstraintSet,
               ],
             },
           },
@@ -350,24 +356,30 @@ export function BarcodeCameraDialog({
     // Otimista: o controle acompanha o dedo, e o `applyConstraints` que vem
     // atrás não tem como "voltar" um zoom que o aparelho declarou suportar.
     setZoom(next);
-    void applyTuning(trackRef.current, abilities, { torch: torchOn, zoom: next });
+    void applyTuning(trackRef.current, abilities, {
+      torch: torchOn,
+      zoom: next,
+    });
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          size={triggerLabel ? "default" : "icon-sm"}
-          variant="outline"
-          className={triggerClassName}
-          aria-label="Ler código de barras com a câmera"
-          title="Ler com a câmera"
-        >
-          <Camera className="size-4" aria-hidden />
-          {triggerLabel}
-        </Button>
-      </DialogTrigger>
+      {/* Com `triggerLabel` o botão já diz o que faz; a dica só entra quando
+          ele é apenas o ícone da câmera. */}
+      <MaybeTooltip enabled={!triggerLabel} content="Ler com a câmera">
+        <DialogTrigger asChild>
+          <Button
+            type="button"
+            size={triggerLabel ? "default" : "icon-sm"}
+            variant="outline"
+            className={triggerClassName}
+            aria-label="Ler código de barras com a câmera"
+          >
+            <Camera className="size-4" aria-hidden />
+            {triggerLabel}
+          </Button>
+        </DialogTrigger>
+      </MaybeTooltip>
       <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Ler código de barras</DialogTitle>
@@ -410,7 +422,9 @@ export function BarcodeCameraDialog({
                 tente, e é aí que o código pequeno costuma exigir chegar perto.
                 Ampliar resolve o mesmo problema sem sair da distância que a
                 câmera consegue focar. */}
-            {abilities.zoom && zoom !== null && zoomCeiling > abilities.zoom.min ? (
+            {abilities.zoom &&
+            zoom !== null &&
+            zoomCeiling > abilities.zoom.min ? (
               <label className="absolute inset-x-3 bottom-2 flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
                 <ZoomIn className="size-3.5 shrink-0" aria-hidden />
                 <span className="sr-only">Aproximar sem mover o aparelho</span>
@@ -420,9 +434,7 @@ export function BarcodeCameraDialog({
                   max={zoomCeiling}
                   step={abilities.zoom.step}
                   value={zoom}
-                  onChange={(event) =>
-                    changeZoom(Number(event.target.value))
-                  }
+                  onChange={(event) => changeZoom(Number(event.target.value))}
                   className="accent-primary min-w-0 flex-1"
                 />
                 <span className="w-9 shrink-0 text-right tabular-nums">
@@ -529,5 +541,24 @@ export function BarcodeCameraDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Envolve na dica só quando ela acrescenta algo. */
+function MaybeTooltip({
+  enabled,
+  content,
+  children,
+}: {
+  enabled: boolean;
+  content: string;
+  children: React.ReactNode;
+}) {
+  return enabled ? (
+    <Tooltip content={content} side="top">
+      {children}
+    </Tooltip>
+  ) : (
+    children
   );
 }

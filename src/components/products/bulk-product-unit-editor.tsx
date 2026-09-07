@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 
 import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
@@ -112,10 +113,7 @@ export function BulkProductUnitEditor({
     () =>
       Array.from(
         new Map(
-          products.map((product) => [
-            product.categoryId,
-            product.categoryName,
-          ]),
+          products.map((product) => [product.categoryId, product.categoryName]),
         ),
       )
         .map(([id, name]) => ({ id, name }))
@@ -205,9 +203,7 @@ export function BulkProductUnitEditor({
         const present = next[productId] ?? original;
         const updated: UnitConfiguration = {
           purchaseUnitId:
-            purchaseChoice === KEEP
-              ? present.purchaseUnitId
-              : purchaseChoice,
+            purchaseChoice === KEEP ? present.purchaseUnitId : purchaseChoice,
           pricingUnitId:
             pricingChoice === KEEP ? present.pricingUnitId : pricingChoice,
           comparisonUnitId:
@@ -245,7 +241,10 @@ export function BulkProductUnitEditor({
     value: unit.id,
     label: unit.label,
   }));
-  const keepOptions = [{ value: KEEP, label: "Manter como está" }, ...unitOptions];
+  const keepOptions = [
+    { value: KEEP, label: "Manter como está" },
+    ...unitOptions,
+  ];
   const comparisonOptions = [
     { value: KEEP, label: "Manter como está" },
     { value: NONE, label: "Usar a unidade de precificação" },
@@ -267,8 +266,8 @@ export function BulkProductUnitEditor({
         </div>
         <p className="text-fg-muted mt-1 text-xs">
           Os produtos protegidos não aparecem para seleção e não terão o
-          histórico alterado. Nas configurações, a ordem é compra ·
-          precificação · comparação.
+          histórico alterado. Nas configurações, a ordem é compra · precificação
+          · comparação.
         </p>
       </div>
 
@@ -400,7 +399,12 @@ export function BulkProductUnitEditor({
       <div className="border-border overflow-hidden rounded-lg border">
         <div className="border-border bg-surface-sunken flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
           <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={toggleVisible}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={toggleVisible}
+            >
               {allVisibleSelected ? "Desmarcar página" : "Selecionar página"}
             </Button>
             {filtered.length > visible.length ? (
@@ -434,7 +438,10 @@ export function BulkProductUnitEditor({
           <TableBody>
             {visible.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-fg-muted py-10 text-center">
+                <TableCell
+                  colSpan={6}
+                  className="text-fg-muted py-10 text-center"
+                >
                   Nenhum produto encontrado com estes filtros.
                 </TableCell>
               </TableRow>
@@ -446,9 +453,9 @@ export function BulkProductUnitEditor({
                 product.comparisonUnitCode ?? product.pricingUnitCode;
               const resultingComparisonCode =
                 resulting.comparisonUnitId === null
-                  ? unitById.get(resulting.pricingUnitId)?.code ??
-                    product.pricingUnitCode
-                  : unitById.get(resulting.comparisonUnitId)?.code ?? "—";
+                  ? (unitById.get(resulting.pricingUnitId)?.code ??
+                    product.pricingUnitCode)
+                  : (unitById.get(resulting.comparisonUnitId)?.code ?? "—");
               return (
                 <TableRow
                   key={product.id}
@@ -464,7 +471,10 @@ export function BulkProductUnitEditor({
                     />
                   </TableCell>
                   <TableCell className="font-medium">
-                    <span className="block max-w-72 truncate" title={product.name}>
+                    <span
+                      className="block max-w-72 truncate"
+                      title={product.name}
+                    >
                       {product.name}
                     </span>
                     <span className="text-fg-muted block text-xs md:hidden">
@@ -475,7 +485,8 @@ export function BulkProductUnitEditor({
                     {product.categoryName}
                   </TableCell>
                   <TableCell className="text-fg-muted font-mono text-xs">
-                    {product.purchaseUnitCode} · {product.pricingUnitCode} · {comparisonCode}
+                    {product.purchaseUnitCode} · {product.pricingUnitCode} ·{" "}
+                    {comparisonCode}
                   </TableCell>
                   <TableCell
                     className={
@@ -484,24 +495,28 @@ export function BulkProductUnitEditor({
                         : "text-fg-subtle font-mono text-xs"
                     }
                   >
-                    {unitById.get(resulting.purchaseUnitId)?.code ?? product.purchaseUnitCode} ·{" "}
-                    {unitById.get(resulting.pricingUnitId)?.code ?? product.pricingUnitCode} ·{" "}
-                    {resultingComparisonCode}
+                    {unitById.get(resulting.purchaseUnitId)?.code ??
+                      product.purchaseUnitCode}{" "}
+                    ·{" "}
+                    {unitById.get(resulting.pricingUnitId)?.code ??
+                      product.pricingUnitCode}{" "}
+                    · {resultingComparisonCode}
                   </TableCell>
                   <TableCell>
                     {draft ? (
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => undo(product.id)}
-                        title="Desfazer alteração"
-                      >
-                        <RotateCcw aria-hidden />
-                        <span className="sr-only">
-                          Desfazer alteração de {product.name}
-                        </span>
-                      </Button>
+                      <Tooltip content="Desfazer alteração" side="top">
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => undo(product.id)}
+                        >
+                          <RotateCcw aria-hidden />
+                          <span className="sr-only">
+                            Desfazer alteração de {product.name}
+                          </span>
+                        </Button>
+                      </Tooltip>
                     ) : null}
                   </TableCell>
                 </TableRow>

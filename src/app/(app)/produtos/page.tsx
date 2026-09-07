@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { TableSkeleton } from "@/components/layout/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
   DropdownMenu,
@@ -379,19 +380,16 @@ async function ProdutosContent({
                       <TableCell className="block justify-self-end p-0 sm:table-cell sm:p-2">
                         <div className="flex items-center justify-end gap-1">
                           {product.unitsEditable ? (
-                            <Button
-                              asChild
-                              size="icon-sm"
-                              variant="ghost"
-                              title="Editar unidades"
-                            >
-                              <Link href={`/produtos/editar/${product.id}`}>
-                                <Pencil aria-hidden />
-                                <span className="sr-only">
-                                  Editar unidades de {product.name}
-                                </span>
-                              </Link>
-                            </Button>
+                            <Tooltip content="Editar unidades" side="top">
+                              <Button asChild size="icon-sm" variant="ghost">
+                                <Link href={`/produtos/editar/${product.id}`}>
+                                  <Pencil aria-hidden />
+                                  <span className="sr-only">
+                                    Editar unidades de {product.name}
+                                  </span>
+                                </Link>
+                              </Button>
+                            </Tooltip>
                           ) : null}
                           <form
                             action={setProductActive.bind(
