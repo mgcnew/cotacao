@@ -68,6 +68,7 @@ export default async function ShoppingListPage({
             <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-0 sm:flex-1">
               <div
                 key={pagination.page}
+                data-slot="list-scroll"
                 role="region"
                 aria-label="Itens da lista de compras"
                 tabIndex={0}

@@ -550,6 +550,60 @@ html:has([data-slot="landing-page"]) {
   height: 0;
 }
 
+/* A barra das listas que rolam por dentro do cartão.
+
+   Aqui ela NÃO some, ao contrário da do `main`. A página rolando é evidente
+   por si; já a faixa de linhas dentro de um cartão de borda fechada não dá
+   nenhum outro sinal de que existe conteúdo abaixo — a barra é o aviso. Então
+   ela fica: fina, sem trilho e com pouco contraste em repouso, ganhando corpo
+   quando o ponteiro entra na área.
+
+   `scrollbar-width`/`scrollbar-color` resolvem Firefox e Chromium. O Safari só
+   passou a entender essas duas há pouco, e por isso o bloco `-webkit-` abaixo
+   continua necessário; nele a borda transparente com `background-clip` afina o
+   polegar sem encolher a área de clique. */
+[data-slot="table-container"],
+[data-slot="list-scroll"] {
+  /* Reserva o trilho mesmo sem rolagem. Sem isto a barra some na última página
+     — que quase sempre é a curta — e a coluna da direita pula de largura a cada
+     vez que se vira a página. Mesmo motivo do `dialog-body` logo abaixo. */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--border-strong) 65%, transparent)
+    transparent;
+}
+
+[data-slot="table-container"]:hover,
+[data-slot="list-scroll"]:hover {
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+[data-slot="table-container"]::-webkit-scrollbar,
+[data-slot="list-scroll"]::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-slot="table-container"]::-webkit-scrollbar-track,
+[data-slot="list-scroll"]::-webkit-scrollbar-track,
+[data-slot="table-container"]::-webkit-scrollbar-corner,
+[data-slot="list-scroll"]::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+[data-slot="table-container"]::-webkit-scrollbar-thumb,
+[data-slot="list-scroll"]::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--border-strong) 65%, transparent);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 9999px;
+}
+
+[data-slot="table-container"]:hover::-webkit-scrollbar-thumb,
+[data-slot="list-scroll"]:hover::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+}
+
 /* O Radix bloqueia a janela, mas a janela não é o contêiner rolável deste app.
    Sem esta regra, o `main` mantém sua barra enquanto o DialogBody monta a sua:
    por um quadro aparecem duas barras lado a lado ao abrir um modal. */

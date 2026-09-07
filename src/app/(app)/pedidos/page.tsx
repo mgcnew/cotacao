@@ -272,6 +272,7 @@ async function ListaDePedidos({
                 teclado não alcança as linhas de baixo. */}
           <div
             key={page}
+            data-slot="list-scroll"
             role="region"
             aria-label="Lista de pedidos"
             tabIndex={0}
