@@ -294,9 +294,17 @@ function AddSupplierEditor({
               id: option.id,
               name: option.name,
               description:
-                option.contacts[0]?.name ?? "Nenhum contato disponível",
+                option.contacts.length > 0
+                  ? `${option.contacts.length === 1 ? "Contato" : "Contatos"}: ${option.contacts
+                      .map((contact) => contact.name)
+                      .join(", ")}`
+                  : "Nenhum contato disponível",
+              keywords: option.contacts.flatMap((contact) => [
+                contact.name,
+                contact.role ?? "",
+              ]),
             }))}
-            placeholder="Digite o fornecedor…"
+            placeholder="Digite o fornecedor ou vendedor…"
             emptyMessage="Nenhum fornecedor encontrado."
             required
           />

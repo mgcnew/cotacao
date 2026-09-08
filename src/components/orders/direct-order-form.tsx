@@ -39,6 +39,10 @@ export type DirectOrderOptions = {
   suppliers: {
     id: string;
     name: string;
+    contacts: {
+      name: string;
+      role: string | null;
+    }[];
     openNotices: {
       id: string;
       kind: string;
@@ -88,6 +92,16 @@ export function CamposDoPedidoDireto({
       suppliers.map((supplier) => ({
         id: supplier.id,
         name: supplier.name,
+        description:
+          supplier.contacts.length === 0
+            ? undefined
+            : `${supplier.contacts.length === 1 ? "Contato" : "Contatos"}: ${supplier.contacts
+                .map((contact) => contact.name)
+                .join(", ")}`,
+        keywords: supplier.contacts.flatMap((contact) => [
+          contact.name,
+          contact.role ?? "",
+        ]),
       })),
     [suppliers],
   );
@@ -112,7 +126,7 @@ export function CamposDoPedidoDireto({
             value={supplierId}
             onValueChange={setSupplierId}
             options={supplierOptions}
-            placeholder="Digite o nome do fornecedor…"
+            placeholder="Digite o fornecedor ou vendedor…"
             emptyMessage="Nenhum fornecedor encontrado."
           />
         </div>

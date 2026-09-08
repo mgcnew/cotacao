@@ -11,6 +11,8 @@ export type SearchableOption = {
   id: string;
   name: string;
   description?: string;
+  /** Termos pesquisáveis que não precisam aparecer como nome da opção. */
+  keywords?: string[];
 };
 
 export function SearchableSelect({
@@ -65,7 +67,7 @@ export function SearchableSelect({
   const suggestions = options
     .filter((option) =>
       normalizeListSearch(
-        `${option.name} ${option.description ?? ""}`,
+        `${option.name} ${option.description ?? ""} ${(option.keywords ?? []).join(" ")}`,
       ).includes(needle),
     )
     .slice(0, 8);

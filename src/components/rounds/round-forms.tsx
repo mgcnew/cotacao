@@ -26,6 +26,9 @@ import {
 } from "@/features/rounds/actions";
 
 type Option = { id: string; name: string };
+type SupplierOption = Option & {
+  contacts?: { name: string; role?: string | null }[];
+};
 
 const selectClass =
   "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
@@ -400,7 +403,7 @@ export function SupplierPickerForm({
   suppliers,
 }: {
   roundId: string;
-  suppliers: Option[];
+  suppliers: SupplierOption[];
 }) {
   const [state, formAction] = useActionState<RoundFormState, FormData>(
     addRoundSupplier,
@@ -422,8 +425,21 @@ export function SupplierPickerForm({
         <SearchableSelect
           id="supplierId"
           name="supplierId"
-          options={suppliers}
-          placeholder="Digite o nome do fornecedor…"
+          options={suppliers.map((supplier) => ({
+            id: supplier.id,
+            name: supplier.name,
+            description:
+              supplier.contacts?.length
+                ? `${supplier.contacts.length === 1 ? "Contato" : "Contatos"}: ${supplier.contacts
+                    .map((contact) => contact.name)
+                    .join(", ")}`
+                : undefined,
+            keywords: supplier.contacts?.flatMap((contact) => [
+              contact.name,
+              contact.role ?? "",
+            ]),
+          }))}
+          placeholder="Digite o fornecedor ou vendedor…"
           emptyMessage="Nenhum fornecedor encontrado."
           required
           focusKey={state.savedAt}

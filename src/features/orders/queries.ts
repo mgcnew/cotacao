@@ -102,7 +102,7 @@ export async function listDirectOrderOptions(companyId: string) {
     await Promise.all([
       supabase
         .from("suppliers")
-        .select("id, name")
+        .select("id, name, supplier_contacts ( name, role, is_active )")
         .eq("company_id", companyId)
         .eq("status", "active")
         .order("name"),
@@ -136,7 +136,9 @@ export async function listDirectOrderOptions(companyId: string) {
 
   return {
     suppliers: (suppliers.data ?? []).map((supplier) => ({
-      ...supplier,
+      id: supplier.id,
+      name: supplier.name,
+      contacts: supplier.supplier_contacts.filter((contact) => contact.is_active),
       openNotices: (noticesBySupplier.get(supplier.id) ?? []).map((notice) => ({
         id: notice.id,
         kind: notice.kind,
