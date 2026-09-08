@@ -2,6 +2,7 @@ import "server-only";
 
 import type { PriceHistoryPoint } from "@/components/history/price-history-chart";
 import type { HistoryFilters } from "@/features/history/queries";
+import { parseHistoricalNfeXml } from "@/features/receipts/historical-nfe";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -51,6 +52,220 @@ export async function listHistoricalNfeImports(
       invoiceTotal: Number(row.invoice_total),
     })),
     pagination: { page, pageSize, total },
+  };
+}
+
+/**
+ * Notas vinculadas a um fornecedor. O XML continua sendo o único arquivo
+ * armazenado; esta lista expõe apenas os metadados necessários para chegar à
+ * visualização HTML gerada sob demanda.
+ */
+export async function listSupplierFiscalDocuments(
+  companyId: string,
+  supplierId: string,
+) {
+  const supabase = await createServerSupabaseClient();
+  const [historical, received] = await Promise.all([
+    supabase
+      .from("historical_nfe_imports")
+      .select(
+        "id, status, access_key, invoice_number, invoice_series, issued_at, issuer_name, invoice_total",
+      )
+      .eq("company_id", companyId)
+      .eq("supplier_id", supplierId)
+      .order("issued_at", { ascending: false })
+      .limit(30),
+    supabase
+      .from("receipt_documents")
+      .select(
+        "id, historical_import_id, access_key, invoice_number, invoice_series, issued_at, issuer_name, invoice_total, created_at, receipts!inner ( status, orders!inner ( supplier_id ) )",
+      )
+      .eq("company_id", companyId)
+      .eq("receipts.orders.supplier_id", supplierId)
+      .order("issued_at", { ascending: false })
+      .limit(30),
+  ]);
+
+  if (historical.error) {
+    throw new Error(
+      `Falha ao listar documentos fiscais históricos: ${historical.error.message}`,
+    );
+  }
+  if (received.error) {
+    throw new Error(
+      `Falha ao listar documentos fiscais recebidos: ${received.error.message}`,
+    );
+  }
+
+  const documents = new Map<
+    string,
+    {
+      id: string;
+      status: string;
+      access_key: string;
+      invoice_number: string;
+      invoice_series: string | null;
+      issued_at: string;
+      issuer_name: string | null;
+      invoiceTotal: number;
+      href: string;
+    }
+  >();
+  for (const document of historical.data ?? []) {
+    documents.set(document.access_key, {
+      ...document,
+      invoiceTotal: Number(document.invoice_total),
+      href: `/recebimentos/historico/${document.id}/nota`,
+    });
+  }
+  for (const document of received.data ?? []) {
+    if (documents.has(document.access_key)) continue;
+    documents.set(document.access_key, {
+      id: document.id,
+      status:
+        document.receipts.status === "posted" ? "posted" : "received-draft",
+      access_key: document.access_key,
+      invoice_number: document.invoice_number ?? "—",
+      invoice_series: document.invoice_series,
+      issued_at: document.issued_at ?? document.created_at,
+      issuer_name: document.issuer_name,
+      invoiceTotal: Number(document.invoice_total ?? 0),
+      href: `/recebimentos/documentos/${document.id}/nota`,
+    });
+  }
+
+  return [...documents.values()]
+    .sort(
+      (left, right) =>
+        new Date(right.issued_at).getTime() - new Date(left.issued_at).getTime(),
+    )
+    .slice(0, 30);
+}
+
+/**
+ * Dados da representação HTML. É uma consulta deliberadamente pequena: abrir
+ * a nota não deve carregar catálogos, regras de conversão ou seletores usados
+ * somente pela conciliação.
+ */
+export async function getHistoricalNfeDocumentView(
+  companyId: string,
+  importId: string,
+) {
+  const supabase = await createServerSupabaseClient();
+  const [history, items] = await Promise.all([
+    supabase
+      .from("historical_nfe_imports")
+      .select("*")
+      .eq("company_id", companyId)
+      .eq("id", importId)
+      .maybeSingle(),
+    supabase
+      .from("historical_nfe_items")
+      .select(
+        "id, line_number, supplier_code, barcode, description, commercial_unit, commercial_quantity, commercial_unit_price, product_total, item_discount, item_freight, item_insurance, item_other",
+      )
+      .eq("company_id", companyId)
+      .eq("import_id", importId)
+      .order("line_number"),
+  ]);
+
+  if (history.error) {
+    throw new Error(`Falha ao abrir documento fiscal: ${history.error.message}`);
+  }
+  if (!history.data) return null;
+  if (items.error) {
+    throw new Error(`Falha ao abrir itens do documento: ${items.error.message}`);
+  }
+
+  const signed = await supabase.storage
+    .from("historical-nfe-documents")
+    .createSignedUrl(history.data.storage_path, 600, {
+      download: history.data.file_name,
+    });
+
+  return {
+    history: {
+      ...history.data,
+      invoiceTotal: Number(history.data.invoice_total),
+    },
+    items: (items.data ?? []).map((item) => ({
+      ...item,
+      commercialQuantity: Number(item.commercial_quantity),
+      commercialUnitPrice: Number(item.commercial_unit_price),
+      productTotal: Number(item.product_total),
+      itemDiscount: Number(item.item_discount),
+      itemFreight: Number(item.item_freight),
+      itemInsurance: Number(item.item_insurance),
+      itemOther: Number(item.item_other),
+    })),
+    downloadUrl: signed.data?.signedUrl ?? null,
+  };
+}
+
+/** Representa também os XMLs anexados diretamente a um recebimento. */
+export async function getReceiptNfeDocumentView(
+  companyId: string,
+  documentId: string,
+) {
+  const supabase = await createServerSupabaseClient();
+  const { data: document, error } = await supabase
+    .from("receipt_documents")
+    .select("*, receipts!inner ( id, status )")
+    .eq("company_id", companyId)
+    .eq("id", documentId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Falha ao abrir documento fiscal: ${error.message}`);
+  }
+  if (!document) return null;
+
+  const [stored, signed] = await Promise.all([
+    supabase.storage
+      .from(document.storage_bucket)
+      .download(document.storage_path),
+    supabase.storage
+      .from(document.storage_bucket)
+      .createSignedUrl(document.storage_path, 600, {
+        download: document.file_name,
+      }),
+  ]);
+  if (stored.error || !stored.data) {
+    throw new Error(
+      `Falha ao ler o XML armazenado: ${stored.error?.message ?? "arquivo indisponível"}`,
+    );
+  }
+
+  const nfe = parseHistoricalNfeXml(await stored.data.text());
+  return {
+    receiptId: document.receipts.id,
+    data: {
+      history: {
+        invoice_number: nfe.number,
+        invoice_series: nfe.series,
+        issued_at: nfe.issuedAt ?? document.issued_at ?? document.created_at,
+        issuer_name: nfe.issuer.name,
+        issuer_document: nfe.issuer.document,
+        recipient_name: nfe.recipient.name,
+        recipient_document: nfe.recipient.document,
+        access_key: nfe.accessKey!,
+        status:
+          document.receipts.status === "posted" ? "posted" : "received-draft",
+        fiscal_totals: nfe.fiscalTotals,
+        invoiceTotal: nfe.total,
+      },
+      items: nfe.items.map((item) => ({
+        id: `${document.id}-${item.lineNumber}`,
+        line_number: item.lineNumber,
+        supplier_code: item.supplierCode,
+        description: item.description,
+        commercialQuantity: item.commercialQuantity,
+        commercial_unit: item.commercialUnit,
+        commercialUnitPrice: item.commercialUnitPrice,
+        productTotal: item.total,
+      })),
+      downloadUrl: signed.data?.signedUrl ?? null,
+    },
   };
 }
 

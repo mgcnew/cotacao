@@ -789,7 +789,8 @@ body:has([data-slot="dialog-overlay"][data-state="open"])
 /* O relatório usa a mesma página autenticada na tela, mas a impressão é um
    documento: menu, topbar, rolagens e tema escuro não podem ir para o papel. */
 @media print {
-  body:has([data-slot="quotation-report"]) {
+  body:has([data-slot="quotation-report"]),
+  body:has([data-slot="nfe-document"]) {
     --bg: #ffffff;
     --fg: #17171a;
     --fg-muted: #5d5d66;
@@ -807,17 +808,21 @@ body:has([data-slot="dialog-overlay"][data-state="open"])
   }
 
   body:has([data-slot="quotation-report"]) [data-slot="app-sidebar"],
-  body:has([data-slot="quotation-report"]) [data-slot="app-header"] {
+  body:has([data-slot="quotation-report"]) [data-slot="app-header"],
+  body:has([data-slot="nfe-document"]) [data-slot="app-sidebar"],
+  body:has([data-slot="nfe-document"]) [data-slot="app-header"] {
     display: none !important;
   }
 
-  body:has([data-slot="quotation-report"]) [data-slot="app-shell"] {
+  body:has([data-slot="quotation-report"]) [data-slot="app-shell"],
+  body:has([data-slot="nfe-document"]) [data-slot="app-shell"] {
     display: block;
     height: auto;
     overflow: visible;
   }
 
-  body:has([data-slot="quotation-report"]) [data-slot="app-main"] {
+  body:has([data-slot="quotation-report"]) [data-slot="app-main"],
+  body:has([data-slot="nfe-document"]) [data-slot="app-main"] {
     overflow: visible;
     padding: 0;
   }

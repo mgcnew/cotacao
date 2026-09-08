@@ -34,11 +34,17 @@ export type FormAttribute = {
   isRequired: boolean;
 };
 
+export type CreatedProductOption = NonNullable<
+  ProductFormState["createdProduct"]
+>;
+
 type Props = {
   categories: Option[];
   units: Option[];
   /** Atributos ativos de todas as categorias; a tela mostra os da escolhida. */
   attributes: FormAttribute[];
+  initialName?: string;
+  onCreated?: (product: CreatedProductOption) => void;
 };
 
 const selectClass =
@@ -81,10 +87,26 @@ function SubmitButton() {
   );
 }
 
-export function ProductForm({ categories, units, attributes }: Props) {
+export function ProductForm({
+  categories,
+  units,
+  attributes,
+  initialName = "",
+  onCreated,
+}: Props) {
   const modal = useModalDeRota();
+  const createAndNotify = React.useCallback(
+    async (previous: ProductFormState, formData: FormData) => {
+      const result = await createProduct(previous, formData);
+      if (!result.error && result.createdProduct) {
+        onCreated?.(result.createdProduct);
+      }
+      return result;
+    },
+    [onCreated],
+  );
   const [state, formAction] = useActionState<ProductFormState, FormData>(
-    useFechaModalAoConcluir(createProduct),
+    useFechaModalAoConcluir(createAndNotify),
     { error: null },
   );
   const [categoryId, setCategoryId] = React.useState("");
@@ -106,6 +128,7 @@ export function ProductForm({ categories, units, attributes }: Props) {
               required
               autoFocus
               maxLength={120}
+              defaultValue={initialName}
               placeholder="Coxa e sobrecoxa congelada"
             />
           </Field>

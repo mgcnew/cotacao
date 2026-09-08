@@ -1,3 +1,4 @@
+import { Eye } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -7,6 +8,11 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getHistoricalNfeImport } from "@/features/receipts/historical-queries";
+import {
+  listAttributeDefinitions,
+  listCategories,
+  listUnits,
+} from "@/features/products/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
 const DATE_TIME = new Intl.DateTimeFormat("pt-BR", {
@@ -27,6 +33,14 @@ export default async function ConciliacaoNfeHistoricaPage({
   const data = await getHistoricalNfeImport(company.companyId, id);
   if (!data) notFound();
   const { history } = data;
+  const productCatalog =
+    history.status === "draft" && permissions.has("product.create")
+      ? await Promise.all([
+          listCategories(company.companyId),
+          listUnits(company.companyId),
+          listAttributeDefinitions(company.companyId),
+        ])
+      : null;
 
   return (
     <div className="w-full">
@@ -38,6 +52,11 @@ export default async function ConciliacaoNfeHistoricaPage({
              formulário, ao lado do campo onde a falta aparece: no celular,
              quatro botões empurravam a nota para baixo da dobra. */
           <>
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/recebimentos/historico/${id}/nota`} target="_blank">
+                <Eye className="size-3.5" aria-hidden /> Visualizar nota
+              </Link>
+            </Button>
             {data.downloadUrl ? (
               <Button asChild size="sm" variant="outline">
                 <a href={data.downloadUrl}>Baixar XML</a>
@@ -142,6 +161,35 @@ export default async function ConciliacaoNfeHistoricaPage({
           suppliers={data.suppliers}
           products={data.products}
           items={data.items}
+          canCreateProduct={permissions.has("product.create")}
+          productFormOptions={
+            productCatalog
+              ? {
+                  categories: productCatalog[0]
+                    .filter((category) => category.isActive)
+                    .map((category) => ({
+                      id: category.id,
+                      label: category.name,
+                    })),
+                  units: productCatalog[1]
+                    .filter((unit) => unit.is_active)
+                    .map((unit) => ({
+                      id: unit.id,
+                      label: `${unit.name} (${unit.symbol})`,
+                    })),
+                  attributes: productCatalog[2]
+                    .filter((attribute) => attribute.isActive)
+                    .map((attribute) => ({
+                      id: attribute.id,
+                      categoryId: attribute.categoryId,
+                      name: attribute.name,
+                      dataType: attribute.dataType,
+                      unitSymbol: attribute.unitSymbol,
+                      isRequired: attribute.isRequired,
+                    })),
+                }
+              : null
+          }
         />
       ) : (
         <p className="border-border bg-surface text-fg-muted rounded-xl border p-4 text-sm sm:p-5">

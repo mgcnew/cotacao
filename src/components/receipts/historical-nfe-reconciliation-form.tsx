@@ -10,10 +10,23 @@ import {
   useState,
 } from "react";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
+import {
+  ProductForm,
+  type CreatedProductOption,
+  type FormAttribute,
+} from "@/components/products/product-form";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FormSubmitButton } from "@/components/ui/form-submit-button";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -52,6 +65,11 @@ type Product = {
     mode: string;
     factor: number | null;
   }[];
+};
+type ProductFormOptions = {
+  categories: { id: string; label: string }[];
+  units: { id: string; label: string }[];
+  attributes: FormAttribute[];
 };
 type Item = {
   id: string;
@@ -382,6 +400,8 @@ export function HistoricalNfeReconciliationForm({
   suppliers,
   products,
   items,
+  canCreateProduct,
+  productFormOptions,
 }: {
   importId: string;
   issuerDocument: string | null;
@@ -390,8 +410,12 @@ export function HistoricalNfeReconciliationForm({
   suppliers: Supplier[];
   products: Product[];
   items: Item[];
+  canCreateProduct: boolean;
+  productFormOptions: ProductFormOptions | null;
 }) {
   const [supplierId, setSupplierId] = useState(initialSupplierId);
+  const [availableProducts, setAvailableProducts] = useState(products);
+  const [productDialogItem, setProductDialogItem] = useState<Item | null>(null);
   const [adoptDocument, setAdoptDocument] = useState(false);
   const [filter, setFilter] = useState<"all" | "pending" | "ignored">("all");
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
@@ -494,8 +518,14 @@ export function HistoricalNfeReconciliationForm({
     }));
   }
 
-  function chooseProduct(item: Item, productId: string) {
-    const product = products.find((candidate) => candidate.id === productId);
+  function chooseProduct(
+    item: Item,
+    productId: string,
+    newlyCreated?: Product,
+  ) {
+    const product =
+      newlyCreated ??
+      availableProducts.find((candidate) => candidate.id === productId);
     if (!product) {
       patchDraft(item.id, {
         productId: "",
@@ -528,7 +558,7 @@ export function HistoricalNfeReconciliationForm({
       Object.fromEntries(
         items.map((item) => {
           const currentDraft = current[item.id];
-          const product = products.find(
+          const product = availableProducts.find(
             (candidate) => candidate.id === currentDraft.productId,
           );
           if (!product) return [item.id, currentDraft];
@@ -563,7 +593,7 @@ export function HistoricalNfeReconciliationForm({
         value: parsedDecimal(entryValue),
         sourceQuantity: source,
       });
-      const product = products.find(
+      const product = availableProducts.find(
         (candidate) => candidate.id === draft.productId,
       );
       const wanted = new Set(
@@ -642,8 +672,31 @@ export function HistoricalNfeReconciliationForm({
     });
   }
 
+  function useCreatedProduct(created: CreatedProductOption) {
+    const product: Product = {
+      id: created.id,
+      name: created.name,
+      description: created.pricingUnitSymbol,
+      pricingUnitCode: created.pricingUnitCode,
+      pricingUnitSymbol: created.pricingUnitSymbol,
+      pricingUnitId: created.pricingUnitId,
+      unitRules: [],
+    };
+    setAvailableProducts((current) =>
+      [
+        ...current.filter((candidate) => candidate.id !== product.id),
+        product,
+      ].sort((left, right) => left.name.localeCompare(right.name, "pt-BR")),
+    );
+    if (productDialogItem) {
+      chooseProduct(productDialogItem, product.id, product);
+    }
+    setProductDialogItem(null);
+  }
+
   return (
-    <form action={formAction} className="space-y-5">
+    <>
+      <form action={formAction} className="space-y-5">
       <section className="border-border bg-surface rounded-xl border p-4 sm:p-5">
         <label className="text-fg-muted flex flex-col gap-1.5 text-sm">
           Fornecedor da NF-e
@@ -737,7 +790,7 @@ export function HistoricalNfeReconciliationForm({
         ) : null}
         {items.map((item, index) => {
           const draft = drafts[item.id];
-          const selectedProduct = products.find(
+          const selectedProduct = availableProducts.find(
             (product) => product.id === draft.productId,
           );
           const problem = problems.get(item.id) ?? null;
@@ -854,19 +907,21 @@ export function HistoricalNfeReconciliationForm({
                             Produto no sistema
                           </label>
                           {draft.productId ? null : (
-                            <Link
-                              href="/produtos/novo"
-                              target="_blank"
-                              className="text-primary underline-offset-4 hover:underline"
+                            <button
+                              type="button"
+                              disabled={!canCreateProduct || !productFormOptions}
+                              onClick={() => setProductDialogItem(item)}
+                              className="text-primary inline-flex items-center gap-1 underline-offset-4 hover:underline disabled:hidden"
                             >
+                              <Plus className="size-3" aria-hidden />
                               Cadastrar produto
-                            </Link>
+                            </button>
                           )}
                         </span>
                         <SearchableSelect
                           id={`historical-product-${item.id}`}
                           name={`product_${item.id}`}
-                          options={products}
+                          options={availableProducts}
                           value={draft.productId}
                           onValueChange={(value) => chooseProduct(item, value)}
                           placeholder="Digite para associar…"
@@ -1214,23 +1269,51 @@ export function HistoricalNfeReconciliationForm({
       {/* `first:mt-0`: sem erro, o ErrorLine não renderiza nada e esta linha
           passa a ser o primeiro filho — não sobra folga fantasma no topo. */}
       <div className="border-border bg-surface sticky bottom-3 rounded-xl border p-3 shadow-lg sm:p-4">
-        <ErrorLine error={state.error} />
-        <div className="mt-3 flex flex-col gap-2 first:mt-0 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-fg-muted text-xs" aria-live="polite">
-            {items.length - pendingCount} de {items.length}{" "}
-            {items.length === 1 ? "item pronto" : "itens prontos"}
-            {pendingCount
-              ? ` · ${pendingCount} ${pendingCount === 1 ? "pendente" : "pendentes"}`
-              : ""}
-          </p>
-          <FormSubmitButton
-            pendingLabel="Gravando histórico…"
-            className="w-full sm:w-auto"
-          >
-            Confirmar importação
-          </FormSubmitButton>
+          <ErrorLine error={state.error} />
+          <div className="mt-3 flex flex-col gap-2 first:mt-0 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-fg-muted text-xs" aria-live="polite">
+              {items.length - pendingCount} de {items.length}{" "}
+              {items.length === 1 ? "item pronto" : "itens prontos"}
+              {pendingCount
+                ? ` · ${pendingCount} ${pendingCount === 1 ? "pendente" : "pendentes"}`
+                : ""}
+            </p>
+            <FormSubmitButton
+              pendingLabel="Gravando histórico…"
+              className="w-full sm:w-auto"
+            >
+              Confirmar importação
+            </FormSubmitButton>
+          </div>
         </div>
-      </div>
-    </form>
+      </form>
+
+      <Dialog
+        open={productDialogItem !== null}
+        onOpenChange={(open) => {
+          if (!open) setProductDialogItem(null);
+        }}
+      >
+        <DialogContent size="xl" impedirFechamentoAcidental>
+          <DialogHeader>
+            <DialogTitle>Novo produto</DialogTitle>
+            <DialogDescription>
+              Cadastre sem sair da conciliação. Ao salvar, o produto será
+              associado a este item automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            {productDialogItem && productFormOptions ? (
+              <ProductForm
+                key={productDialogItem.id}
+                {...productFormOptions}
+                initialName={productDialogItem.description}
+                onCreated={useCreatedProduct}
+              />
+            ) : null}
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

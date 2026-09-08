@@ -232,6 +232,14 @@ export type ProductFormState = {
   savedAt?: number;
   /** Nome do último produto gravado, para confirmar na tela sem recarregar. */
   savedName?: string;
+  /** Dados mínimos para seletores atualizarem a opção sem recarregar a tela. */
+  createdProduct?: {
+    id: string;
+    name: string;
+    pricingUnitId: string;
+    pricingUnitCode: string;
+    pricingUnitSymbol: string;
+  };
 };
 
 export type ProductUnitEditState = {
@@ -520,7 +528,9 @@ export async function createProduct(
       comparison_unit_id: parsed.data.comparisonUnitId,
       description: parsed.data.description,
     })
-    .select("id")
+    .select(
+      "id, name, pricing_unit_id, pricing_unit:units!products_company_id_pricing_unit_id_fkey ( code, symbol )",
+    )
     .single();
 
   if (error) {
@@ -571,7 +581,18 @@ export async function createProduct(
   }
 
   revalidatePath("/produtos");
-  return { error: null, savedAt: Date.now(), savedName: parsed.data.name };
+  return {
+    error: null,
+    savedAt: Date.now(),
+    savedName: parsed.data.name,
+    createdProduct: {
+      id: created.id,
+      name: created.name,
+      pricingUnitId: created.pricing_unit_id,
+      pricingUnitCode: created.pricing_unit.code,
+      pricingUnitSymbol: created.pricing_unit.symbol,
+    },
+  };
 }
 
 export async function setProductActive(productId: string, isActive: boolean) {

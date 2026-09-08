@@ -1,3 +1,4 @@
+import { Eye } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -99,14 +100,23 @@ export default async function ConferenciaPage({
                         ? ` · ${MONEY.format(document.invoiceTotal)}`
                         : ""}
                     </p>
-                    {document.downloadUrl ? (
-                      <a
-                        href={document.downloadUrl}
-                        className="text-primary mt-2 inline-block text-xs font-medium hover:underline"
+                    <div className="mt-2 flex flex-wrap gap-3 text-xs font-medium">
+                      <Link
+                        href={`/recebimentos/documentos/${document.id}/nota`}
+                        target="_blank"
+                        className="text-primary inline-flex items-center gap-1 hover:underline"
                       >
-                        Baixar XML
-                      </a>
-                    ) : null}
+                        <Eye className="size-3" aria-hidden /> Visualizar nota
+                      </Link>
+                      {document.downloadUrl ? (
+                        <a
+                          href={document.downloadUrl}
+                          className="text-primary hover:underline"
+                        >
+                          Baixar XML
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>
