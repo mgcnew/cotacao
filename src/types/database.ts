@@ -3313,6 +3313,7 @@ export type Database = {
           imported_to_id: string | null;
           imported_to_type: string | null;
           notes: string | null;
+          origin: string;
           product_id: string;
           purchase_unit_id: string;
           requested_quantity: number;
@@ -3329,6 +3330,7 @@ export type Database = {
           imported_to_id?: string | null;
           imported_to_type?: string | null;
           notes?: string | null;
+          origin?: string;
           product_id: string;
           purchase_unit_id: string;
           requested_quantity: number;
@@ -3345,6 +3347,7 @@ export type Database = {
           imported_to_id?: string | null;
           imported_to_type?: string | null;
           notes?: string | null;
+          origin?: string;
           product_id?: string;
           purchase_unit_id?: string;
           requested_quantity?: number;

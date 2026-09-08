@@ -78,6 +78,7 @@ export async function getOpenShoppingList(companyId: string) {
       product_id,
       requested_quantity,
       notes,
+      origin,
       created_at,
       products!inner ( name, is_active ),
       purchase_unit:units!shopping_list_items_company_id_purchase_unit_id_fkey ( symbol )
@@ -103,6 +104,7 @@ export async function listPendingShoppingItems(companyId: string) {
     quantity: String(item.requested_quantity).replace(".", ","),
     purchaseUnit: item.purchase_unit?.symbol ?? "",
     notes: item.notes ?? "",
+    origin: item.origin,
     isActive: item.products.is_active,
   }));
 }

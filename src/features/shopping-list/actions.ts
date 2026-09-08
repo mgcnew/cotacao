@@ -128,6 +128,7 @@ export async function addShoppingListItem(
         purchase_unit_id: product.purchase_unit_id,
         requested_quantity: parsed.data.quantity,
         notes: parsed.data.notes || null,
+        origin: "manual",
         added_by: user.id,
       });
 

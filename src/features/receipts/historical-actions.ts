@@ -552,6 +552,8 @@ export async function postHistoricalNfe(
   }
 
   revalidatePath("/recebimentos/historico");
+  revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
   revalidatePath("/produtos", "layout");
   revalidatePath("/fornecedores", "layout");
   redirect("/recebimentos/historico");

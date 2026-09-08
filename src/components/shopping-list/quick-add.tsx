@@ -27,7 +27,12 @@ function findProductByBarcode(products: ShoppingProduct[], code: string) {
 function Submit() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending} className="gap-1.5">
+    <Button
+      type="submit"
+      size="sm"
+      disabled={pending}
+      className="col-span-2 h-10 w-full gap-1.5 sm:col-span-1 sm:h-7 sm:w-auto"
+    >
       <Plus className="size-3.5" aria-hidden />
       {pending ? "Adicionando…" : "Adicionar"}
     </Button>
@@ -98,11 +103,11 @@ export function ShoppingListQuickAdd({
     <form
       ref={formRef}
       action={action}
-      className="border-border bg-surface relative flex flex-col gap-3 rounded-xl border p-4"
+      className="border-border bg-surface relative flex flex-col gap-3 rounded-xl border p-3 sm:p-4"
     >
       <input type="hidden" name="productId" value={selected?.id ?? ""} />
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(10rem,0.7fr)_auto] sm:items-end">
-        <div className="relative flex flex-col gap-1.5">
+      <div className="grid grid-cols-[minmax(6.5rem,0.38fr)_minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(10rem,0.7fr)_auto] sm:items-end">
+        <div className="relative col-span-2 flex min-w-0 flex-col gap-1.5 sm:col-span-1">
           <label
             htmlFor="shopping-product"
             className="text-fg text-sm font-medium"
@@ -140,10 +145,13 @@ export function ShoppingListQuickAdd({
                   window.setTimeout(() => formRef.current?.requestSubmit(), 0);
                 }}
                 placeholder="Digite o nome ou bipe o código"
-                className="pl-8"
+                className="h-10 pl-8 sm:h-8"
               />
             </div>
-            <BarcodeCameraDialog onDetected={handleCameraCode} />
+            <BarcodeCameraDialog
+              onDetected={handleCameraCode}
+              triggerClassName="size-10 sm:size-7"
+            />
           </div>
           {suggestions.length > 0 && !selected ? (
             <div className="border-border bg-surface absolute top-full z-20 mt-1 w-full overflow-hidden rounded-lg border shadow-lg">
@@ -152,7 +160,7 @@ export function ShoppingListQuickAdd({
                   key={product.id}
                   type="button"
                   onClick={() => choose(product)}
-                  className="hover:bg-surface-muted flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm"
+                  className="hover:bg-surface-muted flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm sm:min-h-0"
                 >
                   <span>{product.name}</span>
                   <span className="text-fg-subtle text-xs">
@@ -163,7 +171,7 @@ export function ShoppingListQuickAdd({
             </div>
           ) : null}
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <label
             htmlFor="shopping-quantity"
             className="text-fg text-sm font-medium"
@@ -176,9 +184,10 @@ export function ShoppingListQuickAdd({
             required
             defaultValue="1"
             inputMode="decimal"
+            className="h-10 sm:h-8"
           />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <label
             htmlFor="shopping-notes"
             className="text-fg text-sm font-medium"
@@ -191,6 +200,7 @@ export function ShoppingListQuickAdd({
             name="notes"
             maxLength={300}
             placeholder="Estoque crítico, para sexta…"
+            className="h-10 sm:h-8"
           />
         </div>
         <Submit />
