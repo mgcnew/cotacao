@@ -52,24 +52,30 @@ export default async function ShoppingListPage({
     permissions.has("order.create");
   const requestedOrigin = first(params.origem);
   const origin: ListOrigin =
-    requestedOrigin === "assistant" || requestedOrigin === "manual"
+    requestedOrigin === "assistant" || requestedOrigin === "all"
       ? requestedOrigin
-      : "all";
+      : "manual";
+  const assistantItems = data.items.filter(
+    (item) => item.origin === "assistant",
+  );
+  const manualItems = data.items.filter((item) => item.origin === "manual");
   const filteredItems = data.items.filter(
     (item) => origin === "all" || item.origin === origin,
   );
   const pagination = parseListPagination(params, filteredItems.length);
   const visibleItems = filteredItems.slice(pagination.start, pagination.end);
   const originCounts = {
-    all: data.items.length,
-    assistant: data.items.filter((item) => item.origin === "assistant").length,
-    manual: data.items.filter((item) => item.origin === "manual").length,
+    all: data.items.length + suggestions.length,
+    assistant: assistantItems.length + suggestions.length,
+    manual: manualItems.length,
   };
+  const showSuggestions = origin === "all" || origin === "assistant";
+  const hasVisibleSuggestions = showSuggestions && suggestions.length > 0;
   const hrefForOrigin = (value: ListOrigin) => {
     const query = new URLSearchParams();
     const pageSize = first(params.por_pagina);
     if (pageSize) query.set("por_pagina", pageSize);
-    if (value !== "all") query.set("origem", value);
+    if (value !== "manual") query.set("origem", value);
     const serialized = query.toString();
     return serialized ? `/lista-compras?${serialized}` : "/lista-compras";
   };
@@ -83,61 +89,64 @@ export default async function ShoppingListPage({
 
       {canManage ? <ShoppingListQuickAdd products={products} /> : null}
 
-      <PurchaseSuggestions suggestions={suggestions} canManage={canManage} />
+      <nav
+        aria-label="Filtrar itens por origem"
+        className="mt-4 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0"
+      >
+        {(
+          [
+            { value: "all", label: "Todos", icon: ClipboardCheck },
+            { value: "assistant", label: "Assistente", icon: Sparkles },
+            {
+              value: "manual",
+              label: "Inseridos por você",
+              icon: UserRound,
+            },
+          ] as const
+        ).map((option) => {
+          const Icon = option.icon;
+          return (
+            <Link
+              key={option.value}
+              href={hrefForOrigin(option.value)}
+              aria-current={origin === option.value ? "page" : undefined}
+              className={cn(
+                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors sm:h-8",
+                origin === option.value
+                  ? "border-primary bg-primary-soft text-primary"
+                  : "border-border bg-surface text-fg-muted hover:bg-surface-muted hover:text-fg",
+              )}
+            >
+              <Icon className="size-3.5" aria-hidden />
+              {option.label} ({originCounts[option.value]})
+            </Link>
+          );
+        })}
+      </nav>
+
+      {showSuggestions ? (
+        <PurchaseSuggestions suggestions={suggestions} canManage={canManage} />
+      ) : null}
 
       <div className="mt-4">
-        {data.items.length > 0 ? (
-          <nav
-            aria-label="Filtrar itens por origem"
-            className="mb-3 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0"
-          >
-            {(
-              [
-                { value: "all", label: "Todos", icon: ClipboardCheck },
-                { value: "assistant", label: "Assistente", icon: Sparkles },
-                {
-                  value: "manual",
-                  label: "Inseridos por você",
-                  icon: UserRound,
-                },
-              ] as const
-            ).map((option) => {
-              const Icon = option.icon;
-              return (
-                <Link
-                  key={option.value}
-                  href={hrefForOrigin(option.value)}
-                  aria-current={origin === option.value ? "page" : undefined}
-                  className={cn(
-                    "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors sm:h-8",
-                    origin === option.value
-                      ? "border-primary bg-primary-soft text-primary"
-                      : "border-border bg-surface text-fg-muted hover:bg-surface-muted hover:text-fg",
-                  )}
-                >
-                  <Icon className="size-3.5" aria-hidden />
-                  {option.label} ({originCounts[option.value]})
-                </Link>
-              );
-            })}
-          </nav>
-        ) : null}
 
-        {filteredItems.length === 0 ? (
+        {filteredItems.length === 0 && !hasVisibleSuggestions ? (
           <EmptyState
-            icon={ClipboardCheck}
+            icon={origin === "assistant" ? Sparkles : ClipboardCheck}
             title={
-              data.items.length === 0
-                ? "Nada pendente"
-                : "Nenhum item neste filtro"
+              origin === "assistant"
+                ? "Nenhuma sugestão pendente"
+                : origin === "manual"
+                  ? "Nenhum item inserido por você"
+                  : "Nada pendente"
             }
             description={
-              data.items.length === 0
-                ? "Digite o nome de um produto ou bipe seu código de barras para começar a lista."
-                : "Escolha outra origem para ver os demais itens da lista."
+              origin === "assistant"
+                ? "Quando o histórico identificar uma reposição, ela aparecerá aqui."
+                : "Digite o nome de um produto ou bipe seu código de barras para começar a lista."
             }
           />
-        ) : (
+        ) : filteredItems.length > 0 ? (
           <>
             <div className="flex flex-col overflow-hidden sm:min-h-0 sm:flex-1 sm:rounded-xl sm:border sm:border-border sm:bg-surface sm:shadow-xs">
               <div
@@ -253,7 +262,7 @@ export default async function ShoppingListPage({
               />
             </div>
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

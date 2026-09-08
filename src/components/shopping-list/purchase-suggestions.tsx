@@ -116,10 +116,10 @@ function SuggestionCard({
     suggestion.shoppingListQuantity;
 
   return (
-    <article className="border-border bg-background rounded-xl border p-3 sm:p-4">
-      <div className="flex flex-col items-start gap-2 min-[400px]:flex-row min-[400px]:justify-between min-[400px]:gap-3">
+    <article className="border-border bg-background min-w-0 overflow-hidden rounded-xl border p-3 sm:p-4">
+      <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
         <div className="min-w-0">
-          <h3 className="text-fg truncate text-sm font-semibold">
+          <h3 className="text-fg break-words text-sm leading-snug font-semibold sm:truncate">
             {suggestion.productName}
           </h3>
           <p className="text-fg-muted mt-1 text-xs">
@@ -267,7 +267,7 @@ function SuggestionCard({
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
           <form
             action={acceptAction}
-            className="grid flex-1 grid-cols-[minmax(0,1fr)_auto] items-end gap-2"
+            className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-end"
           >
             <input
               type="hidden"
@@ -297,7 +297,7 @@ function SuggestionCard({
                 className="h-8"
               />
             </label>
-            <SubmitButton>
+            <SubmitButton className="w-full sm:w-auto">
               <Check aria-hidden /> Adicionar
             </SubmitButton>
           </form>
