@@ -4205,6 +4205,18 @@ export type Database = {
         };
         Relationships: [];
       };
+      v_latest_supplier_product_price: {
+        Row: {
+          company_id: string | null;
+          occurred_at: string | null;
+          practiced_price: number | null;
+          pricing_unit_symbol: string | null;
+          product_id: string | null;
+          source: string | null;
+          supplier_id: string | null;
+        };
+        Relationships: [];
+      };
       v_conversion_history: {
         Row: {
           company_id: string | null;

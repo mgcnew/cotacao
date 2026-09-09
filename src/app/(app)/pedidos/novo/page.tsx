@@ -9,7 +9,6 @@ import {
 } from "@/components/orders/direct-order-form";
 import { Button } from "@/components/ui/button";
 import { listDirectOrderOptions } from "@/features/orders/queries";
-import { getSupplierScheduleTemplateItems } from "@/features/suppliers/schedules";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
 /**
@@ -43,22 +42,23 @@ export default async function NovoPedidoPage({
     ? query.agenda[0]
     : query.agenda;
   const parsedSchedule = z.uuid().safeParse(requestedSchedule);
-  const templateItems =
-    initialSupplierId && parsedSchedule.success
-      ? await getSupplierScheduleTemplateItems(
-          company.companyId,
-          parsedSchedule.data,
-          initialSupplierId,
-        )
-      : [];
+  const templateItems = parsedSchedule.success
+    ? (suppliers
+        .find((supplier) => supplier.id === initialSupplierId)
+        ?.purchaseTemplates.find(
+          (template) => template.id === parsedSchedule.data,
+        )?.items ?? [])
+    : [];
   const initialItems = templateItems
-    .filter((item) => item.isActive)
     .map((item) => ({
       productId: item.productId,
       productName: item.productName,
       quantity: item.quantity,
-      price: "",
-      notes: item.notes ?? "",
+      price:
+        item.lastPrice === null
+          ? ""
+          : item.lastPrice.toFixed(2).replace(".", ","),
+      notes: item.notes,
     }));
 
   return (

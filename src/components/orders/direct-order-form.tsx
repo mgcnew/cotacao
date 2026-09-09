@@ -23,6 +23,7 @@ import {
   createDirectOrder,
   type OrderActionState,
 } from "@/features/orders/actions";
+import type { SupplierPurchaseTemplate } from "@/features/orders/queries";
 import {
   formatSupplierNoticeDate,
   isSupplierNoticeOverdue,
@@ -43,6 +44,7 @@ export type DirectOrderOptions = {
       name: string;
       role: string | null;
     }[];
+    purchaseTemplates: SupplierPurchaseTemplate[];
     openNotices: {
       id: string;
       kind: string;
@@ -212,7 +214,7 @@ export function CamposDoPedidoDireto({
       {initialItems && initialItems.length > 0 ? (
         <div className="border-primary/25 bg-primary-soft text-fg rounded-xl border px-3 py-2 text-sm">
           <strong>{initialItems.length} produtos do modelo carregados.</strong>{" "}
-          Revise as quantidades e informe os preços atuais antes de criar o
+          Revise as quantidades e os preços de referência antes de criar o
           pedido.
         </div>
       ) : null}
@@ -220,6 +222,7 @@ export function CamposDoPedidoDireto({
       <OrderItemRows
         products={products}
         shoppingItems={shoppingItems}
+        supplierTemplates={selectedSupplier?.purchaseTemplates ?? []}
         idPrefix={idPrefixo}
         seeds={
           initialItems?.length

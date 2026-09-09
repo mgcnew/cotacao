@@ -87,6 +87,45 @@ export function orderNextStep(status: string): OrderNextStep {
   }
 }
 
+export type SupplierPurchaseSuggestion = {
+  id: string;
+  productId: string;
+  productName: string;
+  purchaseUnit: string;
+  pricingUnit: string;
+  quantity: string;
+  notes: string;
+  lastPrice: number | null;
+  lastPurchasedAt: string | null;
+  lastPriceIsStale: boolean;
+  priceSource: string | null;
+};
+
+export type SupplierPurchaseTemplate = {
+  id: string;
+  label: string;
+  items: SupplierPurchaseSuggestion[];
+};
+
+type DirectOrderTemplateRow = {
+  id: string;
+  product_id: string;
+  default_quantity: number;
+  notes: string | null;
+  supplier_purchase_schedules: {
+    id: string;
+    supplier_id: string;
+    label: string | null;
+    is_active: boolean;
+  } | null;
+  products: {
+    name: string;
+    is_active: boolean;
+    purchase_unit: { symbol: string } | null;
+    pricing_unit: { symbol: string } | null;
+  } | null;
+};
+
 /**
  * O que o pedido direto precisa escolher: fornecedor e produto.
  *
@@ -98,7 +137,7 @@ export function orderNextStep(status: string): OrderNextStep {
 export async function listDirectOrderOptions(companyId: string) {
   const supabase = await createServerSupabaseClient();
 
-  const [suppliers, products, shoppingItems, supplierNotices] =
+  const [suppliers, products, shoppingItems, supplierNotices, templateItems] =
     await Promise.all([
       supabase
         .from("suppliers")
@@ -115,6 +154,32 @@ export async function listDirectOrderOptions(companyId: string) {
         .eq("status", "open")
         .order("priority")
         .order("created_at", { ascending: false }),
+      supabase
+        .from("supplier_purchase_schedule_items")
+        .select(
+          `
+          id,
+          product_id,
+          default_quantity,
+          notes,
+          supplier_purchase_schedules!supplier_purchase_schedule_items_company_id_schedule_id_fkey!inner (
+            id,
+            supplier_id,
+            label,
+            is_active
+          ),
+          products!supplier_purchase_schedule_items_company_id_product_id_fkey (
+            name,
+            is_active,
+            purchase_unit:units!products_company_id_purchase_unit_id_fkey ( symbol ),
+            pricing_unit:units!products_company_id_pricing_unit_id_fkey ( symbol )
+          )
+        `,
+        )
+        .eq("company_id", companyId)
+        .eq("supplier_purchase_schedules.is_active", true)
+        .order("sort_order")
+        .order("created_at"),
     ]);
 
   if (suppliers.error) {
@@ -122,6 +187,96 @@ export async function listDirectOrderOptions(companyId: string) {
   }
   if (supplierNotices.error) {
     throw new Error(`Falha ao listar avisos: ${supplierNotices.error.message}`);
+  }
+  if (templateItems.error) {
+    throw new Error(
+      `Falha ao carregar modelos de compra: ${templateItems.error.message}`,
+    );
+  }
+
+  const templateRows = (templateItems.data ??
+    []) as unknown as DirectOrderTemplateRow[];
+  const templateSupplierIds = [
+    ...new Set(
+      templateRows.flatMap((row) =>
+        row.supplier_purchase_schedules?.supplier_id
+          ? [row.supplier_purchase_schedules.supplier_id]
+          : [],
+      ),
+    ),
+  ];
+  const templateProductIds = [
+    ...new Set(templateRows.map((row) => row.product_id)),
+  ];
+  const latestPrices =
+    templateSupplierIds.length > 0 && templateProductIds.length > 0
+      ? await supabase
+          .from("v_latest_supplier_product_price")
+          .select(
+            "supplier_id, product_id, practiced_price, occurred_at, source",
+          )
+          .eq("company_id", companyId)
+          .in("supplier_id", templateSupplierIds)
+          .in("product_id", templateProductIds)
+      : { data: [], error: null };
+  if (latestPrices.error) {
+    throw new Error(
+      `Falha ao carregar os últimos preços pagos: ${latestPrices.error.message}`,
+    );
+  }
+
+  const priceBySupplierProduct = new Map(
+    (latestPrices.data ?? []).flatMap((price) =>
+      price.supplier_id && price.product_id
+        ? [[`${price.supplier_id}:${price.product_id}`, price] as const]
+        : [],
+    ),
+  );
+  const templatesBySupplier = new Map<
+    string,
+    Map<string, SupplierPurchaseTemplate>
+  >();
+  for (const row of templateRows) {
+    const schedule = row.supplier_purchase_schedules;
+    const product = row.products;
+    if (!schedule?.is_active || !product?.is_active) continue;
+
+    let supplierTemplates = templatesBySupplier.get(schedule.supplier_id);
+    if (!supplierTemplates) {
+      supplierTemplates = new Map();
+      templatesBySupplier.set(schedule.supplier_id, supplierTemplates);
+    }
+    let template = supplierTemplates.get(schedule.id);
+    if (!template) {
+      template = {
+        id: schedule.id,
+        label: schedule.label?.trim() || "Compra recorrente",
+        items: [],
+      };
+      supplierTemplates.set(schedule.id, template);
+    }
+    const price = priceBySupplierProduct.get(
+      `${schedule.supplier_id}:${row.product_id}`,
+    );
+    template.items.push({
+      id: row.id,
+      productId: row.product_id,
+      productName: product.name,
+      purchaseUnit: product.purchase_unit?.symbol ?? "",
+      pricingUnit: product.pricing_unit?.symbol ?? "",
+      quantity: String(row.default_quantity).replace(".", ","),
+      notes: row.notes ?? "",
+      lastPrice:
+        price?.practiced_price === null || price?.practiced_price === undefined
+          ? null
+          : Number(price.practiced_price),
+      lastPurchasedAt: price?.occurred_at ?? null,
+      lastPriceIsStale: price?.occurred_at
+        ? Date.now() - new Date(price.occurred_at).getTime() >
+          90 * 24 * 60 * 60 * 1000
+        : false,
+      priceSource: price?.source ?? null,
+    });
   }
 
   const noticesBySupplier = new Map<
@@ -138,7 +293,12 @@ export async function listDirectOrderOptions(companyId: string) {
     suppliers: (suppliers.data ?? []).map((supplier) => ({
       id: supplier.id,
       name: supplier.name,
-      contacts: supplier.supplier_contacts.filter((contact) => contact.is_active),
+      contacts: supplier.supplier_contacts.filter(
+        (contact) => contact.is_active,
+      ),
+      purchaseTemplates: [
+        ...(templatesBySupplier.get(supplier.id)?.values() ?? []),
+      ],
       openNotices: (noticesBySupplier.get(supplier.id) ?? []).map((notice) => ({
         id: notice.id,
         kind: notice.kind,

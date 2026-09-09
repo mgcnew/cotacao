@@ -132,6 +132,18 @@ async function buildOrderItems(
     return { ok: false, error: "Adicione ao menos um item ao pedido." };
   }
 
+  const seenProductIds = new Set<string>();
+  for (const row of rows) {
+    if (row.productId && seenProductIds.has(row.productId)) {
+      return {
+        ok: false,
+        error:
+          "O mesmo produto aparece mais de uma vez. Mantenha uma única linha e some as quantidades.",
+      };
+    }
+    if (row.productId) seenProductIds.add(row.productId);
+  }
+
   const supabase = await createServerSupabaseClient();
   // Sem filtrar por `is_active`: um produto desativado depois da compra ainda
   // precisa poder ser corrigido no pedido em que já está. O que não se permite
