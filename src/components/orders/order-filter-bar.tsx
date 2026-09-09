@@ -1,12 +1,12 @@
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   SITUACOES_COMPOSTAS,
   type OrderFilters,
 } from "@/features/orders/filters";
 import { ORDER_STATUS_LABEL } from "@/features/orders/queries";
-
-const selectClass =
-  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
 
 /**
  * Os campos do recorte da lista de pedidos.
@@ -29,55 +29,49 @@ export function OrderFilterFields({
         <label htmlFor="situacao" className="text-fg-muted text-xs">
           Situação
         </label>
-        <select
+        <ThemedSelect
           id="situacao"
           name="situacao"
           defaultValue={filters.situacao ?? ""}
-          className={selectClass}
-        >
-          <option value="">Todas</option>
-          {Object.entries(SITUACOES_COMPOSTAS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-          {Object.entries(ORDER_STATUS_LABEL).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+          placeholder="Todas"
+          emptyOptionLabel="Todas"
+          options={[
+            ...Object.entries(SITUACOES_COMPOSTAS).map(([value, label]) => ({
+              value,
+              label,
+            })),
+            ...Object.entries(ORDER_STATUS_LABEL).map(([value, label]) => ({
+              value,
+              label,
+            })),
+          ]}
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="fornecedor" className="text-fg-muted text-xs">
           Fornecedor
         </label>
-        <select
+        <SearchableSelect
           id="fornecedor"
           name="fornecedor"
           defaultValue={filters.fornecedorId ?? ""}
-          className={selectClass}
-        >
-          <option value="">Todos</option>
-          {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+          options={suppliers}
+          placeholder="Digite o fornecedor…"
+          emptyMessage="Nenhum fornecedor encontrado."
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="de" className="text-fg-muted text-xs">
           Pedidos de
         </label>
-        <Input
+        <DateTimePicker
           id="de"
           name="de"
-          type="date"
           defaultValue={filters.de ?? ""}
-          className="h-8"
+          placeholder="Escolher data inicial"
+          dateOnly
         />
       </div>
 
@@ -85,12 +79,12 @@ export function OrderFilterFields({
         <label htmlFor="ate" className="text-fg-muted text-xs">
           Até
         </label>
-        <Input
+        <DateTimePicker
           id="ate"
           name="ate"
-          type="date"
           defaultValue={filters.ate ?? ""}
-          className="h-8"
+          placeholder="Escolher data final"
+          dateOnly
         />
       </div>
 
