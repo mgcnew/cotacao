@@ -234,6 +234,77 @@ export async function getProductUnitEditContext(
     : null;
 }
 
+export type ProductDeleteContext = {
+  product: { id: string; name: string; isActive: boolean };
+  /** free = exclui; removable = desfaça o vínculo antes; historical = só inativa. */
+  kind: "free" | "removable" | "historical";
+  canDelete: boolean;
+  reason: string | null;
+  /** O que sai junto do produto. A confirmação mostra antes de excluir. */
+  collateral: {
+    barcodes: number;
+    supplierLinks: number;
+    nfeAliases: number;
+    nfeUnitRules: number;
+    attributes: number;
+    archivedListItems: number;
+    importReferences: number;
+  };
+};
+
+/**
+ * Veredito de exclusão de um produto.
+ *
+ * A avaliação não entra em `rpc_list_products_page` de propósito: ela cruza sete
+ * tabelas e só interessa a quem abriu a confirmação. Cobrar isso por linha da
+ * listagem seria pagar o preço em toda paginação para um caminho que quase
+ * nunca é tomado.
+ */
+export async function getProductDeleteContext(
+  companyId: string,
+  productId: string,
+): Promise<ProductDeleteContext | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select("id,name,is_active")
+    .eq("company_id", companyId)
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (productError) {
+    throw new Error(`Falha ao carregar produto: ${productError.message}`);
+  }
+  if (!product) return null;
+
+  const { data, error } = await supabase.rpc("rpc_product_delete_preview", {
+    p_company_id: companyId,
+    p_product_id: productId,
+  });
+  if (error) {
+    throw new Error(`Falha ao verificar o uso do produto: ${error.message}`);
+  }
+
+  const preview = data as unknown as {
+    kind: ProductDeleteContext["kind"];
+    canDelete: boolean;
+    reason: string | null;
+    collateral: ProductDeleteContext["collateral"];
+  };
+
+  return {
+    product: {
+      id: product.id,
+      name: product.name,
+      isActive: product.is_active,
+    },
+    kind: preview.kind,
+    canDelete: preview.canDelete,
+    reason: preview.reason,
+    collateral: preview.collateral,
+  };
+}
+
 export async function getCatalogCounts(companyId: string) {
   const supabase = await createServerSupabaseClient();
 

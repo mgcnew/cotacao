@@ -4843,6 +4843,20 @@ export type Database = {
         };
         Returns: string | null;
       };
+      rpc_product_delete_preview: {
+        Args: {
+          p_company_id: string;
+          p_product_id: string;
+        };
+        Returns: Json;
+      };
+      rpc_delete_product: {
+        Args: {
+          p_company_id: string;
+          p_product_id: string;
+        };
+        Returns: Json;
+      };
       rpc_save_supplier_product_nfe_unit_rule: {
         Args: {
           p_company_id: string;

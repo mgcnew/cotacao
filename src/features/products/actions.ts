@@ -24,9 +24,11 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * Duas regras que valem para todo este arquivo:
  *  1. `company_id` vem SEMPRE de requireActiveCompany(), nunca do formulário —
  *     senão bastaria trocar um campo escondido para escrever em outra empresa;
- *  2. nada de DELETE: o schema não expõe policy de DELETE nestas tabelas, e as
- *     FKs são ON DELETE RESTRICT. Item de catálogo sai de circulação por
- *     `is_active = false`, preservando o histórico de cotações que o referencia.
+ *  2. nada de DELETE direto: o schema não concede DELETE em `products` ao
+ *     papel `authenticated` e as FKs de história são ON DELETE RESTRICT. A
+ *     única exclusão possível é `rpc_delete_product`, que avalia antes se o
+ *     produto tem história e recusa com motivo legível quando tem. Item com
+ *     histórico continua saindo de circulação por `is_active = false`.
  */
 
 export type CategoryFormState = {
@@ -610,6 +612,38 @@ export async function setProductActive(productId: string, isActive: boolean) {
   }
 
   revalidatePath("/produtos");
+}
+
+export type ProductDeleteState = {
+  error: string | null;
+  /** Nome do produto excluído, para a confirmação de saída. */
+  deletedName?: string;
+};
+
+/**
+ * Exclui um produto que ainda não tem história.
+ *
+ * A RPC reavalia sob lock antes de apagar: o veredito que a tela mostrou pode
+ * ter envelhecido entre abrir a confirmação e clicar, porque outra pessoa pode
+ * ter posto o produto numa rodada nesse intervalo. Por isso a mensagem de erro
+ * vem dela e é exibida como está — é ela quem sabe o que mudou.
+ */
+export async function deleteProduct(
+  productId: string,
+): Promise<ProductDeleteState> {
+  const company = await requireActiveCompany();
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("rpc_delete_product", {
+    p_company_id: company.companyId,
+    p_product_id: productId,
+  });
+  if (error) return { error: error.message };
+
+  const result = data as unknown as { deleted?: boolean; name?: string } | null;
+
+  revalidatePath("/produtos");
+  return { error: null, deletedName: result?.name ?? undefined };
 }
 
 export type UnitFormState = {

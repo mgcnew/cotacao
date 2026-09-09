@@ -1,4 +1,4 @@
-import { MoreHorizontal, Package, Pencil } from "lucide-react";
+import { MoreHorizontal, Package, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -237,6 +237,7 @@ async function ProdutosContent({
 
   const podeCriar = permissions.has("product.create");
   const podeEditar = permissions.has("product.update");
+  const podeExcluir = permissions.has("product.delete");
 
   return (
     <>
@@ -323,7 +324,9 @@ async function ProdutosContent({
                     Comparação
                   </TableHead>
                   <TableHead>Situação</TableHead>
-                  {podeEditar ? <TableHead className="w-0" /> : null}
+                  {podeEditar || podeExcluir ? (
+                    <TableHead className="w-0" />
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody className="block sm:table-row-group">
@@ -376,10 +379,10 @@ async function ProdutosContent({
                         {product.isActive ? "Ativo" : "Inativo"}
                       </Badge>
                     </TableCell>
-                    {podeEditar ? (
+                    {podeEditar || podeExcluir ? (
                       <TableCell className="block justify-self-end p-0 sm:table-cell sm:p-2">
                         <div className="flex items-center justify-end gap-1">
-                          {product.unitsEditable ? (
+                          {podeEditar && product.unitsEditable ? (
                             <Tooltip content="Editar unidades" side="top">
                               <Button asChild size="icon-sm" variant="ghost">
                                 <Link href={`/produtos/editar/${product.id}`}>
@@ -391,22 +394,41 @@ async function ProdutosContent({
                               </Button>
                             </Tooltip>
                           ) : null}
-                          <form
-                            action={setProductActive.bind(
-                              null,
-                              product.id,
-                              !product.isActive,
-                            )}
-                          >
-                            <Button
-                              type="submit"
-                              size="sm"
-                              variant="ghost"
-                              className="text-fg-muted whitespace-nowrap"
+                          {podeEditar ? (
+                            <form
+                              action={setProductActive.bind(
+                                null,
+                                product.id,
+                                !product.isActive,
+                              )}
                             >
-                              {product.isActive ? "Desativar" : "Reativar"}
-                            </Button>
-                          </form>
+                              <Button
+                                type="submit"
+                                size="sm"
+                                variant="ghost"
+                                className="text-fg-muted whitespace-nowrap"
+                              >
+                                {product.isActive ? "Desativar" : "Reativar"}
+                              </Button>
+                            </form>
+                          ) : null}
+                          {/* O veredito de exclusão cruza sete tabelas e não é
+                              calculado por linha: quem clica abre a
+                              confirmação, e é lá que o produto revela se pode
+                              sair, se basta desfazer um vínculo ou se só
+                              resta inativar. */}
+                          {podeExcluir ? (
+                            <Tooltip content="Excluir produto" side="top">
+                              <Button asChild size="icon-sm" variant="ghost">
+                                <Link href={`/produtos/excluir/${product.id}`}>
+                                  <Trash2 aria-hidden />
+                                  <span className="sr-only">
+                                    Excluir {product.name}
+                                  </span>
+                                </Link>
+                              </Button>
+                            </Tooltip>
+                          ) : null}
                         </div>
                       </TableCell>
                     ) : null}
