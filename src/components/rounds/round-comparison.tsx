@@ -7,6 +7,10 @@ import { EmptyState } from "@/components/layout/empty-state";
 import { CorrectionForm } from "@/components/quotations/correction-form";
 import { ManualPriceForm } from "@/components/quotations/manual-price-form";
 import { NegotiationForm } from "@/components/quotations/negotiation-form";
+import {
+  NegotiationReferenceDialog,
+  type NegotiationReferenceCandidate,
+} from "@/components/quotations/negotiation-reference-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +70,42 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
   const currentIndex = Math.max(0, suppliers.findIndex((supplier) => supplier.id === supplierId));
   const supplier = suppliers[currentIndex] ?? suppliers[0];
   const stats = supplierStats(supplier, rows);
+  const negotiationCandidates = rows.flatMap((row) => {
+    const ownCell = row.cells.get(supplier.id);
+    if (
+      !ownCell?.responseItemId ||
+      ownCell.currentPrice === null ||
+      ownCell.doesNotSupply ||
+      ownCell.isAvailable === false
+    ) {
+      return [];
+    }
+    const competitorPrices = suppliers.flatMap((candidate) => {
+      if (candidate.id === supplier.id || candidate.removed_at !== null) return [];
+      const candidateCell = row.cells.get(candidate.id);
+      const price = comparablePrice(row, candidateCell);
+      return price !== null && !candidateCell?.doesNotSupply && candidateCell?.isAvailable !== false
+        ? [price]
+        : [];
+    });
+    return [
+      {
+        responseItemId: ownCell.responseItemId,
+        productName: row.productName,
+        requestedQuantity: row.requestedQuantity,
+        purchaseUnit: row.purchaseUnit,
+        pricingUnit: row.pricingUnit,
+        currentPrice: ownCell.currentPrice,
+        bestCompetitorPrice:
+          competitorPrices.length > 0 ? Math.min(...competitorPrices) : null,
+        referenceUnit:
+          row.usesNormalizedComparison && row.comparisonUnit
+            ? row.comparisonUnit
+            : row.pricingUnit,
+        useComparisonUnit: row.usesNormalizedComparison,
+      } satisfies NegotiationReferenceCandidate,
+    ];
+  });
   const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
   const visibleRows = rows.filter((row) => {
     if (normalizedSearch && !`${row.productName} ${row.groupName}`.toLocaleLowerCase("pt-BR").includes(normalizedSearch)) return false;
@@ -164,6 +204,18 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
             {stats.missing > 0 ? <Badge variant="destructive">{stats.missing} pendentes</Badge> : null}
             {supplier.completed_at ? <Badge>resposta concluída</Badge> : <Badge variant="outline">não concluiu</Badge>}
           </div>
+          {dados.podeNegociar && supplier.removed_at === null ? (
+            <NegotiationReferenceDialog
+              key={supplier.id}
+              roundId={dados.round.id}
+              roundSupplierId={supplier.id}
+              supplierName={supplier.suppliers.name}
+              candidates={negotiationCandidates}
+              requests={dados.negotiationReferences.filter(
+                (request) => request.roundSupplierId === supplier.id,
+              )}
+            />
+          ) : null}
         </div>
         <div className="border-primary/20 bg-primary/[0.035] border-t px-3 py-2">
           <p className="text-fg-muted text-xs">Todas as ações abaixo alteram a resposta de <strong className="text-fg">{supplier.suppliers.name}</strong>.</p>

@@ -37,6 +37,7 @@ const PUBLIC_PREFIXES = [
   "/opengraph-image",
   "/q/",
   "/o/",
+  "/n/",
   "/r/",
   "/api/evolution/",
 ];

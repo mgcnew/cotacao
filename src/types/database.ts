@@ -895,6 +895,111 @@ export type Database = {
           },
         ];
       };
+      negotiation_reference_request_items: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          id: string;
+          pricing_unit_snapshot: string;
+          product_name_snapshot: string;
+          purchase_unit_snapshot: string;
+          quotation_response_item_id: string;
+          reference_kind: string;
+          reference_price: number;
+          reference_unit_snapshot: string;
+          request_id: string;
+          requested_quantity_snapshot: number;
+          submitted_at: string | null;
+          submitted_price: number | null;
+          supplier_price_snapshot: number;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          id?: string;
+          pricing_unit_snapshot: string;
+          product_name_snapshot: string;
+          purchase_unit_snapshot: string;
+          quotation_response_item_id: string;
+          reference_kind: string;
+          reference_price: number;
+          reference_unit_snapshot: string;
+          request_id: string;
+          requested_quantity_snapshot: number;
+          submitted_at?: string | null;
+          submitted_price?: number | null;
+          supplier_price_snapshot: number;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          id?: string;
+          pricing_unit_snapshot?: string;
+          product_name_snapshot?: string;
+          purchase_unit_snapshot?: string;
+          quotation_response_item_id?: string;
+          reference_kind?: string;
+          reference_price?: number;
+          reference_unit_snapshot?: string;
+          request_id?: string;
+          requested_quantity_snapshot?: number;
+          submitted_at?: string | null;
+          submitted_price?: number | null;
+          supplier_price_snapshot?: number;
+        };
+        Relationships: [];
+      };
+      negotiation_reference_requests: {
+        Row: {
+          company_id: string;
+          completed_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          expires_at: string;
+          first_accessed_at: string | null;
+          id: string;
+          purchase_round_id: string;
+          revoked_at: string | null;
+          round_supplier_id: string;
+          status: string;
+          supplier_id: string;
+          token_hash: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          expires_at: string;
+          first_accessed_at?: string | null;
+          id?: string;
+          purchase_round_id: string;
+          revoked_at?: string | null;
+          round_supplier_id: string;
+          status?: string;
+          supplier_id: string;
+          token_hash: string;
+          updated_at?: string;
+        };
+        Update: {
+          company_id?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          expires_at?: string;
+          first_accessed_at?: string | null;
+          id?: string;
+          purchase_round_id?: string;
+          revoked_at?: string | null;
+          round_supplier_id?: string;
+          status?: string;
+          supplier_id?: string;
+          token_hash?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       negotiations: {
         Row: {
           channel: string;
@@ -4616,6 +4721,16 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_create_negotiation_reference_request: {
+        Args: {
+          p_company_id: string;
+          p_expires_at: string;
+          p_items: Json;
+          p_round_supplier_id: string;
+          p_token_hash: string;
+        };
+        Returns: string;
+      };
       rpc_correct_quotation_item_with_conversion: {
         Args: {
           p_company_id: string;
@@ -4976,6 +5091,10 @@ export type Database = {
         Returns: Json;
       };
       rpc_public_get_order: { Args: { p_token: string }; Returns: Json };
+      rpc_public_get_negotiation_reference: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
       rpc_public_get_order_packaging_context: {
         Args: { p_token: string };
         Returns: Json;
@@ -4998,6 +5117,10 @@ export type Database = {
         Returns: Json;
       };
       rpc_public_submit_quotation_validated: {
+        Args: { p_items: Json; p_token: string };
+        Returns: Json;
+      };
+      rpc_public_submit_negotiation_reference: {
         Args: { p_items: Json; p_token: string };
         Returns: Json;
       };
@@ -5036,6 +5159,10 @@ export type Database = {
           p_quotation_response_item_id: string;
         };
         Returns: Json;
+      };
+      rpc_revoke_negotiation_reference_request: {
+        Args: { p_company_id: string; p_request_id: string };
+        Returns: boolean;
       };
       rpc_resolve_commercial_divergence: {
         Args: {

@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 
 import { getRoundComparison } from "@/features/quotations/comparison";
+import { listNegotiationReferenceRequests } from "@/features/quotations/negotiation-reference";
 import { carregarRodadaBasica } from "@/features/rounds/central";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
@@ -20,10 +21,12 @@ import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 export const carregarComparacao = cache(async (roundId: string) => {
   const company = await requireActiveCompany();
 
-  const [round, comparison, permissions] = await Promise.all([
+  const [round, comparison, permissions, negotiationReferences] =
+    await Promise.all([
     carregarRodadaBasica(roundId),
     getRoundComparison(company.companyId, roundId),
     getPermissions(company.companyId),
+    listNegotiationReferenceRequests(company.companyId, roundId),
   ]);
 
   if (!round) return null;
@@ -32,6 +35,7 @@ export const carregarComparacao = cache(async (roundId: string) => {
     round,
     rows: comparison.rows,
     suppliers: comparison.suppliers,
+    negotiationReferences,
     podeNegociar: permissions.has("negotiation.create"),
     podeCorrigir: permissions.has("quotation_response.correct"),
     // Lançar no lugar do fornecedor: a permissão já existia na semente da

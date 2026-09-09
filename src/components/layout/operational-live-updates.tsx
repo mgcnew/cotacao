@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 
 const SUPPLIER_RESPONSE_EVENTS = new Set([
   "quotation.response_submitted",
+  "negotiation.reference_responded",
   "order.confirmed",
   "order.divergence_created",
 ]);
