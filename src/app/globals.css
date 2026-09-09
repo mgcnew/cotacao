@@ -611,14 +611,6 @@ html:has([data-slot="landing-page"]) {
   background-color: var(--border-strong);
 }
 
-/* O Radix bloqueia a janela, mas a janela não é o contêiner rolável deste app.
-   Sem esta regra, o `main` mantém sua barra enquanto o DialogBody monta a sua:
-   por um quadro aparecem duas barras lado a lado ao abrir um modal. */
-body:has([data-slot="dialog-overlay"][data-state="open"])
-  [data-slot="app-main"] {
-  overflow-y: hidden;
-}
-
 [data-slot="dialog-body"] {
   scrollbar-gutter: stable;
 }
