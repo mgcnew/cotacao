@@ -130,12 +130,15 @@ type ScanFeedback = BarcodeScanOutcome & { at: number };
 export function BarcodeCameraDialog({
   onDetected,
   continuous = false,
+  successVibrationMs,
   triggerLabel,
   triggerClassName,
 }: {
   onDetected: (code: string) => BarcodeScanOutcome;
   /** Segue lendo depois de cada acerto, em vez de fechar no primeiro. */
   continuous?: boolean;
+  /** Duração do pulso tátil de confirmação; zero desativa a vibração. */
+  successVibrationMs?: number;
   triggerLabel?: string;
   triggerClassName?: string;
 }) {
@@ -260,7 +263,8 @@ export function BarcodeCameraDialog({
               return;
             }
 
-            navigator.vibrate?.(continuous ? 40 : 80);
+            const vibrationMs = successVibrationMs ?? (continuous ? 40 : 80);
+            if (vibrationMs > 0) navigator.vibrate?.(vibrationMs);
             if (continuous) {
               setScanned((current) =>
                 [{ code, label: outcome.label, at: now }, ...current].slice(
@@ -324,7 +328,7 @@ export function BarcodeCameraDialog({
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [continuous, open, videoElement]);
+  }, [continuous, open, successVibrationMs, videoElement]);
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {

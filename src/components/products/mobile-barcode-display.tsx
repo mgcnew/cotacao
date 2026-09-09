@@ -379,6 +379,7 @@ export function MobileBarcodeDisplay({
           <BarcodeCameraDialog
             onDetected={handleDetected}
             continuous
+            successVibrationMs={35}
             triggerLabel="Câmera"
           />
         </div>
