@@ -550,6 +550,19 @@ html:has([data-slot="landing-page"]) {
   height: 0;
 }
 
+/* As tabs da lista continuam rolando por gesto no celular, mas o trilho
+   competia visualmente com a pílula selecionada e parecia uma segunda seleção. */
+[data-slot="shopping-list-origin-tabs"] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+[data-slot="shopping-list-origin-tabs"]::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* A barra das listas que rolam por dentro do cartão.
 
    Aqui ela NÃO some, ao contrário da do `main`. A página rolando é evidente

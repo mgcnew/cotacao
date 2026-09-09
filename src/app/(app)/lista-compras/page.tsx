@@ -89,40 +89,43 @@ export default async function ShoppingListPage({
 
       {canManage ? <ShoppingListQuickAdd products={products} /> : null}
 
-      <nav
-        aria-label="Filtrar itens por origem"
-        className="mt-4 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0"
-      >
-        {(
-          [
-            { value: "all", label: "Todos", icon: ClipboardCheck },
-            { value: "assistant", label: "Assistente", icon: Sparkles },
-            {
-              value: "manual",
-              label: "Inseridos por você",
-              icon: UserRound,
-            },
-          ] as const
-        ).map((option) => {
-          const Icon = option.icon;
-          return (
-            <Link
-              key={option.value}
-              href={hrefForOrigin(option.value)}
-              aria-current={origin === option.value ? "page" : undefined}
-              className={cn(
-                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors sm:h-8",
-                origin === option.value
-                  ? "border-primary bg-primary-soft text-primary"
-                  : "border-border bg-surface text-fg-muted hover:bg-surface-muted hover:text-fg",
-              )}
-            >
-              <Icon className="size-3.5" aria-hidden />
-              {option.label} ({originCounts[option.value]})
-            </Link>
-          );
-        })}
-      </nav>
+      <div className="mt-4 overflow-hidden sm:overflow-visible">
+        <nav
+          data-slot="shopping-list-origin-tabs"
+          aria-label="Filtrar itens por origem"
+          className="-mb-4 flex gap-2 overflow-x-auto pb-4 sm:mb-0 sm:flex-wrap sm:overflow-visible sm:pb-0"
+        >
+          {(
+            [
+              { value: "all", label: "Todos", icon: ClipboardCheck },
+              { value: "assistant", label: "Assistente", icon: Sparkles },
+              {
+                value: "manual",
+                label: "Inseridos por você",
+                icon: UserRound,
+              },
+            ] as const
+          ).map((option) => {
+            const Icon = option.icon;
+            return (
+              <Link
+                key={option.value}
+                href={hrefForOrigin(option.value)}
+                aria-current={origin === option.value ? "page" : undefined}
+                className={cn(
+                  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors sm:h-8",
+                  origin === option.value
+                    ? "border-primary bg-primary-soft text-primary"
+                    : "border-border bg-surface text-fg-muted hover:bg-surface-muted hover:text-fg",
+                )}
+              >
+                <Icon className="size-3.5" aria-hidden />
+                {option.label} ({originCounts[option.value]})
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
       {showSuggestions ? (
         <PurchaseSuggestions suggestions={suggestions} canManage={canManage} />
