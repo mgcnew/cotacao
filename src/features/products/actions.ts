@@ -244,11 +244,6 @@ export type ProductFormState = {
   };
 };
 
-export type ProductUnitEditState = {
-  error: string | null;
-  savedAt?: number;
-};
-
 export type BulkProductUnitEditState = {
   error: string | null;
   savedAt?: number;
@@ -267,34 +262,6 @@ const productUnitsSchema = z.object({
       error: "Unidade de comparação inválida",
     }),
 });
-
-export async function updateUnusedProductUnits(
-  productId: string,
-  _previous: ProductUnitEditState,
-  formData: FormData,
-): Promise<ProductUnitEditState> {
-  const company = await requireActiveCompany();
-  const parsed = productUnitsSchema.safeParse({
-    purchaseUnitId: formData.get("purchaseUnitId"),
-    pricingUnitId: formData.get("pricingUnitId"),
-    comparisonUnitId: formData.get("comparisonUnitId"),
-  });
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-
-  const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc("rpc_update_unused_product_units", {
-    p_company_id: company.companyId,
-    p_product_id: productId,
-    p_purchase_unit_id: parsed.data.purchaseUnitId,
-    p_pricing_unit_id: parsed.data.pricingUnitId,
-    p_comparison_unit_id: parsed.data.comparisonUnitId,
-  });
-  if (error) return { error: error.message };
-
-  revalidatePath("/produtos");
-  revalidatePath(`/produtos/historico/${productId}`);
-  return { error: null, savedAt: Date.now() };
-}
 
 const bulkProductUnitsSchema = z
   .array(
@@ -595,6 +562,262 @@ export async function createProduct(
       pricingUnitSymbol: created.pricing_unit.symbol,
     },
   };
+}
+
+/**
+ * Campos do produto que a edição alcança por UPDATE direto.
+ *
+ * As unidades ficam fora do schema porque não são gravadas aqui: elas passam
+ * pela RPC de 0089, que reavalia a trava de 0102 sob lock. O código de barras
+ * também fica de fora — tem tela própria, com leitor e vários códigos por
+ * produto, e espremê-lo num campo só perderia isso.
+ */
+const productEditSchema = productSchema.omit({
+  purchaseUnitId: true,
+  pricingUnitId: true,
+  comparisonUnitId: true,
+  barcode: true,
+});
+
+export type ProductEditState = {
+  error: string | null;
+  savedAt?: number;
+};
+
+/**
+ * Corrige o cadastro de um produto: nome, categoria, finalidade, observações,
+ * atributos e — quando ainda destravadas — as unidades.
+ *
+ * Renomear é livre porque o passado está copiado, não referenciado: pedido
+ * enviado guarda `product_name_snapshot` (0010) e rodada encerrada guarda o
+ * relatório inteiro (0059). Quem lê o nome vivo é a rodada aberta já enviada, e
+ * disso a tela avisa antes — sem impedir, porque é montando a rodada que o erro
+ * de digitação aparece.
+ *
+ * Trocar a categoria é o caso delicado: atributo pertence a uma categoria, e o
+ * que estava preenchido sob a antiga não faz sentido sob a nova. Por isso os
+ * valores órfãos são apagados no mesmo passo em que os novos entram.
+ */
+export async function updateProduct(
+  productId: string,
+  _prev: ProductEditState,
+  formData: FormData,
+): Promise<ProductEditState> {
+  const company = await requireActiveCompany();
+
+  const parsed = productEditSchema.safeParse({
+    name: formData.get("name"),
+    categoryId: formData.get("categoryId"),
+    purpose: formData.get("purpose"),
+    description: formData.get("description"),
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+
+  const supabase = await createServerSupabaseClient();
+
+  const { data: current, error: currentError } = await supabase
+    .from("products")
+    .select(
+      "id,name,category_id,purchase_unit_id,pricing_unit_id,comparison_unit_id",
+    )
+    .eq("company_id", company.companyId)
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (currentError) {
+    return { error: `Falha ao carregar o produto: ${currentError.message}` };
+  }
+  if (!current) {
+    return { error: "Produto não encontrado nesta empresa." };
+  }
+
+  // O trigger de 0044 recusaria o nome repetido de qualquer forma, mas com erro
+  // de constraint. Perguntar antes é o que permite devolver a frase legível —
+  // e só vale a pergunta se o nome mudou de verdade.
+  if (normalizeEntityName(parsed.data.name) !== normalizeEntityName(current.name)) {
+    const { data: nameOwner, error: nameReadError } = await supabase
+      .from("products")
+      .select("id")
+      .eq("company_id", company.companyId)
+      .eq("normalized_name", normalizeEntityName(parsed.data.name))
+      .neq("id", productId)
+      .limit(1)
+      .maybeSingle();
+
+    if (nameReadError) {
+      return {
+        error: `Não foi possível verificar o nome do produto: ${nameReadError.message}`,
+      };
+    }
+    if (nameOwner) {
+      return { error: "Já existe um produto com este nome nesta empresa." };
+    }
+  }
+
+  // Mesma regra do cadastro: as definições vêm do banco, nunca do formulário.
+  // Assim um campo forjado no HTML não vira atributo, e obrigatório continua
+  // obrigatório — inclusive o da categoria nova, para onde o produto vai agora.
+  const { data: definitions, error: defsError } = await supabase
+    .from("product_attribute_definitions")
+    .select("id, name, data_type, is_required")
+    .eq("company_id", company.companyId)
+    .eq("category_id", parsed.data.categoryId)
+    .eq("is_active", true);
+
+  if (defsError) {
+    return { error: `Falha ao carregar atributos: ${defsError.message}` };
+  }
+
+  const values: {
+    attribute_definition_id: string;
+    value_text: string | null;
+    value_numeric: number | null;
+    value_boolean: boolean | null;
+  }[] = [];
+
+  for (const def of definitions ?? []) {
+    const raw = String(formData.get(`attr_${def.id}`) ?? "").trim();
+
+    if (!raw) {
+      if (def.is_required) {
+        return { error: `Preencha o atributo obrigatório "${def.name}".` };
+      }
+      continue; // Opcional em branco: a linha existente sai no expurgo abaixo.
+    }
+
+    if (def.data_type === "numeric") {
+      // Aceita vírgula decimal: é como se digita em português.
+      const parsedNumber = Number(raw.replace(/\./g, "").replace(",", "."));
+      if (!Number.isFinite(parsedNumber)) {
+        return { error: `O atributo "${def.name}" precisa ser um número.` };
+      }
+      values.push({
+        attribute_definition_id: def.id,
+        value_text: null,
+        value_numeric: parsedNumber,
+        value_boolean: null,
+      });
+    } else if (def.data_type === "boolean") {
+      values.push({
+        attribute_definition_id: def.id,
+        value_text: null,
+        value_numeric: null,
+        value_boolean: raw === "true",
+      });
+    } else {
+      values.push({
+        attribute_definition_id: def.id,
+        value_text: raw,
+        value_numeric: null,
+        value_boolean: null,
+      });
+    }
+  }
+
+  // As unidades só vêm no formulário quando ainda estão destravadas, e só valem
+  // uma chamada se realmente mudaram. A RPC reavalia a trava sob lock: se
+  // alguém pôs o produto numa rodada enquanto esta tela estava aberta, é ela
+  // quem recusa, com o motivo certo.
+  const unitFieldsPresent = formData.has("purchaseUnitId");
+  const units = unitFieldsPresent
+    ? productUnitsSchema.safeParse({
+        purchaseUnitId: formData.get("purchaseUnitId"),
+        pricingUnitId: formData.get("pricingUnitId"),
+        comparisonUnitId: formData.get("comparisonUnitId"),
+      })
+    : null;
+
+  if (units && !units.success) {
+    return { error: units.error.issues[0].message };
+  }
+
+  const unitsChanged =
+    units?.success === true &&
+    (units.data.purchaseUnitId !== current.purchase_unit_id ||
+      units.data.pricingUnitId !== current.pricing_unit_id ||
+      units.data.comparisonUnitId !== current.comparison_unit_id);
+
+  // A unidade vai primeiro justamente porque é a que pode ser recusada. Assim a
+  // recusa não deixa para trás um nome já trocado sem que a pessoa soubesse.
+  if (unitsChanged && units?.success) {
+    const { error: unitsError } = await supabase.rpc(
+      "rpc_update_unused_product_units",
+      {
+        p_company_id: company.companyId,
+        p_product_id: productId,
+        p_purchase_unit_id: units.data.purchaseUnitId,
+        p_pricing_unit_id: units.data.pricingUnitId,
+        p_comparison_unit_id: units.data.comparisonUnitId,
+      },
+    );
+    if (unitsError) return { error: unitsError.message };
+  }
+
+  const { error: updateError } = await supabase
+    .from("products")
+    .update({
+      name: parsed.data.name,
+      category_id: parsed.data.categoryId,
+      purpose: parsed.data.purpose,
+      description: parsed.data.description,
+    })
+    .eq("company_id", company.companyId)
+    .eq("id", productId);
+
+  if (updateError) {
+    if (updateError.code === "23505") {
+      return { error: "Já existe um produto com este nome nesta empresa." };
+    }
+    if (updateError.code === "23503") {
+      return {
+        error:
+          "Categoria não pertence a esta empresa. Recarregue a página e tente de novo.",
+      };
+    }
+    return { error: describeWriteError(updateError, "um produto") };
+  }
+
+  // Fora o que acabou de ser gravado, nada mais deve restar: some tanto o
+  // atributo esvaziado quanto o que ficou órfão pela troca de categoria.
+  const keep = values.map((value) => value.attribute_definition_id);
+  let purge = supabase
+    .from("product_attribute_values")
+    .delete()
+    .eq("company_id", company.companyId)
+    .eq("product_id", productId);
+  if (keep.length > 0) {
+    purge = purge.not("attribute_definition_id", "in", `(${keep.join(",")})`);
+  }
+  const { error: purgeError } = await purge;
+
+  if (purgeError) {
+    return { error: `Falha ao limpar atributos antigos: ${purgeError.message}` };
+  }
+
+  if (values.length > 0) {
+    const { error: valuesError } = await supabase
+      .from("product_attribute_values")
+      .upsert(
+        values.map((value) => ({
+          ...value,
+          company_id: company.companyId,
+          product_id: productId,
+        })),
+        { onConflict: "product_id,attribute_definition_id" },
+      );
+
+    if (valuesError) {
+      return { error: `Falha ao salvar atributos: ${valuesError.message}` };
+    }
+  }
+
+  revalidatePath("/produtos");
+  revalidatePath(`/produtos/editar/${productId}`);
+  revalidatePath(`/produtos/historico/${productId}`);
+  return { error: null, savedAt: Date.now() };
 }
 
 export async function setProductActive(productId: string, isActive: boolean) {

@@ -382,13 +382,16 @@ async function ProdutosContent({
                     {podeEditar || podeExcluir ? (
                       <TableCell className="block justify-self-end p-0 sm:table-cell sm:p-2">
                         <div className="flex items-center justify-end gap-1">
-                          {podeEditar && product.unitsEditable ? (
-                            <Tooltip content="Editar unidades" side="top">
+                          {/* Não depende mais de `unitsEditable`: nome, categoria
+                              e finalidade se corrigem sempre, e é dentro da tela
+                              que a unidade aparece travada quando for o caso. */}
+                          {podeEditar ? (
+                            <Tooltip content="Editar produto" side="top">
                               <Button asChild size="icon-sm" variant="ghost">
                                 <Link href={`/produtos/editar/${product.id}`}>
                                   <Pencil aria-hidden />
                                   <span className="sr-only">
-                                    Editar unidades de {product.name}
+                                    Editar {product.name}
                                   </span>
                                 </Link>
                               </Button>

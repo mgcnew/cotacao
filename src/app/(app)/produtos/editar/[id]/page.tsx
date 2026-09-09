@@ -2,25 +2,27 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
-import { ProductUnitEditForm } from "@/components/products/product-unit-edit-form";
+import { ProductEditForm } from "@/components/products/product-edit-form";
 import { Button } from "@/components/ui/button";
 import { DialogBody } from "@/components/ui/dialog";
 import {
-  getProductUnitEditContext,
+  getProductEditContext,
+  listAttributeDefinitions,
+  listCategories,
   listUnits,
 } from "@/features/products/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
-export default async function EditarUnidadesProdutoPage({
+export default async function EditarProdutoPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <ProductUnitEditContent id={id} />;
+  return <ProductEditContent id={id} />;
 }
 
-export async function ProductUnitEditContent({
+export async function ProductEditContent({
   id,
   inModal = false,
 }: {
@@ -28,69 +30,82 @@ export async function ProductUnitEditContent({
   inModal?: boolean;
 }) {
   const company = await requireActiveCompany();
-  const [context, rawUnits, permissions] = await Promise.all([
-    getProductUnitEditContext(company.companyId, id),
-    listUnits(company.companyId),
-    getPermissions(company.companyId),
-  ]);
+  const [context, rawCategories, rawUnits, attributes, permissions] =
+    await Promise.all([
+      getProductEditContext(company.companyId, id),
+      listCategories(company.companyId),
+      listUnits(company.companyId),
+      listAttributeDefinitions(company.companyId),
+      getPermissions(company.companyId),
+    ]);
   if (!context) notFound();
   if (!permissions.has("product.update")) redirect("/produtos");
 
-  const selectedIds = new Set([
+  // Inativo não entra em cadastro novo, mas precisa continuar aparecendo se é o
+  // que este produto já usa — senão a edição de nome trocaria a categoria por
+  // baixo do pano só porque ela saiu de circulação.
+  const categories = rawCategories
+    .filter((c) => c.isActive || c.id === context.product.categoryId)
+    .map((c) => ({
+      id: c.id,
+      label: `${c.name}${c.isActive ? "" : " (inativa)"}`,
+    }));
+
+  const emUso = new Set([
     context.product.purchaseUnitId,
     context.product.pricingUnitId,
     context.product.comparisonUnitId,
   ]);
   const units = rawUnits
-    .filter((unit) => unit.is_active || selectedIds.has(unit.id))
+    .filter((unit) => unit.is_active || emUso.has(unit.id))
     .map((unit) => ({
       id: unit.id,
-      label: `${unit.code} — ${unit.name}${unit.is_active ? "" : " (inativa)"}`,
+      label: `${unit.name} (${unit.symbol})${unit.is_active ? "" : " — inativa"}`,
     }));
 
-  if (inModal) {
-    return (
-      <ProductUnitEditForm
-        product={context.product}
-        units={units}
-        lockReason={context.lockReason}
-        inModal
-      />
-    );
-  }
+  const form = (
+    <ProductEditForm
+      context={context}
+      categories={categories}
+      units={units}
+      attributes={attributes
+        .filter((a) => a.isActive)
+        .map((a) => ({
+          id: a.id,
+          categoryId: a.categoryId,
+          name: a.name,
+          dataType: a.dataType,
+          unitSymbol: a.unitSymbol,
+          isRequired: a.isRequired,
+        }))}
+      inModal={inModal}
+    />
+  );
+
+  if (inModal) return form;
 
   return (
     <div className="w-full">
       <PageHeader
-        title={`Editar unidades — ${context.product.name}`}
-        description="Correção disponível somente enquanto o produto ainda não possui movimentação operacional."
+        title={`Editar — ${context.product.name}`}
+        description="Nome, categoria e finalidade se corrigem a qualquer momento. As unidades, somente enquanto ninguém tiver cotado ou pedido sob elas."
         action={
           <Button asChild size="sm" variant="ghost">
             <Link href="/produtos">Voltar</Link>
           </Button>
         }
       />
-      <ProductUnitEditForm
-        product={context.product}
-        units={units}
-        lockReason={context.lockReason}
-      />
+      {form}
     </div>
   );
 }
 
-export function ProductUnitEditLoading({ inModal = false }) {
+export function ProductEditLoading({ inModal = false }) {
   const content = (
-    <div className="space-y-4">
-      <div className="bg-surface-sunken h-12 animate-pulse rounded-lg" />
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[0, 1, 2].map((item) => (
-          <div
-            key={item}
-            className="bg-surface-sunken h-16 animate-pulse rounded-lg"
-          />
-        ))}
-      </div>
+    <div className="flex flex-col gap-6">
+      <div className="bg-surface-sunken h-36 animate-pulse rounded-xl" />
+      <div className="bg-surface-sunken h-40 animate-pulse rounded-xl" />
+      <div className="bg-surface-sunken h-24 animate-pulse rounded-xl" />
     </div>
   );
   return inModal ? <DialogBody>{content}</DialogBody> : content;

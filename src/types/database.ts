@@ -4843,6 +4843,13 @@ export type Database = {
         };
         Returns: string | null;
       };
+      rpc_product_name_exposure: {
+        Args: {
+          p_company_id: string;
+          p_product_id: string;
+        };
+        Returns: Json;
+      };
       rpc_product_delete_preview: {
         Args: {
           p_company_id: string;

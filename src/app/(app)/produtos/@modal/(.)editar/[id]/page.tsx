@@ -1,12 +1,12 @@
 import { Suspense } from "react";
 
 import {
-  ProductUnitEditContent,
-  ProductUnitEditLoading,
+  ProductEditContent,
+  ProductEditLoading,
 } from "@/app/(app)/produtos/editar/[id]/page";
 import { RouteModal } from "@/components/layout/route-modal";
 
-export default async function EditarUnidadesProdutoEmModal({
+export default async function EditarProdutoEmModal({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -14,13 +14,13 @@ export default async function EditarUnidadesProdutoEmModal({
   const { id } = await params;
   return (
     <RouteModal
-      titulo="Editar unidades do produto"
-      descricao="A correção afeta somente usos futuros e é bloqueada quando já existe movimentação."
+      titulo="Editar produto"
+      descricao="Nome, categoria e finalidade se corrigem sempre. As unidades, só enquanto ninguém tiver cotado ou pedido sob elas."
       size="lg"
       impedirFechamentoAcidental
     >
-      <Suspense fallback={<ProductUnitEditLoading inModal />}>
-        <ProductUnitEditContent id={id} inModal />
+      <Suspense fallback={<ProductEditLoading inModal />}>
+        <ProductEditContent id={id} inModal />
       </Suspense>
     </RouteModal>
   );

@@ -190,48 +190,114 @@ export async function getProduct(companyId: string, productId: string) {
   return data;
 }
 
-/** Dados mínimos para corrigir unidades de um produto ainda sem uso. */
-export async function getProductUnitEditContext(
+export type ProductEditContext = {
+  product: {
+    id: string;
+    name: string;
+    categoryId: string;
+    purpose: string;
+    description: string | null;
+    purchaseUnitId: string;
+    pricingUnitId: string;
+    comparisonUnitId: string | null;
+  };
+  /** Valor atual por definição de atributo, já no formato que o input recebe. */
+  attributeValues: Record<string, string>;
+  /** Motivo do bloqueio das unidades (0102), ou null se ainda dá para corrigir. */
+  unitsLockReason: string | null;
+  /** Rodadas abertas já enviadas onde o nome atual está na tela do fornecedor. */
+  nameExposure: { id: string; title: string; suppliers: number }[];
+};
+
+/**
+ * Tudo que a edição de um produto precisa saber sobre ele.
+ *
+ * As unidades vêm junto porque moram no mesmo formulário, mas continuam sob a
+ * trava de 0102 — o nome se corrige sempre, a unidade só enquanto ninguém
+ * escreveu um número sob ela. Já `nameExposure` não trava nada: é o aviso de
+ * que a rodada aberta lê o nome vivo e o fornecedor verá o novo.
+ */
+export async function getProductEditContext(
   companyId: string,
   productId: string,
-) {
+): Promise<ProductEditContext | null> {
   const supabase = await createServerSupabaseClient();
-  const [product, lock] = await Promise.all([
+
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select(
+      "id,name,category_id,purpose,description,purchase_unit_id,pricing_unit_id,comparison_unit_id",
+    )
+    .eq("company_id", companyId)
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (productError) {
+    throw new Error(`Falha ao carregar produto: ${productError.message}`);
+  }
+  if (!product) return null;
+
+  const [values, lock, exposure] = await Promise.all([
     supabase
-      .from("products")
-      .select(
-        "id,name,purchase_unit_id,pricing_unit_id,comparison_unit_id",
-      )
+      .from("product_attribute_values")
+      .select("attribute_definition_id,value_text,value_numeric,value_boolean")
       .eq("company_id", companyId)
-      .eq("id", productId)
-      .maybeSingle(),
+      .eq("product_id", productId),
     supabase.rpc("rpc_product_units_lock_reason", {
+      p_company_id: companyId,
+      p_product_id: productId,
+    }),
+    supabase.rpc("rpc_product_name_exposure", {
       p_company_id: companyId,
       p_product_id: productId,
     }),
   ]);
 
-  if (product.error) {
-    throw new Error(`Falha ao carregar produto: ${product.error.message}`);
+  if (values.error) {
+    throw new Error(`Falha ao carregar atributos: ${values.error.message}`);
   }
-  if (lock.error && product.data) {
+  if (lock.error) {
+    throw new Error(`Falha ao verificar o uso do produto: ${lock.error.message}`);
+  }
+  if (exposure.error) {
     throw new Error(
-      `Falha ao verificar o uso do produto: ${lock.error.message}`,
+      `Falha ao verificar as rodadas do produto: ${exposure.error.message}`,
     );
   }
 
-  return product.data
-    ? {
-        product: {
-          id: product.data.id,
-          name: product.data.name,
-          purchaseUnitId: product.data.purchase_unit_id,
-          pricingUnitId: product.data.pricing_unit_id,
-          comparisonUnitId: product.data.comparison_unit_id,
-        },
-        lockReason: lock.data,
-      }
-    : null;
+  const attributeValues: Record<string, string> = {};
+  for (const row of values.data ?? []) {
+    if (row.value_text !== null) {
+      attributeValues[row.attribute_definition_id] = row.value_text;
+    } else if (row.value_numeric !== null) {
+      // O número volta como veio do Postgres ("400.000000"); o zero à direita
+      // só polui o campo, e a vírgula é como se digita em português.
+      attributeValues[row.attribute_definition_id] = String(
+        Number(row.value_numeric),
+      ).replace(".", ",");
+    } else if (row.value_boolean !== null) {
+      attributeValues[row.attribute_definition_id] = row.value_boolean
+        ? "true"
+        : "false";
+    }
+  }
+
+  return {
+    product: {
+      id: product.id,
+      name: product.name,
+      categoryId: product.category_id,
+      purpose: product.purpose,
+      description: product.description,
+      purchaseUnitId: product.purchase_unit_id,
+      pricingUnitId: product.pricing_unit_id,
+      comparisonUnitId: product.comparison_unit_id,
+    },
+    attributeValues,
+    unitsLockReason: lock.data,
+    nameExposure: (exposure.data ??
+      []) as ProductEditContext["nameExposure"],
+  };
 }
 
 export type ProductDeleteContext = {
