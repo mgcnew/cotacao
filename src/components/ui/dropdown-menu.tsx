@@ -107,15 +107,30 @@ function DropdownMenuSeparator({
  */
 function DropdownMenuItem({
   className,
+  variant = "default",
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Item>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
+  /**
+   * `destructive` para o que não tem volta — excluir, revogar, descartar.
+   *
+   * O vermelho mora no texto e no ícone, não num fundo cheio: dentro de uma
+   * lista de itens iguais, uma faixa vermelha chamaria mais atenção que a ação
+   * principal do menu. Ele só acende de vez quando o item está sob o ponteiro
+   * ou sob a seta do teclado — que é quando a pessoa está prestes a escolhê-lo.
+   */
+  variant?: "default" | "destructive";
+}) {
   return (
     <DropdownMenuPrimitive.Item
       data-slot="dropdown-menu-item"
+      data-variant={variant}
       className={cn(
-        "text-fg data-[highlighted]:bg-surface-muted data-[highlighted]:text-fg relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none",
+        "relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         "[&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
+        variant === "destructive"
+          ? "text-destructive data-[highlighted]:bg-destructive/10 data-[highlighted]:text-destructive dark:data-[highlighted]:bg-destructive/20"
+          : "text-fg data-[highlighted]:bg-surface-muted data-[highlighted]:text-fg",
         className,
       )}
       {...props}

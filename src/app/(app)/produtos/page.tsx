@@ -1,14 +1,14 @@
-import { MoreHorizontal, Package, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal, Package } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
+import { ProductRowActions } from "@/components/products/product-row-actions";
 import { FilterDialog } from "@/components/layout/filter-dialog";
 import { PageHeader } from "@/components/layout/page-header";
 import { TableSkeleton } from "@/components/layout/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tooltip } from "@/components/ui/tooltip";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
   DropdownMenu,
@@ -29,7 +29,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { setProductActive } from "@/features/products/actions";
 import {
   countProductListFilters,
   parseProductListFilters,
@@ -381,57 +380,14 @@ async function ProdutosContent({
                     </TableCell>
                     {podeEditar || podeExcluir ? (
                       <TableCell className="block justify-self-end p-0 sm:table-cell sm:p-2">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* Não depende mais de `unitsEditable`: nome, categoria
-                              e finalidade se corrigem sempre, e é dentro da tela
-                              que a unidade aparece travada quando for o caso. */}
-                          {podeEditar ? (
-                            <Tooltip content="Editar produto" side="top">
-                              <Button asChild size="icon-sm" variant="ghost">
-                                <Link href={`/produtos/editar/${product.id}`}>
-                                  <Pencil aria-hidden />
-                                  <span className="sr-only">
-                                    Editar {product.name}
-                                  </span>
-                                </Link>
-                              </Button>
-                            </Tooltip>
-                          ) : null}
-                          {podeEditar ? (
-                            <form
-                              action={setProductActive.bind(
-                                null,
-                                product.id,
-                                !product.isActive,
-                              )}
-                            >
-                              <Button
-                                type="submit"
-                                size="sm"
-                                variant="ghost"
-                                className="text-fg-muted whitespace-nowrap"
-                              >
-                                {product.isActive ? "Desativar" : "Reativar"}
-                              </Button>
-                            </form>
-                          ) : null}
-                          {/* O veredito de exclusão cruza sete tabelas e não é
-                              calculado por linha: quem clica abre a
-                              confirmação, e é lá que o produto revela se pode
-                              sair, se basta desfazer um vínculo ou se só
-                              resta inativar. */}
-                          {podeExcluir ? (
-                            <Tooltip content="Excluir produto" side="top">
-                              <Button asChild size="icon-sm" variant="ghost">
-                                <Link href={`/produtos/excluir/${product.id}`}>
-                                  <Trash2 aria-hidden />
-                                  <span className="sr-only">
-                                    Excluir {product.name}
-                                  </span>
-                                </Link>
-                              </Button>
-                            </Tooltip>
-                          ) : null}
+                        <div className="flex items-center justify-end">
+                          <ProductRowActions
+                            productId={product.id}
+                            productName={product.name}
+                            isActive={product.isActive}
+                            podeEditar={podeEditar}
+                            podeExcluir={podeExcluir}
+                          />
                         </div>
                       </TableCell>
                     ) : null}
