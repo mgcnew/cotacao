@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   Table,
   TableBody,
@@ -40,9 +41,6 @@ import {
 import { PRODUCT_PURPOSE_LABEL } from "@/features/products/purposes";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { parseListPagination } from "@/lib/list-pagination";
-
-const selectClass =
-  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
 
 function ProductFilterFields({
   busca,
@@ -76,34 +74,35 @@ function ProductFilterFields({
         <label htmlFor="product-status" className="text-fg-muted text-xs">
           Situação
         </label>
-        <select
+        {/* "Todas" é o vazio: aparece como rótulo do gatilho e como primeira
+            opção, e sai da URL em vez de virar `?status=`. */}
+        <ThemedSelect
           id="product-status"
           name="status"
           defaultValue={status === "todos" ? "" : status}
-          className={selectClass}
-        >
-          <option value="">Todas</option>
-          <option value="ativos">Somente ativos</option>
-          <option value="inativos">Somente inativos</option>
-        </select>
+          placeholder="Todas"
+          emptyOptionLabel="Todas"
+          options={[
+            { value: "ativos", label: "Somente ativos" },
+            { value: "inativos", label: "Somente inativos" },
+          ]}
+        />
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="product-category" className="text-fg-muted text-xs">
           Categoria
         </label>
-        <select
+        <ThemedSelect
           id="product-category"
           name="categoria"
           defaultValue={categoria ?? ""}
-          className={selectClass}
-        >
-          <option value="">Todas</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
+          placeholder="Todas"
+          emptyOptionLabel="Todas"
+          options={categories.map((category) => ({
+            value: category.id,
+            label: category.name,
+          }))}
+        />
       </div>
     </div>
   );
