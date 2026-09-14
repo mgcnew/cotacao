@@ -55,3 +55,36 @@ function pluralizar(palavra: string): string {
   if (/[rz]$/.test(palavra)) return `${palavra}es`;
   return `${palavra}s`;
 }
+
+type UnitLike = { name?: string | null; symbol: string };
+
+/**
+ * Nome do fator de conversão derivado das unidades do produto.
+ *
+ * "Metros por fardo", "Unidades por caixa". Antes isso era um atributo escrito
+ * à mão na categoria, com uma unidade fixa — e uma categoria só comporta um.
+ * Era por isso que resinite por metro não cabia em Embalagens junto da sacola:
+ * o rótulo dizia "Quantidade por pacote (un)" e a conta dividia por unidade.
+ *
+ * Derivado das unidades, cada produto carrega o seu, e é impossível o rótulo
+ * discordar da conta.
+ */
+export function packagingFactorName(
+  pricingUnit: UnitLike,
+  comparisonUnit: UnitLike,
+): string {
+  const conteudo = unitWord(comparisonUnit, 2);
+  return `${conteudo.charAt(0).toLocaleUpperCase("pt-BR")}${conteudo.slice(1)} por ${unitWord(pricingUnit)}`;
+}
+
+/**
+ * A mesma relação como rótulo de campo, com a unidade ao lado do input:
+ * "Cada fardo tem [500] unidades".
+ *
+ * Sem "quantos/quantas": o gênero do substantivo não se deduz do tipo da
+ * unidade, e "quantos unidades" sai errado. "Cada" não flexiona, e o resto da
+ * frase fica do lado de fora do rótulo, onde nada precisa concordar.
+ */
+export function packagingFactorLabel(pricingUnit: UnitLike): string {
+  return `Cada ${unitWord(pricingUnit)} tem`;
+}

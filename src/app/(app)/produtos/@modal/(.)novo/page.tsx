@@ -70,6 +70,7 @@ async function Conteudo() {
           dataType: attribute.dataType,
           unitSymbol: attribute.unitSymbol,
           isRequired: attribute.isRequired,
+          isConversionFactor: attribute.isConversionFactor,
         }))}
     />
   );

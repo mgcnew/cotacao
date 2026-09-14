@@ -77,6 +77,7 @@ export async function ProductEditContent({
           dataType: a.dataType,
           unitSymbol: a.unitSymbol,
           isRequired: a.isRequired,
+          isConversionFactor: a.isConversionFactor,
         }))}
       inModal={inModal}
     />

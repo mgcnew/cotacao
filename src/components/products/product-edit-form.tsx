@@ -21,6 +21,7 @@ import {
   type ProductEditState,
 } from "@/features/products/actions";
 import { PRODUCT_PURPOSES } from "@/features/products/purposes";
+import { derivePackagingFactor } from "@/components/products/product-form";
 import type { ProductEditContext } from "@/features/products/queries";
 import type { FormAttribute } from "@/components/products/product-form";
 
@@ -113,7 +114,8 @@ export function ProductEditForm({
   attributes: FormAttribute[];
   inModal?: boolean;
 }) {
-  const { product, attributeValues, unitsLockReason, nameExposure } = context;
+  const { product, attributeValues, presentationFactor, unitsLockReason, nameExposure } =
+    context;
   const modal = useModalDeRota();
 
   const boundAction = React.useMemo(
@@ -125,8 +127,26 @@ export function ProductEditForm({
 
   const [categoryId, setCategoryId] = React.useState(product.categoryId);
   const [name, setName] = React.useState(product.name);
+  const [purpose, setPurpose] = React.useState(product.purpose);
+  const [pricingUnitId, setPricingUnitId] = React.useState(product.pricingUnitId);
+  const [comparisonUnitId, setComparisonUnitId] = React.useState(
+    product.comparisonUnitId ?? "",
+  );
 
-  const visibleAttributes = attributes.filter((a) => a.categoryId === categoryId);
+  // Travada, a unidade não muda — então o que vale é a do produto, não o que
+  // um estado local diria.
+  const fator = derivePackagingFactor({
+    purpose,
+    pricingUnitId: unitsLockReason ? product.pricingUnitId : pricingUnitId,
+    comparisonUnitId: unitsLockReason
+      ? (product.comparisonUnitId ?? "")
+      : comparisonUnitId,
+    units,
+  });
+
+  const visibleAttributes = attributes.filter(
+    (a) => a.categoryId === categoryId && !(fator && a.isConversionFactor),
+  );
   const categoryChanged = categoryId !== product.categoryId;
   const nameChanged = name.trim() !== product.name.trim();
 
@@ -180,12 +200,13 @@ export function ProductEditForm({
               id="purpose"
               name="purpose"
               required
-              defaultValue={product.purpose}
-              options={PRODUCT_PURPOSES.map((purpose) => ({
-                value: purpose.value,
-                label: purpose.hint
-                  ? `${purpose.label} — ${purpose.hint}`
-                  : purpose.label,
+              value={purpose}
+              onValueChange={setPurpose}
+              options={PRODUCT_PURPOSES.map((option) => ({
+                value: option.value,
+                label: option.hint
+                  ? `${option.label} — ${option.hint}`
+                  : option.label,
               }))}
             />
           </Field>
@@ -262,7 +283,8 @@ export function ProductEditForm({
                 id="pricingUnitId"
                 name="pricingUnitId"
                 required
-                defaultValue={product.pricingUnitId}
+                value={pricingUnitId}
+                onValueChange={setPricingUnitId}
                 options={unitOptions}
               />
             </Field>
@@ -274,7 +296,8 @@ export function ProductEditForm({
               <ThemedSelect
                 id="comparisonUnitId"
                 name="comparisonUnitId"
-                defaultValue={product.comparisonUnitId ?? ""}
+                value={comparisonUnitId}
+                onValueChange={setComparisonUnitId}
                 placeholder="—"
                 emptyOptionLabel="Usar a unidade de precificação"
                 options={unitOptions}
@@ -283,6 +306,31 @@ export function ProductEditForm({
           </div>
         )}
       </Secao>
+
+      {fator ? (
+        <Secao
+          titulo="Apresentação"
+          descricao="Sai das unidades acima, e cada fornecedor responde a sua na cotação. É o que põe embalagens de tamanhos diferentes na mesma base de comparação."
+        >
+          <Field
+            label={fator.rotulo}
+            htmlFor="presentationFactor"
+            hint="Opcional — serve de referência até o fornecedor informar a dele."
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                id="presentationFactor"
+                name="presentationFactor"
+                inputMode="decimal"
+                placeholder="Ex.: 300"
+                defaultValue={presentationFactor}
+                className="w-32"
+              />
+              <span className="text-fg text-sm">{fator.conteudo}</span>
+            </div>
+          </Field>
+        </Secao>
+      ) : null}
 
       {visibleAttributes.length > 0 || categoryChanged ? (
         <Secao

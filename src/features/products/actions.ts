@@ -9,7 +9,10 @@ import {
 } from "@/features/products/attributes";
 import { normalizeBarcode } from "@/features/products/barcodes";
 import { PRODUCT_PURPOSE_VALUES } from "@/features/products/purposes";
-import { UNIT_KIND_VALUES } from "@/features/products/units";
+import {
+  packagingFactorName,
+  UNIT_KIND_VALUES,
+} from "@/features/products/units";
 import { requireActiveCompany } from "@/lib/auth/dal";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -402,6 +405,174 @@ const productSchema = z.object({
  * então um id de outra empresa é recusado pela própria FK, não por uma
  * consulta que eu poderia esquecer de escrever.
  */
+
+/**
+ * Mantém o fator de conversão que as unidades do produto já declaram.
+ *
+ * Ele continua existindo como definição de atributo porque é ali que a resposta
+ * do fornecedor é gravada, e é de lá que a comparação, a estimativa de alocação
+ * e a confirmação do pedido já sabem ler — todas preferindo a definição do
+ * produto à da categoria. O que muda é quem escreve: ninguém digita mais o
+ * nome nem escolhe a unidade, as escolhidas acima ditam os dois.
+ *
+ * Era por isso que embalagem por metro não cabia na mesma categoria da sacola:
+ * uma categoria comporta um único fator, com uma unidade só.
+ */
+async function syncPackagingFactor(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+  productId: string,
+  purpose: string,
+  units: { pricingUnitId: string; comparisonUnitId: string | null },
+  rawFactor: string,
+): Promise<{ definitionId: string | null; error: string | null }> {
+  const { data: existing, error: readError } = await supabase
+    .from("product_attribute_definitions")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("product_id", productId)
+    .eq("is_conversion_factor", true)
+    .maybeSingle();
+
+  if (readError) {
+    return {
+      definitionId: null,
+      error: `Não foi possível ler a apresentação: ${readError.message}`,
+    };
+  }
+
+  const precisa =
+    purpose === "packaging" &&
+    units.comparisonUnitId !== null &&
+    units.comparisonUnitId !== units.pricingUnitId;
+
+  if (!precisa) {
+    if (!existing) return { definitionId: null, error: null };
+    // Desativar em vez de apagar: as respostas já dadas por fornecedores
+    // apontam para esta linha, e um pedido antigo ainda precisa explicá-las.
+    const { error } = await supabase
+      .from("product_attribute_definitions")
+      .update({ is_active: false, is_required: false })
+      .eq("company_id", companyId)
+      .eq("id", existing.id);
+    return {
+      definitionId: null,
+      error: error ? `Não foi possível desativar a apresentação: ${error.message}` : null,
+    };
+  }
+
+  // `precisa` já garantiu que não é nulo; o const devolve isso ao tipo.
+  const comparisonUnitId = units.comparisonUnitId as string;
+
+  const { data: unidades, error: unitsError } = await supabase
+    .from("units")
+    .select("id, name, symbol")
+    .eq("company_id", companyId)
+    .in("id", [units.pricingUnitId, comparisonUnitId]);
+
+  if (unitsError) {
+    return {
+      definitionId: null,
+      error: `Não foi possível ler as unidades: ${unitsError.message}`,
+    };
+  }
+
+  const pricing = (unidades ?? []).find((u) => u.id === units.pricingUnitId);
+  const comparison = (unidades ?? []).find((u) => u.id === comparisonUnitId);
+  if (!pricing || !comparison) {
+    return {
+      definitionId: null,
+      error: "Unidade de precificação ou de comparação não pertence a esta empresa.",
+    };
+  }
+
+  const name = packagingFactorName(pricing, comparison);
+  const payload = {
+    name,
+    key: toAttributeKey(name) || "fator_de_conversao",
+    data_type: "numeric" as const,
+    unit_id: comparison.id,
+    // Obrigatório para o fornecedor, que é quem sabe a resposta. No cadastro
+    // continua opcional: ver o laço de valores em createProduct.
+    is_required: true,
+    is_active: true,
+    is_conversion_factor: true,
+  };
+
+  let definitionId = existing?.id ?? null;
+  if (definitionId) {
+    const { error } = await supabase
+      .from("product_attribute_definitions")
+      .update(payload)
+      .eq("company_id", companyId)
+      .eq("id", definitionId);
+    if (error) {
+      return {
+        definitionId: null,
+        error: `Não foi possível atualizar a apresentação: ${error.message}`,
+      };
+    }
+  } else {
+    const { data: criada, error } = await supabase
+      .from("product_attribute_definitions")
+      .insert({ company_id: companyId, product_id: productId, ...payload })
+      .select("id")
+      .single();
+    if (error) {
+      return {
+        definitionId: null,
+        error: `Não foi possível criar a apresentação: ${error.message}`,
+      };
+    }
+    definitionId = criada.id;
+  }
+
+  const digitado = rawFactor.trim();
+  if (!digitado) {
+    // Em branco é uma resposta legítima: quem cadastra pode não saber quantas
+    // unidades vêm no pacote, e quem sabe é o fornecedor, na cotação.
+    const { error } = await supabase
+      .from("product_attribute_values")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("product_id", productId)
+      .eq("attribute_definition_id", definitionId);
+    return {
+      definitionId,
+      error: error ? `Não foi possível limpar a apresentação: ${error.message}` : null,
+    };
+  }
+
+  const numero = Number(digitado.replace(/\./g, "").replace(",", "."));
+  if (!Number.isFinite(numero) || numero <= 0) {
+    return {
+      definitionId,
+      error: `"${name}" precisa ser um número maior que zero.`,
+    };
+  }
+
+  const { error: valueError } = await supabase
+    .from("product_attribute_values")
+    .upsert(
+      {
+        company_id: companyId,
+        product_id: productId,
+        attribute_definition_id: definitionId,
+        value_text: null,
+        value_numeric: numero,
+        value_boolean: null,
+      },
+      { onConflict: "product_id,attribute_definition_id" },
+    );
+
+  return {
+    definitionId,
+    error: valueError
+      ? `Não foi possível gravar a apresentação: ${valueError.message}`
+      : null,
+  };
+}
+
 export async function createProduct(
   _prev: ProductFormState,
   formData: FormData,
@@ -495,7 +666,11 @@ export async function createProduct(
     const raw = String(formData.get(`attr_${def.id}`) ?? "").trim();
 
     if (!raw) {
-      if (def.is_required) {
+      // Fator de conversão nunca obriga aqui. Quem sabe quantas unidades vêm
+      // no pacote é o fornecedor, e é ele quem responde na cotação; exigir do
+      // cadastro só produzia número inventado — e número inventado atravessa
+      // a comparação com cara de fato.
+      if (def.is_required && !def.is_conversion_factor) {
         return { error: `Preencha o atributo obrigatório "${def.name}".` };
       }
       continue; // Opcional em branco: não grava linha nenhuma.
@@ -577,6 +752,24 @@ export async function createProduct(
         error: `Produto "${parsed.data.name}" foi criado, mas os atributos não: ${valuesError.message}. Edite o produto para completar.`,
       };
     }
+  }
+
+  const fator = await syncPackagingFactor(
+    supabase,
+    company.companyId,
+    created.id,
+    parsed.data.purpose,
+    {
+      pricingUnitId: normalizedUnits.pricingUnitId,
+      comparisonUnitId: normalizedUnits.comparisonUnitId,
+    },
+    String(formData.get("presentationFactor") ?? ""),
+  );
+
+  if (fator.error) {
+    return {
+      error: `Produto "${parsed.data.name}" foi criado, mas a apresentação não: ${fator.error} Edite o produto para completar.`,
+    };
   }
 
   if (parsed.data.barcode) {
@@ -729,7 +922,11 @@ export async function updateProduct(
     const raw = String(formData.get(`attr_${def.id}`) ?? "").trim();
 
     if (!raw) {
-      if (def.is_required) {
+      // Fator de conversão nunca obriga aqui. Quem sabe quantas unidades vêm
+      // no pacote é o fornecedor, e é ele quem responde na cotação; exigir do
+      // cadastro só produzia número inventado — e número inventado atravessa
+      // a comparação com cara de fato.
+      if (def.is_required && !def.is_conversion_factor) {
         return { error: `Preencha o atributo obrigatório "${def.name}".` };
       }
       continue; // Opcional em branco: a linha existente sai no expurgo abaixo.
@@ -836,9 +1033,29 @@ export async function updateProduct(
     return { error: describeWriteError(updateError, "um produto") };
   }
 
+  const fator = await syncPackagingFactor(
+    supabase,
+    company.companyId,
+    productId,
+    parsed.data.purpose,
+    {
+      pricingUnitId: normalizedUnits?.pricingUnitId ?? current.pricing_unit_id,
+      comparisonUnitId:
+        normalizedUnits?.comparisonUnitId ?? current.comparison_unit_id,
+    },
+    String(formData.get("presentationFactor") ?? ""),
+  );
+
+  if (fator.error) return { error: fator.error };
+
   // Fora o que acabou de ser gravado, nada mais deve restar: some tanto o
-  // atributo esvaziado quanto o que ficou órfão pela troca de categoria.
-  const keep = values.map((value) => value.attribute_definition_id);
+  // atributo esvaziado quanto o que ficou órfão pela troca de categoria. A
+  // apresentação acabou de ser gravada pelo `syncPackagingFactor` e por isso
+  // entra no que fica — ela não vem do laço de atributos da categoria.
+  const keep = [
+    ...values.map((value) => value.attribute_definition_id),
+    ...(fator.definitionId ? [fator.definitionId] : []),
+  ];
   let purge = supabase
     .from("product_attribute_values")
     .delete()

@@ -22,6 +22,10 @@ import {
   type ProductFormState,
 } from "@/features/products/actions";
 import { PRODUCT_PURPOSES } from "@/features/products/purposes";
+import {
+  packagingFactorLabel,
+  unitWord,
+} from "@/features/products/units";
 
 type Option = { id: string; label: string };
 
@@ -32,6 +36,7 @@ export type FormAttribute = {
   dataType: "text" | "numeric" | "boolean";
   unitSymbol: string | null;
   isRequired: boolean;
+  isConversionFactor: boolean;
 };
 
 export type CreatedProductOption = NonNullable<
@@ -78,6 +83,47 @@ function Field({
   );
 }
 
+/** O rótulo da unidade chega como "Fardo (fd)"; nome e sigla saem dele. */
+function unidadeDaOpcao(option: Option) {
+  const parsed = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(option.label);
+  return parsed
+    ? { name: parsed[1], symbol: parsed[2] }
+    : { name: option.label, symbol: option.label };
+}
+
+/**
+ * A relação que as unidades já declaram — e que o fornecedor vai confirmar.
+ *
+ * Vale só para embalagem, e só quando a comparação acontece numa unidade
+ * diferente da de precificação: é o que transforma "R$ 40 o fardo" em
+ * "R$ 0,08 a unidade". Enquanto isso morava num atributo da categoria, uma
+ * categoria inteira ficava presa a uma única base de medida.
+ */
+export function derivePackagingFactor({
+  purpose,
+  pricingUnitId,
+  comparisonUnitId,
+  units,
+}: {
+  purpose: string;
+  pricingUnitId: string;
+  comparisonUnitId: string;
+  units: Option[];
+}): { rotulo: string; conteudo: string } | null {
+  if (purpose !== "packaging") return null;
+  if (!pricingUnitId || !comparisonUnitId) return null;
+  if (pricingUnitId === comparisonUnitId) return null;
+
+  const pricing = units.find((unit) => unit.id === pricingUnitId);
+  const comparison = units.find((unit) => unit.id === comparisonUnitId);
+  if (!pricing || !comparison) return null;
+
+  return {
+    rotulo: packagingFactorLabel(unidadeDaOpcao(pricing)),
+    conteudo: unitWord(unidadeDaOpcao(comparison), 2),
+  };
+}
+
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
@@ -110,11 +156,22 @@ export function ProductForm({
     { error: null },
   );
   const [categoryId, setCategoryId] = React.useState("");
+  const [purpose, setPurpose] = React.useState("resale");
+  const [pricingUnitId, setPricingUnitId] = React.useState("");
+  const [comparisonUnitId, setComparisonUnitId] = React.useState("");
+
+  const fator = derivePackagingFactor({
+    purpose,
+    pricingUnitId,
+    comparisonUnitId,
+    units,
+  });
 
   // Só os atributos da categoria escolhida — é o que "esses campos só aparecem
-  // quando relevantes" quer dizer na prática.
+  // quando relevantes" quer dizer na prática. Quando as unidades já dizem a
+  // relação, o fator da categoria sai: quem manda é a apresentação derivada.
   const visibleAttributes = attributes.filter(
-    (a) => a.categoryId === categoryId,
+    (a) => a.categoryId === categoryId && !(fator && a.isConversionFactor),
   );
 
   const conteudo = (
@@ -156,12 +213,13 @@ export function ProductForm({
               id="purpose"
               name="purpose"
               required
-              defaultValue="resale"
-              options={PRODUCT_PURPOSES.map((purpose) => ({
-                value: purpose.value,
-                label: purpose.hint
-                  ? `${purpose.label} — ${purpose.hint}`
-                  : purpose.label,
+              value={purpose}
+              onValueChange={setPurpose}
+              options={PRODUCT_PURPOSES.map((option) => ({
+                value: option.value,
+                label: option.hint
+                  ? `${option.label} — ${option.hint}`
+                  : option.label,
               }))}
             />
           </Field>
@@ -207,6 +265,8 @@ export function ProductForm({
               id="pricingUnitId"
               name="pricingUnitId"
               required
+              value={pricingUnitId}
+              onValueChange={setPricingUnitId}
               options={units.map((unit) => ({
                 value: unit.id,
                 label: unit.label,
@@ -224,6 +284,8 @@ export function ProductForm({
               name="comparisonUnitId"
               placeholder="—"
               emptyOptionLabel="Usar a unidade de precificação"
+              value={comparisonUnitId}
+              onValueChange={setComparisonUnitId}
               options={units.map((unit) => ({
                 value: unit.id,
                 label: unit.label,
@@ -232,6 +294,36 @@ export function ProductForm({
           </Field>
         </div>
       </section>
+
+      {fator ? (
+        <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5">
+          <div>
+            <h2 className="text-fg text-sm font-semibold">Apresentação</h2>
+            <p className="text-fg-muted mt-1 text-sm">
+              Sai das unidades acima, e cada fornecedor responde a sua na
+              cotação. É o que põe embalagens de tamanhos diferentes na mesma
+              base de comparação.
+            </p>
+          </div>
+
+          <Field
+            label={fator.rotulo}
+            htmlFor="presentationFactor"
+            hint="Opcional — serve de referência até o fornecedor informar a dele."
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                id="presentationFactor"
+                name="presentationFactor"
+                inputMode="decimal"
+                placeholder="Ex.: 300"
+                className="w-32"
+              />
+              <span className="text-fg text-sm">{fator.conteudo}</span>
+            </div>
+          </Field>
+        </section>
+      ) : null}
 
       {visibleAttributes.length > 0 ? (
         <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-5">

@@ -203,6 +203,8 @@ export type ProductEditContext = {
   };
   /** Valor atual por definição de atributo, já no formato que o input recebe. */
   attributeValues: Record<string, string>;
+  /** Apresentação já anotada pelo comprador, quando ele soube informá-la. */
+  presentationFactor: string;
   /** Motivo do bloqueio das unidades (0102), ou null se ainda dá para corrigir. */
   unitsLockReason: string | null;
   /** Rodadas abertas já enviadas onde o nome atual está na tela do fornecedor. */
@@ -237,7 +239,7 @@ export async function getProductEditContext(
   }
   if (!product) return null;
 
-  const [values, lock, exposure] = await Promise.all([
+  const [values, lock, exposure, presentation] = await Promise.all([
     supabase
       .from("product_attribute_values")
       .select("attribute_definition_id,value_text,value_numeric,value_boolean")
@@ -251,6 +253,16 @@ export async function getProductEditContext(
       p_company_id: companyId,
       p_product_id: productId,
     }),
+    // O fator derivado das unidades mora numa definição do próprio produto, e
+    // não aparece na lista de atributos da categoria — por isso vem à parte.
+    supabase
+      .from("product_attribute_definitions")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("product_id", productId)
+      .eq("is_conversion_factor", true)
+      .eq("is_active", true)
+      .maybeSingle(),
   ]);
 
   if (values.error) {
@@ -262,6 +274,11 @@ export async function getProductEditContext(
   if (exposure.error) {
     throw new Error(
       `Falha ao verificar as rodadas do produto: ${exposure.error.message}`,
+    );
+  }
+  if (presentation.error) {
+    throw new Error(
+      `Falha ao carregar a apresentação: ${presentation.error.message}`,
     );
   }
 
@@ -294,6 +311,9 @@ export async function getProductEditContext(
       comparisonUnitId: product.comparison_unit_id,
     },
     attributeValues,
+    presentationFactor: presentation.data
+      ? (attributeValues[presentation.data.id] ?? "")
+      : "",
     unitsLockReason: lock.data,
     nameExposure: (exposure.data ??
       []) as ProductEditContext["nameExposure"],
