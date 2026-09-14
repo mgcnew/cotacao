@@ -83,6 +83,18 @@ function Field({
   );
 }
 
+/**
+ * Fator de conversão nunca é obrigatório no cadastro do produto.
+ *
+ * Quem sabe quantas unidades vêm no pacote é o fornecedor, e é ele quem
+ * responde na cotação; o valor daqui só serve de referência. O servidor já
+ * parou de exigir, mas o `required` do campo continuava barrando antes —
+ * então na prática ainda era obrigatório.
+ */
+export function obrigatorio(attr: FormAttribute) {
+  return attr.isRequired && !attr.isConversionFactor;
+}
+
 /** O rótulo da unidade chega como "Fardo (fd)"; nome e sigla saem dele. */
 function unidadeDaOpcao(option: Option) {
   const parsed = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(option.label);
@@ -347,14 +359,14 @@ export function ProductForm({
               return (
                 <Field
                   key={attr.id}
-                  label={attr.isRequired ? `${label} *` : label}
+                  label={obrigatorio(attr) ? `${label} *` : label}
                   htmlFor={fieldId}
                 >
                   {attr.dataType === "boolean" ? (
                     <select
                       id={fieldId}
                       name={fieldId}
-                      required={attr.isRequired}
+                      required={obrigatorio(attr)}
                       defaultValue=""
                       className={selectClass}
                     >
@@ -366,7 +378,7 @@ export function ProductForm({
                     <Input
                       id={fieldId}
                       name={fieldId}
-                      required={attr.isRequired}
+                      required={obrigatorio(attr)}
                       inputMode={
                         attr.dataType === "numeric" ? "decimal" : undefined
                       }

@@ -111,6 +111,8 @@ export function ReceiptConferenceForm({
   companyDocument,
   supplierDocument,
   canUpdateSupplier,
+  canReviseOrder,
+  catalogProducts,
   existingDocuments,
 }: {
   receiptId: string;
@@ -123,6 +125,8 @@ export function ReceiptConferenceForm({
   companyDocument: string | null;
   supplierDocument: string | null;
   canUpdateSupplier: boolean;
+  canReviseOrder: boolean;
+  catalogProducts: { id: string; name: string; purchaseUnit: string; pricingUnit: string }[];
   existingDocuments: {
     id: string;
     fileName: string;
@@ -205,6 +209,8 @@ export function ReceiptConferenceForm({
         companyDocument={companyDocument}
         supplierDocument={supplierDocument}
         canUpdateSupplier={canUpdateSupplier}
+        canReviseOrder={canReviseOrder}
+        catalogProducts={catalogProducts}
         existingDocuments={existingDocuments}
         value={xmlImport}
         onChange={applyXml}

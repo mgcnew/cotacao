@@ -9,13 +9,17 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 
 import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import {
+  addInvoiceItemToOrder,
   deleteReceiptNfe,
   learnSupplierProductAlias,
   linkReceiptIssuerFromNfe,
@@ -47,6 +51,22 @@ const MONEY = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+/**
+ * Decimais para preencher campo, não para ler.
+ *
+ * Sem "R$" e sem separador de milhar: o que sai daqui volta pelo mesmo input e
+ * precisa ser reconhecido como número. Quantidade não força casas — 6 fardos
+ * são 6, não 6,00.
+ */
+const DECIMAL_QTY = new Intl.NumberFormat("pt-BR", {
+  maximumFractionDigits: 4,
+  useGrouping: false,
+});
+const DECIMAL_PRICE = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4,
+  useGrouping: false,
+});
 const XML_MAX_SIZE = 4 * 1024 * 1024;
 
 export type NfeOrderItemForImport = {
@@ -388,6 +408,8 @@ export function NfeImportPanel({
   companyDocument,
   supplierDocument,
   canUpdateSupplier,
+  canReviseOrder,
+  catalogProducts,
   existingDocuments,
   value,
   onChange,
@@ -397,6 +419,8 @@ export function NfeImportPanel({
   companyDocument: string | null;
   supplierDocument: string | null;
   canUpdateSupplier: boolean;
+  canReviseOrder: boolean;
+  catalogProducts: { id: string; name: string; purchaseUnit: string; pricingUnit: string }[];
   existingDocuments: {
     id: string;
     fileName: string;
@@ -417,6 +441,11 @@ export function NfeImportPanel({
   const [associatingLine, setAssociatingLine] = React.useState<string | null>(
     null,
   );
+  const [catalogSelections, setCatalogSelections] = React.useState<
+    Record<string, { productId: string; quantity: string; price: string }>
+  >({});
+  const [addingLine, setAddingLine] = React.useState<string | null>(null);
+  const router = useRouter();
   const [linkingAccessKey, setLinkingAccessKey] = React.useState<string | null>(
     null,
   );
@@ -752,6 +781,53 @@ export function NfeImportPanel({
 
   function sourcedItemKey(xmlItem: SourcedNfeItem) {
     return `${xmlItem.receiptAccessKey}:${xmlItem.lineNumber}`;
+  }
+
+  const catalogOptions = React.useMemo(
+    () =>
+      catalogProducts.map((product) => ({
+        id: product.id,
+        name: product.name,
+        description: `${product.purchaseUnit} · preço por ${product.pricingUnit}`,
+      })),
+    [catalogProducts],
+  );
+
+  /**
+   * Acrescenta ao pedido o produto que a nota trouxe e o pedido não tinha.
+   *
+   * Depois disso o pedido mudou de revisão, então o `items` que este painel
+   * recebeu está velho — daí o `router.refresh()`. Mexer só no estado local
+   * deixaria a tela concordando consigo mesma e discordando do banco.
+   */
+  async function addToOrder(xmlItem: SourcedNfeItem) {
+    const sourceKey = sourcedItemKey(xmlItem);
+    const draft = catalogSelections[sourceKey];
+    if (!draft?.productId) {
+      setError("Escolha no catálogo qual produto chegou.");
+      return;
+    }
+
+    setAddingLine(sourceKey);
+    setError(null);
+    setMessage(null);
+    const data = new FormData();
+    data.set("receiptId", receiptId);
+    data.set("productId", draft.productId);
+    data.set("quantity", draft.quantity);
+    data.set("price", draft.price);
+    data.set("notes", `Acrescentado pela NF-e: ${xmlItem.description}`);
+
+    const result = await addInvoiceItemToOrder(data);
+    if (result.error) {
+      setError(result.error);
+      setAddingLine(null);
+      return;
+    }
+
+    setMessage(result.message ?? "Item acrescentado ao pedido.");
+    setAddingLine(null);
+    router.refresh();
   }
 
   async function associateItem(xmlItem: SourcedNfeItem) {
@@ -1276,62 +1352,168 @@ export function NfeImportPanel({
                 />
                 <div>
                   <p className="text-fg text-sm font-medium">
-                    Ensinar correspondência dos produtos
+                    Produtos da nota sem correspondência
                   </p>
                   <p className="text-fg-muted text-xs">
-                    Associe uma vez. Nas próximas notas deste fornecedor, o
-                    código e o nome serão reconhecidos automaticamente.
+                    Ou é um produto do pedido com outro nome — associe uma vez e
+                    as próximas notas deste fornecedor o reconhecem sozinhas —,
+                    ou não estava no pedido e entra nele agora.
                   </p>
                 </div>
               </div>
               <div className="space-y-2">
-                {value.unmatched.map((xmlItem) => (
-                  <div
-                    key={sourcedItemKey(xmlItem)}
-                    className="border-border bg-surface grid gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,1fr)_auto] sm:items-end"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-fg truncate text-sm font-medium">
-                        {xmlItem.description}
-                      </p>
-                      <p className="text-fg-muted text-xs">
-                        Código {xmlItem.supplierCode ?? "não informado"} ·{" "}
-                        {QTY.format(xmlItem.commercialQuantity)}{" "}
-                        {xmlItem.commercialUnit ?? ""}
-                      </p>
-                    </div>
-                    <ThemedSelect
-                      id={`nfe-association-${sourcedItemKey(xmlItem)}`}
-                      value={
-                        associationSelections[sourcedItemKey(xmlItem)] ?? ""
-                      }
-                      onValueChange={(selected) =>
-                        setAssociationSelections((current) => ({
-                          ...current,
-                          [sourcedItemKey(xmlItem)]: selected,
-                        }))
-                      }
-                      placeholder="Escolher produto do pedido"
-                      options={items.map((item) => ({
-                        value: item.id,
-                        label: item.productName,
-                      }))}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={
-                        !associationSelections[sourcedItemKey(xmlItem)] ||
-                        associatingLine === sourcedItemKey(xmlItem)
-                      }
-                      onClick={() => void associateItem(xmlItem)}
+                {value.unmatched.map((xmlItem) => {
+                  const sourceKey = sourcedItemKey(xmlItem);
+                  const draft = catalogSelections[sourceKey] ?? {
+                    productId: "",
+                    // Vírgula, que é como se digita e como o campo será relido.
+                    quantity: DECIMAL_QTY.format(xmlItem.commercialQuantity),
+                    price: DECIMAL_PRICE.format(xmlItem.commercialUnitPrice),
+                  };
+                  const escolhido = catalogProducts.find(
+                    (product) => product.id === draft.productId,
+                  );
+                  const atualizar = (
+                    patch: Partial<typeof draft>,
+                  ) =>
+                    setCatalogSelections((current) => ({
+                      ...current,
+                      [sourceKey]: { ...draft, ...patch },
+                    }));
+
+                  return (
+                    <div
+                      key={sourceKey}
+                      className="border-border bg-surface flex flex-col gap-3 rounded-lg border p-3"
                     >
-                      {associatingLine === sourcedItemKey(xmlItem)
-                        ? "Associando…"
-                        : "Associar"}
-                    </Button>
-                  </div>
-                ))}
+                      <div className="min-w-0">
+                        <p className="text-fg truncate text-sm font-medium">
+                          {xmlItem.description}
+                        </p>
+                        <p className="text-fg-muted text-xs">
+                          Código {xmlItem.supplierCode ?? "não informado"} ·{" "}
+                          {QTY.format(xmlItem.commercialQuantity)}{" "}
+                          {xmlItem.commercialUnit ?? ""}
+                        </p>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-[minmax(12rem,1fr)_auto] sm:items-end">
+                        <div className="flex flex-col gap-1.5">
+                          <label
+                            htmlFor={`nfe-association-${sourceKey}`}
+                            className="text-fg text-xs font-medium"
+                          >
+                            É um produto do pedido com outro nome
+                          </label>
+                          <ThemedSelect
+                            id={`nfe-association-${sourceKey}`}
+                            value={associationSelections[sourceKey] ?? ""}
+                            onValueChange={(selected) =>
+                              setAssociationSelections((current) => ({
+                                ...current,
+                                [sourceKey]: selected,
+                              }))
+                            }
+                            placeholder="Escolher produto do pedido"
+                            options={items.map((item) => ({
+                              value: item.id,
+                              label: item.productName,
+                            }))}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={
+                            !associationSelections[sourceKey] ||
+                            associatingLine === sourceKey
+                          }
+                          onClick={() => void associateItem(xmlItem)}
+                        >
+                          {associatingLine === sourceKey
+                            ? "Associando…"
+                            : "Associar"}
+                        </Button>
+                      </div>
+
+                      {canReviseOrder ? (
+                        <div className="border-border flex flex-col gap-2 border-t pt-3">
+                          <div>
+                            <p className="text-fg text-xs font-medium">
+                              Não estava no pedido — comprei a mais
+                            </p>
+                            <p className="text-fg-muted text-xs">
+                              Entra numa revisão do pedido já confirmada: a nota
+                              é a prova, o fornecedor não precisa confirmar de
+                              novo.
+                            </p>
+                          </div>
+                          <SearchableSelect
+                            id={`nfe-catalog-${sourceKey}`}
+                            name={`nfe-catalog-${sourceKey}`}
+                            value={draft.productId}
+                            onValueChange={(productId) =>
+                              atualizar({ productId })
+                            }
+                            options={catalogOptions}
+                            placeholder="Digite o nome do produto no catálogo…"
+                            emptyMessage="Nenhum produto encontrado. Cadastre-o antes."
+                          />
+                          <div className="grid gap-2 sm:grid-cols-[8rem_10rem_auto] sm:items-end">
+                            <div className="flex flex-col gap-1.5">
+                              <label
+                                htmlFor={`nfe-qtd-${sourceKey}`}
+                                className="text-fg-muted text-xs"
+                              >
+                                Quantidade
+                                {escolhido ? ` (${escolhido.purchaseUnit})` : ""}
+                              </label>
+                              <Input
+                                id={`nfe-qtd-${sourceKey}`}
+                                inputMode="decimal"
+                                value={draft.quantity}
+                                onChange={(event) =>
+                                  atualizar({ quantity: event.target.value })
+                                }
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              <label
+                                htmlFor={`nfe-preco-${sourceKey}`}
+                                className="text-fg-muted text-xs"
+                              >
+                                Preço
+                                {escolhido ? ` por ${escolhido.pricingUnit}` : ""}
+                              </label>
+                              <Input
+                                id={`nfe-preco-${sourceKey}`}
+                                inputMode="decimal"
+                                value={draft.price}
+                                onChange={(event) =>
+                                  atualizar({ price: event.target.value })
+                                }
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="justify-self-start"
+                              disabled={
+                                !draft.productId || addingLine === sourceKey
+                              }
+                              onClick={() => void addToOrder(xmlItem)}
+                            >
+                              {addingLine === sourceKey
+                                ? "Acrescentando…"
+                                : "Acrescentar ao pedido"}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : null}

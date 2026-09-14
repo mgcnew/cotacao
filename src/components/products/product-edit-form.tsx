@@ -21,7 +21,10 @@ import {
   type ProductEditState,
 } from "@/features/products/actions";
 import { PRODUCT_PURPOSES } from "@/features/products/purposes";
-import { derivePackagingFactor } from "@/components/products/product-form";
+import {
+  derivePackagingFactor,
+  obrigatorio,
+} from "@/components/products/product-form";
 import type { ProductEditContext } from "@/features/products/queries";
 import type { FormAttribute } from "@/components/products/product-form";
 
@@ -364,14 +367,14 @@ export function ProductEditForm({
                 return (
                   <Field
                     key={attr.id}
-                    label={attr.isRequired ? `${label} *` : label}
+                    label={obrigatorio(attr) ? `${label} *` : label}
                     htmlFor={fieldId}
                   >
                     {attr.dataType === "boolean" ? (
                       <select
                         id={fieldId}
                         name={fieldId}
-                        required={attr.isRequired}
+                        required={obrigatorio(attr)}
                         defaultValue={atual}
                         className={selectClass}
                       >
@@ -383,7 +386,7 @@ export function ProductEditForm({
                       <Input
                         id={fieldId}
                         name={fieldId}
-                        required={attr.isRequired}
+                        required={obrigatorio(attr)}
                         defaultValue={atual}
                         inputMode={
                           attr.dataType === "numeric" ? "decimal" : undefined

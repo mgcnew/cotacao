@@ -4779,6 +4779,17 @@ export type Database = {
         };
         Returns: string;
       };
+      rpc_add_invoice_item_to_order: {
+        Args: {
+          p_company_id: string;
+          p_notes?: string;
+          p_order_id: string;
+          p_price: number;
+          p_product_id: string;
+          p_quantity: number;
+        };
+        Returns: Json;
+      };
       rpc_create_order_revision: {
         Args: {
           p_company_id: string;

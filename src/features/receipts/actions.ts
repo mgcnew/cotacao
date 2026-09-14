@@ -487,6 +487,86 @@ export async function learnSupplierProductAlias(
   };
 }
 
+/**
+ * Acrescenta ao pedido um produto que veio na nota e não estava nele.
+ *
+ * O `orderId` sai do recebimento, não do cliente: quem recebe a nota não
+ * escolhe em qual pedido o item entra.
+ *
+ * A permissão pedida é `order.revise`, e não `receipt.post` — o que muda aqui
+ * é o pedido, não o recebimento. Conferir mercadoria e reescrever o que foi
+ * comprado são autoridades diferentes.
+ */
+export async function addInvoiceItemToOrder(
+  formData: FormData,
+): Promise<ReceiptNfeAssistState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("order.revise")) {
+    return {
+      error: "Seu papel não permite acrescentar itens ao pedido.",
+    };
+  }
+
+  const receiptId = String(formData.get("receiptId") ?? "");
+  const productId = String(formData.get("productId") ?? "");
+  // Vírgula decimal e ponto de milhar, que é como se digita em português.
+  const decimal = (campo: string) =>
+    Number(
+      String(formData.get(campo) ?? "")
+        .replace(/\./g, "")
+        .replace(",", "."),
+    );
+  const quantity = decimal("quantity");
+  const price = decimal("price");
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!receiptId || !productId) {
+    return { error: "Escolha o produto do catálogo que corresponde ao item." };
+  }
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return { error: "Informe a quantidade recebida." };
+  }
+  if (!Number.isFinite(price) || price < 0) {
+    return { error: "Informe o preço da nota." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: receipt, error: receiptError } = await supabase
+    .from("receipts")
+    .select("order_id")
+    .eq("company_id", company.companyId)
+    .eq("id", receiptId)
+    .maybeSingle();
+
+  if (receiptError) {
+    return { error: `Não foi possível ler o recebimento: ${receiptError.message}` };
+  }
+  if (!receipt) return { error: "Recebimento não encontrado." };
+
+  const { error } = await supabase.rpc("rpc_add_invoice_item_to_order", {
+    p_company_id: company.companyId,
+    p_order_id: receipt.order_id,
+    p_product_id: productId,
+    p_quantity: quantity,
+    p_price: price,
+    p_notes: notes || undefined,
+  });
+
+  if (error) {
+    return { error: `Não foi possível acrescentar ao pedido: ${error.message}` };
+  }
+
+  revalidatePath(`/recebimentos/${receiptId}`);
+  revalidatePath(`/pedidos/${receipt.order_id}`);
+  revalidatePath("/pedidos");
+  return {
+    error: null,
+    message:
+      "Item acrescentado ao pedido, numa revisão confirmada pela própria nota.",
+  };
+}
+
 export async function saveSupplierProductNfeUnitRule(
   formData: FormData,
 ): Promise<ReceiptNfeAssistState> {
