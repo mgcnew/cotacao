@@ -48,12 +48,14 @@ export function buildOrderMessage(
   url: string | null,
   template = DEFAULT_WHATSAPP_TEMPLATES.order_confirmation,
 ): string {
-  const total = ctx.items.reduce(
-    (sum, i) => sum + i.requestedQuantity * i.agreedPrice,
-    0,
-  );
+  // Modelos personalizados antigos podem ainda conter {total}. A linha inteira
+  // é retirada para nunca enviar como exato um total que depende do peso real.
+  const templateWithoutTotal = template
+    .split("\n")
+    .filter((line) => !line.includes("{total}"))
+    .join("\n");
 
-  return renderWhatsAppTemplate(template, {
+  return renderWhatsAppTemplate(templateWithoutTotal, {
     numero_pedido: String(ctx.orderNumber),
     revisao: ctx.revisionNumber > 1 ? ` — revisão ${ctx.revisionNumber}` : "",
     empresa: ctx.companyName,
@@ -63,7 +65,6 @@ export function buildOrderMessage(
       (i) =>
         `• ${i.productName} — ${QTY.format(i.requestedQuantity)} ${i.purchaseUnit} × ${MONEY.format(i.agreedPrice)}/${i.pricingUnit}`,
     ).join("\n"),
-    total: MONEY.format(total),
     prazo_entrega: ctx.deliveryDueDate ? `Entrega prevista: ${dia(ctx.deliveryDueDate)}` : "",
     link: url ?? "[link individual de confirmação]",
   });

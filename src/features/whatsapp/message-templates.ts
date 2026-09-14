@@ -17,7 +17,6 @@ export const WHATSAPP_TEMPLATE_VARIABLES = [
   "fornecedor",
   "documento_empresa",
   "itens",
-  "total",
   "prazo_entrega",
 ] as const;
 
@@ -34,7 +33,6 @@ export const WHATSAPP_TEMPLATE_VARIABLES_BY_KIND: Record<
     "documento_empresa",
     "fornecedor",
     "itens",
-    "total",
     "prazo_entrega",
     "link",
   ],
@@ -67,7 +65,6 @@ export const DEFAULT_WHATSAPP_TEMPLATES: Record<WhatsAppTemplateKind, string> = 
     "",
     "{itens}",
     "",
-    "*Total: {total}*",
     "{prazo_entrega}",
     "",
     "Confirme o pedido ou aponte alguma divergência por aqui:",
@@ -111,6 +108,10 @@ export function findUnsupportedTemplateVariables(body: string, kind: WhatsAppTem
   return [...new Set(
     [...body.matchAll(/\{([^{}]+)\}/g)]
       .map((match) => match[1])
-      .filter((name) => !allowed.has(name)),
+      .filter(
+        (name) =>
+          !(kind === "order_confirmation" && name === "total") &&
+          !allowed.has(name),
+      ),
   )];
 }

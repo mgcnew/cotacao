@@ -35,26 +35,6 @@ export default async function PedidoPublicoPage({
     );
   }
 
-  const itemTotals = data.revision.items.map((item) => {
-    const pricingQuantity =
-      item.estimated_pricing_quantity != null
-        ? Number(item.estimated_pricing_quantity)
-        : item.purchase_unit.symbol === item.pricing_unit.symbol
-          ? Number(item.requested_quantity)
-          : null;
-    return {
-      id: item.order_revision_item_id,
-      total:
-        pricingQuantity === null
-          ? null
-          : pricingQuantity * Number(item.agreed_price),
-    };
-  });
-  const totalCalculavel = itemTotals.every((item) => item.total !== null);
-  const total = itemTotals.reduce(
-    (sum, item) => sum + Number(item.total ?? 0),
-    0,
-  );
   const packagingItems = data.revision.items.filter(
     (item) => item.packaging_presentation !== null,
   );
@@ -166,39 +146,16 @@ export default async function PedidoPublicoPage({
                     {MONEY.format(Number(item.agreed_price))} por{" "}
                     {item.pricing_unit.symbol}
                   </p>
-                  {itemTotals.find(
-                    (total) => total.id === item.order_revision_item_id,
-                  )?.total !== null ? (
-                    <p className="text-fg-subtle mt-0.5 text-xs tabular-nums">
-                      Estimado{" "}
-                      {MONEY.format(
-                        Number(
-                          itemTotals.find(
-                            (total) => total.id === item.order_revision_item_id,
-                          )?.total,
-                        ),
-                      )}
-                    </p>
-                  ) : null}
                 </div>
               </li>
             ))}
           </ul>
 
-          <div className="border-border bg-surface-sunken flex items-center justify-between gap-4 border-t px-4 py-3 sm:px-5">
-            <div>
-              <span className="text-fg text-sm font-medium">
-                {totalCalculavel ? "Total estimado" : "Total variável"}
-              </span>
-              {!totalCalculavel ? (
-                <p className="text-fg-subtle text-xs">
-                  Há item cujo valor depende de peso ou conversão na entrega.
-                </p>
-              ) : null}
-            </div>
-            <span className="text-fg text-lg font-semibold tabular-nums">
-              {totalCalculavel ? MONEY.format(total) : "A calcular"}
-            </span>
+          <div className="border-border bg-surface-sunken border-t px-4 py-3 sm:px-5">
+            <p className="text-fg-muted text-xs">
+              O valor final do pedido será apurado no recebimento, conforme os
+              pesos e as quantidades efetivamente entregues.
+            </p>
           </div>
         </section>
 

@@ -33,10 +33,6 @@ import {
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { parseListPagination } from "@/lib/list-pagination";
 
-const MONEY = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
 const DATA = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
@@ -209,7 +205,7 @@ async function ListaDePedidos({
           <Metric
             label={filtrando ? "Pedidos nesta seleção" : "Pedidos"}
             value={String(summary.quantity)}
-            hint={`${MONEY.format(summary.value)} fora os cancelados`}
+            hint="fora os cancelados"
           />
           <Metric
             label="Em rascunho"
@@ -255,12 +251,11 @@ async function ListaDePedidos({
         />
       ) : (
         <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-0 sm:flex-1">
-          <div className="bg-surface-sunken text-fg-muted hidden shrink-0 grid-cols-[minmax(5rem,.7fr)_minmax(9rem,1.4fr)_7rem_4rem_7rem_minmax(8rem,1fr)_8rem] gap-3 border-b px-4 py-2 text-xs font-medium sm:grid">
+          <div className="bg-surface-sunken text-fg-muted hidden shrink-0 grid-cols-[minmax(5rem,.7fr)_minmax(9rem,1.4fr)_7rem_4rem_minmax(8rem,1fr)_8rem] gap-3 border-b px-4 py-2 text-xs font-medium sm:grid">
             <span>Pedido</span>
             <span>Fornecedor</span>
             <span>Entrega</span>
             <span className="text-right">Itens</span>
-            <span className="text-right">Total</span>
             <span>Situação</span>
             <span className="text-right">Próximo passo</span>
           </div>
@@ -309,7 +304,7 @@ function OrderResponsiveRow({
   enviarAqui,
 }: PresentedOrder) {
   return (
-    <article className="grid min-w-0 gap-3 p-4 sm:grid-cols-[minmax(5rem,.7fr)_minmax(9rem,1.4fr)_7rem_4rem_7rem_minmax(8rem,1fr)_8rem] sm:items-center sm:py-3">
+    <article className="grid min-w-0 gap-3 p-4 sm:grid-cols-[minmax(5rem,.7fr)_minmax(9rem,1.4fr)_7rem_4rem_minmax(8rem,1fr)_8rem] sm:items-center sm:py-3">
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="min-w-0">
           <IntentPrefetchLink
@@ -359,9 +354,6 @@ function OrderResponsiveRow({
       <p className="text-fg-muted hidden text-right text-sm tabular-nums sm:block">
         {order.itemCount}
       </p>
-      <p className="text-fg hidden text-right text-sm font-semibold tabular-nums sm:block">
-        {MONEY.format(order.total)}
-      </p>
       <span className="hidden max-w-full flex-wrap gap-1 sm:flex sm:justify-start">
         <Badge
           variant={
@@ -379,14 +371,8 @@ function OrderResponsiveRow({
         ) : null}
       </span>
 
-      <dl className="border-border grid grid-cols-3 gap-2 border-y py-3 text-center sm:hidden">
-        <div className="min-w-0">
-          <dt className="text-fg-subtle text-[11px]">Total</dt>
-          <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">
-            {MONEY.format(order.total)}
-          </dd>
-        </div>
-        <div className="border-border min-w-0 border-x px-1">
+      <dl className="border-border grid grid-cols-2 gap-2 border-y py-3 text-center sm:hidden">
+        <div className="border-border min-w-0 border-r px-1">
           <dt className="text-fg-subtle text-[11px]">Itens</dt>
           <dd className="text-fg mt-0.5 text-sm font-semibold tabular-nums">
             {order.itemCount}

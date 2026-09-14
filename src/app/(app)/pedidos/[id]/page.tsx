@@ -205,10 +205,6 @@ export async function PedidoContent({
       : Promise.resolve(null),
   ]);
 
-  const total = (revision?.items ?? []).reduce(
-    (sum, i) => sum + i.requestedQuantity * i.agreedPrice,
-    0,
-  );
   const pendentes = (revision?.items ?? []).filter(
     (i) => i.pendingQuantity > 0,
   );
@@ -223,7 +219,7 @@ export async function PedidoContent({
     <>
       {revision ? (
         <section className="border-border bg-surface mb-6 rounded-xl border p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="mb-3">
             <div>
               <h2 className="text-fg text-sm font-semibold">
                 Revisão {revision.revisionNumber}
@@ -244,9 +240,6 @@ export async function PedidoContent({
                 </p>
               ) : null}
             </div>
-            <span className="text-fg font-medium tabular-nums">
-              {MONEY.format(total)}
-            </span>
           </div>
 
           <ul className="flex flex-col gap-1.5">

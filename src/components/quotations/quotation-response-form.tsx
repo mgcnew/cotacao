@@ -5,7 +5,9 @@ import {
   AlertTriangle,
   Calculator,
   CheckCircle2,
+  Clock3,
   PackageCheck,
+  PackageX,
 } from "lucide-react";
 import * as React from "react";
 import { useActionState } from "react";
@@ -67,16 +69,28 @@ const RESPONSE_OPTIONS = [
     value: "priced",
     label: "Tenho disponível",
     description: "Consigo atender e vou informar o preço",
+    icon: PackageCheck,
+    iconClass: "bg-success-soft text-success",
+    activeClass:
+      "border-success/50 bg-success-soft ring-success/15 ring-2",
   },
   {
     value: "unavailable",
     label: "Sem disponibilidade agora",
     description: "Trabalho com o produto, mas não consigo atender desta vez",
+    icon: Clock3,
+    iconClass: "bg-warning-soft text-warning",
+    activeClass:
+      "border-warning/50 bg-warning-soft ring-warning/15 ring-2",
   },
   {
     value: "does_not_supply",
     label: "Não trabalho com este produto",
     description: "Não forneço este item",
+    icon: PackageX,
+    iconClass: "bg-destructive-soft text-destructive",
+    activeClass:
+      "border-destructive/45 bg-destructive-soft ring-destructive/10 ring-2",
   },
 ] as const;
 
@@ -335,14 +349,20 @@ function ItemCard({
         <div
           role="group"
           aria-label={`Disponibilidade de ${item.product_name}`}
-          className="flex flex-col gap-2"
+          className="border-border bg-surface-sunken flex flex-col gap-3 rounded-xl border p-3 sm:p-4"
         >
-          <p className="text-fg text-sm font-semibold">
-            Você consegue fornecer este produto nesta cotação?
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-fg text-sm font-semibold">
+              Você consegue fornecer este produto nesta cotação?
+            </p>
+            <span className="bg-primary-soft text-primary rounded-full px-2.5 py-1 text-[11px] font-semibold">
+              Resposta obrigatória
+            </span>
+          </div>
           <div className="grid gap-2 sm:grid-cols-3">
             {RESPONSE_OPTIONS.map((option) => {
               const active = status === option.value;
+              const OptionIcon = option.icon;
               return (
                 <button
                   key={option.value}
@@ -351,22 +371,33 @@ function ItemCard({
                   aria-pressed={active}
                   onClick={() => escolherStatus(option.value)}
                   className={cn(
-                    "border-border bg-surface-sunken hover:border-primary/45 focus-visible:border-ring focus-visible:ring-ring/50 min-h-20 rounded-lg border p-3 text-left transition-colors focus-visible:ring-3 focus-visible:outline-none",
-                    active &&
-                      "border-primary bg-primary-soft ring-primary/15 ring-2",
+                    "border-border bg-surface hover:border-fg-subtle focus-visible:border-ring focus-visible:ring-ring/50 min-h-24 rounded-xl border p-3 text-left transition-[border-color,background-color,box-shadow] focus-visible:ring-3 focus-visible:outline-none",
+                    active && option.activeClass,
                   )}
                 >
-                  <span className="text-fg flex items-center gap-2 text-sm font-semibold">
+                  <span className="flex items-start gap-3">
+                    <span
+                      className={cn(
+                        "grid size-9 shrink-0 place-items-center rounded-lg",
+                        option.iconClass,
+                      )}
+                    >
+                      <OptionIcon className="size-4.5" aria-hidden />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="text-fg block text-sm font-semibold">
+                        {option.label}
+                      </span>
+                      <span className="text-fg-muted mt-1 block text-xs leading-snug">
+                        {option.description}
+                      </span>
+                    </span>
                     {active ? (
                       <CheckCircle2
-                        className="text-primary size-4 shrink-0"
+                        className="text-fg size-4.5 shrink-0"
                         aria-hidden
                       />
                     ) : null}
-                    {option.label}
-                  </span>
-                  <span className="text-fg-muted mt-1 block text-xs leading-snug">
-                    {option.description}
                   </span>
                 </button>
               );

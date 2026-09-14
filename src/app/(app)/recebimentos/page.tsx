@@ -156,7 +156,7 @@ export default async function RecebimentosPage({
                   <span className="text-fg-muted text-sm">
                     {row.draftReceipt!.invoiceTotal !== null
                       ? `Nota: ${MONEY.format(row.draftReceipt!.invoiceTotal)}`
-                      : `Pedido: ${MONEY.format(row.expectedTotal)}`}
+                      : "Valor da nota será informado na conferência"}
                   </span>
                   {canPost ? (
                     <Button asChild size="sm">
@@ -231,8 +231,7 @@ export default async function RecebimentosPage({
                     <p className="text-fg-muted mt-1 hidden text-sm sm:block">
                       {row.deliveryDueDate
                         ? `Previsto para ${formatDay(row.deliveryDueDate)}`
-                        : "Sem data prevista"}{" "}
-                      · {MONEY.format(row.expectedTotal)}
+                        : "Sem data prevista"}
                     </p>
                   </div>
                   {canRegister ? (

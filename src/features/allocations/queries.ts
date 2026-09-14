@@ -81,7 +81,7 @@ export async function getAllocationBoard(companyId: string, roundId: string) {
   return { ...comparison, allocationsByItem: byItem, allocations };
 }
 
-/** Pedidos gerados a partir da rodada, com o total de cada um. */
+/** Pedidos gerados a partir da rodada. */
 export async function listRoundOrders(companyId: string, roundId: string) {
   const supabase = await createServerSupabaseClient();
 
@@ -113,12 +113,6 @@ export async function listRoundOrders(companyId: string, roundId: string) {
     )[0];
 
     const items = revision?.order_revision_items ?? [];
-    const total = items.reduce(
-      (sum, item) =>
-        sum + Number(item.requested_quantity) * Number(item.agreed_price),
-      0,
-    );
-
     return {
       id: order.id,
       orderNumber: order.order_number,
@@ -126,7 +120,6 @@ export async function listRoundOrders(companyId: string, roundId: string) {
       supplierName: order.suppliers.name,
       deliveryDueDate: revision?.delivery_due_date ?? null,
       itemCount: items.length,
-      total,
     };
   });
 }

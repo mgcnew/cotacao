@@ -750,7 +750,7 @@ function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados:
         {supplier.recommendations.map(({ row, candidates, winner }) => (
           <li key={row.itemId} className="bg-primary/[0.025] flex flex-wrap items-center gap-3 px-4 py-3">
             <ItemName row={row} quantity={row.requestedQuantity} />
-            <Price price={winner.price} pricingQuantity={winner.pricingFactor === null ? null : row.requestedQuantity * winner.pricingFactor} unit={row.pricingUnit} best />
+            <Price price={winner.price} pricingQuantity={winner.pricingFactor === null ? null : row.requestedQuantity * winner.pricingFactor} unit={row.pricingUnit} comparisonPrice={row.requiresPresentationComparison ? winner.comparisonPrice : null} comparisonUnit={row.comparisonUnit} best />
             <Badge variant="secondary">melhor preço · sugestão</Badge>
             {dados.podeDecidir && dados.round.status === "active" ? <AllocateForm roundId={dados.round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={row.requestedQuantity} initialSupplierId={winner.id} buttonLabel="Revisar escolha" /> : null}
           </li>
@@ -764,8 +764,9 @@ function ItemName({ row, quantity }: { row: Row; quantity: number }) {
   return <div className="min-w-48 flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-subtle text-xs">{row.groupName} · {QTY.format(quantity)} {row.purchaseUnit}</p></div>;
 }
 
-function Price({ price, pricingQuantity, unit, best = false }: { price: number; pricingQuantity: number | null; unit: string; best?: boolean }) {
-  return <div className="text-right text-sm tabular-nums"><p className={best ? "text-success font-semibold" : "text-fg"}>{MONEY.format(price)} <span className="text-fg-subtle text-xs font-normal">/{unit}</span></p>{pricingQuantity === null ? <p className="text-warning text-xs">total sem conversão</p> : <p className="text-fg-muted text-xs">{MONEY.format(pricingQuantity * price)}</p>}</div>;
+function Price({ price, pricingQuantity, unit, comparisonPrice = null, comparisonUnit = null, best = false }: { price: number; pricingQuantity: number | null; unit: string; comparisonPrice?: number | null; comparisonUnit?: string | null; best?: boolean }) {
+  const hasComparison = comparisonPrice !== null && comparisonUnit !== null;
+  return <div className="text-right text-sm tabular-nums"><p className={best ? "text-success font-semibold" : "text-fg"}>{MONEY.format(hasComparison ? comparisonPrice : price)} <span className="text-fg-subtle text-xs font-normal">/{hasComparison ? comparisonUnit : unit}</span></p>{hasComparison ? <p className="text-fg-subtle text-xs">pacote {MONEY.format(price)} / {unit}</p> : null}{pricingQuantity === null ? <p className="text-warning text-xs">total sem conversão</p> : <p className="text-fg-muted text-xs">{MONEY.format(pricingQuantity * price)}</p>}</div>;
 }
 
 function Summary({ label, value, detail, alert = false }: { label: string; value: string; detail: string; alert?: boolean }) {
@@ -778,7 +779,7 @@ function GeneratedOrders({ orders }: { orders: DadosDaAlocacao["orders"] }) {
       <h2 className="text-fg mb-1 flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4" aria-hidden /> Pedidos gerados</h2>
       <p className="text-fg-muted mb-3 text-sm">Gerar o pedido não o envia. Cada um nasce em rascunho até alguém abrir e mandar ao fornecedor.</p>
       <ul className="flex flex-col gap-2">
-        {orders.map((order) => <li key={order.id} className="border-border bg-surface flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3"><div><Link href={`/pedidos/${order.id}`} className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline">#{order.orderNumber} · {order.supplierName}</Link><p className="text-fg-subtle text-xs">{order.itemCount} {order.itemCount === 1 ? "item" : "itens"}{order.deliveryDueDate ? ` · entrega ${order.deliveryDueDate}` : ""}</p></div><div className="flex items-center gap-3"><span className="text-fg font-medium tabular-nums">{MONEY.format(order.total)}</span><Badge variant={order.status === "draft" ? "outline" : "secondary"}>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Badge><Button asChild size="sm" variant="outline"><Link href={`/pedidos/${order.id}`}>{order.status === "draft" ? "Enviar" : "Abrir"}</Link></Button></div></li>)}
+        {orders.map((order) => <li key={order.id} className="border-border bg-surface flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3"><div><Link href={`/pedidos/${order.id}`} className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline">#{order.orderNumber} · {order.supplierName}</Link><p className="text-fg-subtle text-xs">{order.itemCount} {order.itemCount === 1 ? "item" : "itens"}{order.deliveryDueDate ? ` · entrega ${order.deliveryDueDate}` : ""}</p></div><div className="flex items-center gap-3"><Badge variant={order.status === "draft" ? "outline" : "secondary"}>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Badge><Button asChild size="sm" variant="outline"><Link href={`/pedidos/${order.id}`}>{order.status === "draft" ? "Enviar" : "Abrir"}</Link></Button></div></li>)}
       </ul>
     </section>
   );

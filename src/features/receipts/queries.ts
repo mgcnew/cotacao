@@ -69,10 +69,6 @@ export async function listReceivingBoard(companyId: string) {
       orderStatus: order.status,
       supplierName: order.suppliers.name,
       deliveryDueDate: revision?.delivery_due_date ?? null,
-      expectedTotal: items.reduce(
-        (sum, item) => sum + item.requestedQuantity * item.agreedPrice,
-        0,
-      ),
       items,
       draftReceipt: draft
         ? {

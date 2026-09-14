@@ -85,7 +85,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         pricing_unit_id,
         comparison_unit_id,
         product_id,
-        products!inner ( name, category_id ),
+        products!inner ( name, category_id, purpose ),
         purchase_unit:units!quotation_items_company_id_purchase_unit_id_fkey ( symbol ),
         pricing_unit:units!quotation_items_company_id_pricing_unit_id_fkey ( symbol ),
         comparison_unit:units!quotation_items_company_id_comparison_unit_id_fkey ( symbol )
@@ -136,7 +136,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
     await supabase
       .from("product_attribute_definitions")
       .select(
-        "id, name, category_id, product_id, is_required, units ( symbol )",
+        "id, name, category_id, product_id, unit_id, is_required, units ( symbol )",
       )
       .eq("company_id", companyId)
       .eq("is_active", true)
@@ -291,6 +291,20 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       (conversionDefinitions ?? []).find(
         (definition) => definition.category_id === item.products.category_id,
       );
+    // Cadastro legado de embalagem: compra em pacote, "precificação" ficou
+    // como unidade interna e a comparação vazia. O preço informado, porém, é
+    // o pacote inteiro. Reconhecer essa forma evita multiplicar preço × itens
+    // por pacote; a migration 0109 corrige o cadastro definitivamente.
+    const legacyPackagingPresentation =
+      item.products.purpose === "packaging" &&
+      item.purchase_unit_id !== item.pricing_unit_id &&
+      item.comparison_unit_id === null &&
+      conversionDefinition?.unit_id === item.pricing_unit_id;
+    const requiresPresentationComparison =
+      Boolean(conversionDefinition) &&
+      (legacyPackagingPresentation ||
+        (item.comparison_unit_id !== null &&
+          item.pricing_unit_id !== item.comparison_unit_id));
     let conversionName: string | null = conversionDefinition?.name ?? null;
 
     for (const rs of roundSuppliers) {
@@ -338,12 +352,13 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         conversionName ?? conversionNameByResponse.get(response.id) ?? null;
       const normalized =
         current !== null &&
-        item.comparison_unit_id !== null &&
         !response.does_not_supply
-          ? item.pricing_unit_id === item.comparison_unit_id
-            ? current
-            : factor
+          ? requiresPresentationComparison
+            ? factor
               ? current / factor
+              : null
+            : item.comparison_unit_id !== null
+              ? current
               : null
           : null;
 
@@ -365,10 +380,6 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       });
     }
 
-    const requiresPresentationComparison =
-      Boolean(conversionDefinition) &&
-      item.comparison_unit_id !== null &&
-      item.pricing_unit_id !== item.comparison_unit_id;
     const usesNormalizedComparison =
       precos.length > 0 &&
       normalizados.length === precos.length &&
@@ -389,10 +400,15 @@ export async function getRoundComparison(companyId: string, roundId: string) {
           ? null
           : Number(item.estimated_conversion_rate),
       requiresPricingConversion:
-        item.purchase_unit_id !== item.pricing_unit_id,
+        item.purchase_unit_id !== item.pricing_unit_id &&
+        !legacyPackagingPresentation,
       purchaseUnit: item.purchase_unit?.symbol ?? "",
-      pricingUnit: item.pricing_unit?.symbol ?? "",
-      comparisonUnit: item.comparison_unit?.symbol ?? null,
+      pricingUnit: legacyPackagingPresentation
+        ? (item.purchase_unit?.symbol ?? "")
+        : (item.pricing_unit?.symbol ?? ""),
+      comparisonUnit: legacyPackagingPresentation
+        ? (conversionDefinition?.units?.symbol ?? null)
+        : (item.comparison_unit?.symbol ?? null),
       cells,
       bestPrice,
       bestNormalized,

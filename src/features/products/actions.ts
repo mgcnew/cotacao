@@ -263,6 +263,39 @@ const productUnitsSchema = z.object({
     }),
 });
 
+function normalizePackagingUnits(
+  purpose: string,
+  units: {
+    purchaseUnitId: string;
+    pricingUnitId: string;
+    comparisonUnitId: string | null;
+  },
+  definitions: {
+    is_conversion_factor: boolean;
+    unit_id: string | null;
+  }[],
+) {
+  const conversionUnit = definitions.find(
+    (definition) =>
+      definition.is_conversion_factor &&
+      definition.unit_id === units.pricingUnitId,
+  )?.unit_id;
+  const isLegacyPackagingShape =
+    purpose === "packaging" &&
+    units.purchaseUnitId !== units.pricingUnitId &&
+    conversionUnit !== undefined &&
+    (units.comparisonUnitId === null ||
+      units.comparisonUnitId === conversionUnit);
+
+  return isLegacyPackagingShape
+    ? {
+        purchaseUnitId: units.purchaseUnitId,
+        pricingUnitId: units.purchaseUnitId,
+        comparisonUnitId: conversionUnit,
+      }
+    : units;
+}
+
 const bulkProductUnitsSchema = z
   .array(
     z.object({
@@ -430,7 +463,9 @@ export async function createProduct(
   // vira atributo, e obrigatório continua obrigatório.
   const { data: definitions, error: defsError } = await supabase
     .from("product_attribute_definitions")
-    .select("id, name, data_type, is_required")
+    .select(
+      "id, name, data_type, is_required, is_conversion_factor, unit_id",
+    )
     .eq("company_id", company.companyId)
     .eq("category_id", parsed.data.categoryId)
     .eq("is_active", true);
@@ -438,6 +473,16 @@ export async function createProduct(
   if (defsError) {
     return { error: `Falha ao carregar atributos: ${defsError.message}` };
   }
+
+  const normalizedUnits = normalizePackagingUnits(
+    parsed.data.purpose,
+    {
+      purchaseUnitId: parsed.data.purchaseUnitId,
+      pricingUnitId: parsed.data.pricingUnitId,
+      comparisonUnitId: parsed.data.comparisonUnitId,
+    },
+    definitions ?? [],
+  );
 
   const values: {
     attribute_definition_id: string;
@@ -492,9 +537,9 @@ export async function createProduct(
       name: parsed.data.name,
       category_id: parsed.data.categoryId,
       purpose: parsed.data.purpose,
-      purchase_unit_id: parsed.data.purchaseUnitId,
-      pricing_unit_id: parsed.data.pricingUnitId,
-      comparison_unit_id: parsed.data.comparisonUnitId,
+      purchase_unit_id: normalizedUnits.purchaseUnitId,
+      pricing_unit_id: normalizedUnits.pricingUnitId,
+      comparison_unit_id: normalizedUnits.comparisonUnitId,
       description: parsed.data.description,
     })
     .select(
@@ -662,7 +707,9 @@ export async function updateProduct(
   // obrigatório — inclusive o da categoria nova, para onde o produto vai agora.
   const { data: definitions, error: defsError } = await supabase
     .from("product_attribute_definitions")
-    .select("id, name, data_type, is_required")
+    .select(
+      "id, name, data_type, is_required, is_conversion_factor, unit_id",
+    )
     .eq("company_id", company.companyId)
     .eq("category_id", parsed.data.categoryId)
     .eq("is_active", true);
@@ -734,23 +781,32 @@ export async function updateProduct(
     return { error: units.error.issues[0].message };
   }
 
+  const normalizedUnits =
+    units?.success === true
+      ? normalizePackagingUnits(
+          parsed.data.purpose,
+          units.data,
+          definitions ?? [],
+        )
+      : null;
+
   const unitsChanged =
-    units?.success === true &&
-    (units.data.purchaseUnitId !== current.purchase_unit_id ||
-      units.data.pricingUnitId !== current.pricing_unit_id ||
-      units.data.comparisonUnitId !== current.comparison_unit_id);
+    normalizedUnits !== null &&
+    (normalizedUnits.purchaseUnitId !== current.purchase_unit_id ||
+      normalizedUnits.pricingUnitId !== current.pricing_unit_id ||
+      normalizedUnits.comparisonUnitId !== current.comparison_unit_id);
 
   // A unidade vai primeiro justamente porque é a que pode ser recusada. Assim a
   // recusa não deixa para trás um nome já trocado sem que a pessoa soubesse.
-  if (unitsChanged && units?.success) {
+  if (unitsChanged && normalizedUnits) {
     const { error: unitsError } = await supabase.rpc(
       "rpc_update_unused_product_units",
       {
         p_company_id: company.companyId,
         p_product_id: productId,
-        p_purchase_unit_id: units.data.purchaseUnitId,
-        p_pricing_unit_id: units.data.pricingUnitId,
-        p_comparison_unit_id: units.data.comparisonUnitId,
+        p_purchase_unit_id: normalizedUnits.purchaseUnitId,
+        p_pricing_unit_id: normalizedUnits.pricingUnitId,
+        p_comparison_unit_id: normalizedUnits.comparisonUnitId,
       },
     );
     if (unitsError) return { error: unitsError.message };
