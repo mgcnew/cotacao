@@ -10,6 +10,20 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * `public_access_tokens` direto: `anon` não tem SELECT nela, de propósito.
  */
 
+/**
+ * Unidade como o link público a recebe.
+ *
+ * `name` e `kind` chegam a partir da migration 0110 e são opcionais de
+ * propósito: um link já aberto continua válido sem eles, caindo na sigla.
+ */
+export type PublicUnit = {
+  id: string;
+  code: string;
+  symbol: string;
+  name?: string | null;
+  kind?: string | null;
+};
+
 export type PublicAttribute = {
   attribute_definition_id: string;
   name: string;
@@ -19,7 +33,7 @@ export type PublicAttribute = {
   is_conversion_factor: boolean;
   suggested_value_numeric: number | null;
   suggested_confirmed_at: string | null;
-  unit: { id: string; symbol: string } | null;
+  unit: Omit<PublicUnit, "code"> | null;
 };
 
 export type PublicQuotationItem = {
@@ -28,9 +42,10 @@ export type PublicQuotationItem = {
   group: string;
   product_name: string;
   requested_quantity: string;
-  purchase_unit: { id: string; code: string; symbol: string };
-  pricing_unit: { id: string; code: string; symbol: string };
-  comparison_unit: { id: string; code: string; symbol: string } | null;
+  purpose?: "resale" | "internal" | "production" | "packaging" | "other";
+  purchase_unit: PublicUnit;
+  pricing_unit: PublicUnit;
+  comparison_unit: PublicUnit | null;
   notes: string | null;
   already_answered: boolean;
   last_supplier_price: number | null;

@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ThemedSelect } from "@/components/ui/themed-select";
+import { unitWord } from "@/features/products/units";
 import {
   submitQuotation,
   type SubmitQuotationState,
@@ -205,6 +206,15 @@ function ItemCard({
   const conversionAttribute = item.attributes.find(
     (attribute) => attribute.is_conversion_factor,
   );
+  const otherAttributes = item.attributes.filter(
+    (attribute) => !attribute.is_conversion_factor,
+  );
+  // Preço e conteúdo só viram um campo só quando o item é embalagem. `purpose`
+  // chega a partir da migration 0110; antes dela o fator de conversão é o
+  // único sinal disponível — e na prática ele sempre foi de embalagem.
+  const packaging =
+    Boolean(conversionAttribute) &&
+    (item.purpose === undefined || item.purpose === "packaging");
   const rawFactor = conversionAttribute
     ? attributeValues[conversionAttribute.attribute_definition_id] ?? ""
     : "";
@@ -405,28 +415,53 @@ function ItemCard({
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-[11rem_1fr]">
+        {priced && packaging && conversionAttribute ? (
+          <PackagingSale
+            item={item}
+            itemId={id}
+            attr={conversionAttribute}
+            price={price}
+            onPriceChange={setPrice}
+            priceInvalid={showValidation && !validPrice}
+            factor={rawFactor}
+            onFactorChange={(value) =>
+              setAttributeValues((current) => ({
+                ...current,
+                [conversionAttribute.attribute_definition_id]: value,
+              }))
+            }
+            factorInvalid={showValidation && Boolean(invalidConversionAttribute)}
+            numericFactor={numericFactor}
+            normalizedPrice={normalizedPrice}
+          />
+        ) : null}
+
+        <div
+          className={cn("grid gap-3", !packaging && "sm:grid-cols-[11rem_1fr]")}
+        >
           {priced ? (
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor={`preco_${id}`}
-                className="text-fg text-sm font-medium"
-              >
-                Preço por {item.pricing_unit.symbol}
-              </label>
-              <Input
-                id={`preco_${id}`}
-                name={`preco_${id}`}
-                // Só dígitos entram, então o teclado numérico simples basta —
-                // uma tecla de vírgula aqui seria uma tecla que não faz nada.
-                inputMode="numeric"
-                enterKeyHint="next"
-                placeholder="0,00"
-                value={price}
-                aria-invalid={showValidation && !validPrice}
-                onChange={(event) => setPrice(formatarCentavos(event.target.value))}
-              />
-            </div>
+            packaging ? null : (
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor={`preco_${id}`}
+                  className="text-fg text-sm font-medium"
+                >
+                  Preço por {item.pricing_unit.symbol}
+                </label>
+                <Input
+                  id={`preco_${id}`}
+                  name={`preco_${id}`}
+                  // Só dígitos entram, então o teclado numérico simples basta —
+                  // uma tecla de vírgula aqui seria uma tecla que não faz nada.
+                  inputMode="numeric"
+                  enterKeyHint="next"
+                  placeholder="0,00"
+                  value={price}
+                  aria-invalid={showValidation && !validPrice}
+                  onChange={(event) => setPrice(formatarCentavos(event.target.value))}
+                />
+              </div>
+            )
           ) : status === "" ? (
             <div className="bg-surface-sunken text-fg-muted flex items-center rounded-lg px-3 py-2 text-sm">
               Escolha uma opção acima para continuar.
@@ -471,9 +506,10 @@ function ItemCard({
           </div>
         ) : null}
 
-        {priced && item.attributes.length > 0 ? (
+        {priced &&
+        (packaging ? otherAttributes.length > 0 : item.attributes.length > 0) ? (
           <section className="border-border border-t pt-4">
-            {conversionAttribute ? (
+            {conversionAttribute && !packaging ? (
               <div className="border-primary/25 bg-primary-soft mb-3 rounded-xl border p-3">
                 <div className="mb-3 flex items-start gap-2">
                   <Calculator className="text-primary mt-0.5 size-4 shrink-0" aria-hidden />
@@ -516,7 +552,7 @@ function ItemCard({
               </div>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
-            {item.attributes.filter((attr) => !attr.is_conversion_factor).map((attr) => {
+            {otherAttributes.map((attr) => {
               return (
                 <AttributeField
                   key={attr.attribute_definition_id}
@@ -538,6 +574,179 @@ function ItemCard({
         ) : null}
       </div>
     </article>
+  );
+}
+
+/**
+ * Venda de embalagem: preço e conteúdo no mesmo campo.
+ *
+ * Para uma embalagem os dois números não dizem nada separados — R$ 40 o fardo
+ * só vira comparável quando se sabe que o fardo traz 500 unidades. O formulário
+ * antigo pedia o preço em cima, a observação opcional ao lado e o conteúdo lá
+ * embaixo, atrás de uma borda: os dois números que formam a razão eram os mais
+ * distantes do cartão.
+ *
+ * A frase também era de contagem — "quantas {un} vêm em cada {fd}". Escrita com
+ * o nome da unidade e no plural certo ela atende igualmente o que se vende por
+ * pacote, por metro e por quilo, que é o mesmo cálculo com outro substantivo.
+ */
+function PackagingSale({
+  item,
+  itemId,
+  attr,
+  price,
+  onPriceChange,
+  priceInvalid,
+  factor,
+  onFactorChange,
+  factorInvalid,
+  numericFactor,
+  normalizedPrice,
+}: {
+  item: PublicQuotationItem;
+  itemId: string;
+  attr: PublicQuotationItem["attributes"][number];
+  price: string;
+  onPriceChange: (value: string) => void;
+  priceInvalid: boolean;
+  factor: string;
+  onFactorChange: (value: string) => void;
+  factorInvalid: boolean;
+  numericFactor: number;
+  normalizedPrice: number | null;
+}) {
+  const fieldName = `attr_${itemId}_${attr.attribute_definition_id}__${attr.data_type}`;
+  // Nada de artigo definido antes do nome da unidade: "o preço do caixa" sai
+  // errado, e o gênero não se deduz do `kind`. "1 caixa" e "cada caixa"
+  // funcionam em qualquer gênero.
+  const embalagem = unitWord(item.pricing_unit);
+  // A unidade de comparação é o que o comprador enxerga no fim. Quando ela
+  // ainda não está no item, a do próprio atributo de conversão responde.
+  const conteudo = item.comparison_unit ?? attr.unit;
+  const conteudoUm = unitWord(conteudo, 1) || "unidade";
+  const conteudoVarios = unitWord(conteudo, 2) || "unidades";
+
+  const pedido = Number(item.requested_quantity);
+  // A quantidade pedida vem na unidade de compra, e o fator é por unidade de
+  // preço. Projetar o total só é honesto quando as duas são a mesma — que é
+  // como a embalagem fica depois da 0109.
+  const mesmaUnidade = item.purchase_unit.id === item.pricing_unit.id;
+  const totalConteudo =
+    mesmaUnidade && Number.isFinite(numericFactor) && numericFactor > 0
+      ? pedido * numericFactor
+      : null;
+
+  const faltando =
+    !price.trim() && !factor.trim()
+      ? `Preencha os dois campos para ver o custo por ${conteudoUm}.`
+      : !price.trim()
+        ? `Falta o preço de 1 ${embalagem}.`
+        : `Falta quanto vem em cada ${embalagem}.`;
+
+  return (
+    <section
+      aria-label={`Como você vende ${item.product_name}`}
+      className="border-border bg-surface-sunken flex flex-col gap-3 rounded-xl border p-3 sm:p-4"
+    >
+      <div>
+        <h3 className="text-fg text-sm font-semibold">Como você vende</h3>
+        <p className="text-fg-muted mt-0.5 text-xs">
+          Quanto custa 1 {embalagem} e quanto vem dentro. É assim que o
+          comprador compara embalagens de tamanhos diferentes.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-[11rem_1fr]">
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor={`preco_${itemId}`}
+            className="text-fg text-sm font-medium"
+          >
+            Preço de 1 {embalagem}
+          </label>
+          <div className="relative">
+            <span
+              aria-hidden
+              className="text-fg-subtle pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm"
+            >
+              R$
+            </span>
+            <Input
+              id={`preco_${itemId}`}
+              name={`preco_${itemId}`}
+              // Só dígitos entram, então o teclado numérico simples basta —
+              // uma tecla de vírgula aqui seria uma tecla que não faz nada.
+              inputMode="numeric"
+              enterKeyHint="next"
+              placeholder="0,00"
+              value={price}
+              aria-invalid={priceInvalid}
+              onChange={(event) =>
+                onPriceChange(formatarCentavos(event.target.value))
+              }
+              className="h-11 pl-9 tabular-nums"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={fieldName} className="text-fg text-sm font-medium">
+            Cada {embalagem} tem
+            {attr.required ? (
+              <span className="text-destructive ml-1" aria-label="obrigatório">
+                *
+              </span>
+            ) : null}
+          </label>
+          <div className="flex items-center gap-2">
+            <Input
+              id={fieldName}
+              name={fieldName}
+              inputMode="decimal"
+              enterKeyHint="next"
+              placeholder="0"
+              value={factor}
+              required={attr.required}
+              aria-invalid={factorInvalid}
+              min="0.000001"
+              onChange={(event) => onFactorChange(event.target.value)}
+              className="h-11 w-24 tabular-nums"
+            />
+            <span className="text-fg text-sm">{conteudoVarios}</span>
+          </div>
+          {attr.suggested_value_numeric !== null ? (
+            <p className="text-fg-subtle text-xs">
+              Valor da última cotação
+              {attr.suggested_confirmed_at
+                ? `, confirmado em ${new Intl.DateTimeFormat("pt-BR").format(new Date(attr.suggested_confirmed_at))}`
+                : ""}
+              . Você confirmará no envio ou poderá alterar agora.
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="border-border border-t pt-3">
+        {normalizedPrice !== null ? (
+          <>
+            <p className="text-primary text-base font-semibold tabular-nums">
+              R$ {UNIT_PRICE.format(normalizedPrice)}{" "}
+              <span className="text-fg-muted text-sm font-normal">
+                por {conteudoUm}
+              </span>
+            </p>
+            {totalConteudo !== null ? (
+              <p className="text-fg-muted mt-1 text-xs tabular-nums">
+                {QTY.format(pedido)} {unitWord(item.purchase_unit, pedido)} ={" "}
+                {QTY.format(totalConteudo)} {conteudoVarios} no total
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-fg-subtle text-sm">{faltando}</p>
+        )}
+      </div>
+    </section>
   );
 }
 
