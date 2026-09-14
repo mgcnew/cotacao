@@ -16,11 +16,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import type { DadosDaComparacao } from "@/features/rounds/comparacao";
+import { formatUnitPrice } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 const MONEY = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
-const NORMALIZED = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const PERCENT = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 
 type Filter = "all" | "above" | "missing" | "best";
@@ -297,7 +297,7 @@ function ComparisonRow({ row, supplier, dados }: { row: Row; supplier: Supplier;
         {row.bestComparablePrice === null ? <span className="text-fg-subtle text-sm">{row.requiresPresentationComparison ? "Preencha a apresentação de todas as propostas" : "Nenhum preço recebido"}</span> : (
           <>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-fg font-semibold tabular-nums">R$ {row.usesNormalizedComparison ? NORMALIZED.format(row.bestComparablePrice) : MONEY.format(row.bestComparablePrice)}{row.usesNormalizedComparison ? ` / ${row.comparisonUnit}` : ""}</span>
+              <span className="text-fg font-semibold tabular-nums">R$ {row.usesNormalizedComparison ? formatUnitPrice(row.bestComparablePrice) : MONEY.format(row.bestComparablePrice)}{row.usesNormalizedComparison ? ` / ${row.comparisonUnit}` : ""}</span>
               {isBest ? <Badge variant="secondary">este fornecedor</Badge> : null}
             </div>
             <p className="text-fg-subtle mt-0.5 text-xs">{bestSuppliers.map((best) => best.suppliers.name).join(", ")}</p>
@@ -351,8 +351,8 @@ function TodasAsRespostas({ id, row, dados, emAnalise }: { id: string; row: Row;
             </span>
             {linha.preco !== null ? (
               <span className="flex items-center gap-1.5">
-                <span className={cn("tabular-nums", melhor ? "text-success font-semibold" : "text-fg")}>R$ {row.usesNormalizedComparison ? NORMALIZED.format(linha.preco) : MONEY.format(linha.preco)}{row.usesNormalizedComparison ? `/${row.comparisonUnit}` : ""}</span>
-                {row.usesNormalizedComparison && linha.cell.currentPrice !== null ? <span className="text-fg-subtle tabular-nums">pacote R$ {MONEY.format(linha.cell.currentPrice)}</span> : linha.cell.normalizedPrice !== null && row.comparisonUnit ? <span className="text-fg-subtle tabular-nums">= {NORMALIZED.format(linha.cell.normalizedPrice)}/{row.comparisonUnit}</span> : null}
+                <span className={cn("tabular-nums", melhor ? "text-success font-semibold" : "text-fg")}>R$ {row.usesNormalizedComparison ? formatUnitPrice(linha.preco) : MONEY.format(linha.preco)}{row.usesNormalizedComparison ? `/${row.comparisonUnit}` : ""}</span>
+                {row.usesNormalizedComparison && linha.cell.currentPrice !== null ? <span className="text-fg-subtle tabular-nums">pacote R$ {MONEY.format(linha.cell.currentPrice)}</span> : linha.cell.normalizedPrice !== null && row.comparisonUnit ? <span className="text-fg-subtle tabular-nums">= {formatUnitPrice(linha.cell.normalizedPrice)}/{row.comparisonUnit}</span> : null}
               </span>
             ) : (
               <span className="text-fg-subtle">
@@ -404,7 +404,7 @@ function SupplierOffer({ row, supplier, cell, dados }: { row: Row; supplier: Sup
         {cell.correctionCount > 0 ? <Badge variant="outline">corrigido</Badge> : null}
       </div>
       {cell.negotiated && cell.quotedPrice !== null ? <p className="text-fg-subtle text-xs line-through tabular-nums">Original: R$ {MONEY.format(cell.quotedPrice)}</p> : null}
-      {cell.normalizedPrice !== null ? <p className={row.bestNormalized !== null && cell.normalizedPrice === row.bestNormalized ? "text-success text-xs font-medium tabular-nums" : "text-fg-muted text-xs tabular-nums"}>= {NORMALIZED.format(cell.normalizedPrice)} / {row.comparisonUnit}</p> : null}
+      {cell.normalizedPrice !== null ? <p className={row.bestNormalized !== null && cell.normalizedPrice === row.bestNormalized ? "text-success text-xs font-medium tabular-nums" : "text-fg-muted text-xs tabular-nums"}>= {formatUnitPrice(cell.normalizedPrice)} / {row.comparisonUnit}</p> : null}
       {cell.attributes.length > 0 ? <p className="text-fg-subtle mt-1 text-xs">{cell.attributes.map((attribute) => `${attribute.name}: ${attribute.value}`).join(" · ")}</p> : null}
       {cell.notes ? <p className="text-fg-muted mt-1 text-xs">{cell.notes}</p> : null}
       <div className="mt-1 flex flex-wrap items-start gap-1">

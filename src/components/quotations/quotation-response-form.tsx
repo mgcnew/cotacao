@@ -31,13 +31,10 @@ import {
   type SubmitQuotationState,
 } from "@/features/quotations/actions";
 import type { PublicQuotationItem } from "@/features/quotations/public";
+import { formatUnitPrice } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
-const UNIT_PRICE = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 4,
-});
 
 /** Nove dígitos chegam a 9.999.999,99 — muito além de qualquer preço unitário. */
 const MAX_DIGITOS = 9;
@@ -495,7 +492,7 @@ function ItemCard({
               <strong className="block">Confira este preço antes de enviar.</strong>
               <span className="text-fg-muted mt-0.5 block text-xs leading-relaxed">
                 O valor está bem diferente do último preço pago à sua empresa:{" "}
-                R$ {UNIT_PRICE.format(historicalPrice)}
+                R$ {formatUnitPrice(historicalPrice)}
                 {item.last_supplier_price_at
                   ? ` em ${new Intl.DateTimeFormat("pt-BR").format(new Date(item.last_supplier_price_at))}`
                   : ""}. Se não puder atender agora, escolha “Sem disponibilidade”;
@@ -545,7 +542,7 @@ function ItemCard({
                   <div className="border-primary/20 bg-surface mt-3 rounded-lg border px-3 py-2 text-sm">
                     <span className="text-fg-muted">Custo comparável: </span>
                     <strong className="text-primary tabular-nums">
-                      R$ {UNIT_PRICE.format(normalizedPrice)} / {item.comparison_unit.symbol}
+                      R$ {formatUnitPrice(normalizedPrice)} / {item.comparison_unit.symbol}
                     </strong>
                   </div>
                 ) : null}
@@ -730,7 +727,7 @@ function PackagingSale({
         {normalizedPrice !== null ? (
           <>
             <p className="text-primary text-base font-semibold tabular-nums">
-              R$ {UNIT_PRICE.format(normalizedPrice)}{" "}
+              R$ {formatUnitPrice(normalizedPrice)}{" "}
               <span className="text-fg-muted text-sm font-normal">
                 por {conteudoUm}
               </span>
@@ -1102,11 +1099,11 @@ export function QuotationResponseForm({
                   <span className="text-fg-muted mt-1 block text-xs">
                     Digitado:{" "}
                     <strong className="text-warning tabular-nums">
-                      R$ {UNIT_PRICE.format(entry.enteredPrice)}
+                      R$ {formatUnitPrice(entry.enteredPrice)}
                     </strong>{" "}
                     · último pago:{" "}
                     <strong className="text-fg tabular-nums">
-                      R$ {UNIT_PRICE.format(entry.historicalPrice)}
+                      R$ {formatUnitPrice(entry.historicalPrice)}
                     </strong>
                     {entry.historicalAt
                       ? ` em ${new Intl.DateTimeFormat("pt-BR").format(new Date(entry.historicalAt))}`
