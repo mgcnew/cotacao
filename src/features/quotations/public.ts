@@ -33,6 +33,8 @@ export type PublicQuotationItem = {
   comparison_unit: { id: string; code: string; symbol: string } | null;
   notes: string | null;
   already_answered: boolean;
+  last_supplier_price: number | null;
+  last_supplier_price_at: string | null;
   attributes: PublicAttribute[];
 };
 
@@ -59,12 +61,16 @@ export async function getPublicQuotation(
 ): Promise<PublicQuotation | null> {
   const supabase = await createServerSupabaseClient();
 
-  const [quotationResult, conversionResult] = await Promise.all([
-    supabase.rpc("rpc_public_get_quotation", { p_token: token }),
-    supabase.rpc("rpc_public_get_quotation_conversion_context", {
-      p_token: token,
-    }),
-  ]);
+  const [quotationResult, conversionResult, priceContextResult] =
+    await Promise.all([
+      supabase.rpc("rpc_public_get_quotation", { p_token: token }),
+      supabase.rpc("rpc_public_get_quotation_conversion_context", {
+        p_token: token,
+      }),
+      supabase.rpc("rpc_public_get_quotation_price_context", {
+        p_token: token,
+      }),
+    ]);
   const { data, error } = quotationResult;
 
   if (error) {
@@ -75,6 +81,11 @@ export async function getPublicQuotation(
   if (conversionResult.error && conversionResult.error.code !== "PGRST202") {
     throw new Error(
       `Falha ao carregar apresentações: ${conversionResult.error.message}`,
+    );
+  }
+  if (priceContextResult.error && priceContextResult.error.code !== "PGRST202") {
+    throw new Error(
+      `Falha ao carregar referências de preço: ${priceContextResult.error.message}`,
     );
   }
 
@@ -91,22 +102,35 @@ export async function getPublicQuotation(
       context,
     ]),
   );
+  const priceContextByItem = new Map(
+    (priceContextResult.data ?? []).map((context) => [
+      context.supplier_quotation_item_id,
+      context,
+    ]),
+  );
 
   return {
     ...quotation,
-    items: quotation.items.map((item) => ({
-      ...item,
-      attributes: item.attributes.map((attribute) => {
-        const context = contextByItemAndAttribute.get(
-          `${item.supplier_quotation_item_id}:${attribute.attribute_definition_id}`,
-        );
-        return {
-          ...attribute,
-          is_conversion_factor: Boolean(context),
-          suggested_value_numeric: context?.suggested_value_numeric ?? null,
-          suggested_confirmed_at: context?.suggested_confirmed_at ?? null,
-        };
-      }),
-    })),
+    items: quotation.items.map((item) => {
+      const priceContext = priceContextByItem.get(
+        item.supplier_quotation_item_id,
+      );
+      return {
+        ...item,
+        last_supplier_price: priceContext?.last_supplier_price ?? null,
+        last_supplier_price_at: priceContext?.last_supplier_price_at ?? null,
+        attributes: item.attributes.map((attribute) => {
+          const context = contextByItemAndAttribute.get(
+            `${item.supplier_quotation_item_id}:${attribute.attribute_definition_id}`,
+          );
+          return {
+            ...attribute,
+            is_conversion_factor: Boolean(context),
+            suggested_value_numeric: context?.suggested_value_numeric ?? null,
+            suggested_confirmed_at: context?.suggested_confirmed_at ?? null,
+          };
+        }),
+      };
+    }),
   };
 }

@@ -1,6 +1,12 @@
 "use client";
 
-import { AlertCircle, Calculator, CheckCircle2, PackageCheck } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  Calculator,
+  CheckCircle2,
+  PackageCheck,
+} from "lucide-react";
 import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
@@ -55,15 +61,13 @@ function formatarCentavos(entrada: string): string {
   const inteiro = Number(preenchido.slice(0, -2)).toLocaleString("pt-BR");
   return `${inteiro},${preenchido.slice(-2)}`;
 }
-/**
- * As duas saídas para quem NÃO vai dar preço.
- *
- * "Tenho disponível" não está aqui de propósito: se o comprador mandou o link,
- * é porque entende que o fornecedor trabalha com o item. Partir de "tem" e
- * pedir só o preço tira um clique de cada produto — e são muitos produtos por
- * rodada. Quem não puder atender diz por estes dois botões.
- */
-const INDISPONIVEL_OPTIONS = [
+/** A disponibilidade vem antes do preço para nenhuma alternativa passar batida. */
+const RESPONSE_OPTIONS = [
+  {
+    value: "priced",
+    label: "Tenho disponível",
+    description: "Consigo atender e vou informar o preço",
+  },
   {
     value: "unavailable",
     label: "Sem disponibilidade agora",
@@ -76,9 +80,7 @@ const INDISPONIVEL_OPTIONS = [
   },
 ] as const;
 
-type ResponseStatus =
-  | "priced"
-  | (typeof INDISPONIVEL_OPTIONS)[number]["value"];
+type ResponseStatus = "" | (typeof RESPONSE_OPTIONS)[number]["value"];
 
 type HistoricalPresentation = {
   itemId: string;
@@ -86,6 +88,14 @@ type HistoricalPresentation = {
   productName: string;
   value: number;
   unit: string | null;
+};
+
+type SuspiciousPrice = {
+  itemId: string;
+  productName: string;
+  enteredPrice: number;
+  historicalPrice: number;
+  historicalAt: string | null;
 };
 
 function SubmitButton({
@@ -117,6 +127,7 @@ function ItemCard({
   item,
   onResolvedChange,
   onHistoricalPresentationChange,
+  onSuspiciousPriceChange,
   showValidation,
 }: {
   item: PublicQuotationItem;
@@ -125,11 +136,14 @@ function ItemCard({
     id: string,
     presentation: HistoricalPresentation | null,
   ) => void;
+  onSuspiciousPriceChange: (
+    id: string,
+    suspicious: SuspiciousPrice | null,
+  ) => void;
   showValidation: boolean;
 }) {
   const id = item.supplier_quotation_item_id;
-  // Começa em "priced": o link já pressupõe que o fornecedor atende o item.
-  const [status, setStatus] = React.useState<ResponseStatus>("priced");
+  const [status, setStatus] = React.useState<ResponseStatus>("");
   const [price, setPrice] = React.useState("");
   const [attributeValues, setAttributeValues] = React.useState<Record<string, string>>(
     () =>
@@ -160,10 +174,12 @@ function ItemCard({
     return !Number.isFinite(numeric) || numeric <= 0;
   });
   const resolved =
-    !priced ||
+    (status !== "" && !priced) ||
     (validPrice && !missingRequiredAttribute && !invalidConversionAttribute);
   const validationMessage =
-    priced && !validPrice
+    status === ""
+      ? "Escolha se consegue atender este produto."
+      : priced && !validPrice
       ? price.trim()
         ? "Informe um preço válido e maior que zero."
         : "Informe o preço ou diga que não consegue atender."
@@ -183,10 +199,20 @@ function ItemCard({
     validPrice && Number.isFinite(numericFactor) && numericFactor > 0
       ? numericPrice / numericFactor
       : null;
+  const historicalPrice =
+    item.last_supplier_price === null
+      ? null
+      : Number(item.last_supplier_price);
+  const priceRatio =
+    validPrice && historicalPrice !== null && historicalPrice > 0
+      ? numericPrice / historicalPrice
+      : null;
+  const suspiciousPrice =
+    priceRatio !== null &&
+    Math.abs(numericPrice - (historicalPrice ?? 0)) >= 2 &&
+    (priceRatio >= 3 || priceRatio <= 1 / 3);
 
-  /** Clicar de novo na opção marcada volta para o preço. */
-  function alternarIndisponivel(opcao: ResponseStatus) {
-    const proximo = status === opcao ? "priced" : opcao;
+  function escolherStatus(proximo: ResponseStatus) {
     setStatus(proximo);
     if (proximo === "priced") {
       window.requestAnimationFrame(() =>
@@ -200,6 +226,29 @@ function ItemCard({
   React.useEffect(() => {
     onResolvedChange(id, resolved);
   }, [id, onResolvedChange, resolved]);
+
+  React.useEffect(() => {
+    onSuspiciousPriceChange(
+      id,
+      suspiciousPrice && historicalPrice !== null
+        ? {
+            itemId: id,
+            productName: item.product_name,
+            enteredPrice: numericPrice,
+            historicalPrice,
+            historicalAt: item.last_supplier_price_at,
+          }
+        : null,
+    );
+  }, [
+    historicalPrice,
+    id,
+    item.last_supplier_price_at,
+    item.product_name,
+    numericPrice,
+    onSuspiciousPriceChange,
+    suspiciousPrice,
+  ]);
 
   const suggestedFactor = conversionAttribute?.suggested_value_numeric ?? null;
   const reusesHistoricalPresentation =
@@ -270,7 +319,7 @@ function ItemCard({
       </header>
 
       <div className="flex flex-col gap-4 p-4">
-        {/* O status viaja escondido: a escolha explícita é só a de NÃO atender. */}
+        {/* O status viaja escondido, mas a escolha é deliberadamente explícita. */}
         <input type="hidden" name={`status_${id}`} value={status} />
 
         {showValidation && validationMessage ? (
@@ -282,6 +331,48 @@ function ItemCard({
             {validationMessage}
           </p>
         ) : null}
+
+        <div
+          role="group"
+          aria-label={`Disponibilidade de ${item.product_name}`}
+          className="flex flex-col gap-2"
+        >
+          <p className="text-fg text-sm font-semibold">
+            Você consegue fornecer este produto nesta cotação?
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {RESPONSE_OPTIONS.map((option) => {
+              const active = status === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  data-response-status={option.value}
+                  aria-pressed={active}
+                  onClick={() => escolherStatus(option.value)}
+                  className={cn(
+                    "border-border bg-surface-sunken hover:border-primary/45 focus-visible:border-ring focus-visible:ring-ring/50 min-h-20 rounded-lg border p-3 text-left transition-colors focus-visible:ring-3 focus-visible:outline-none",
+                    active &&
+                      "border-primary bg-primary-soft ring-primary/15 ring-2",
+                  )}
+                >
+                  <span className="text-fg flex items-center gap-2 text-sm font-semibold">
+                    {active ? (
+                      <CheckCircle2
+                        className="text-primary size-4 shrink-0"
+                        aria-hidden
+                      />
+                    ) : null}
+                    {option.label}
+                  </span>
+                  <span className="text-fg-muted mt-1 block text-xs leading-snug">
+                    {option.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-[11rem_1fr]">
           {priced ? (
@@ -305,9 +396,13 @@ function ItemCard({
                 onChange={(event) => setPrice(formatarCentavos(event.target.value))}
               />
             </div>
+          ) : status === "" ? (
+            <div className="bg-surface-sunken text-fg-muted flex items-center rounded-lg px-3 py-2 text-sm">
+              Escolha uma opção acima para continuar.
+            </div>
           ) : (
             <div className="bg-surface-sunken text-fg-muted flex items-center rounded-lg px-3 py-2 text-sm">
-              Não é necessário informar preço nesta opção.
+              Preço não necessário para a opção escolhida.
             </div>
           )}
 
@@ -327,41 +422,25 @@ function ItemCard({
           </div>
         </div>
 
-        <div
-          role="group"
-          aria-label={`Não consegue atender ${item.product_name}?`}
-          className="flex flex-col gap-2"
-        >
-          <p className="text-fg-muted text-xs">Não consegue atender?</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {INDISPONIVEL_OPTIONS.map((option) => {
-              const ativo = status === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={ativo}
-                  onClick={() => alternarIndisponivel(option.value)}
-                  className={cn(
-                    "border-border bg-surface-sunken hover:border-primary/45 focus-visible:border-ring focus-visible:ring-ring/50 rounded-lg border p-3 text-left transition-colors focus-visible:ring-3 focus-visible:outline-none",
-                    ativo && "border-primary bg-primary-soft",
-                  )}
-                >
-                  <span className="text-fg block text-sm font-medium">
-                    {option.label}
-                  </span>
-                  <span className="text-fg-muted mt-0.5 block text-xs leading-snug">
-                    {ativo
-                      ? "Marcado. Clique de novo para voltar a informar preço."
-                      : option.description}
-                  </span>
-                </button>
-              );
-            })}
+        {suspiciousPrice && historicalPrice !== null ? (
+          <div className="border-warning/35 bg-warning-soft text-warning flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <div>
+              <strong className="block">Confira este preço antes de enviar.</strong>
+              <span className="text-fg-muted mt-0.5 block text-xs leading-relaxed">
+                O valor está bem diferente do último preço pago à sua empresa:{" "}
+                R$ {UNIT_PRICE.format(historicalPrice)}
+                {item.last_supplier_price_at
+                  ? ` em ${new Intl.DateTimeFormat("pt-BR").format(new Date(item.last_supplier_price_at))}`
+                  : ""}. Se não puder atender agora, escolha “Sem disponibilidade”;
+                se não fornecer este item, escolha “Não trabalho com este
+                produto”.
+              </span>
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        {item.attributes.length > 0 ? (
+        {priced && item.attributes.length > 0 ? (
           <section className="border-border border-t pt-4">
             {conversionAttribute ? (
               <div className="border-primary/25 bg-primary-soft mb-3 rounded-xl border p-3">
@@ -494,10 +573,16 @@ export function QuotationResponseForm({
   const [historicalPresentations, setHistoricalPresentations] = React.useState<
     Record<string, HistoricalPresentation>
   >({});
+  const [suspiciousPrices, setSuspiciousPrices] = React.useState<
+    Record<string, SuspiciousPrice>
+  >({});
   const [confirmationOpen, setConfirmationOpen] = React.useState(false);
+  const [priceConfirmationOpen, setPriceConfirmationOpen] =
+    React.useState(false);
   const [showValidation, setShowValidation] = React.useState(false);
   const formRef = React.useRef<HTMLFormElement>(null);
   const allowHistoricalSubmit = React.useRef(false);
+  const allowSuspiciousSubmit = React.useRef(false);
   const pendentes = items.filter((item) => !item.already_answered);
   const completed = pendentes.filter(
     (item) => resolved[item.supplier_quotation_item_id],
@@ -530,7 +615,31 @@ export function QuotationResponseForm({
     },
     [],
   );
+  const updateSuspiciousPrice = React.useCallback(
+    (id: string, suspicious: SuspiciousPrice | null) => {
+      setSuspiciousPrices((current) => {
+        const previous = current[id];
+        if (!suspicious) {
+          if (!(id in current)) return current;
+          const next = { ...current };
+          delete next[id];
+          allowSuspiciousSubmit.current = false;
+          return next;
+        }
+        if (
+          previous?.enteredPrice === suspicious.enteredPrice &&
+          previous.historicalPrice === suspicious.historicalPrice
+        ) {
+          return current;
+        }
+        allowSuspiciousSubmit.current = false;
+        return { ...current, [id]: suspicious };
+      });
+    },
+    [],
+  );
   const reusedPresentations = Object.values(historicalPresentations);
+  const pricesToConfirm = Object.values(suspiciousPrices);
 
   function focusFirstPending() {
     const firstPending = pendentes.find(
@@ -542,9 +651,32 @@ export function QuotationResponseForm({
       `cotacao-item-${firstPending.supplier_quotation_item_id}`,
     );
     card?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Pendente só existe em item sem preço, e o preço é o campo que resolve.
-    const field = card?.querySelector<HTMLInputElement>('input[name^="preco_"]');
+    const selectedStatus = card?.querySelector<HTMLInputElement>(
+      'input[name^="status_"]',
+    )?.value;
+    const field =
+      selectedStatus === "priced"
+        ? card?.querySelector<HTMLElement>('input[name^="preco_"]')
+        : card?.querySelector<HTMLElement>("[data-response-status]");
     window.setTimeout(() => field?.focus({ preventScroll: true }), 350);
+  }
+
+  function reviewSuspiciousPrices() {
+    const first = pricesToConfirm[0];
+    setPriceConfirmationOpen(false);
+    if (!first) return;
+    const card = document.getElementById(`cotacao-item-${first.itemId}`);
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(
+      () => document.getElementById(`preco_${first.itemId}`)?.focus(),
+      350,
+    );
+  }
+
+  function confirmSuspiciousPrices() {
+    allowSuspiciousSubmit.current = true;
+    setPriceConfirmationOpen(false);
+    window.requestAnimationFrame(() => formRef.current?.requestSubmit());
   }
 
   function reviewHistoricalPresentations() {
@@ -619,6 +751,11 @@ export function QuotationResponseForm({
           focusFirstPending();
           return;
         }
+        if (pricesToConfirm.length > 0 && !allowSuspiciousSubmit.current) {
+          event.preventDefault();
+          setPriceConfirmationOpen(true);
+          return;
+        }
         if (
           reusedPresentations.length > 0 &&
           !allowHistoricalSubmit.current
@@ -628,6 +765,7 @@ export function QuotationResponseForm({
           return;
         }
         allowHistoricalSubmit.current = false;
+        allowSuspiciousSubmit.current = false;
       }}
       onInvalid={(event) => {
         setShowValidation(true);
@@ -656,8 +794,8 @@ export function QuotationResponseForm({
           />
         </div>
         <p className="text-fg-subtle mt-2 text-xs">
-          Digite só os números do preço — os dois últimos são os centavos. Só
-          marque alguma coisa se não conseguir atender.
+          Em cada produto, escolha uma das três opções. Ao informar preço,
+          digite só os números — os dois últimos são os centavos.
         </p>
       </section>
 
@@ -677,6 +815,7 @@ export function QuotationResponseForm({
               item={item}
               onResolvedChange={updateResolved}
               onHistoricalPresentationChange={updateHistoricalPresentation}
+              onSuspiciousPriceChange={updateSuspiciousPrice}
               showValidation={showValidation}
             />
           ))}
@@ -695,11 +834,73 @@ export function QuotationResponseForm({
 
       <div className="border-border bg-surface sticky bottom-0 z-20 -mx-3 flex flex-col gap-2 border-t px-3 py-3 shadow-[0_-8px_20px_-16px_rgba(0,0,0,.45)] sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:rounded-xl sm:border">
         <p className="text-fg-subtle text-center text-xs sm:max-w-sm sm:text-left">
-          Informe o preço de cada produto. Se não conseguir atender algum, use
-          os botões do item.
+          Confirme se tem, está sem disponibilidade ou não trabalha com cada
+          produto antes de enviar.
         </p>
         <SubmitButton completed={completed} total={pendentes.length} />
       </div>
+
+      <Dialog
+        open={priceConfirmationOpen}
+        onOpenChange={setPriceConfirmationOpen}
+      >
+        <DialogContent size="sm" impedirFechamentoAcidental>
+          <DialogHeader>
+            <DialogTitle>Confirme os preços fora do padrão</DialogTitle>
+            <DialogDescription>
+              Estes valores estão muito diferentes do último preço pago à sua
+              empresa. Confira se não houve erro de digitação.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <ul className="divide-border overflow-hidden rounded-lg border">
+              {pricesToConfirm.map((entry) => (
+                <li key={entry.itemId} className="px-3 py-2.5 text-sm">
+                  <span className="text-fg block font-medium wrap-anywhere">
+                    {entry.productName}
+                  </span>
+                  <span className="text-fg-muted mt-1 block text-xs">
+                    Digitado:{" "}
+                    <strong className="text-warning tabular-nums">
+                      R$ {UNIT_PRICE.format(entry.enteredPrice)}
+                    </strong>{" "}
+                    · último pago:{" "}
+                    <strong className="text-fg tabular-nums">
+                      R$ {UNIT_PRICE.format(entry.historicalPrice)}
+                    </strong>
+                    {entry.historicalAt
+                      ? ` em ${new Intl.DateTimeFormat("pt-BR").format(new Date(entry.historicalAt))}`
+                      : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="bg-warning-soft text-fg-muted mt-3 flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm">
+              <AlertTriangle
+                className="text-warning mt-0.5 size-4 shrink-0"
+                aria-hidden
+              />
+              <p>
+                Se não puder entregar agora, volte e escolha “Sem
+                disponibilidade”. Se não fornecer o produto, escolha “Não
+                trabalho com este produto”.
+              </p>
+            </div>
+          </DialogBody>
+          <DialogFooter className="justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={reviewSuspiciousPrices}
+            >
+              Voltar e conferir
+            </Button>
+            <Button type="button" onClick={confirmSuspiciousPrices}>
+              Confirmo os valores
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmationOpen} onOpenChange={setConfirmationOpen}>
         <DialogContent size="sm" impedirFechamentoAcidental>

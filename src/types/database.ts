@@ -5108,6 +5108,14 @@ export type Database = {
         Args: { p_token: string };
         Returns: Json;
       };
+      rpc_public_get_quotation_price_context: {
+        Args: { p_token: string };
+        Returns: {
+          last_supplier_price: number | null;
+          last_supplier_price_at: string | null;
+          supplier_quotation_item_id: string;
+        }[];
+      };
       rpc_public_report_order_divergence: {
         Args: { p_divergences: Json; p_token: string };
         Returns: Json;
