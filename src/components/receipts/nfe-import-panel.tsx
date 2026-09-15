@@ -126,6 +126,19 @@ export type NfeUnitRule = {
   factor: number | null;
 };
 
+/**
+ * A regra que de fato produziu a quantidade desta linha.
+ *
+ * Sem guardar isto a tela mostra só o resultado — "2 CX × 20 = 40 UN" — e não
+ * tem como oferecer a correção. A embalagem muda com o tempo: a caixa que
+ * trazia 20 passa a trazer 18, e o fator aprendido num pedido antigo
+ * continuaria convertendo calado, errando toda nota seguinte.
+ */
+export type AppliedConversion = {
+  targetKind: "purchase" | "pricing";
+  rule: NfeUnitRule;
+};
+
 export type ImportedNfeItem = {
   logisticQuantity: number | null;
   pricingQuantity: number | null;
@@ -134,6 +147,7 @@ export type ImportedNfeItem = {
   match: NfeItemMatch;
   warnings: string[];
   conversionNotes: string[];
+  appliedConversions: AppliedConversion[];
   manualConfirmationRequired: boolean;
   associationDoubt: boolean;
   receiptAccessKey: string;
@@ -259,14 +273,35 @@ function quantityForXmlUnit(item: NfeItem, unit: string) {
   return null;
 }
 
-function totalForXmlUnit(items: NfeItem[], unit: string) {
+export function totalForXmlUnit(items: NfeItem[], unit: string) {
   const values = items.map((item) => quantityForXmlUnit(item, unit));
   return values.every((value): value is number => value !== null)
     ? values.reduce((sum, value) => sum + value, 0)
     : null;
 }
 
-function parsedDecimal(value: string) {
+/**
+ * Troca a regra daquele par unidade da nota → unidade de destino.
+ *
+ * O casamento é pela unidade normalizada, não pelo id: a regra corrigida pode
+ * nem ter id ainda quando a correção vale só para esta nota.
+ */
+export function replaceUnitRule(rules: NfeUnitRule[], rule: NfeUnitRule) {
+  return [
+    ...rules.filter(
+      (candidate) =>
+        !(
+          normalizedNfeUnit(candidate.xmlUnit) ===
+            normalizedNfeUnit(rule.xmlUnit) &&
+          normalizedNfeUnit(candidate.targetUnit) ===
+            normalizedNfeUnit(rule.targetUnit)
+        ),
+    ),
+    rule,
+  ];
+}
+
+export function parsedDecimal(value: string) {
   const normalized = value.trim().replace(",", ".");
   const parsed = Number(normalized);
   return normalized && Number.isFinite(parsed) ? parsed : null;
@@ -294,6 +329,7 @@ function convertedQuantity(
         quantity: pendingQuantity,
         note: `A NF-e informa ${QTY.format(sourceQuantity)} ${rule.xmlUnit}; confirme abaixo a quantidade física em ${targetUnit}.`,
         manual: true,
+        rule,
       };
     }
     if (rule.factor && rule.factor > 0) {
@@ -302,6 +338,7 @@ function convertedQuantity(
         quantity,
         note: `${QTY.format(sourceQuantity)} ${rule.xmlUnit} × ${QTY.format(rule.factor)} = ${QTY.format(quantity)} ${targetUnit}.`,
         manual: false,
+        rule,
       };
     }
   }
@@ -320,6 +357,7 @@ export function importedItemValues(
   );
   const warnings: string[] = [];
   const conversionNotes: string[] = [];
+  const appliedConversions: AppliedConversion[] = [];
   let manualConfirmationRequired = false;
   let associationDoubt = false;
 
@@ -344,6 +382,10 @@ export function importedItemValues(
     if (converted) {
       logisticQuantity = converted.quantity;
       conversionNotes.push(converted.note);
+      appliedConversions.push({
+        targetKind: "purchase",
+        rule: converted.rule,
+      });
       manualConfirmationRequired = converted.manual;
     }
   }
@@ -357,6 +399,7 @@ export function importedItemValues(
     if (converted) {
       pricingQuantity = converted.quantity;
       conversionNotes.push(converted.note);
+      appliedConversions.push({ targetKind: "pricing", rule: converted.rule });
     }
   }
 
@@ -447,6 +490,7 @@ export function importedItemValues(
     practicedPrice,
     warnings,
     conversionNotes,
+    appliedConversions,
     manualConfirmationRequired,
     associationDoubt,
   };
@@ -463,6 +507,8 @@ export function NfeImportPanel({
   existingDocuments,
   value,
   onChange,
+  unitRuleOverrides,
+  onUnitRules,
 }: {
   receiptId: string;
   items: NfeOrderItemForImport[];
@@ -478,6 +524,15 @@ export function NfeImportPanel({
   }[];
   value: NfeImportPayload | null;
   onChange: (payload: NfeImportPayload | null) => void;
+  /**
+   * Regras já corrigidas nesta conferência, por item do pedido.
+   *
+   * Vivem no formulário, não aqui, porque a correção também pode partir do
+   * card do produto — que é onde o número errado aparece. Duas cópias do que
+   * "vale agora" divergiriam na primeira correção feita pelo outro caminho.
+   */
+  unitRuleOverrides: Record<string, NfeUnitRule[]>;
+  onUnitRules: (orderItemId: string, rules: NfeUnitRule[]) => void;
 }) {
   const [error, setError] = React.useState<string | null>(null);
   const [reading, setReading] = React.useState(false);
@@ -516,9 +571,6 @@ export function NfeImportPanel({
   const [savingConversion, setSavingConversion] = React.useState<string | null>(
     null,
   );
-  const [unitRuleOverrides, setUnitRuleOverrides] = React.useState<
-    Record<string, NfeUnitRule[]>
-  >({});
   const inputId = React.useId();
 
   function itemWithCurrentRules(item: NfeOrderItemForImport) {
@@ -587,18 +639,7 @@ export function NfeImportPanel({
       return;
     }
     const currentItem = itemWithCurrentRules(orderItem);
-    const nextRules = [
-      ...currentItem.unitRules.filter(
-        (rule) =>
-          !(
-            normalizedNfeUnit(rule.xmlUnit) ===
-              normalizedNfeUnit(result.rule!.xmlUnit) &&
-            normalizedNfeUnit(rule.targetUnit) ===
-              normalizedNfeUnit(result.rule!.targetUnit)
-          ),
-      ),
-      result.rule,
-    ];
+    const nextRules = replaceUnitRule(currentItem.unitRules, result.rule);
     const recomputed = importedItemValues(imported.xmlItems, {
       ...currentItem,
       unitRules: nextRules,
@@ -610,10 +651,7 @@ export function NfeImportPanel({
         [orderItem.id]: { ...imported, ...recomputed },
       },
     });
-    setUnitRuleOverrides((current) => ({
-      ...current,
-      [orderItem.id]: nextRules,
-    }));
+    onUnitRules(orderItem.id, nextRules);
     setMessage(result.message ?? "Conversão salva.");
     setSavingConversion(null);
   }

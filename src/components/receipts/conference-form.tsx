@@ -6,9 +6,13 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
+import { ConversionFix } from "@/components/receipts/conversion-fix";
 import {
   NfeImportPanel,
+  importedItemValues,
+  replaceUnitRule,
   type NfeImportPayload,
+  type NfeUnitRule,
 } from "@/components/receipts/nfe-import-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -148,6 +152,27 @@ export function ReceiptConferenceForm({
   const [formVersion, setFormVersion] = React.useState(0);
   const [unmatching, setUnmatching] = React.useState<string | null>(null);
   const [unmatchError, setUnmatchError] = React.useState<string | null>(null);
+  /**
+   * Regras de conversão corrigidas nesta conferência, por item do pedido.
+   *
+   * Moram aqui, e não no painel do XML, porque a correção parte do card do
+   * produto — onde o número errado aparece — e o painel também precisa delas
+   * para recalcular o que já importou.
+   */
+  const [unitRuleOverrides, setUnitRuleOverrides] = React.useState<
+    Record<string, NfeUnitRule[]>
+  >({});
+  /**
+   * Remonta os campos de um único produto.
+   *
+   * Corrigir a conversão troca a quantidade sugerida, e `defaultValue` só é
+   * lido na montagem. Trocar a `key` do formulário inteiro resolveria — e
+   * apagaria tudo que já foi digitado nos outros produtos.
+   */
+  const [itemVersions, setItemVersions] = React.useState<
+    Record<string, number>
+  >({});
+  const formRef = React.useRef<HTMLFormElement>(null);
 
   /**
    * Devolve a linha da nota à lista dos não reconhecidos e apaga o que o
@@ -208,20 +233,70 @@ export function ReceiptConferenceForm({
     setFormVersion((version) => version + 1);
   }
 
-  function recalculate(form: HTMLFormElement) {
-    const data = new FormData(form);
-    setCalculatedTotal(
-      items.reduce(
-        (sum, item) =>
-          sum +
-          numberFromField(
-            data.get(`${item.sameUnit ? "log" : "prec"}_${item.id}`),
-          ) *
-            numberFromField(data.get(`preco_${item.id}`)),
-        0,
-      ),
+  const recalculate = React.useCallback(
+    (form: HTMLFormElement) => {
+      const data = new FormData(form);
+      setCalculatedTotal(
+        items.reduce(
+          (sum, item) =>
+            sum +
+            numberFromField(
+              data.get(`${item.sameUnit ? "log" : "prec"}_${item.id}`),
+            ) *
+              numberFromField(data.get(`preco_${item.id}`)),
+          0,
+        ),
+      );
+      setTypedInvoiceTotal(numberFromField(data.get("invoiceTotal")));
+    },
+    [items],
+  );
+
+  /**
+   * Relê o formulário depois que um produto foi remontado.
+   *
+   * A soma precisa do valor novo do produto corrigido e do que já estava
+   * digitado nos outros — e só o DOM tem os dois juntos.
+   */
+  const firstRender = React.useRef(true);
+  React.useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    if (formRef.current) recalculate(formRef.current);
+  }, [itemVersions, recalculate]);
+
+  /**
+   * Passa a valer a conversão corrigida: recalcula as quantidades deste
+   * produto e remonta só os campos dele.
+   */
+  function applyConversion(item: Item, rule: NfeUnitRule) {
+    if (!xmlImport) return;
+    const imported = xmlImport.items[item.id];
+    if (!imported) return;
+    const nextRules = replaceUnitRule(
+      unitRuleOverrides[item.id] ?? item.unitRules,
+      rule,
     );
-    setTypedInvoiceTotal(numberFromField(data.get("invoiceTotal")));
+    setUnitRuleOverrides((current) => ({ ...current, [item.id]: nextRules }));
+    setXmlImport({
+      ...xmlImport,
+      items: {
+        ...xmlImport.items,
+        [item.id]: {
+          ...imported,
+          ...importedItemValues(imported.xmlItems, {
+            ...item,
+            unitRules: nextRules,
+          }),
+        },
+      },
+    });
+    setItemVersions((current) => ({
+      ...current,
+      [item.id]: (current[item.id] ?? 0) + 1,
+    }));
   }
 
   const fiscal = xmlImport?.nfe.fiscalTotals;
@@ -259,8 +334,16 @@ export function ReceiptConferenceForm({
         existingDocuments={existingDocuments}
         value={xmlImport}
         onChange={applyXml}
+        unitRuleOverrides={unitRuleOverrides}
+        onUnitRules={(orderItemId, rules) =>
+          setUnitRuleOverrides((current) => ({
+            ...current,
+            [orderItemId]: rules,
+          }))
+        }
       />
       <form
+        ref={formRef}
         key={formVersion}
         action={action}
         onInput={(event) => recalculate(event.currentTarget)}
@@ -522,6 +605,7 @@ export function ReceiptConferenceForm({
                   </div>
                 ) : null}
                 <div
+                  key={itemVersions[item.id] ?? 0}
                   className={`grid gap-3 ${item.sameUnit ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}
                 >
                   <div className="flex flex-col gap-1">
@@ -587,6 +671,23 @@ export function ReceiptConferenceForm({
                     ))}
                   </div>
                 ) : null}
+                {imported?.appliedConversions
+                  .filter((applied) => applied.rule.mode === "fixed_factor")
+                  .map((applied) => (
+                    <ConversionFix
+                      key={`${applied.targetKind}:${applied.rule.xmlUnit}`}
+                      receiptId={receiptId}
+                      orderItemId={item.id}
+                      applied={applied}
+                      targetUnit={
+                        applied.targetKind === "purchase"
+                          ? item.purchaseUnit
+                          : item.pricingUnit
+                      }
+                      xmlItems={imported.xmlItems}
+                      onApply={(rule) => applyConversion(item, rule)}
+                    />
+                  ))}
                 {imported?.manualConfirmationRequired ? (
                   <label className="border-warning/40 bg-warning/5 text-fg mt-3 flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-xs">
                     <input
