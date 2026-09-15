@@ -4614,6 +4614,22 @@ export type Database = {
         };
         Returns: string;
       };
+      rpc_analytics_supplier_delivery: {
+        Args: {
+          p_company_id: string;
+          p_from?: string;
+          p_product_ids?: string[];
+          p_supplier_id?: string;
+          p_to?: string;
+        };
+        Returns: {
+          completed_orders: number;
+          divergences: number;
+          last_completed_at: string | null;
+          received_total: number;
+          supplier_id: string;
+        }[];
+      };
       rpc_analytics_supplier_performance: {
         Args: {
           p_company_id: string;

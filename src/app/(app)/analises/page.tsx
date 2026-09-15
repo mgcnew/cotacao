@@ -241,9 +241,11 @@ export default async function AnalisesPage({
             Desempenho dos fornecedores
           </h2>
           <p className="text-fg-muted mt-0.5 text-xs">
-            Convites, respostas e decisões dentro do período e dos filtros
-            selecionados. Vitória considera apenas disputas decididas entre
-            ganhou e não ganhou.
+            A disputa é contada por item cotado, que é como o fornecedor
+            concorre: vitória considera apenas os itens decididos entre ganhou e
+            não ganhou. Já a entrega conta pedidos recebidos por inteiro,
+            inclusive os feitos sem cotação, pela data em que a mercadoria
+            chegou.
           </p>
         </header>
 
@@ -252,6 +254,13 @@ export default async function AnalisesPage({
             Exibindo temporariamente o histórico geral dos fornecedores. A
             migration 0063 habilita período, vitórias e resultados neste painel
             sem atingir o limite do banco.
+          </div>
+        ) : null}
+
+        {!performance.deliveryAvailable ? (
+          <div className="border-warning/30 bg-warning-soft text-warning border-b px-4 py-3 text-xs sm:px-5">
+            Pedidos concluídos e valor recebido ficam sem número até a migration
+            0114 ser aplicada. As colunas de cotação não dependem dela.
           </div>
         ) : null}
 
@@ -270,12 +279,14 @@ export default async function AnalisesPage({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Fornecedor</TableHead>
-                    <TableHead className="text-right">Convites</TableHead>
+                    <TableHead className="text-right">Itens cotados</TableHead>
                     <TableHead className="text-right">Respostas</TableHead>
-                    <TableHead className="text-right">Ganhou</TableHead>
-                    <TableHead className="text-right">Não ganhou</TableHead>
+                    <TableHead className="text-right">Itens ganhos</TableHead>
+                    <TableHead className="text-right">Itens perdidos</TableHead>
                     <TableHead className="text-right">Vitória</TableHead>
-                    <TableHead className="text-right">Pedidos</TableHead>
+                    <TableHead className="text-right">
+                      Pedidos concluídos
+                    </TableHead>
                     <TableHead>Última rodada</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -328,8 +339,24 @@ export default async function AnalisesPage({
                             : PERCENT.format(supplier.winRate)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {supplier.purchaseOrders}
+                      <TableCell className="text-right">
+                        <span className="tabular-nums">
+                          {performance.deliveryAvailable
+                            ? supplier.completedOrders
+                            : "—"}
+                        </span>
+                        {performance.deliveryAvailable ? (
+                          <p className="text-fg-subtle mt-0.5 text-[11px]">
+                            {MONEY.format(supplier.receivedTotal)} recebido
+                            {supplier.divergences > 0
+                              ? ` · ${supplier.divergences} ${
+                                  supplier.divergences === 1
+                                    ? "divergência"
+                                    : "divergências"
+                                }`
+                              : ""}
+                          </p>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-fg-subtle text-xs">
                         {formatDate(supplier.lastRoundAt, timezone)}
@@ -356,12 +383,17 @@ export default async function AnalisesPage({
                       </p>
                     </div>
                     <Badge variant="secondary">
-                      {supplier.purchaseOrders}{" "}
-                      {supplier.purchaseOrders === 1 ? "pedido" : "pedidos"}
+                      {performance.deliveryAvailable
+                        ? `${supplier.completedOrders} ${
+                            supplier.completedOrders === 1
+                              ? "pedido concluído"
+                              : "pedidos concluídos"
+                          }`
+                        : "entrega indisponível"}
                     </Badge>
                   </div>
                   <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                    <Stat label="Convites" value={supplier.opportunities} />
+                    <Stat label="Itens cotados" value={supplier.opportunities} />
                     <Stat
                       label="Respostas"
                       value={`${supplier.responses} · ${supplier.responseRate === null ? "—" : PERCENT.format(supplier.responseRate)}`}
@@ -371,7 +403,7 @@ export default async function AnalisesPage({
                       value={`${supplier.noResponses} / ${supplier.unavailable}`}
                     />
                     <Stat
-                      label="Ganhou / perdeu"
+                      label="Itens ganhos / perdidos"
                       value={`${supplier.wins} / ${supplier.losses}`}
                     />
                     <Stat
@@ -382,6 +414,12 @@ export default async function AnalisesPage({
                           : PERCENT.format(supplier.winRate)
                       }
                     />
+                    {performance.deliveryAvailable ? (
+                      <Stat
+                        label="Recebido / divergências"
+                        value={`${MONEY.format(supplier.receivedTotal)} / ${supplier.divergences}`}
+                      />
+                    ) : null}
                   </dl>
                 </article>
               ))}

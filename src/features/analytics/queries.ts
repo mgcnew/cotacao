@@ -234,27 +234,42 @@ export type SupplierPerformance = {
   opportunities: number;
   responses: number;
   responseRate: number | null;
-  purchaseOrders: number;
   wins: number;
   losses: number;
   noResponses: number;
   unavailable: number;
   winRate: number | null;
   lastRoundAt: string | null;
+  /** Pedidos recebidos por inteiro no período, inclusive os feitos sem cotação. */
+  completedOrders: number;
+  receivedTotal: number;
+  divergences: number;
 };
 
 export type SupplierPerformanceResult = {
   rows: SupplierPerformance[];
   /** Fallback usado apenas enquanto a migration da agregação não foi aplicada. */
   lifetimeFallback: boolean;
+  /** Falso enquanto a migration 0114 não foi aplicada: a entrega fica sem número. */
+  deliveryAvailable: boolean;
 };
 
-/** Desempenho por fornecedor, agregando o par fornecedor × produto. */
+type SupplierDelivery = {
+  completedOrders: number;
+  receivedTotal: number;
+  divergences: number;
+};
+
 /**
  * Desempenho por fornecedor.
  *
- * Usa o histórico de cotação, portanto período, produto, categoria,
- * fornecedor e resultado são aplicados de verdade à mesma base.
+ * Duas perguntas diferentes na mesma linha, cada uma com sua base e seu
+ * recorte de data. A disputa — convites, respostas, ganhos — sai do histórico
+ * de cotação e é contada por item, porque é item a item que o fornecedor
+ * concorre: quem ganha 1 de 40 produtos não teve a mesma rodada de quem ganhou
+ * 40, e medir por pedido apagaria essa diferença. A entrega sai de pedidos e
+ * recebimentos, recortada pela data em que a mercadoria chegou, e alcança
+ * também o fornecedor que só recebeu pedido direto, sem cotação nenhuma.
  */
 export async function getSupplierPerformance(
   companyId: string,
@@ -266,42 +281,98 @@ export async function getSupplierPerformance(
     ? await resolveProductIds(companyId, filters)
     : null;
   if (productIds !== null && productIds.length === 0) {
-    return { rows: [], lifetimeFallback: false };
+    return { rows: [], lifetimeFallback: false, deliveryAvailable: true };
   }
 
-  const result = await supabase.rpc("rpc_analytics_supplier_performance", {
-    p_company_id: companyId,
-    p_from: filters?.de ?? undefined,
-    p_to: filters?.ate ?? undefined,
-    p_product_ids: productIds ?? undefined,
-    p_supplier_id: filters?.fornecedorId ?? undefined,
-    p_outcome: filters?.resultadoCotacao ?? undefined,
-  });
+  const [result, delivery] = await Promise.all([
+    supabase.rpc("rpc_analytics_supplier_performance", {
+      p_company_id: companyId,
+      p_from: filters?.de ?? undefined,
+      p_to: filters?.ate ?? undefined,
+      p_product_ids: productIds ?? undefined,
+      p_supplier_id: filters?.fornecedorId ?? undefined,
+      p_outcome: filters?.resultadoCotacao ?? undefined,
+    }),
+    supabase.rpc("rpc_analytics_supplier_delivery", {
+      p_company_id: companyId,
+      p_from: filters?.de ?? undefined,
+      p_to: filters?.ate ?? undefined,
+      p_product_ids: productIds ?? undefined,
+      p_supplier_id: filters?.fornecedorId ?? undefined,
+    }),
+  ]);
+
+  const deliveryAvailable = !delivery.error;
+  const deliveryById = new Map<string, SupplierDelivery>(
+    (delivery.data ?? []).map((row) => [
+      row.supplier_id,
+      {
+        completedOrders: Number(row.completed_orders),
+        receivedTotal: Number(row.received_total),
+        divergences: Number(row.divergences),
+      },
+    ]),
+  );
+  const noDelivery: SupplierDelivery = {
+    completedOrders: 0,
+    receivedTotal: 0,
+    divergences: 0,
+  };
 
   if (!result.error) {
-    return {
-      lifetimeFallback: false,
-      rows: (result.data ?? []).map((row) => {
-        const opportunities = Number(row.opportunities);
-        const responses = Number(row.responses);
-        const wins = Number(row.wins);
-        const losses = Number(row.losses);
-        return {
-          supplierId: row.supplier_id,
-          supplierName: row.supplier_name,
-          opportunities,
-          responses,
-          responseRate: opportunities > 0 ? responses / opportunities : null,
-          purchaseOrders: Number(row.purchase_orders),
-          wins,
-          losses,
-          noResponses: Number(row.no_responses),
-          unavailable: Number(row.unavailable),
-          winRate: wins + losses > 0 ? wins / (wins + losses) : null,
-          lastRoundAt: row.last_round_at,
-        };
-      }),
-    };
+    const rows: SupplierPerformance[] = (result.data ?? []).map((row) => {
+      const opportunities = Number(row.opportunities);
+      const responses = Number(row.responses);
+      const wins = Number(row.wins);
+      const losses = Number(row.losses);
+      return {
+        supplierId: row.supplier_id,
+        supplierName: row.supplier_name,
+        opportunities,
+        responses,
+        responseRate: opportunities > 0 ? responses / opportunities : null,
+        wins,
+        losses,
+        noResponses: Number(row.no_responses),
+        unavailable: Number(row.unavailable),
+        winRate: wins + losses > 0 ? wins / (wins + losses) : null,
+        lastRoundAt: row.last_round_at,
+        ...(deliveryById.get(row.supplier_id) ?? noDelivery),
+      };
+    });
+
+    // Quem comprou por pedido direto nunca apareceu nesta tabela: sem convite,
+    // não há linha no histórico de cotação. Filtrar por resultado de cotação é
+    // justamente perguntar pela disputa, e aí esses fornecedores não cabem.
+    const listed = new Set(rows.map((supplier) => supplier.supplierId));
+    const onlyDelivered = [...deliveryById.entries()].filter(
+      ([supplierId]) => !listed.has(supplierId),
+    );
+    if (onlyDelivered.length && !filters?.resultadoCotacao) {
+      const nameById = new Map(
+        (await getAnalyticsReferences(companyId)).fornecedores.map(
+          (supplier) => [supplier.id, supplier.name],
+        ),
+      );
+      for (const [supplierId, delivered] of onlyDelivered) {
+        rows.push({
+          supplierId,
+          supplierName: nameById.get(supplierId) ?? "—",
+          opportunities: 0,
+          responses: 0,
+          responseRate: null,
+          wins: 0,
+          losses: 0,
+          noResponses: 0,
+          unavailable: 0,
+          winRate: null,
+          lastRoundAt: null,
+          ...delivered,
+        });
+      }
+    }
+
+    return { lifetimeFallback: false, deliveryAvailable, rows };
   }
 
   // Mantém a tela disponível no intervalo entre deploy e aplicação da
@@ -309,7 +380,7 @@ export async function getSupplierPerformance(
   let fallback = supabase
     .from("v_supplier_product_stats")
     .select(
-      "supplier_id, quotation_opportunities, responses, purchase_orders, last_response_at, last_purchase_at",
+      "supplier_id, quotation_opportunities, responses, last_response_at, last_purchase_at",
     )
     .eq("company_id", companyId);
   if (filters?.fornecedorId) {
@@ -336,17 +407,16 @@ export async function getSupplierPerformance(
       opportunities: 0,
       responses: 0,
       responseRate: null,
-      purchaseOrders: 0,
       wins: 0,
       losses: 0,
       noResponses: 0,
       unavailable: 0,
       winRate: null,
       lastRoundAt: null,
+      ...(deliveryById.get(row.supplier_id) ?? noDelivery),
     };
     current.opportunities += Number(row.quotation_opportunities ?? 0);
     current.responses += Number(row.responses ?? 0);
-    current.purchaseOrders += Number(row.purchase_orders ?? 0);
     const activity = [row.last_response_at, row.last_purchase_at]
       .filter((value): value is string => Boolean(value))
       .sort()
@@ -359,6 +429,7 @@ export async function getSupplierPerformance(
 
   return {
     lifetimeFallback: true,
+    deliveryAvailable,
     rows: [...grouped.values()]
       .map((supplier) => ({
         ...supplier,
