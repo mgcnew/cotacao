@@ -488,6 +488,53 @@ export async function learnSupplierProductAlias(
 }
 
 /**
+ * Desfaz o que foi aprendido para uma descrição da NF-e.
+ *
+ * Associar é escrever uma regra: a próxima nota do fornecedor casa sozinha,
+ * com confiança máxima. Quando a regra nasce errada, desfazer a linha desta
+ * conferência não basta — sem apagar a memória, o próximo XML refaz o engano
+ * sem perguntar.
+ */
+export async function forgetSupplierProductAlias(
+  formData: FormData,
+): Promise<ReceiptNfeAssistState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.post")) {
+    return { error: "Seu papel não permite desfazer associações da NF-e." };
+  }
+
+  const receiptId = String(formData.get("receiptId") ?? "");
+  const supplierName = String(formData.get("supplierName") ?? "").trim();
+  const supplierCode = String(formData.get("supplierCode") ?? "").trim();
+  if (!receiptId || !supplierName) {
+    return { error: "Informe qual item da nota deve ser desassociado." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "rpc_forget_supplier_product_alias",
+    {
+      p_company_id: company.companyId,
+      p_receipt_id: receiptId,
+      p_supplier_name: supplierName,
+      p_supplier_code: supplierCode || undefined,
+    },
+  );
+  if (error) {
+    return { error: `Não foi possível desfazer a associação: ${error.message}` };
+  }
+
+  revalidatePath(`/recebimentos/${receiptId}`);
+  return {
+    error: null,
+    message: data
+      ? "Associação desfeita. As próximas notas deste fornecedor voltam a perguntar qual é o produto."
+      : "Associação desfeita nesta conferência.",
+  };
+}
+
+/**
  * Acrescenta ao pedido um produto que veio na nota e não estava nele.
  *
  * O `orderId` sai do recebimento, não do cliente: quem recebe a nota não
@@ -805,6 +852,17 @@ export async function postDraftReceipt(
       };
     }
     if (!logistic && !pricing) continue;
+    // Preço muito distante do combinado costuma ser linha da nota associada ao
+    // produto errado. O que aqui passa vira histórico do produto e referência
+    // de preço do fornecedor, então precisa de um olho humano dizendo que é.
+    if (
+      formData.get(`assoc_required_${id}`) === "1" &&
+      formData.get(`assoc_confirm_${id}`) !== "on"
+    ) {
+      return {
+        error: `Em "${name}", confirme que a linha da nota é mesmo deste produto ou desfaça a associação.`,
+      };
+    }
     if (!logistic || !pricing || !price) {
       return {
         error: `Em "${name}", preencha quantidade recebida, quantidade de precificação e preço da nota.`,

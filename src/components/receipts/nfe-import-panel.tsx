@@ -67,6 +67,38 @@ const DECIMAL_PRICE = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 4,
   useGrouping: false,
 });
+const PERCENT = new Intl.NumberFormat("pt-BR", {
+  style: "percent",
+  maximumFractionDigits: 0,
+});
+/**
+ * Distância do preço combinado a partir da qual a associação vira suspeita.
+ *
+ * Preço diferente do combinado é rotina e já abre divergência comercial. Um
+ * abismo é outra coisa: costuma ser produto trocado, não negociação — meia
+ * carcaça associada a um corte salgado aparece assim, no preço, antes de
+ * virar histórico e contaminar a referência do fornecedor.
+ */
+const PRICE_SUSPICION_RATIO = 0.3;
+
+export function priceDeviation(
+  practicedPrice: number | null,
+  agreedPrice: number,
+) {
+  if (practicedPrice === null || practicedPrice <= 0 || agreedPrice <= 0) {
+    return null;
+  }
+  return (practicedPrice - agreedPrice) / agreedPrice;
+}
+
+export function suspiciousPrice(
+  practicedPrice: number | null,
+  agreedPrice: number,
+) {
+  const deviation = priceDeviation(practicedPrice, agreedPrice);
+  return deviation !== null && Math.abs(deviation) >= PRICE_SUSPICION_RATIO;
+}
+
 const XML_MAX_SIZE = 4 * 1024 * 1024;
 
 export type NfeOrderItemForImport = {
@@ -103,6 +135,7 @@ export type ImportedNfeItem = {
   warnings: string[];
   conversionNotes: string[];
   manualConfirmationRequired: boolean;
+  associationDoubt: boolean;
   receiptAccessKey: string;
 };
 
@@ -288,6 +321,7 @@ export function importedItemValues(
   const warnings: string[] = [];
   const conversionNotes: string[] = [];
   let manualConfirmationRequired = false;
+  let associationDoubt = false;
 
   let logisticQuantity = logisticValues.every(
     (quantity): quantity is number => quantity !== null,
@@ -365,13 +399,28 @@ export function importedItemValues(
   if (practicedPrice === null) {
     warnings.push("Confira manualmente o preço por unidade de precificação.");
   } else if (!sameMoney(practicedPrice, orderItem.agreedPrice)) {
-    warnings.push(
-      "Preço da nota " +
-        MONEY.format(practicedPrice) +
-        " diferente do combinado " +
-        MONEY.format(orderItem.agreedPrice) +
-        ".",
-    );
+    const deviation = priceDeviation(practicedPrice, orderItem.agreedPrice);
+    if (deviation !== null && Math.abs(deviation) >= PRICE_SUSPICION_RATIO) {
+      associationDoubt = true;
+      warnings.push(
+        "Preço da nota " +
+          MONEY.format(practicedPrice) +
+          " está " +
+          PERCENT.format(Math.abs(deviation)) +
+          (deviation < 0 ? " abaixo" : " acima") +
+          " do combinado " +
+          MONEY.format(orderItem.agreedPrice) +
+          ". Confira se esta linha da nota é mesmo deste produto.",
+      );
+    } else {
+      warnings.push(
+        "Preço da nota " +
+          MONEY.format(practicedPrice) +
+          " diferente do combinado " +
+          MONEY.format(orderItem.agreedPrice) +
+          ".",
+      );
+    }
   }
   if (
     logisticQuantity !== null &&
@@ -399,6 +448,7 @@ export function importedItemValues(
     warnings,
     conversionNotes,
     manualConfirmationRequired,
+    associationDoubt,
   };
 }
 
@@ -441,6 +491,15 @@ export function NfeImportPanel({
   const [associatingLine, setAssociatingLine] = React.useState<string | null>(
     null,
   );
+  /**
+   * Aviso já mostrado para um par linha da nota × produto do pedido.
+   *
+   * Associar grava uma regra permanente, então o preço absurdo precisa ser
+   * visto antes da gravação, e não depois — quando já virou histórico.
+   */
+  const [associationDoubts, setAssociationDoubts] = React.useState<
+    Record<string, { orderItemId: string; text: string }>
+  >({});
   const [catalogSelections, setCatalogSelections] = React.useState<
     Record<string, { productId: string; quantity: string; price: string }>
   >({});
@@ -844,6 +903,31 @@ export function NfeImportPanel({
       setError(
         `"${orderItem.productName}" já está associado a outra NF-e nesta chegada. Confirme as notas em recebimentos parciais separados para preservar a origem fiscal.`,
       );
+      return;
+    }
+
+    const preview = importedItemValues(
+      [xmlItem],
+      itemWithCurrentRules(orderItem),
+    );
+    if (
+      preview.associationDoubt &&
+      associationDoubts[sourceKey]?.orderItemId !== orderItem.id
+    ) {
+      setAssociationDoubts((current) => ({
+        ...current,
+        [sourceKey]: {
+          orderItemId: orderItem.id,
+          text:
+            `"${xmlItem.description}" sai a ` +
+            MONEY.format(preview.practicedPrice ?? 0) +
+            `/${orderItem.pricingUnit} e "${orderItem.productName}" foi ` +
+            "combinado a " +
+            MONEY.format(orderItem.agreedPrice) +
+            `/${orderItem.pricingUnit}. Preço tão distante costuma ser ` +
+            "produto trocado. Se for mesmo este produto, associe de novo.",
+        },
+      }));
       return;
     }
 
@@ -1373,6 +1457,12 @@ export function NfeImportPanel({
                   const escolhido = catalogProducts.find(
                     (product) => product.id === draft.productId,
                   );
+                  const pendingDoubt = associationDoubts[sourceKey];
+                  const doubt =
+                    pendingDoubt &&
+                    pendingDoubt.orderItemId === associationSelections[sourceKey]
+                      ? pendingDoubt
+                      : null;
                   const atualizar = (
                     patch: Partial<typeof draft>,
                   ) =>
@@ -1393,7 +1483,11 @@ export function NfeImportPanel({
                         <p className="text-fg-muted text-xs">
                           Código {xmlItem.supplierCode ?? "não informado"} ·{" "}
                           {QTY.format(xmlItem.commercialQuantity)}{" "}
-                          {xmlItem.commercialUnit ?? ""}
+                          {xmlItem.commercialUnit ?? ""} ·{" "}
+                          {MONEY.format(xmlItem.commercialUnitPrice)}
+                          {xmlItem.commercialUnit
+                            ? `/${xmlItem.commercialUnit}`
+                            : ""}
                         </p>
                       </div>
 
@@ -1408,22 +1502,25 @@ export function NfeImportPanel({
                           <ThemedSelect
                             id={`nfe-association-${sourceKey}`}
                             value={associationSelections[sourceKey] ?? ""}
-                            onValueChange={(selected) =>
+                            onValueChange={(selected) => {
                               setAssociationSelections((current) => ({
                                 ...current,
                                 [sourceKey]: selected,
-                              }))
-                            }
+                              }));
+                            }}
                             placeholder="Escolher produto do pedido"
                             options={items.map((item) => ({
                               value: item.id,
-                              label: item.productName,
+                              label:
+                                `${item.productName} · ` +
+                                `${MONEY.format(item.agreedPrice)}/${item.pricingUnit}`,
                             }))}
                           />
                         </div>
                         <Button
                           type="button"
                           size="sm"
+                          variant={doubt ? "outline" : "default"}
                           disabled={
                             !associationSelections[sourceKey] ||
                             associatingLine === sourceKey
@@ -1432,9 +1529,20 @@ export function NfeImportPanel({
                         >
                           {associatingLine === sourceKey
                             ? "Associando…"
-                            : "Associar"}
+                            : doubt
+                              ? "Associar mesmo assim"
+                              : "Associar"}
                         </Button>
                       </div>
+                      {doubt ? (
+                        <div className="bg-warning-soft text-warning flex items-start gap-2 rounded-md px-3 py-2 text-xs">
+                          <AlertTriangle
+                            className="mt-0.5 size-3.5 shrink-0"
+                            aria-hidden
+                          />
+                          <p>{doubt.text}</p>
+                        </div>
+                      ) : null}
 
                       {canReviseOrder ? (
                         <div className="border-border flex flex-col gap-2 border-t pt-3">

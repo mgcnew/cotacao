@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import {
+  forgetSupplierProductAlias,
   postDraftReceipt,
   type ReceiptActionState,
 } from "@/features/receipts/actions";
@@ -145,6 +146,50 @@ export function ReceiptConferenceForm({
     null,
   );
   const [formVersion, setFormVersion] = React.useState(0);
+  const [unmatching, setUnmatching] = React.useState<string | null>(null);
+  const [unmatchError, setUnmatchError] = React.useState<string | null>(null);
+
+  /**
+   * Devolve a linha da nota à lista dos não reconhecidos e apaga o que o
+   * sistema aprendeu com a associação errada.
+   *
+   * Só tirar daqui não bastaria: o casamento por código do fornecedor tem
+   * confiança máxima, então a mesma descrição voltaria a cair no produto
+   * errado na próxima nota, sem perguntar nada.
+   */
+  async function unmatchItem(
+    itemId: string,
+    imported: NfeImportPayload["items"][string],
+  ) {
+    if (!xmlImport) return;
+    setUnmatching(itemId);
+    setUnmatchError(null);
+    for (const xmlItem of imported.xmlItems) {
+      const data = new FormData();
+      data.set("receiptId", receiptId);
+      data.set("supplierName", xmlItem.description);
+      if (xmlItem.supplierCode) data.set("supplierCode", xmlItem.supplierCode);
+      const result = await forgetSupplierProductAlias(data);
+      if (result.error) {
+        setUnmatchError(result.error);
+        setUnmatching(null);
+        return;
+      }
+    }
+    const { [itemId]: removed, ...rest } = xmlImport.items;
+    applyXml({
+      ...xmlImport,
+      items: rest,
+      unmatched: [
+        ...xmlImport.unmatched,
+        ...removed.xmlItems.map((xmlItem) => ({
+          ...xmlItem,
+          receiptAccessKey: removed.receiptAccessKey,
+        })),
+      ],
+    });
+    setUnmatching(null);
+  }
 
   function applyXml(payload: NfeImportPayload | null) {
     setXmlImport(payload);
@@ -436,12 +481,25 @@ export function ReceiptConferenceForm({
                   </p>
                 </div>
                 {imported ? (
-                  <p className="text-fg-muted mb-3 text-xs">
-                    Na nota:{" "}
-                    {imported.xmlItems
-                      .map((xmlItem) => xmlItem.description)
-                      .join(", ")}
-                  </p>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-fg-muted text-xs">
+                      Na nota:{" "}
+                      {imported.xmlItems
+                        .map((xmlItem) => xmlItem.description)
+                        .join(", ")}
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={unmatching === item.id}
+                      onClick={() => void unmatchItem(item.id, imported)}
+                    >
+                      {unmatching === item.id
+                        ? "Desfazendo…"
+                        : "Não é este produto"}
+                    </Button>
+                  </div>
                 ) : null}
                 {!imported && (xmlImport?.documents.length ?? 0) > 1 ? (
                   <div className="mb-3 max-w-md">
@@ -548,6 +606,31 @@ export function ReceiptConferenceForm({
                     </span>
                   </label>
                 ) : null}
+                {imported?.associationDoubt ? (
+                  <label className="border-warning/40 bg-warning/5 text-fg mt-3 flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-xs">
+                    <input
+                      type="hidden"
+                      name={`assoc_required_${item.id}`}
+                      value="1"
+                    />
+                    <input
+                      type="checkbox"
+                      name={`assoc_confirm_${item.id}`}
+                      className="border-input mt-0.5 size-4 rounded"
+                    />
+                    <span>
+                      Confirmo que{" "}
+                      <strong>
+                        {imported.xmlItems
+                          .map((xmlItem) => xmlItem.description)
+                          .join(", ")}
+                      </strong>{" "}
+                      é {item.productName}. O preço está longe demais do
+                      combinado; se não for o mesmo produto, use “Não é este
+                      produto” acima.
+                    </span>
+                  </label>
+                ) : null}
                 {imported?.warnings.length ? (
                   <div className="bg-warning-soft text-warning mt-3 flex items-start gap-2 rounded-md px-3 py-2 text-xs">
                     <AlertTriangle
@@ -572,7 +655,7 @@ export function ReceiptConferenceForm({
           })}
         </section>
 
-        <ErrorLine error={state.error} />
+        <ErrorLine error={unmatchError ?? state.error} />
         <div className="border-border bg-surface sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 shadow-lg">
           <p className="text-fg-subtle text-xs">
             Se ainda houver saldo, o pedido ficará parcialmente recebido e

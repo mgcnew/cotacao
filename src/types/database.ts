@@ -4928,6 +4928,15 @@ export type Database = {
         Args: { p_company_id: string; p_days: number };
         Returns: Json;
       };
+      rpc_forget_supplier_product_alias: {
+        Args: {
+          p_company_id: string;
+          p_receipt_id: string;
+          p_supplier_code?: string;
+          p_supplier_name: string;
+        };
+        Returns: boolean;
+      };
       rpc_learn_supplier_product_alias: {
         Args: {
           p_barcode?: string;
