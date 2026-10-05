@@ -13,7 +13,9 @@ const schema = z
   .object({
     responseItemId: z.uuid({ error: "Item de resposta inválido" }),
     roundId: z.uuid({ error: "Rodada inválida" }),
-    supplies: z.enum(["sim", "nao"]),
+    // "sem_estoque": trabalha com o produto, mas acabou — o mesmo "sem
+    // disponibilidade agora" que o fornecedor marca pelo link.
+    supplies: z.enum(["sim", "sem_estoque", "nao"]),
     // `nullish`, e não `optional`: FormData.get devolve null quando o campo
     // não existe no DOM — é o caso do preço, que só é renderizado quando o
     // fornecedor fornece o item. `optional()` sozinho recusaria esse null.
@@ -45,7 +47,7 @@ const schema = z
       .nullish()
       .transform((v) => (v ? v : undefined)),
   })
-  .refine((v) => v.supplies === "nao" || (v.price && v.price.length > 0), {
+  .refine((v) => v.supplies !== "sim" || (v.price && v.price.length > 0), {
     error: "Informe o preço corrigido",
     path: ["price"],
   });
@@ -84,6 +86,7 @@ export async function correctResponseItem(
   }
 
   const fornece = parsed.data.supplies === "sim";
+  const naoFornece = parsed.data.supplies === "nao";
 
   let price: number | undefined;
   if (fornece && parsed.data.price) {
@@ -112,8 +115,9 @@ export async function correctResponseItem(
       p_company_id: company.companyId,
       p_quotation_response_item_id: parsed.data.responseItemId,
       p_quoted_price: price,
+      // Sem preço nos dois casos indisponíveis: a RPC apaga o anterior (0115).
       p_is_available: fornece,
-      p_does_not_supply: !fornece,
+      p_does_not_supply: naoFornece,
       p_notes: parsed.data.notes,
       p_reason: parsed.data.reason,
       p_conversion_attribute_definition_id: parsed.data.conversionDefinitionId,
@@ -125,10 +129,18 @@ export async function correctResponseItem(
     if (error.message.includes("Permissão")) {
       return { error: "Seu papel não permite corrigir respostas." };
     }
+    if (error.message.includes("virou pedido")) {
+      return {
+        error: "Este item já virou pedido para este fornecedor — ajuste pelo pedido.",
+      };
+    }
     return { error: `Não foi possível corrigir: ${error.message}` };
   }
 
+  // Indisponível cancela a alocação em rascunho que apontava para ele.
   revalidatePath(`/compras/${parsed.data.roundId}/comparacao`);
+  revalidatePath(`/compras/${parsed.data.roundId}/alocacao`);
+  revalidatePath(`/compras/${parsed.data.roundId}`);
   return { error: null, savedAt: Date.now() };
 }
 

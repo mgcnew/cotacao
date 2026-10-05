@@ -382,8 +382,9 @@ function SupplierOffer({ row, supplier, cell, dados }: { row: Row; supplier: Sup
   if (cell.isAvailable === false) {
     return (
       <div>
-        <Badge variant="outline">sem disponibilidade nesta cotação</Badge>
+        <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline">sem disponibilidade nesta cotação</Badge>{cell.correctionCount > 0 ? <Badge variant="outline">corrigido</Badge> : null}</div>
         {cell.notes ? <p className="text-fg-muted mt-1 text-xs">{cell.notes}</p> : null}
+        {dados.podeCorrigir && cell.responseItemId ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={null} doesNotSupply={false} isAvailable={false} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} currentConversionFactor={cell.conversionFactor} conversionRequired={row.conversionRequired} /> : null}
       </div>
     );
   }

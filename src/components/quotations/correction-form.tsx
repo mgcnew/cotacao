@@ -13,6 +13,8 @@ import {
   type CorrectionState,
 } from "@/features/quotations/correction";
 
+type Situacao = "sim" | "sem_estoque" | "nao";
+
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
@@ -27,13 +29,15 @@ function SubmitButton() {
  *
  * O fornecedor não pode reenviar item já respondido — regra do banco. Quando
  * ele erra o preço ou marca "não fornece" sem querer, o conserto é aqui, com
- * motivo obrigatório e registro de quem mudou o quê.
+ * motivo obrigatório e registro de quem mudou o quê. Também é por aqui que o
+ * comprador registra que o produto acabou no fornecedor depois da resposta.
  */
 export function CorrectionForm({
   responseItemId,
   roundId,
   currentPrice,
   doesNotSupply,
+  isAvailable = null,
   supplierName,
   productName,
   pricingUnit,
@@ -47,6 +51,7 @@ export function CorrectionForm({
   roundId: string;
   currentPrice: number | null;
   doesNotSupply: boolean;
+  isAvailable?: boolean | null;
   supplierName: string;
   productName: string;
   pricingUnit: string;
@@ -57,7 +62,10 @@ export function CorrectionForm({
   conversionRequired?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
-  const [fornece, setFornece] = React.useState(!doesNotSupply);
+  const [situacao, setSituacao] = React.useState<Situacao>(
+    doesNotSupply ? "nao" : isAvailable === false ? "sem_estoque" : "sim",
+  );
+  const fornece = situacao === "sim";
   const [state, formAction] = useActionState<CorrectionState, FormData>(
     correctResponseItem,
     { error: null },
@@ -94,14 +102,22 @@ export function CorrectionForm({
       <ThemedSelect
         id={`corr-fornece-${responseItemId}`}
         name="supplies"
-        value={fornece ? "sim" : "nao"}
-        onValueChange={(next) => setFornece(next === "sim")}
+        value={situacao}
+        onValueChange={(next) => setSituacao(next as Situacao)}
         ariaLabel="O fornecedor trabalha com este produto?"
         options={[
           { value: "sim", label: "Fornece este produto" },
+          { value: "sem_estoque", label: "Sem disponibilidade agora" },
           { value: "nao", label: "Não trabalha com este produto" },
         ]}
       />
+
+      {situacao !== "sim" && currentPrice !== null ? (
+        <p className="text-fg-subtle text-xs">
+          O preço de R$ {currentPrice.toFixed(2).replace(".", ",")} sai da
+          comparação, e a alocação em rascunho para este fornecedor é desfeita.
+        </p>
+      ) : null}
 
       {fornece ? (
         <div className="flex flex-col gap-1.5">

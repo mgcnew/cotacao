@@ -338,8 +338,12 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         continue;
       }
 
+      // Sem disponibilidade não concorre, mesmo que a resposta ainda carregue
+      // um preço negociado de antes: o produto acabou no fornecedor.
       const current =
-        price?.current_price !== undefined && price?.current_price !== null
+        response.is_available === false
+          ? null
+          : price?.current_price !== undefined && price?.current_price !== null
           ? Number(price.current_price)
           : response.quoted_price !== null
             ? Number(response.quoted_price)

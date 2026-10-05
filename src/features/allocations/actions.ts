@@ -83,7 +83,7 @@ export async function allocateItem(
       `
       id,
       round_suppliers!inner ( supplier_id ),
-      quotation_response_items ( id, does_not_supply )
+      quotation_response_items ( id, does_not_supply, is_available )
     `,
     )
     .eq("company_id", company.companyId)
@@ -101,6 +101,9 @@ export async function allocateItem(
   }
   if (responseItem.does_not_supply) {
     return { error: "Este fornecedor declarou que não fornece este item." };
+  }
+  if (responseItem.is_available === false) {
+    return { error: "Este fornecedor está sem o produto no momento." };
   }
 
   const { data: priceRow, error: priceError } = await supabase
