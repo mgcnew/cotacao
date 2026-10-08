@@ -2700,6 +2700,7 @@ export type Database = {
           supplier_legal_entity_id: string | null;
           transferred_at: string | null;
           transferred_by: string | null;
+          transferred_from_status: string | null;
           transferred_receipt_id: string | null;
           updated_at: string;
           uploaded_by: string | null;
@@ -2730,6 +2731,7 @@ export type Database = {
           supplier_legal_entity_id?: string | null;
           transferred_at?: string | null;
           transferred_by?: string | null;
+          transferred_from_status?: string | null;
           transferred_receipt_id?: string | null;
           updated_at?: string;
           uploaded_by?: string | null;
@@ -2760,6 +2762,7 @@ export type Database = {
           supplier_legal_entity_id?: string | null;
           transferred_at?: string | null;
           transferred_by?: string | null;
+          transferred_from_status?: string | null;
           transferred_receipt_id?: string | null;
           updated_at?: string;
           uploaded_by?: string | null;
@@ -4605,6 +4608,14 @@ export type Database = {
           p_unit_rules?: Json;
         };
         Returns: undefined;
+      };
+      rpc_receive_order_with_historical_nfe: {
+        Args: {
+          p_company_id: string;
+          p_import_id: string;
+          p_order_id: string;
+        };
+        Returns: Json;
       };
       rpc_transfer_historical_nfe_to_receipt: {
         Args: {

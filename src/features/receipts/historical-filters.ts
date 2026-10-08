@@ -15,8 +15,15 @@ export const HISTORICAL_STATUS_LABEL = {
 
 export type HistoricalStatus = keyof typeof HISTORICAL_STATUS_LABEL;
 
+/**
+ * Recorte que não é situação do banco: notas ainda no histórico que caem na
+ * janela de um pedido sem entrada do mesmo fornecedor.
+ */
+export const LOOKS_LIKE_ORDER = "parece_pedido";
+export type HistoricalSituation = HistoricalStatus | typeof LOOKS_LIKE_ORDER;
+
 export type HistoricalNfeFilters = {
-  situacao: HistoricalStatus | null;
+  situacao: HistoricalSituation | null;
   fornecedorId: string | null;
   de: string | null;
   ate: string | null;
@@ -59,9 +66,11 @@ export function parseHistoricalNfeFilters(
     .trim();
   return {
     situacao:
-      situacao && situacao in HISTORICAL_STATUS_LABEL
-        ? (situacao as HistoricalStatus)
-        : null,
+      situacao === LOOKS_LIKE_ORDER
+        ? LOOKS_LIKE_ORDER
+        : situacao && situacao in HISTORICAL_STATUS_LABEL
+          ? (situacao as HistoricalStatus)
+          : null,
     fornecedorId: fornecedor && UUID.test(fornecedor) ? fornecedor : null,
     de: data(searchParams.de),
     ate: data(searchParams.ate),

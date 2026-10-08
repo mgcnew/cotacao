@@ -6,8 +6,10 @@ import {
   EMPTY_HISTORICAL_FILTERS,
   HISTORICAL_STATUS_LABEL,
   type HistoricalNfeFilters,
+  LOOKS_LIKE_ORDER,
   type HistoricalStatus,
 } from "@/features/receipts/historical-filters";
+import { listImportsLookingLikeOrders } from "@/features/receipts/historical-order-match";
 import { parseHistoricalNfeXml } from "@/features/receipts/historical-nfe";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -72,25 +74,44 @@ export async function listHistoricalNfeImports(
     return q;
   }
 
+  const looksLikeOrder = await listImportsLookingLikeOrders(companyId);
+  const looksLikeOrderIds = [...looksLikeOrder.keys()].slice(0, 300);
+
   const statuses = Object.keys(HISTORICAL_STATUS_LABEL) as HistoricalStatus[];
-  const counts = await Promise.all(
-    statuses.map((status) =>
-      recortar(
-        supabase
-          .from("historical_nfe_imports")
-          .select("id", { count: "exact", head: true }),
-      ).eq("status", status),
+  const [counts, looksLikeOrderCount] = await Promise.all([
+    Promise.all(
+      statuses.map((status) =>
+        recortar(
+          supabase
+            .from("historical_nfe_imports")
+            .select("id", { count: "exact", head: true }),
+        ).eq("status", status),
+      ),
     ),
-  );
+    looksLikeOrderIds.length > 0
+      ? recortar(
+          supabase
+            .from("historical_nfe_imports")
+            .select("id", { count: "exact", head: true }),
+        ).in("id", looksLikeOrderIds)
+      : Promise.resolve({ count: 0, error: null }),
+  ]);
+  if (looksLikeOrderCount.error)
+    throw new Error(
+      `Falha ao contar NF-e com pedido: ${looksLikeOrderCount.error.message}`,
+    );
   const byStatus = {} as Record<HistoricalStatus, number>;
   counts.forEach((result, index) => {
     if (result.error)
       throw new Error(`Falha ao contar NF-e: ${result.error.message}`);
     byStatus[statuses[index]] = result.count ?? 0;
   });
-  const total = filters.situacao
-    ? byStatus[filters.situacao]
-    : statuses.reduce((sum, status) => sum + byStatus[status], 0);
+  const total =
+    filters.situacao === LOOKS_LIKE_ORDER
+      ? (looksLikeOrderCount.count ?? 0)
+      : filters.situacao
+        ? byStatus[filters.situacao]
+        : statuses.reduce((sum, status) => sum + byStatus[status], 0);
 
   const page = Math.min(
     Math.max(requestedPage, 1),
@@ -104,7 +125,14 @@ export async function listHistoricalNfeImports(
         "id, supplier_id, status, access_key, invoice_number, invoice_series, issued_at, issuer_name, invoice_total, file_name, created_at, historical_nfe_items(count)",
       ),
   );
-  if (filters.situacao) list = list.eq("status", filters.situacao);
+  if (filters.situacao === LOOKS_LIKE_ORDER)
+    list = list.in(
+      "id",
+      looksLikeOrderIds.length > 0
+        ? looksLikeOrderIds
+        : ["00000000-0000-0000-0000-000000000000"],
+    );
+  else if (filters.situacao) list = list.eq("status", filters.situacao);
   const imports = await list
     .order("issued_at", { ascending: false })
     .range(start, start + pageSize - 1);
@@ -121,8 +149,10 @@ export async function listHistoricalNfeImports(
         : null,
       itemCount: row.historical_nfe_items[0]?.count ?? 0,
       invoiceTotal: Number(row.invoice_total),
+      suggestedOrderNumbers: looksLikeOrder.get(row.id) ?? [],
     })),
     byStatus,
+    looksLikeOrderCount: looksLikeOrderCount.count ?? 0,
     suppliers: suppliers.data ?? [],
     pagination: { page, pageSize, total },
   };

@@ -25,6 +25,8 @@ import {
   HISTORICAL_STATUS_LABEL,
   parseHistoricalNfeFilters,
   type HistoricalNfeFilters,
+  LOOKS_LIKE_ORDER,
+  type HistoricalSituation,
   type HistoricalStatus,
 } from "@/features/receipts/historical-filters";
 import { listHistoricalNfeImports } from "@/features/receipts/historical-queries";
@@ -36,7 +38,7 @@ const BASE_PATH = "/recebimentos/historico";
 /** Endereço da lista com o recorte atual, trocando só a situação. */
 function hrefComSituacao(
   filters: HistoricalNfeFilters,
-  situacao: HistoricalStatus | null,
+  situacao: HistoricalSituation | null,
 ) {
   const params = new URLSearchParams();
   if (situacao) params.set("situacao", situacao);
@@ -81,6 +83,35 @@ export default async function HistoricoFiscalPage({
     (sum, n) => sum + n,
     0,
   );
+  const abas: {
+    status: HistoricalSituation | null;
+    label: string;
+    count: number;
+    destaque?: boolean;
+  }[] = [
+    { status: null, label: "Todas", count: totalSemSituacao },
+    // Logo depois de "Todas": é a aba que pede ação antes de conciliar — uma
+    // nota daqui conciliada no histórico vira compra contada em dobro.
+    ...(imports.looksLikeOrderCount > 0 || filters.situacao === LOOKS_LIKE_ORDER
+      ? [
+          {
+            status: LOOKS_LIKE_ORDER as HistoricalSituation,
+            label: "Parece pedido",
+            count: imports.looksLikeOrderCount,
+            destaque: true,
+          },
+        ]
+      : []),
+    ...(Object.keys(HISTORICAL_STATUS_LABEL) as HistoricalStatus[])
+      .filter(
+        (status) => imports.byStatus[status] > 0 || filters.situacao === status,
+      )
+      .map((status) => ({
+        status,
+        label: HISTORICAL_STATUS_LABEL[status],
+        count: imports.byStatus[status],
+      })),
+  ];
 
   return (
     <div className="w-full">
@@ -171,24 +202,7 @@ export default async function HistoricoFiscalPage({
           aria-label="Situação das notas"
           className="mb-3 flex gap-1.5 overflow-x-auto pb-1"
         >
-          {(
-            [
-              [null, "Todas", totalSemSituacao],
-              ...(Object.keys(HISTORICAL_STATUS_LABEL) as HistoricalStatus[])
-                .filter(
-                  (status) =>
-                    imports.byStatus[status] > 0 || filters.situacao === status,
-                )
-                .map(
-                  (status) =>
-                    [
-                      status,
-                      HISTORICAL_STATUS_LABEL[status],
-                      imports.byStatus[status],
-                    ] as const,
-                ),
-            ] as const
-          ).map(([status, label, count]) => {
+          {abas.map(({ status, label, count, destaque }) => {
             const ativa = filters.situacao === status;
             return (
               <Link
@@ -199,7 +213,9 @@ export default async function HistoricoFiscalPage({
                   "border-border inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
                   ativa
                     ? "bg-primary-solid text-primary-solid-fg border-primary-solid"
-                    : "text-fg-muted hover:bg-surface-sunken hover:text-fg",
+                    : destaque
+                      ? "border-warning/40 bg-warning/5 text-warning hover:bg-warning-soft"
+                      : "text-fg-muted hover:bg-surface-sunken hover:text-fg",
                 )}
               >
                 {label}
@@ -291,7 +307,16 @@ export default async function HistoricoFiscalPage({
                     <TableCell className="text-fg block p-0 font-medium tabular-nums sm:table-cell sm:p-2 sm:font-normal">
                       {MONEY.format(item.invoiceTotal)}
                     </TableCell>
-                    <TableCell className="block justify-self-end p-0 sm:table-cell sm:p-2">
+                    <TableCell className="flex flex-wrap justify-end gap-1 justify-self-end p-0 sm:table-cell sm:p-2">
+                      {item.suggestedOrderNumbers.length > 0 ? (
+                        <Badge
+                          variant="outline"
+                          className="border-warning/40 text-warning mr-1"
+                          title="Emitida na janela de um pedido sem entrada deste fornecedor"
+                        >
+                          Pedido #{item.suggestedOrderNumbers[0]}?
+                        </Badge>
+                      ) : null}
                       <Badge
                         variant={
                           item.status === "posted" ? "default" : "outline"

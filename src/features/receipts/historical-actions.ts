@@ -599,3 +599,47 @@ export async function transferHistoricalNfeToReceipt(
   revalidatePath(`/recebimentos/${receiptId}`);
   redirect(`/recebimentos/${receiptId}#xml-nfe`);
 }
+
+/**
+ * Dá entrada no pedido sugerido usando esta NF-e: abre a chegada (na data de
+ * emissão da nota, se ainda não houver uma) e leva a nota para a conferência.
+ */
+export async function receiveOrderWithHistoricalNfe(
+  importId: string,
+  orderId: string,
+  _previous: HistoricalNfeTransferState,
+): Promise<HistoricalNfeTransferState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.post") || !permissions.has("receipt.create")) {
+    return { error: "Seu papel não permite dar entrada neste pedido." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "rpc_receive_order_with_historical_nfe",
+    {
+      p_company_id: company.companyId,
+      p_import_id: importId,
+      p_order_id: orderId,
+    },
+  );
+  if (error) {
+    return {
+      error: error.message.includes("Could not find the function")
+        ? "Falta aplicar a migration 0116 no banco para usar esta opção."
+        : `Não foi possível dar entrada no pedido: ${error.message}`,
+    };
+  }
+
+  const receiptId = (data as { receipt_id?: string } | null)?.receipt_id;
+  revalidatePath("/recebimentos/historico");
+  revalidatePath(`/recebimentos/historico/${importId}`);
+  revalidatePath("/recebimentos");
+  revalidatePath(`/pedidos/${orderId}`);
+  revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
+  revalidatePath("/produtos", "layout");
+  revalidatePath("/fornecedores", "layout");
+  redirect(receiptId ? `/recebimentos/${receiptId}#xml-nfe` : "/recebimentos");
+}
