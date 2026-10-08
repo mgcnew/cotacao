@@ -14,6 +14,128 @@ import { parseHistoricalNfeXml } from "@/features/receipts/historical-nfe";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
+type FilterableQuery<Q> = {
+  eq(column: string, value: string): Q;
+  gte(column: string, value: string): Q;
+  lt(column: string, value: string): Q;
+  or(filters: string): Q;
+};
+
+/**
+ * A lista mostra o nome do cadastro, não a razão social do XML ("Coca cola",
+ * e não "SPAL INDÚSTRIA…"). A busca precisa achar pelos dois.
+ */
+function suppliersMatchingSearch(
+  suppliers: { id: string; name: string }[],
+  busca: string | null,
+): string[] {
+  const termo = busca?.toLocaleLowerCase("pt-BR");
+  if (!termo) return [];
+  return suppliers
+    .filter((row) => row.name.toLocaleLowerCase("pt-BR").includes(termo))
+    .map((row) => row.id);
+}
+
+/** Fornecedor, período e busca — tudo do recorte, menos a situação. */
+function applyHistoricalFilters<Q extends FilterableQuery<Q>>(
+  query: Q,
+  companyId: string,
+  filters: HistoricalNfeFilters,
+  fornecedoresDaBusca: string[],
+): Q {
+  let q = query.eq("company_id", companyId);
+  if (filters.fornecedorId) q = q.eq("supplier_id", filters.fornecedorId);
+  // Emissão é instante; o filtro é dia no fuso da loja.
+  if (filters.de) q = q.gte("issued_at", `${filters.de}T00:00:00-03:00`);
+  if (filters.ate)
+    q = q.lt("issued_at", `${diaSeguinte(filters.ate)}T00:00:00-03:00`);
+  if (filters.busca) {
+    const termo = `*${filters.busca}*`;
+    q = q.or(
+      [
+        `invoice_number.ilike.${termo}`,
+        `issuer_name.ilike.${termo}`,
+        `access_key.ilike.${termo}`,
+        `file_name.ilike.${termo}`,
+        ...(fornecedoresDaBusca.length > 0
+          ? [`supplier_id.in.(${fornecedoresDaBusca.join(",")})`]
+          : []),
+      ].join(","),
+    );
+  }
+  return q;
+}
+
+/**
+ * A nota que vem depois desta no mesmo recorte da lista — para "Salvar e
+ * abrir a próxima". Segue a ordem da lista (emissão mais recente primeiro,
+ * `id` desempatando). Chegando ao fim, recomeça do topo: notas que ficaram
+ * para trás ainda pedem atenção. `null` quando o recorte não tem mais nada.
+ */
+export async function findNextHistoricalImport(
+  companyId: string,
+  filters: HistoricalNfeFilters,
+  current: { id: string; issuedAt: string },
+): Promise<string | null> {
+  const supabase = await createServerSupabaseClient();
+  let fornecedoresDaBusca: string[] = [];
+  if (filters.busca) {
+    const suppliers = await supabase
+      .from("suppliers")
+      .select("id, name")
+      .eq("company_id", companyId);
+    if (suppliers.error)
+      throw new Error(
+        `Falha ao listar fornecedores: ${suppliers.error.message}`,
+      );
+    fornecedoresDaBusca = suppliersMatchingSearch(
+      suppliers.data ?? [],
+      filters.busca,
+    );
+  }
+  let ids: string[] | null = null;
+  if (filters.situacao === LOOKS_LIKE_ORDER) {
+    ids = [...(await listImportsLookingLikeOrders(companyId)).keys()];
+    if (ids.length === 0) return null;
+  }
+
+  const base = () => {
+    let query = applyHistoricalFilters(
+      supabase.from("historical_nfe_imports").select("id"),
+      companyId,
+      filters,
+      fornecedoresDaBusca,
+    ).neq("id", current.id);
+    if (ids) query = query.in("id", ids.slice(0, 300));
+    else if (filters.situacao) query = query.eq("status", filters.situacao);
+    return query;
+  };
+
+  const instante = `"${current.issuedAt}"`;
+  const depois = await base()
+    .or(
+      `issued_at.lt.${instante},and(issued_at.eq.${instante},id.gt.${current.id})`,
+    )
+    .order("issued_at", { ascending: false })
+    .order("id")
+    .limit(1);
+  if (depois.error)
+    throw new Error(
+      `Falha ao procurar a próxima NF-e: ${depois.error.message}`,
+    );
+  if (depois.data?.[0]) return depois.data[0].id;
+
+  const doTopo = await base()
+    .order("issued_at", { ascending: false })
+    .order("id")
+    .limit(1);
+  if (doTopo.error)
+    throw new Error(
+      `Falha ao procurar a próxima NF-e: ${doTopo.error.message}`,
+    );
+  return doTopo.data?.[0]?.id ?? null;
+}
+
 export async function listHistoricalNfeImports(
   companyId: string,
   requestedPage = 1,
@@ -29,50 +151,15 @@ export async function listHistoricalNfeImports(
     .order("name");
   if (suppliers.error)
     throw new Error(`Falha ao listar fornecedores: ${suppliers.error.message}`);
-  // A lista mostra o nome do cadastro, não a razão social do XML ("Coca cola",
-  // e não "SPAL INDÚSTRIA…"). A busca precisa achar pelos dois.
-  const buscaMinuscula = filters.busca?.toLocaleLowerCase("pt-BR");
-  const fornecedoresDaBusca = buscaMinuscula
-    ? (suppliers.data ?? [])
-        .filter((row) =>
-          row.name.toLocaleLowerCase("pt-BR").includes(buscaMinuscula),
-        )
-        .map((row) => row.id)
-    : [];
-
+  const fornecedoresDaBusca = suppliersMatchingSearch(
+    suppliers.data ?? [],
+    filters.busca,
+  );
   // O mesmo recorte vale para a contagem, para as abas de situação e para a
   // página. A situação fica de fora daqui porque as abas precisam contar
   // cada uma delas dentro do resto do filtro.
-  function recortar<
-    Q extends {
-      eq(column: string, value: string): Q;
-      gte(column: string, value: string): Q;
-      lt(column: string, value: string): Q;
-      or(filters: string): Q;
-    },
-  >(query: Q): Q {
-    let q = query.eq("company_id", companyId);
-    if (filters.fornecedorId) q = q.eq("supplier_id", filters.fornecedorId);
-    // Emissão é instante; o filtro é dia no fuso da loja.
-    if (filters.de) q = q.gte("issued_at", `${filters.de}T00:00:00-03:00`);
-    if (filters.ate)
-      q = q.lt("issued_at", `${diaSeguinte(filters.ate)}T00:00:00-03:00`);
-    if (filters.busca) {
-      const termo = `*${filters.busca}*`;
-      q = q.or(
-        [
-          `invoice_number.ilike.${termo}`,
-          `issuer_name.ilike.${termo}`,
-          `access_key.ilike.${termo}`,
-          `file_name.ilike.${termo}`,
-          ...(fornecedoresDaBusca.length > 0
-            ? [`supplier_id.in.(${fornecedoresDaBusca.join(",")})`]
-            : []),
-        ].join(","),
-      );
-    }
-    return q;
-  }
+  const recortar = <Q extends FilterableQuery<Q>>(query: Q): Q =>
+    applyHistoricalFilters(query, companyId, filters, fornecedoresDaBusca);
 
   const looksLikeOrder = await listImportsLookingLikeOrders(companyId);
   const looksLikeOrderIds = [...looksLikeOrder.keys()].slice(0, 300);
@@ -133,8 +220,11 @@ export async function listHistoricalNfeImports(
         : ["00000000-0000-0000-0000-000000000000"],
     );
   else if (filters.situacao) list = list.eq("status", filters.situacao);
+  // `id` desempata notas emitidas no mesmo instante: sem ele a ordem entre
+  // elas varia, e "abrir a próxima" pularia ou repetiria nota.
   const imports = await list
     .order("issued_at", { ascending: false })
+    .order("id")
     .range(start, start + pageSize - 1);
   if (imports.error)
     throw new Error(`Falha ao listar NF-e: ${imports.error.message}`);

@@ -10,22 +10,31 @@ export function FormSubmitButton({
   className,
   disabled = false,
   variant = "default",
+  name,
+  value,
 }: {
   children: React.ReactNode;
   pendingLabel: string;
   className?: string;
   disabled?: boolean;
   variant?: React.ComponentProps<typeof Button>["variant"];
+  /** Com dois botões no mesmo formulário, diz à action qual foi apertado. */
+  name?: string;
+  value?: string;
 }) {
-  const { pending } = useFormStatus();
+  const { pending, data } = useFormStatus();
+  // Só o botão apertado troca de rótulo; os outros apenas desabilitam.
+  const esteEnviou = !name || data?.get(name) === value;
   return (
     <Button
       type="submit"
+      name={name}
+      value={value}
       variant={variant}
       disabled={pending || disabled}
       className={className}
     >
-      {pending ? pendingLabel : children}
+      {pending && esteEnviou ? pendingLabel : children}
     </Button>
   );
 }

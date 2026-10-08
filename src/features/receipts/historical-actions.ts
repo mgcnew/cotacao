@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { historicalListHref } from "@/features/receipts/historical-filters";
+import {
+  historicalListHref,
+  historicalListQuery,
+  parseHistoricalNfeFilters,
+} from "@/features/receipts/historical-filters";
+import { findNextHistoricalImport } from "@/features/receipts/historical-queries";
 import {
   parseHistoricalNfeXml,
   type HistoricalNfeItem,
@@ -557,8 +562,36 @@ export async function postHistoricalNfe(
   revalidatePath("/dashboard");
   revalidatePath("/produtos", "layout");
   revalidatePath("/fornecedores", "layout");
-  // De volta ao recorte de onde a nota foi aberta (filtros e página).
-  redirect(historicalListHref(String(formData.get("lista") ?? "")));
+  // De volta ao recorte de onde a nota foi aberta (filtros e página) — ou
+  // direto para a nota seguinte dele, quando foi isso que se pediu.
+  const listQuery = historicalListQuery(
+    Object.fromEntries(
+      new URLSearchParams(String(formData.get("lista") ?? "")),
+    ),
+  );
+  if (formData.get("depois") === "proxima") {
+    const issuedAt = await supabase
+      .from("historical_nfe_imports")
+      .select("issued_at")
+      .eq("company_id", company.companyId)
+      .eq("id", importId)
+      .maybeSingle();
+    const nextId = issuedAt.data
+      ? await findNextHistoricalImport(
+          company.companyId,
+          parseHistoricalNfeFilters(
+            Object.fromEntries(new URLSearchParams(listQuery)),
+          ),
+          { id: importId, issuedAt: issuedAt.data.issued_at },
+        ).catch(() => null)
+      : null;
+    if (nextId) {
+      redirect(
+        `/recebimentos/historico/${nextId}${listQuery ? `?lista=${encodeURIComponent(listQuery)}` : ""}`,
+      );
+    }
+  }
+  redirect(historicalListHref(listQuery));
 }
 
 export async function transferHistoricalNfeToReceipt(

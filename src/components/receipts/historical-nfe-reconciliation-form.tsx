@@ -1282,12 +1282,27 @@ export function HistoricalNfeReconciliationForm({
                 ? ` · ${pendingCount} ${pendingCount === 1 ? "pendente" : "pendentes"}`
                 : ""}
             </p>
-            <FormSubmitButton
-              pendingLabel="Gravando histórico…"
-              className="w-full sm:w-auto"
-            >
-              Confirmar importação
-            </FormSubmitButton>
+            {/* Duas saídas: conciliando uma fila de notas, abrir a próxima do
+                mesmo recorte poupa a ida e volta pela lista a cada nota. */}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <FormSubmitButton
+                name="depois"
+                value="lista"
+                variant="outline"
+                pendingLabel="Gravando histórico…"
+                className="w-full sm:w-auto"
+              >
+                Confirmar e voltar
+              </FormSubmitButton>
+              <FormSubmitButton
+                name="depois"
+                value="proxima"
+                pendingLabel="Gravando histórico…"
+                className="w-full sm:w-auto"
+              >
+                Confirmar e abrir a próxima
+              </FormSubmitButton>
+            </div>
           </div>
         </div>
       </form>
