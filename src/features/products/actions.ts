@@ -273,30 +273,32 @@ function normalizePackagingUnits(
     pricingUnitId: string;
     comparisonUnitId: string | null;
   },
-  definitions: {
-    is_conversion_factor: boolean;
-    unit_id: string | null;
-  }[],
-) {
-  const conversionUnit = definitions.find(
-    (definition) =>
-      definition.is_conversion_factor &&
-      definition.unit_id === units.pricingUnitId,
-  )?.unit_id;
-  const isLegacyPackagingShape =
-    purpose === "packaging" &&
-    units.purchaseUnitId !== units.pricingUnitId &&
-    conversionUnit !== undefined &&
-    (units.comparisonUnitId === null ||
-      units.comparisonUnitId === conversionUnit);
-
-  return isLegacyPackagingShape
-    ? {
-        purchaseUnitId: units.purchaseUnitId,
-        pricingUnitId: units.purchaseUnitId,
-        comparisonUnitId: conversionUnit,
-      }
-    : units;
+): {
+  purchaseUnitId: string;
+  pricingUnitId: string;
+  comparisonUnitId: string | null;
+} {
+  // Embalagem se cota pelo pacote inteiro — o fornecedor diz o preço da
+  // bobina e quantos metros vêm nela. Precificação diferente da compra é o
+  // formato antigo, em que o preço da bobina era lido como preço do metro e o
+  // total saía bobinas × metros × preço (R$ 525.000 por 5 bobinas de Resinit).
+  //
+  // Antes isto só era corrigido quando a categoria já tinha um fator na
+  // unidade de precificação; Embalagens tem o seu em unidades, e "Bobina /
+  // Metro" passava. Agora vale sempre: a unidade de dentro vira a de
+  // comparação (a escolhida, ou a de precificação informada).
+  if (purpose !== "packaging" || units.purchaseUnitId === units.pricingUnitId)
+    return units;
+  const comparisonUnitId =
+    units.comparisonUnitId === null ||
+    units.comparisonUnitId === units.purchaseUnitId
+      ? units.pricingUnitId
+      : units.comparisonUnitId;
+  return {
+    purchaseUnitId: units.purchaseUnitId,
+    pricingUnitId: units.purchaseUnitId,
+    comparisonUnitId,
+  };
 }
 
 const bulkProductUnitsSchema = z
@@ -333,11 +335,29 @@ export async function updateUnusedProductUnitsBulk(
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const supabase = await createServerSupabaseClient();
+  // A correção em lote grava direto no banco; a regra das embalagens precisa
+  // valer aqui também, senão "Bobina / Metro" voltaria por este caminho.
+  const { data: purposes, error: purposesError } = await supabase
+    .from("products")
+    .select("id, purpose")
+    .eq("company_id", company.companyId)
+    .in("id", parsed.data.map((change) => change.productId));
+  if (purposesError) {
+    return { error: `Falha ao ler os produtos: ${purposesError.message}` };
+  }
+  const purposeById = new Map(
+    (purposes ?? []).map((row) => [row.id, row.purpose]),
+  );
+  const changes = parsed.data.map((change) => ({
+    productId: change.productId,
+    ...normalizePackagingUnits(purposeById.get(change.productId) ?? "", change),
+  }));
+
   const { data, error } = await supabase.rpc(
     "rpc_bulk_update_unused_product_units",
     {
       p_company_id: company.companyId,
-      p_changes: parsed.data,
+      p_changes: changes,
     },
   );
   if (error) return { error: error.message };
@@ -352,6 +372,23 @@ export async function updateUnusedProductUnitsBulk(
   } | null;
   const updated = Number(result?.updated ?? 0);
   const skipped = Array.isArray(result?.skipped) ? result.skipped : [];
+
+  // Embalagem com unidade de comparação precisa do fator "Metros por bobina",
+  // que é onde o fornecedor responde quanto vem no pacote.
+  const skippedIds = new Set(skipped.map((item) => item.productId));
+  for (const change of changes) {
+    const purpose = purposeById.get(change.productId);
+    if (purpose !== "packaging" || skippedIds.has(change.productId)) continue;
+    const fator = await syncPackagingFactor(
+      supabase,
+      company.companyId,
+      change.productId,
+      purpose,
+      change,
+      null,
+    );
+    if (fator.error) return { error: fator.error };
+  }
 
   revalidatePath("/produtos");
   revalidatePath("/produtos/correcao-unidades");
@@ -424,7 +461,8 @@ async function syncPackagingFactor(
   productId: string,
   purpose: string,
   units: { pricingUnitId: string; comparisonUnitId: string | null },
-  rawFactor: string,
+  /** `null`: só garante a definição, sem mexer no valor do cadastro. */
+  rawFactor: string | null,
 ): Promise<{ definitionId: string | null; error: string | null }> {
   const { data: existing, error: readError } = await supabase
     .from("product_attribute_definitions")
@@ -527,6 +565,7 @@ async function syncPackagingFactor(
     definitionId = criada.id;
   }
 
+  if (rawFactor === null) return { definitionId, error: null };
   const digitado = rawFactor.trim();
   if (!digitado) {
     // Em branco é uma resposta legítima: quem cadastra pode não saber quantas
@@ -645,15 +684,11 @@ export async function createProduct(
     return { error: `Falha ao carregar atributos: ${defsError.message}` };
   }
 
-  const normalizedUnits = normalizePackagingUnits(
-    parsed.data.purpose,
-    {
-      purchaseUnitId: parsed.data.purchaseUnitId,
-      pricingUnitId: parsed.data.pricingUnitId,
-      comparisonUnitId: parsed.data.comparisonUnitId,
-    },
-    definitions ?? [],
-  );
+  const normalizedUnits = normalizePackagingUnits(parsed.data.purpose, {
+    purchaseUnitId: parsed.data.purchaseUnitId,
+    pricingUnitId: parsed.data.pricingUnitId,
+    comparisonUnitId: parsed.data.comparisonUnitId,
+  });
 
   const values: {
     attribute_definition_id: string;
@@ -980,11 +1015,7 @@ export async function updateProduct(
 
   const normalizedUnits =
     units?.success === true
-      ? normalizePackagingUnits(
-          parsed.data.purpose,
-          units.data,
-          definitions ?? [],
-        )
+      ? normalizePackagingUnits(parsed.data.purpose, units.data)
       : null;
 
   const unitsChanged =

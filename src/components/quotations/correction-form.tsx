@@ -8,6 +8,7 @@ import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemedSelect } from "@/components/ui/themed-select";
+import { packagingFactorLabel, unitWord } from "@/features/products/units";
 import {
   correctResponseItem,
   type CorrectionState,
@@ -46,6 +47,8 @@ export function CorrectionForm({
   conversionUnit = null,
   currentConversionFactor = null,
   conversionRequired = false,
+  pricingUnitInfo = null,
+  comparisonUnitInfo = null,
 }: {
   responseItemId: string;
   roundId: string;
@@ -60,7 +63,15 @@ export function CorrectionForm({
   conversionUnit?: string | null;
   currentConversionFactor?: number | null;
   conversionRequired?: boolean;
+  pricingUnitInfo?: { name: string | null; symbol: string } | null;
+  comparisonUnitInfo?: { name: string | null; symbol: string } | null;
 }) {
+  // Embalagem: as mesmas perguntas do link do fornecedor e do lançamento —
+  // "Preço de 1 bobina" e "Cada bobina tem ___ metros".
+  const embalagem =
+    Boolean(conversionDefinitionId) &&
+    pricingUnitInfo !== null &&
+    comparisonUnitInfo !== null;
   const [open, setOpen] = React.useState(false);
   const [situacao, setSituacao] = React.useState<Situacao>(
     doesNotSupply ? "nao" : isAvailable === false ? "sem_estoque" : "sim",
@@ -125,7 +136,9 @@ export function CorrectionForm({
             htmlFor={`corr-preco-${responseItemId}`}
             className="text-fg-muted text-xs"
           >
-            Preço por {pricingUnit}
+            {embalagem
+              ? `Preço de 1 ${unitWord(pricingUnitInfo)}`
+              : `Preço por ${pricingUnit}`}
             {currentPrice !== null
               ? ` (atual: ${currentPrice.toFixed(2).replace(".", ",")})`
               : ""}
@@ -147,7 +160,9 @@ export function CorrectionForm({
             htmlFor={`corr-conversao-${responseItemId}`}
             className="text-fg-muted mb-1 block text-xs"
           >
-            {conversionName}{conversionUnit ? ` (${conversionUnit})` : ""}
+            {embalagem
+              ? `${packagingFactorLabel(pricingUnitInfo!)} (${unitWord(comparisonUnitInfo, 2)})`
+              : `${conversionName}${conversionUnit ? ` (${conversionUnit})` : ""}`}
             {currentConversionFactor !== null
               ? ` (atual: ${currentConversionFactor.toLocaleString("pt-BR")})`
               : ""}

@@ -113,16 +113,39 @@ function unidadeDaOpcao(option: Option) {
  */
 export function derivePackagingFactor({
   purpose,
+  purchaseUnitId = "",
   pricingUnitId,
   comparisonUnitId,
   units,
 }: {
   purpose: string;
+  purchaseUnitId?: string;
   pricingUnitId: string;
   comparisonUnitId: string;
   units: Option[];
-}): { rotulo: string; conteudo: string } | null {
+}): { rotulo: string; conteudo: string; ajuste: string | null } | null {
   if (purpose !== "packaging") return null;
+
+  // Embalagem se cota pelo pacote inteiro: com compra e precificação
+  // diferentes, o servidor passa a precificação para a unidade de compra e a
+  // de dentro para a comparação (ver normalizePackagingUnits). A prévia mostra
+  // já o resultado, para o campo "Cada bobina tem ___ metros" aparecer.
+  let ajuste: string | null = null;
+  if (purchaseUnitId && pricingUnitId && purchaseUnitId !== pricingUnitId) {
+    const dentro =
+      !comparisonUnitId || comparisonUnitId === purchaseUnitId
+        ? pricingUnitId
+        : comparisonUnitId;
+    const compra = units.find((unit) => unit.id === purchaseUnitId);
+    const conteudo = units.find((unit) => unit.id === dentro);
+    if (compra && conteudo) {
+      // Sem artigo antes da unidade: o gênero não se deduz ("o pacote", "a
+      // bobina"), e "1 bobina" serve para qualquer uma.
+      ajuste = `Embalagem é cotada pelo preço de 1 ${unitWord(unidadeDaOpcao(compra))}: ao salvar, a precificação fica em ${unitWord(unidadeDaOpcao(compra))} e ${unitWord(unidadeDaOpcao(conteudo))} passa a ser a unidade de comparação.`;
+    }
+    comparisonUnitId = dentro;
+    pricingUnitId = purchaseUnitId;
+  }
   if (!pricingUnitId || !comparisonUnitId) return null;
   if (pricingUnitId === comparisonUnitId) return null;
 
@@ -133,6 +156,7 @@ export function derivePackagingFactor({
   return {
     rotulo: packagingFactorLabel(unidadeDaOpcao(pricing)),
     conteudo: unitWord(unidadeDaOpcao(comparison), 2),
+    ajuste,
   };
 }
 
@@ -169,11 +193,13 @@ export function ProductForm({
   );
   const [categoryId, setCategoryId] = React.useState("");
   const [purpose, setPurpose] = React.useState("resale");
+  const [purchaseUnitId, setPurchaseUnitId] = React.useState("");
   const [pricingUnitId, setPricingUnitId] = React.useState("");
   const [comparisonUnitId, setComparisonUnitId] = React.useState("");
 
   const fator = derivePackagingFactor({
     purpose,
+    purchaseUnitId,
     pricingUnitId,
     comparisonUnitId,
     units,
@@ -261,6 +287,8 @@ export function ProductForm({
               id="purchaseUnitId"
               name="purchaseUnitId"
               required
+              value={purchaseUnitId}
+              onValueChange={setPurchaseUnitId}
               options={units.map((unit) => ({
                 value: unit.id,
                 label: unit.label,
@@ -316,6 +344,9 @@ export function ProductForm({
               cotação. É o que põe embalagens de tamanhos diferentes na mesma
               base de comparação.
             </p>
+            {fator.ajuste ? (
+              <p className="text-warning mt-2 text-sm">{fator.ajuste}</p>
+            ) : null}
           </div>
 
           <Field

@@ -374,7 +374,7 @@ function SupplierOffer({ row, supplier, cell, dados }: { row: Row; supplier: Sup
       <div>
         <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline">não fornece</Badge>{cell.correctionCount > 0 ? <Badge variant="outline">corrigido</Badge> : null}</div>
         {cell.notes ? <p className="text-fg-muted mt-1 text-xs">{cell.notes}</p> : null}
-        {dados.podeCorrigir && cell.responseItemId ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} doesNotSupply supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} currentConversionFactor={cell.conversionFactor} conversionRequired={row.conversionRequired} /> : null}
+        {dados.podeCorrigir && cell.responseItemId ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} doesNotSupply supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} currentConversionFactor={cell.conversionFactor} conversionRequired={row.conversionRequired} pricingUnitInfo={row.pricingUnitInfo} comparisonUnitInfo={row.comparisonUnitInfo} /> : null}
       </div>
     );
   }
@@ -384,14 +384,14 @@ function SupplierOffer({ row, supplier, cell, dados }: { row: Row; supplier: Sup
       <div>
         <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline">sem disponibilidade nesta cotação</Badge>{cell.correctionCount > 0 ? <Badge variant="outline">corrigido</Badge> : null}</div>
         {cell.notes ? <p className="text-fg-muted mt-1 text-xs">{cell.notes}</p> : null}
-        {dados.podeCorrigir && cell.responseItemId ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={null} doesNotSupply={false} isAvailable={false} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} currentConversionFactor={cell.conversionFactor} conversionRequired={row.conversionRequired} /> : null}
+        {dados.podeCorrigir && cell.responseItemId ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={null} doesNotSupply={false} isAvailable={false} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} currentConversionFactor={cell.conversionFactor} conversionRequired={row.conversionRequired} pricingUnitInfo={row.pricingUnitInfo} comparisonUnitInfo={row.comparisonUnitInfo} /> : null}
       </div>
     );
   }
 
   if (cell.responseItemId === null) {
     const link = row.supplierQuotationItemBySupplier.get(supplier.id);
-    return <div><Badge variant="destructive">aguardando preço</Badge>{dados.podeLancar && link ? <ManualPriceForm supplierQuotationItemId={link} roundId={dados.round.id} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} comparisonUnit={row.comparisonUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} conversionRequired={row.conversionRequired} /> : null}</div>;
+    return <div><Badge variant="destructive">aguardando preço</Badge>{dados.podeLancar && link ? <ManualPriceForm supplierQuotationItemId={link} roundId={dados.round.id} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} comparisonUnit={row.comparisonUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} conversionRequired={row.conversionRequired} pricingUnitInfo={row.pricingUnitInfo} comparisonUnitInfo={row.comparisonUnitInfo} /> : null}</div>;
   }
 
   if (cell.currentPrice === null) return <Badge variant="destructive">resposta sem preço</Badge>;
@@ -410,7 +410,7 @@ function SupplierOffer({ row, supplier, cell, dados }: { row: Row; supplier: Sup
       {cell.notes ? <p className="text-fg-muted mt-1 text-xs">{cell.notes}</p> : null}
       <div className="mt-1 flex flex-wrap items-start gap-1">
         {dados.podeNegociar ? <NegotiationForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} supplierName={supplier.suppliers.name} productName={row.productName} /> : null}
-        {dados.podeCorrigir ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} doesNotSupply={false} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} currentConversionFactor={cell.conversionFactor} conversionRequired={row.conversionRequired} /> : null}
+        {dados.podeCorrigir ? <CorrectionForm responseItemId={cell.responseItemId} roundId={dados.round.id} currentPrice={cell.currentPrice} doesNotSupply={false} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} currentConversionFactor={cell.conversionFactor} conversionRequired={row.conversionRequired} pricingUnitInfo={row.pricingUnitInfo} comparisonUnitInfo={row.comparisonUnitInfo} /> : null}
       </div>
     </div>
   );

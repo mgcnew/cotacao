@@ -51,6 +51,12 @@ export type ComparisonRow = {
   purchaseUnit: string;
   pricingUnit: string;
   comparisonUnit: string | null;
+  /**
+   * As mesmas unidades com nome, para frases como "Preço de 1 bobina" e
+   * "Cada bobina tem ___ metros" — o símbolo sozinho ("Bo") não se lê.
+   */
+  pricingUnitInfo: { name: string | null; symbol: string } | null;
+  comparisonUnitInfo: { name: string | null; symbol: string } | null;
   cells: Map<string, ComparisonCell>;
   bestPrice: number | null;
   /** Menor preço normalizado — o que de fato compara propostas diferentes. */
@@ -86,9 +92,9 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         comparison_unit_id,
         product_id,
         products!inner ( name, category_id, purpose ),
-        purchase_unit:units!quotation_items_company_id_purchase_unit_id_fkey ( symbol ),
-        pricing_unit:units!quotation_items_company_id_pricing_unit_id_fkey ( symbol ),
-        comparison_unit:units!quotation_items_company_id_comparison_unit_id_fkey ( symbol )
+        purchase_unit:units!quotation_items_company_id_purchase_unit_id_fkey ( name, symbol ),
+        pricing_unit:units!quotation_items_company_id_pricing_unit_id_fkey ( name, symbol ),
+        comparison_unit:units!quotation_items_company_id_comparison_unit_id_fkey ( name, symbol )
       `,
       )
       .eq("company_id", companyId)
@@ -136,7 +142,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
     await supabase
       .from("product_attribute_definitions")
       .select(
-        "id, name, category_id, product_id, unit_id, is_required, units ( symbol )",
+        "id, name, category_id, product_id, unit_id, is_required, units ( name, symbol )",
       )
       .eq("company_id", companyId)
       .eq("is_active", true)
@@ -413,6 +419,12 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       comparisonUnit: legacyPackagingPresentation
         ? (conversionDefinition?.units?.symbol ?? null)
         : (item.comparison_unit?.symbol ?? null),
+      pricingUnitInfo: legacyPackagingPresentation
+        ? (item.purchase_unit ?? null)
+        : (item.pricing_unit ?? null),
+      comparisonUnitInfo: legacyPackagingPresentation
+        ? (conversionDefinition?.units ?? null)
+        : (item.comparison_unit ?? null),
       cells,
       bestPrice,
       bestNormalized,

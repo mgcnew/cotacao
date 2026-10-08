@@ -131,6 +131,9 @@ export function ProductEditForm({
   const [categoryId, setCategoryId] = React.useState(product.categoryId);
   const [name, setName] = React.useState(product.name);
   const [purpose, setPurpose] = React.useState(product.purpose);
+  const [purchaseUnitId, setPurchaseUnitId] = React.useState(
+    product.purchaseUnitId,
+  );
   const [pricingUnitId, setPricingUnitId] = React.useState(product.pricingUnitId);
   const [comparisonUnitId, setComparisonUnitId] = React.useState(
     product.comparisonUnitId ?? "",
@@ -140,6 +143,7 @@ export function ProductEditForm({
   // um estado local diria.
   const fator = derivePackagingFactor({
     purpose,
+    purchaseUnitId: unitsLockReason ? product.purchaseUnitId : purchaseUnitId,
     pricingUnitId: unitsLockReason ? product.pricingUnitId : pricingUnitId,
     comparisonUnitId: unitsLockReason
       ? (product.comparisonUnitId ?? "")
@@ -273,7 +277,8 @@ export function ProductEditForm({
                 id="purchaseUnitId"
                 name="purchaseUnitId"
                 required
-                defaultValue={product.purchaseUnitId}
+                value={purchaseUnitId}
+                onValueChange={setPurchaseUnitId}
                 options={unitOptions}
               />
             </Field>
@@ -315,6 +320,9 @@ export function ProductEditForm({
           titulo="Apresentação"
           descricao="Sai das unidades acima, e cada fornecedor responde a sua na cotação. É o que põe embalagens de tamanhos diferentes na mesma base de comparação."
         >
+          {fator.ajuste ? (
+            <p className="text-warning text-sm">{fator.ajuste}</p>
+          ) : null}
           <Field
             label={fator.rotulo}
             htmlFor="presentationFactor"

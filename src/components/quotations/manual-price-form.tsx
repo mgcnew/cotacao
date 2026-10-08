@@ -7,10 +7,24 @@ import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { packagingFactorLabel, unitWord } from "@/features/products/units";
 import {
   recordManualQuotationItem,
   type CorrectionState,
 } from "@/features/quotations/correction";
+
+type UnitInfo = { name: string | null; symbol: string } | null;
+
+const PRECO_POR_UNIDADE = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4,
+});
+
+function numero(texto: string): number {
+  return Number(texto.trim().replace(/\./g, "").replace(",", "."));
+}
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -47,6 +61,8 @@ export function ManualPriceForm({
   conversionName,
   conversionUnit,
   conversionRequired,
+  pricingUnitInfo = null,
+  comparisonUnitInfo = null,
 }: {
   supplierQuotationItemId: string;
   roundId: string;
@@ -58,6 +74,8 @@ export function ManualPriceForm({
   conversionName: string | null;
   conversionUnit: string | null;
   conversionRequired: boolean;
+  pricingUnitInfo?: UnitInfo;
+  comparisonUnitInfo?: UnitInfo;
 }) {
   const [state, formAction] = useActionState<CorrectionState, FormData>(
     recordManualQuotationItem,
@@ -65,6 +83,23 @@ export function ManualPriceForm({
   );
   const [aberto, setAberto] = React.useState(false);
   const [naoFornece, setNaoFornece] = React.useState(false);
+  const [preco, setPreco] = React.useState("");
+  const [fator, setFator] = React.useState("");
+
+  // Embalagem: pergunta como o link do fornecedor pergunta — o preço de 1
+  // bobina e quantos metros vêm nela. O campo solto "por metro" convidava a
+  // digitar o preço da bobina onde se esperava o do metro, e o total saía
+  // bobinas × metros × preço da bobina.
+  const embalagem =
+    Boolean(conversionDefinitionId) &&
+    pricingUnitInfo !== null &&
+    comparisonUnitInfo !== null;
+  const precoNumero = numero(preco);
+  const fatorNumero = numero(fator);
+  const precoPorConteudo =
+    embalagem && precoNumero > 0 && fatorNumero > 0
+      ? precoNumero / fatorNumero
+      : null;
 
   // Gravou: a célula deixa de ser "aguardando" e o formulário some junto.
   const [savedVisto, setSavedVisto] = React.useState(state.savedAt);
@@ -97,44 +132,109 @@ export function ManualPriceForm({
         value={supplierQuotationItemId}
       />
 
-      {conversionDefinitionId && conversionName && !naoFornece ? (
-        <div className="border-primary/20 bg-primary-soft rounded-md border p-2">
+      {embalagem && !naoFornece ? (
+        <div className="border-primary/20 bg-primary-soft flex flex-col gap-1.5 rounded-md border p-2">
           <input
             type="hidden"
             name="conversionDefinitionId"
-            value={conversionDefinitionId}
+            value={conversionDefinitionId ?? ""}
           />
           <label
-            className="text-fg-muted mb-1 block text-xs"
-            htmlFor={`conversao-${supplierQuotationItemId}`}
+            className="text-fg-muted block text-xs"
+            htmlFor={`preco-${supplierQuotationItemId}`}
           >
-            {conversionName}{conversionUnit ? ` (${conversionUnit})` : ""}
-            {conversionRequired ? <span className="text-destructive"> *</span> : null}
+            Preço de 1 {unitWord(pricingUnitInfo)}
           </label>
           <Input
-            id={`conversao-${supplierQuotationItemId}`}
-            name="conversionFactor"
+            id={`preco-${supplierQuotationItemId}`}
+            name="quotedPrice"
             inputMode="decimal"
-            required={conversionRequired}
-            placeholder={`Para comparar por ${comparisonUnit ?? "unidade"}`}
+            autoFocus
+            required
+            value={preco}
+            onChange={(event) => setPreco(event.target.value)}
+            placeholder="R$ 0,00"
             className="h-7 w-full text-sm"
           />
+          <label
+            className="text-fg-muted block text-xs"
+            htmlFor={`conversao-${supplierQuotationItemId}`}
+          >
+            {packagingFactorLabel(pricingUnitInfo!)}
+            {conversionRequired ? (
+              <span className="text-destructive"> *</span>
+            ) : null}
+          </label>
+          <div className="flex items-center gap-1.5">
+            <Input
+              id={`conversao-${supplierQuotationItemId}`}
+              name="conversionFactor"
+              inputMode="decimal"
+              required={conversionRequired}
+              value={fator}
+              onChange={(event) => setFator(event.target.value)}
+              placeholder="0"
+              className="h-7 w-20 text-sm"
+            />
+            <span className="text-fg-muted text-xs">
+              {unitWord(comparisonUnitInfo, 2)}
+            </span>
+          </div>
+          {precoPorConteudo !== null ? (
+            <p className="text-fg text-xs tabular-nums">
+              = {PRECO_POR_UNIDADE.format(precoPorConteudo)} por{" "}
+              {unitWord(comparisonUnitInfo)}
+            </p>
+          ) : null}
         </div>
-      ) : null}
+      ) : (
+        <>
+          {conversionDefinitionId && conversionName && !naoFornece ? (
+            <div className="border-primary/20 bg-primary-soft rounded-md border p-2">
+              <input
+                type="hidden"
+                name="conversionDefinitionId"
+                value={conversionDefinitionId}
+              />
+              <label
+                className="text-fg-muted mb-1 block text-xs"
+                htmlFor={`conversao-${supplierQuotationItemId}`}
+              >
+                {conversionName}
+                {conversionUnit ? ` (${conversionUnit})` : ""}
+                {conversionRequired ? (
+                  <span className="text-destructive"> *</span>
+                ) : null}
+              </label>
+              <Input
+                id={`conversao-${supplierQuotationItemId}`}
+                name="conversionFactor"
+                inputMode="decimal"
+                required={conversionRequired}
+                placeholder={`Para comparar por ${comparisonUnit ?? "unidade"}`}
+                className="h-7 w-full text-sm"
+              />
+            </div>
+          ) : null}
 
-      <label className="sr-only" htmlFor={`preco-${supplierQuotationItemId}`}>
-        Preço de {supplierName} para {productName}
-      </label>
-      <Input
-        id={`preco-${supplierQuotationItemId}`}
-        name="quotedPrice"
-        inputMode="decimal"
-        autoFocus
-        required={!naoFornece}
-        disabled={naoFornece}
-        placeholder={`por ${pricingUnit}`}
-        className="h-7 w-28 text-sm"
-      />
+          <label
+            className="sr-only"
+            htmlFor={`preco-${supplierQuotationItemId}`}
+          >
+            Preço de {supplierName} para {productName}
+          </label>
+          <Input
+            id={`preco-${supplierQuotationItemId}`}
+            name="quotedPrice"
+            inputMode="decimal"
+            autoFocus
+            required={!naoFornece}
+            disabled={naoFornece}
+            placeholder={`por ${pricingUnit}`}
+            className="h-7 w-28 text-sm"
+          />
+        </>
+      )}
 
       <label className="text-fg-subtle flex items-center gap-1.5 text-xs">
         <input
