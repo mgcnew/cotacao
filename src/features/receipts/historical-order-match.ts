@@ -255,19 +255,82 @@ export async function listOpenOrdersForMatch(
 
 /**
  * Números de pedido citados no XML (`<xPed>`, no grupo de compra ou em cada
- * item). Só os dígitos, sem zeros à esquerda — "PED-000123" vira "123".
+ * item).
+ *
+ * A leitura é estrita de propósito: o campo existe para o número do pedido do
+ * *cliente*, mas na prática os fornecedores o enchem com a própria numeração
+ * interna — em 08/10/2026, 25 de 96 notas o traziam, todas com códigos do
+ * fornecedor ("-307182", "7110686322bac94"). Como a citação sozinha basta para
+ * sugerir, aproveitar dígitos soltos desses códigos faria um "60" aparecer por
+ * acaso. Só vale um número inteiro, com prefixo opcional ("PED 60", "#060").
  */
 export function purchaseOrderRefsFromXml(xml: string): Set<string> {
   const refs = new Set<string>();
   for (const match of xml.matchAll(/<(?:[\w.-]+:)?xPed>([^<]*)</gi)) {
-    const digits = (match[1] ?? "").replace(/\D/g, "").replace(/^0+/, "");
-    if (digits) refs.add(digits);
+    const numero = /^(?:ped(?:ido)?)?[\s.#:nº°-]*0*(\d{1,9})$/i.exec(
+      (match[1] ?? "").trim(),
+    )?.[1];
+    if (numero) refs.add(numero);
   }
   return refs;
 }
 
+/**
+ * Números de pedido já lidos, por importação. O XML guardado nunca muda, então
+ * o que se leu uma vez vale para sempre — a lista pode considerar o `xPed` sem
+ * baixar as mesmas notas a cada visita. O teto só evita crescer sem limite num
+ * processo de vida longa.
+ */
+const refsPorImportacao = new Map<string, Set<string>>();
+const TETO_DO_CACHE = 5000;
+
+async function readPurchaseOrderRefs(
+  importId: string,
+  storagePath: string,
+): Promise<Set<string> | undefined> {
+  const cached = refsPorImportacao.get(importId);
+  if (cached) return cached;
+  const supabase = await createServerSupabaseClient();
+  const stored = await supabase.storage
+    .from("historical-nfe-documents")
+    .download(storagePath);
+  // Sem o XML a avaliação continua valendo pelos outros sinais; a falha não é
+  // guardada, para a próxima visita tentar de novo.
+  if (stored.error || !stored.data) return undefined;
+  const refs = purchaseOrderRefsFromXml(await stored.data.text());
+  if (refsPorImportacao.size >= TETO_DO_CACHE) refsPorImportacao.clear();
+  refsPorImportacao.set(importId, refs);
+  return refs;
+}
+
+/**
+ * Lê o `xPed` só das notas que dependem dele: candidatas por fornecedor e
+ * data a algum pedido, mas que não passaram pelo conteúdo. As que já passaram
+ * dispensam a leitura, e as que nem são candidatas não têm o que ganhar.
+ */
+async function withRefsWhereTheyMatter<T extends StoredInvoice>(
+  invoices: T[],
+  orders: OpenOrder[],
+): Promise<T[]> {
+  return Promise.all(
+    invoices.map(async (invoice) => {
+      const evidences = orders
+        .map((order) => evaluateInvoiceForOrder(invoice, order))
+        .filter((evidence) => evidence !== null);
+      if (evidences.length === 0 || evidences.some((e) => e.qualifies))
+        return invoice;
+      const refs = await readPurchaseOrderRefs(
+        invoice.importId,
+        invoice.storagePath,
+      );
+      return refs ? { ...invoice, purchaseOrderRefs: refs } : invoice;
+    }),
+  );
+}
+
 type StoredInvoice = InvoiceForMatch & {
   importId: string;
+  storagePath: string;
   invoiceNumber: string;
   invoiceSeries: string | null;
   invoiceTotal: number;
@@ -286,7 +349,7 @@ async function listStoredInvoices(
   let query = supabase
     .from("historical_nfe_imports")
     .select(
-      "id, supplier_id, status, invoice_number, invoice_series, issued_at, invoice_total, historical_nfe_items ( product_id, reconciliation_status, description, commercial_quantity, commercial_unit, practiced_price )",
+      "id, supplier_id, status, invoice_number, invoice_series, issued_at, invoice_total, storage_path, historical_nfe_items ( product_id, reconciliation_status, description, commercial_quantity, commercial_unit, practiced_price )",
     )
     .eq("company_id", companyId)
     .in("status", ["draft", "posted"])
@@ -300,6 +363,7 @@ async function listStoredInvoices(
 
   return (data ?? []).map((row) => ({
     importId: row.id,
+    storagePath: row.storage_path,
     supplierId: row.supplier_id,
     issuedAt: row.issued_at,
     invoiceNumber: row.invoice_number,
@@ -319,9 +383,8 @@ async function listStoredInvoices(
 }
 
 /**
- * Notas que já passam pelo critério completo com algum pedido — a aba
- * "Parece pedido" e o selo na lista. O `xPed` fica de fora aqui: lê-lo
- * exigiria baixar o XML de cada nota; a página da nota o considera.
+ * Notas que passam pelo critério completo com algum pedido — a aba "Parece
+ * pedido" e o selo na lista.
  */
 export async function listImportsLookingLikeOrders(
   companyId: string,
@@ -333,10 +396,13 @@ export async function listImportsLookingLikeOrders(
   const inicio = orders
     .map((order) => somarDias(order.createdDay, -1))
     .sort()[0];
-  const invoices = await listStoredInvoices(
-    companyId,
-    [...new Set(orders.map((order) => order.supplierId))],
-    inicio,
+  const invoices = await withRefsWhereTheyMatter(
+    await listStoredInvoices(
+      companyId,
+      [...new Set(orders.map((order) => order.supplierId))],
+      inicio,
+    ),
+    orders,
   );
   for (const invoice of invoices) {
     const numeros = orders
@@ -367,14 +433,17 @@ async function invoicesForOrder(
   companyId: string,
   order: OpenOrder,
 ): Promise<InvoiceSuggestion[]> {
-  const invoices = await listStoredInvoices(
-    companyId,
-    [order.supplierId],
-    somarDias(order.createdDay, -1),
-    somarDias(
-      order.deliveryDueDate ?? order.createdDay,
-      JANELA_APOS_PRAZO_DIAS,
+  const invoices = await withRefsWhereTheyMatter(
+    await listStoredInvoices(
+      companyId,
+      [order.supplierId],
+      somarDias(order.createdDay, -1),
+      somarDias(
+        order.deliveryDueDate ?? order.createdDay,
+        JANELA_APOS_PRAZO_DIAS,
+      ),
     ),
+    [order],
   );
   return invoices
     .flatMap((invoice) => {
@@ -531,16 +600,10 @@ export async function suggestOrdersForImport(
   );
   if (candidates.length === 0) return [];
 
-  const supabase = await createServerSupabaseClient();
-  const stored = await supabase.storage
-    .from("historical-nfe-documents")
-    .download(history.storage_path);
-  // Sem o XML a avaliação continua valendo pelos outros sinais.
-  if (!stored.error && stored.data) {
-    invoice.purchaseOrderRefs = purchaseOrderRefsFromXml(
-      await stored.data.text(),
-    );
-  }
+  invoice.purchaseOrderRefs = await readPurchaseOrderRefs(
+    history.id,
+    history.storage_path,
+  );
 
   const qualifying = candidates
     .map((order) => ({
