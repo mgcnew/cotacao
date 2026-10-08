@@ -402,6 +402,7 @@ export function HistoricalNfeReconciliationForm({
   items,
   canCreateProduct,
   productFormOptions,
+  listQuery = "",
 }: {
   importId: string;
   issuerDocument: string | null;
@@ -412,6 +413,8 @@ export function HistoricalNfeReconciliationForm({
   items: Item[];
   canCreateProduct: boolean;
   productFormOptions: ProductFormOptions | null;
+  /** Recorte da lista de onde a nota foi aberta, para voltar a ele. */
+  listQuery?: string;
 }) {
   const [supplierId, setSupplierId] = useState(initialSupplierId);
   const [availableProducts, setAvailableProducts] = useState(products);
@@ -697,6 +700,7 @@ export function HistoricalNfeReconciliationForm({
   return (
     <>
       <form action={formAction} className="space-y-5">
+      <input type="hidden" name="lista" value={listQuery} />
       <section className="border-border bg-surface rounded-xl border p-4 sm:p-5">
         <label className="text-fg-muted flex flex-col gap-1.5 text-sm">
           Fornecedor da NF-e

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { historicalListHref } from "@/features/receipts/historical-filters";
 import {
   parseHistoricalNfeXml,
   type HistoricalNfeItem,
@@ -556,7 +557,8 @@ export async function postHistoricalNfe(
   revalidatePath("/dashboard");
   revalidatePath("/produtos", "layout");
   revalidatePath("/fornecedores", "layout");
-  redirect("/recebimentos/historico");
+  // De volta ao recorte de onde a nota foi aberta (filtros e página).
+  redirect(historicalListHref(String(formData.get("lista") ?? "")));
 }
 
 export async function transferHistoricalNfeToReceipt(

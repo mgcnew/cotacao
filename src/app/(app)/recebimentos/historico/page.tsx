@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import {
   contarHistoricalNfeFilters,
+  historicalListQuery,
   HISTORICAL_STATUS_LABEL,
   parseHistoricalNfeFilters,
   type HistoricalNfeFilters,
@@ -67,6 +68,12 @@ export default async function HistoricoFiscalPage({
     Array.isArray(params.pagina) ? params.pagina[0] : params.pagina,
   );
   const filters = parseHistoricalNfeFilters(params);
+  // Vai junto no link de cada nota, para a volta cair no mesmo recorte.
+  const listQuery = historicalListQuery(params);
+  const notaHref = (id: string) =>
+    listQuery
+      ? `${BASE_PATH}/${id}?lista=${encodeURIComponent(listQuery)}`
+      : `${BASE_PATH}/${id}`;
   const imports = await listHistoricalNfeImports(
     company.companyId,
     Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
@@ -277,7 +284,7 @@ export default async function HistoricoFiscalPage({
                   >
                     <TableCell className="col-span-2 block p-0 whitespace-normal sm:table-cell sm:p-2">
                       <Link
-                        href={`/recebimentos/historico/${item.id}`}
+                        href={notaHref(item.id)}
                         className="text-fg font-medium hover:underline"
                       >
                         {item.invoice_number}

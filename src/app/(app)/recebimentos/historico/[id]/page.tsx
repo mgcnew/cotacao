@@ -11,6 +11,10 @@ import { Button } from "@/components/ui/button";
 import { suggestOrdersForImport } from "@/features/receipts/historical-order-match";
 import { getHistoricalNfeImport } from "@/features/receipts/historical-queries";
 import {
+  historicalListHref,
+  historicalListQuery,
+} from "@/features/receipts/historical-filters";
+import {
   listAttributeDefinitions,
   listCategories,
   listUnits,
@@ -34,8 +38,20 @@ const MONEY = new Intl.NumberFormat("pt-BR", {
 
 export default async function ConciliacaoNfeHistoricaPage({
   params,
+  searchParams,
 }: PageProps<"/recebimentos/historico/[id]">) {
-  const [{ id }, company] = await Promise.all([params, requireActiveCompany()]);
+  const [{ id }, query, company] = await Promise.all([
+    params,
+    searchParams,
+    requireActiveCompany(),
+  ]);
+  // O recorte da lista de onde a nota foi aberta: "Voltar" e a confirmação
+  // devolvem para ele, e não para o começo da lista.
+  const rawLista = Array.isArray(query.lista) ? query.lista[0] : query.lista;
+  const listQuery = historicalListQuery(
+    Object.fromEntries(new URLSearchParams(rawLista ?? "")),
+  );
+  const backHref = historicalListHref(listQuery);
   const permissions = await getPermissions(company.companyId);
   if (!permissions.has("receipt.view")) redirect("/dashboard");
   const data = await getHistoricalNfeImport(company.companyId, id);
@@ -76,7 +92,7 @@ export default async function ConciliacaoNfeHistoricaPage({
               </Button>
             ) : null}
             <Button asChild size="sm" variant="ghost">
-              <Link href="/recebimentos/historico">Voltar</Link>
+              <Link href={backHref}>Voltar</Link>
             </Button>
           </>
         }
@@ -115,6 +131,7 @@ export default async function ConciliacaoNfeHistoricaPage({
           issuedDay={DIA_DA_LOJA.format(new Date(history.issued_at))}
           posted={history.status === "posted"}
           suggestions={orderSuggestions}
+          listQuery={listQuery}
         />
       ) : null}
 
@@ -185,6 +202,7 @@ export default async function ConciliacaoNfeHistoricaPage({
           issuerDocument={history.issuer_document}
           initialIssuerLinked={Boolean(history.supplier_legal_entity_id)}
           initialSupplierId={history.supplier_id ?? ""}
+          listQuery={listQuery}
           suppliers={data.suppliers}
           products={data.products}
           items={data.items}

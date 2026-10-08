@@ -61,6 +61,7 @@ export function HistoricalNfeOrderSuggestion({
   issuedDay,
   posted,
   suggestions,
+  listQuery = "",
 }: {
   importId: string;
   /** Emissão da nota (AAAA-MM-DD, no fuso da loja). */
@@ -68,6 +69,8 @@ export function HistoricalNfeOrderSuggestion({
   /** A nota já foi conciliada no histórico. */
   posted: boolean;
   suggestions: OrderSuggestion[];
+  /** Recorte da lista de onde a nota foi aberta, levado às notas vizinhas. */
+  listQuery?: string;
 }) {
   const [selected, setSelected] = useState(suggestions[0]?.orderId ?? "");
   const chosen =
@@ -192,7 +195,7 @@ export function HistoricalNfeOrderSuggestion({
                     {chosen.siblingInvoices.map((sibling) => (
                       <li key={sibling.importId}>
                         <Link
-                          href={`/recebimentos/historico/${sibling.importId}`}
+                          href={`/recebimentos/historico/${sibling.importId}${listQuery ? `?lista=${encodeURIComponent(listQuery)}` : ""}`}
                           className="border-border bg-surface hover:text-fg inline-flex rounded-full border px-2.5 py-0.5 text-xs"
                         >
                           NF-e {sibling.invoiceNumber}

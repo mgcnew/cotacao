@@ -82,3 +82,35 @@ export function parseHistoricalNfeFilters(
 export function contarHistoricalNfeFilters(f: HistoricalNfeFilters): number {
   return Object.values(f).filter((v) => v !== null).length;
 }
+
+const LIST_PATH = "/recebimentos/historico";
+const LIST_KEYS = ["situacao", "fornecedor", "de", "ate", "busca", "pagina"];
+
+/**
+ * O recorte da lista (filtros e página) como query string, para viajar até a
+ * nota e voltar com ela: quem filtrou "Parece pedido", abriu uma nota e
+ * confirmou volta para a mesma aba e a mesma página, em vez do começo.
+ */
+export function historicalListQuery(
+  searchParams: Record<string, string | string[] | undefined>,
+): string {
+  const query = new URLSearchParams();
+  for (const key of LIST_KEYS) {
+    const raw = searchParams[key];
+    const value = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+    if (value) query.set(key, value.slice(0, 100));
+  }
+  return query.toString();
+}
+
+/**
+ * Endereço de volta à lista a partir do recorte que veio da URL ou do
+ * formulário. Só as chaves da lista sobrevivem — o valor vem de fora, e um
+ * redirect não pode virar porta para outro lugar.
+ */
+export function historicalListHref(raw: string | null | undefined): string {
+  const query = historicalListQuery(
+    Object.fromEntries(new URLSearchParams(raw ?? "")),
+  );
+  return query ? `${LIST_PATH}?${query}` : LIST_PATH;
+}
