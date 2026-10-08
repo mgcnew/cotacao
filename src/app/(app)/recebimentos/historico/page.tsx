@@ -4,10 +4,14 @@ import { redirect } from "next/navigation";
 
 import { HistoricalNfeUploadForm } from "@/components/receipts/historical-nfe-upload-form";
 import { EmptyState } from "@/components/layout/empty-state";
+import { FilterDialog } from "@/components/layout/filter-dialog";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Table,
   TableBody,
@@ -16,8 +20,33 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  contarHistoricalNfeFilters,
+  HISTORICAL_STATUS_LABEL,
+  parseHistoricalNfeFilters,
+  type HistoricalNfeFilters,
+  type HistoricalStatus,
+} from "@/features/receipts/historical-filters";
 import { listHistoricalNfeImports } from "@/features/receipts/historical-queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { cn } from "@/lib/utils";
+
+const BASE_PATH = "/recebimentos/historico";
+
+/** Endereço da lista com o recorte atual, trocando só a situação. */
+function hrefComSituacao(
+  filters: HistoricalNfeFilters,
+  situacao: HistoricalStatus | null,
+) {
+  const params = new URLSearchParams();
+  if (situacao) params.set("situacao", situacao);
+  if (filters.fornecedorId) params.set("fornecedor", filters.fornecedorId);
+  if (filters.de) params.set("de", filters.de);
+  if (filters.ate) params.set("ate", filters.ate);
+  if (filters.busca) params.set("busca", filters.busca);
+  const query = params.toString();
+  return query ? `${BASE_PATH}?${query}` : BASE_PATH;
+}
 
 const DATE = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
 const MONEY = new Intl.NumberFormat("pt-BR", {
@@ -35,11 +64,23 @@ export default async function HistoricoFiscalPage({
   const rawPage = Number(
     Array.isArray(params.pagina) ? params.pagina[0] : params.pagina,
   );
+  const filters = parseHistoricalNfeFilters(params);
   const imports = await listHistoricalNfeImports(
     company.companyId,
     Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
+    filters,
   );
   const canImport = permissions.has("receipt.post");
+  // A situação mora nas abas; o botão conta só o que está escondido nele.
+  const filtrosNoBotao = contarHistoricalNfeFilters({
+    ...filters,
+    situacao: null,
+  });
+  const filtrando = contarHistoricalNfeFilters(filters) > 0;
+  const totalSemSituacao = Object.values(imports.byStatus).reduce(
+    (sum, n) => sum + n,
+    0,
+  );
 
   return (
     <div className="w-full">
@@ -56,18 +97,145 @@ export default async function HistoricoFiscalPage({
       {canImport ? <HistoricalNfeUploadForm /> : null}
 
       <section className="mt-7">
-        <div className="mb-3">
-          <h2 className="text-fg font-semibold">Notas importadas</h2>
-          <p className="text-fg-muted text-sm">
-            Rascunhos ainda precisam da associação dos produtos; confirmadas já
-            alimentam os históricos.
-          </p>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-fg font-semibold">Notas importadas</h2>
+            <p className="text-fg-muted text-sm">
+              Rascunhos ainda precisam da associação dos produtos; confirmadas
+              já alimentam os históricos.
+            </p>
+          </div>
+          <FilterDialog basePath={BASE_PATH} ativos={filtrosNoBotao}>
+            {/* A situação escolhida nas abas viaja junto ao aplicar. */}
+            {filters.situacao ? (
+              <input type="hidden" name="situacao" value={filters.situacao} />
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <label htmlFor="busca" className="text-fg-muted text-xs">
+                  Nº da nota, chave ou fornecedor
+                </label>
+                <Input
+                  id="busca"
+                  name="busca"
+                  placeholder="285609, 3526…, Coca cola…"
+                  defaultValue={filters.busca ?? ""}
+                  className="h-8"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <label htmlFor="fornecedor" className="text-fg-muted text-xs">
+                  Fornecedor
+                </label>
+                <SearchableSelect
+                  id="fornecedor"
+                  name="fornecedor"
+                  defaultValue={filters.fornecedorId ?? ""}
+                  options={imports.suppliers}
+                  placeholder="Digite o fornecedor…"
+                  emptyMessage="Nenhum fornecedor encontrado."
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="de" className="text-fg-muted text-xs">
+                  Emitidas de
+                </label>
+                <DateTimePicker
+                  id="de"
+                  name="de"
+                  defaultValue={filters.de ?? ""}
+                  placeholder="Escolher data inicial"
+                  dateOnly
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="ate" className="text-fg-muted text-xs">
+                  Até
+                </label>
+                <DateTimePicker
+                  id="ate"
+                  name="ate"
+                  defaultValue={filters.ate ?? ""}
+                  placeholder="Escolher data final"
+                  dateOnly
+                />
+              </div>
+            </div>
+          </FilterDialog>
         </div>
+
+        {/* Situação em abas, e não no modal: é o recorte do dia a dia ("o que
+            falta conciliar?"), e a contagem já responde antes do clique. Cada
+            aba conta dentro do resto do filtro. */}
+        <nav
+          aria-label="Situação das notas"
+          className="mb-3 flex gap-1.5 overflow-x-auto pb-1"
+        >
+          {(
+            [
+              [null, "Todas", totalSemSituacao],
+              ...(Object.keys(HISTORICAL_STATUS_LABEL) as HistoricalStatus[])
+                .filter(
+                  (status) =>
+                    imports.byStatus[status] > 0 || filters.situacao === status,
+                )
+                .map(
+                  (status) =>
+                    [
+                      status,
+                      HISTORICAL_STATUS_LABEL[status],
+                      imports.byStatus[status],
+                    ] as const,
+                ),
+            ] as const
+          ).map(([status, label, count]) => {
+            const ativa = filters.situacao === status;
+            return (
+              <Link
+                key={status ?? "todas"}
+                href={hrefComSituacao(filters, status)}
+                aria-current={ativa ? "page" : undefined}
+                className={cn(
+                  "border-border inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
+                  ativa
+                    ? "bg-primary-solid text-primary-solid-fg border-primary-solid"
+                    : "text-fg-muted hover:bg-surface-sunken hover:text-fg",
+                )}
+              >
+                {label}
+                <span
+                  className={cn(
+                    "text-xs tabular-nums",
+                    ativa ? "opacity-80" : "text-fg-subtle",
+                  )}
+                >
+                  {count}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+
         {imports.rows.length === 0 ? (
           <EmptyState
             icon={FileClock}
-            title="Nenhuma NF-e histórica"
-            description="Importe o primeiro XML para recuperar preços e compras anteriores ao sistema."
+            title={
+              filtrando
+                ? "Nenhuma nota neste recorte"
+                : "Nenhuma NF-e histórica"
+            }
+            description={
+              filtrando
+                ? "Nenhuma nota casa com o filtro aplicado. Limpe o recorte para ver todas."
+                : "Importe o primeiro XML para recuperar preços e compras anteriores ao sistema."
+            }
+            action={
+              filtrando ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={BASE_PATH}>Limpar filtros</Link>
+                </Button>
+              ) : null
+            }
           />
         ) : (
           <div className="border-border bg-surface overflow-hidden rounded-xl border">
@@ -129,11 +297,9 @@ export default async function HistoricoFiscalPage({
                           item.status === "posted" ? "default" : "outline"
                         }
                       >
-                        {item.status === "posted"
-                          ? "No histórico"
-                          : item.status === "transferred"
-                            ? "Em recebimento"
-                            : "Conciliar"}
+                        {HISTORICAL_STATUS_LABEL[
+                          item.status as HistoricalStatus
+                        ] ?? item.status}
                       </Badge>
                     </TableCell>
                   </TableRow>

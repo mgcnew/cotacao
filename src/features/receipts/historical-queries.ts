@@ -2,6 +2,12 @@ import "server-only";
 
 import type { PriceHistoryPoint } from "@/components/history/price-history-chart";
 import type { HistoryFilters } from "@/features/history/queries";
+import {
+  EMPTY_HISTORICAL_FILTERS,
+  HISTORICAL_STATUS_LABEL,
+  type HistoricalNfeFilters,
+  type HistoricalStatus,
+} from "@/features/receipts/historical-filters";
 import { parseHistoricalNfeXml } from "@/features/receipts/historical-nfe";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -9,36 +15,101 @@ import type { Database } from "@/types/database";
 export async function listHistoricalNfeImports(
   companyId: string,
   requestedPage = 1,
+  filters: HistoricalNfeFilters = EMPTY_HISTORICAL_FILTERS,
 ) {
   const supabase = await createServerSupabaseClient();
   const pageSize = 30;
-  const count = await supabase
-    .from("historical_nfe_imports")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", companyId);
-  if (count.error)
-    throw new Error(`Falha ao contar NF-e: ${count.error.message}`);
-  const total = count.count ?? 0;
+
+  const suppliers = await supabase
+    .from("suppliers")
+    .select("id, name")
+    .eq("company_id", companyId)
+    .order("name");
+  if (suppliers.error)
+    throw new Error(`Falha ao listar fornecedores: ${suppliers.error.message}`);
+  // A lista mostra o nome do cadastro, não a razão social do XML ("Coca cola",
+  // e não "SPAL INDÚSTRIA…"). A busca precisa achar pelos dois.
+  const buscaMinuscula = filters.busca?.toLocaleLowerCase("pt-BR");
+  const fornecedoresDaBusca = buscaMinuscula
+    ? (suppliers.data ?? [])
+        .filter((row) =>
+          row.name.toLocaleLowerCase("pt-BR").includes(buscaMinuscula),
+        )
+        .map((row) => row.id)
+    : [];
+
+  // O mesmo recorte vale para a contagem, para as abas de situação e para a
+  // página. A situação fica de fora daqui porque as abas precisam contar
+  // cada uma delas dentro do resto do filtro.
+  function recortar<
+    Q extends {
+      eq(column: string, value: string): Q;
+      gte(column: string, value: string): Q;
+      lt(column: string, value: string): Q;
+      or(filters: string): Q;
+    },
+  >(query: Q): Q {
+    let q = query.eq("company_id", companyId);
+    if (filters.fornecedorId) q = q.eq("supplier_id", filters.fornecedorId);
+    // Emissão é instante; o filtro é dia no fuso da loja.
+    if (filters.de) q = q.gte("issued_at", `${filters.de}T00:00:00-03:00`);
+    if (filters.ate)
+      q = q.lt("issued_at", `${diaSeguinte(filters.ate)}T00:00:00-03:00`);
+    if (filters.busca) {
+      const termo = `*${filters.busca}*`;
+      q = q.or(
+        [
+          `invoice_number.ilike.${termo}`,
+          `issuer_name.ilike.${termo}`,
+          `access_key.ilike.${termo}`,
+          `file_name.ilike.${termo}`,
+          ...(fornecedoresDaBusca.length > 0
+            ? [`supplier_id.in.(${fornecedoresDaBusca.join(",")})`]
+            : []),
+        ].join(","),
+      );
+    }
+    return q;
+  }
+
+  const statuses = Object.keys(HISTORICAL_STATUS_LABEL) as HistoricalStatus[];
+  const counts = await Promise.all(
+    statuses.map((status) =>
+      recortar(
+        supabase
+          .from("historical_nfe_imports")
+          .select("id", { count: "exact", head: true }),
+      ).eq("status", status),
+    ),
+  );
+  const byStatus = {} as Record<HistoricalStatus, number>;
+  counts.forEach((result, index) => {
+    if (result.error)
+      throw new Error(`Falha ao contar NF-e: ${result.error.message}`);
+    byStatus[statuses[index]] = result.count ?? 0;
+  });
+  const total = filters.situacao
+    ? byStatus[filters.situacao]
+    : statuses.reduce((sum, status) => sum + byStatus[status], 0);
+
   const page = Math.min(
     Math.max(requestedPage, 1),
     Math.max(Math.ceil(total / pageSize), 1),
   );
   const start = (page - 1) * pageSize;
-  const [imports, suppliers] = await Promise.all([
+  let list = recortar(
     supabase
       .from("historical_nfe_imports")
       .select(
         "id, supplier_id, status, access_key, invoice_number, invoice_series, issued_at, issuer_name, invoice_total, file_name, created_at, historical_nfe_items(count)",
-      )
-      .eq("company_id", companyId)
-      .order("issued_at", { ascending: false })
-      .range(start, start + pageSize - 1),
-    supabase.from("suppliers").select("id, name").eq("company_id", companyId),
-  ]);
+      ),
+  );
+  if (filters.situacao) list = list.eq("status", filters.situacao);
+  const imports = await list
+    .order("issued_at", { ascending: false })
+    .range(start, start + pageSize - 1);
   if (imports.error)
     throw new Error(`Falha ao listar NF-e: ${imports.error.message}`);
-  if (suppliers.error)
-    throw new Error(`Falha ao listar fornecedores: ${suppliers.error.message}`);
   const supplierNames = new Map(
     (suppliers.data ?? []).map((row) => [row.id, row.name]),
   );
@@ -51,8 +122,15 @@ export async function listHistoricalNfeImports(
       itemCount: row.historical_nfe_items[0]?.count ?? 0,
       invoiceTotal: Number(row.invoice_total),
     })),
+    byStatus,
+    suppliers: suppliers.data ?? [],
     pagination: { page, pageSize, total },
   };
+}
+
+function diaSeguinte(dia: string): string {
+  const [ano, mes, d] = dia.split("-").map(Number);
+  return new Date(Date.UTC(ano, mes - 1, d + 1)).toISOString().slice(0, 10);
 }
 
 /**
@@ -137,7 +215,8 @@ export async function listSupplierFiscalDocuments(
   return [...documents.values()]
     .sort(
       (left, right) =>
-        new Date(right.issued_at).getTime() - new Date(left.issued_at).getTime(),
+        new Date(right.issued_at).getTime() -
+        new Date(left.issued_at).getTime(),
     )
     .slice(0, 30);
 }
@@ -170,11 +249,15 @@ export async function getHistoricalNfeDocumentView(
   ]);
 
   if (history.error) {
-    throw new Error(`Falha ao abrir documento fiscal: ${history.error.message}`);
+    throw new Error(
+      `Falha ao abrir documento fiscal: ${history.error.message}`,
+    );
   }
   if (!history.data) return null;
   if (items.error) {
-    throw new Error(`Falha ao abrir itens do documento: ${items.error.message}`);
+    throw new Error(
+      `Falha ao abrir itens do documento: ${items.error.message}`,
+    );
   }
 
   const signed = await supabase.storage
