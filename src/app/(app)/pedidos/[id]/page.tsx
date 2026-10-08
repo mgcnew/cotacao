@@ -449,12 +449,14 @@ export async function PedidoContent({
               <p className="text-fg text-sm font-medium">
                 {notasDoHistorico.length === 1
                   ? "Há uma NF-e no histórico fiscal que parece ser deste pedido"
-                  : `Há ${notasDoHistorico.length} NF-e no histórico fiscal que podem ser deste pedido`}
+                  : `Há ${notasDoHistorico.length} NF-e no histórico fiscal que parecem ser deste pedido`}
               </p>
               <p className="text-fg-muted mt-0.5 text-xs">
-                Mesmo fornecedor, emitidas no período do pedido. Se a mercadoria
-                já veio, dê entrada pela nota: a conferência usa o XML que já
-                está no sistema.
+                Mesmo fornecedor, emitidas no período do pedido, e tudo o que
+                trazem foi pedido, a preços próximos do negociado. Mais de uma
+                nota costuma ser entrega dividida. Se a mercadoria já veio, dê
+                entrada pela nota: a conferência usa o XML que já está no
+                sistema.
               </p>
               <ul className="divide-border mt-2 divide-y">
                 {notasDoHistorico.slice(0, 5).map((nota) => (
@@ -473,15 +475,15 @@ export async function PedidoContent({
                         {" · "}
                         {MONEY.format(nota.invoiceTotal)}
                         {" · "}
-                        {nota.matchedItems} de {nota.itemCount}{" "}
-                        {nota.itemCount === 1 ? "produto" : "produtos"} em comum
+                        traz {nota.evidence.orderLinesCovered} de{" "}
+                        {nota.evidence.orderLines}{" "}
+                        {nota.evidence.orderLines === 1
+                          ? "produto"
+                          : "produtos"}{" "}
+                        do pedido
                       </span>
                     </div>
-                    <Button
-                      asChild
-                      size="sm"
-                      variant={nota.strong ? "default" : "outline"}
-                    >
+                    <Button asChild size="sm" variant="outline">
                       <Link href={`/recebimentos/historico/${nota.importId}`}>
                         Ver nota
                       </Link>

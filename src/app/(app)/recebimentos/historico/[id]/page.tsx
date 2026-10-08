@@ -114,17 +114,7 @@ export default async function ConciliacaoNfeHistoricaPage({
           importId={history.id}
           issuedDay={DIA_DA_LOJA.format(new Date(history.issued_at))}
           posted={history.status === "posted"}
-          suggestions={orderSuggestions.slice(0, 4).map((suggestion) => ({
-            orderId: suggestion.orderId,
-            orderNumber: suggestion.orderNumber,
-            deliveryDueDate: suggestion.deliveryDueDate,
-            createdDay: suggestion.createdDay,
-            openReceiptId: suggestion.openReceiptId,
-            itemCount: suggestion.itemCount,
-            matchedItems: suggestion.matchedItems,
-            citedInInvoice: suggestion.citedInInvoice,
-            strong: suggestion.strong,
-          }))}
+          suggestions={orderSuggestions}
         />
       ) : null}
 
