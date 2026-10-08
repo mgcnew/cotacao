@@ -289,3 +289,78 @@ export async function suggestOrdersForImport(
     orders,
   );
 }
+
+export type InvoiceSuggestion = {
+  importId: string;
+  invoiceNumber: string;
+  invoiceSeries: string | null;
+  issuedAt: string;
+  invoiceTotal: number;
+  status: string;
+  matchedItems: number;
+  itemCount: number;
+  strong: boolean;
+};
+
+/**
+ * O caminho inverso: notas do histórico fiscal que parecem ser deste pedido.
+ * A decisão continua na página da nota, onde está a evidência completa e o
+ * botão de dar entrada — aqui só se aponta para ela.
+ */
+export async function suggestInvoicesForOrder(
+  companyId: string,
+  orderId: string,
+  supplierId: string,
+): Promise<InvoiceSuggestion[]> {
+  const order = (await listOpenOrdersForMatch(companyId, [supplierId])).find(
+    (candidate) => candidate.id === orderId,
+  );
+  if (!order) return [];
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("historical_nfe_imports")
+    .select(
+      "id, supplier_id, status, invoice_number, invoice_series, issued_at, invoice_total, historical_nfe_items ( product_id )",
+    )
+    .eq("company_id", companyId)
+    .eq("supplier_id", supplierId)
+    .in("status", ["draft", "posted"])
+    .gte("issued_at", `${somarDias(order.createdDay, -1)}T00:00:00-03:00`)
+    .lt(
+      "issued_at",
+      `${somarDias(order.deliveryDueDate ?? order.createdDay, JANELA_APOS_PRAZO_DIAS + 1)}T00:00:00-03:00`,
+    )
+    .order("issued_at", { ascending: false })
+    .limit(20);
+  if (error)
+    throw new Error(`Falha ao procurar notas deste pedido: ${error.message}`);
+
+  return (data ?? [])
+    .flatMap((row) => {
+      const [match] = rankOrdersForInvoice(
+        {
+          supplierId: row.supplier_id,
+          issuedAt: row.issued_at,
+          productIds: row.historical_nfe_items.map((item) => item.product_id),
+        },
+        [order],
+      );
+      if (!match) return [];
+      return [
+        {
+          importId: row.id,
+          invoiceNumber: row.invoice_number,
+          invoiceSeries: row.invoice_series,
+          issuedAt: row.issued_at,
+          invoiceTotal: Number(row.invoice_total),
+          status: row.status,
+          matchedItems: match.matchedItems,
+          itemCount: match.itemCount,
+          strong: match.strong,
+          score: match.score,
+        },
+      ];
+    })
+    .sort((a, b) => b.score - a.score);
+}

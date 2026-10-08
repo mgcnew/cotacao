@@ -42,6 +42,7 @@ import {
   REVISION_STATUS_LABEL,
   type OrderRevision,
 } from "@/features/orders/queries";
+import { suggestInvoicesForOrder } from "@/features/receipts/historical-order-match";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { isEvolutionConfigured } from "@/lib/evolution/client";
 import { getWhatsAppConnection } from "@/features/whatsapp/queries";
@@ -82,6 +83,12 @@ function confirmationDescription(revision: {
 }
 
 /** Data ISO do banco vira dd/mm/aaaa sem passar por fuso — é dia, não instante. */
+const DIA_EMISSAO = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  timeZone: "America/Sao_Paulo",
+});
+
 function formatarDia(iso: string): string {
   const [ano, mes, dia] = iso.split("-").map(Number);
   return DATA.format(new Date(ano, mes - 1, dia));
@@ -179,7 +186,10 @@ export async function PedidoContent({
   // Catálogo e painel de envio são independentes. Antes o segundo só começava
   // depois de quatro consultas do formulário de pedido direto, embora este
   // detalhe use apenas os produtos daquele pacote.
-  const [products, envio] = await Promise.all([
+  const aguardandoEntrega =
+    order.status === "awaiting_delivery" ||
+    order.status === "partially_received";
+  const [products, envio, notasDoHistorico] = await Promise.all([
     podeMexerNoRascunho || podeCriarRevisao
       ? listOrderEditableProducts(company.companyId)
       : Promise.resolve([]),
@@ -203,6 +213,11 @@ export async function PedidoContent({
           };
         })()
       : Promise.resolve(null),
+    // A mercadoria pode ter chegado sem ninguém registrar, e a nota ter
+    // entrado depois pelo histórico fiscal. Só quem pode dar entrada vê.
+    aguardandoEntrega && podeReceber && podeEncerrarSaldo
+      ? suggestInvoicesForOrder(company.companyId, id, order.suppliers.id)
+      : Promise.resolve([]),
   ]);
 
   const pendentes = (revision?.items ?? []).filter(
@@ -429,6 +444,53 @@ export async function PedidoContent({
               ) : null}
             </div>
           )}
+          {notasDoHistorico.length > 0 ? (
+            <div className="border-warning/40 bg-warning/5 mt-4 rounded-lg border p-3">
+              <p className="text-fg text-sm font-medium">
+                {notasDoHistorico.length === 1
+                  ? "Há uma NF-e no histórico fiscal que parece ser deste pedido"
+                  : `Há ${notasDoHistorico.length} NF-e no histórico fiscal que podem ser deste pedido`}
+              </p>
+              <p className="text-fg-muted mt-0.5 text-xs">
+                Mesmo fornecedor, emitidas no período do pedido. Se a mercadoria
+                já veio, dê entrada pela nota: a conferência usa o XML que já
+                está no sistema.
+              </p>
+              <ul className="divide-border mt-2 divide-y">
+                {notasDoHistorico.slice(0, 5).map((nota) => (
+                  <li
+                    key={nota.importId}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2"
+                  >
+                    <div className="min-w-0 text-sm">
+                      <span className="text-fg font-medium">
+                        NF-e {nota.invoiceNumber}
+                        {nota.invoiceSeries ? `/${nota.invoiceSeries}` : ""}
+                      </span>
+                      <span className="text-fg-muted">
+                        {" · "}
+                        {DIA_EMISSAO.format(new Date(nota.issuedAt))}
+                        {" · "}
+                        {MONEY.format(nota.invoiceTotal)}
+                        {" · "}
+                        {nota.matchedItems} de {nota.itemCount}{" "}
+                        {nota.itemCount === 1 ? "produto" : "produtos"} em comum
+                      </span>
+                    </div>
+                    <Button
+                      asChild
+                      size="sm"
+                      variant={nota.strong ? "default" : "outline"}
+                    >
+                      <Link href={`/recebimentos/historico/${nota.importId}`}>
+                        Ver nota
+                      </Link>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
