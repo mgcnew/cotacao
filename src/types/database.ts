@@ -1461,6 +1461,57 @@ export type Database = {
         };
         Relationships: [];
       };
+      personal_notes: {
+        Row: {
+          body: string | null;
+          checklist: Json;
+          company_id: string;
+          created_at: string;
+          done_at: string | null;
+          due_date: string | null;
+          id: string;
+          label: string | null;
+          link_id: string | null;
+          link_kind: string | null;
+          pinned: boolean;
+          title: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          body?: string | null;
+          checklist?: Json;
+          company_id: string;
+          created_at?: string;
+          done_at?: string | null;
+          due_date?: string | null;
+          id?: string;
+          label?: string | null;
+          link_id?: string | null;
+          link_kind?: string | null;
+          pinned?: boolean;
+          title?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          body?: string | null;
+          checklist?: Json;
+          company_id?: string;
+          created_at?: string;
+          done_at?: string | null;
+          due_date?: string | null;
+          id?: string;
+          label?: string | null;
+          link_id?: string | null;
+          link_kind?: string | null;
+          pinned?: boolean;
+          title?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       product_attribute_definitions: {
         Row: {
           category_id: string | null;

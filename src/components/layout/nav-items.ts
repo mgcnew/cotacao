@@ -7,6 +7,7 @@ import {
   PackageCheck,
   Barcode,
   MessageCircle,
+  NotebookPen,
   Settings,
   ShoppingCart,
   Truck,
@@ -102,6 +103,8 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: BarChart3,
         permission: "analytics.view",
       },
+      // Pessoal: sem permissão — toda pessoa da empresa tem as suas.
+      { href: "/anotacoes", label: "Anotações", icon: NotebookPen },
     ],
   },
 ];
