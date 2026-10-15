@@ -128,7 +128,8 @@ export function CorrectionForm({
         type="button"
         size="sm"
         variant="ghost"
-        className="text-fg-muted hover:text-fg h-9 gap-1.5 px-2 text-[13px]"
+        aria-label={`Corrigir ${productName} de ${supplierName}`}
+        className="text-fg-muted hover:text-fg h-11 gap-1.5 px-2 text-[13px] sm:h-9"
         onClick={() => setOpen(true)}
       >
         <PencilLine className="size-4" aria-hidden />

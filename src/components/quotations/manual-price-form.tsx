@@ -29,7 +29,7 @@ function numero(texto: string): number {
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending}>
+    <Button type="submit" disabled={pending} className="h-11">
       {pending ? "Lançando…" : "Lançar"}
     </Button>
   );
@@ -112,12 +112,12 @@ export function ManualPriceForm({
     return (
       <Button
         type="button"
-        size="sm"
-        variant="ghost"
-        className="text-fg-subtle hover:text-fg h-6 gap-1 px-1.5 text-xs"
+        variant="outline"
+        aria-label={`Lançar preço de ${supplierName} para ${productName}`}
+        className="text-fg h-11 gap-1.5 px-2.5 text-[13px] sm:h-9"
         onClick={() => setAberto(true)}
       >
-        <PhoneCall className="size-3" aria-hidden />
+        <PhoneCall className="size-4" aria-hidden />
         Lançar preço
       </Button>
     );
@@ -133,14 +133,14 @@ export function ManualPriceForm({
       />
 
       {embalagem && !naoFornece ? (
-        <div className="border-primary/20 bg-primary-soft flex flex-col gap-1.5 rounded-md border p-2">
+        <div className="flex flex-col gap-1.5">
           <input
             type="hidden"
             name="conversionDefinitionId"
             value={conversionDefinitionId ?? ""}
           />
           <label
-            className="text-fg-muted block text-xs"
+            className="text-fg block text-sm font-medium"
             htmlFor={`preco-${supplierQuotationItemId}`}
           >
             Preço de 1 {unitWord(pricingUnitInfo)}
@@ -154,10 +154,10 @@ export function ManualPriceForm({
             value={preco}
             onChange={(event) => setPreco(event.target.value)}
             placeholder="R$ 0,00"
-            className="h-7 w-full text-sm"
+            className="h-11 w-full text-base"
           />
           <label
-            className="text-fg-muted block text-xs"
+            className="text-fg block text-sm font-medium"
             htmlFor={`conversao-${supplierQuotationItemId}`}
           >
             {packagingFactorLabel(pricingUnitInfo!)}
@@ -174,14 +174,14 @@ export function ManualPriceForm({
               value={fator}
               onChange={(event) => setFator(event.target.value)}
               placeholder="0"
-              className="h-7 w-20 text-sm"
+              className="h-11 w-24 text-base"
             />
-            <span className="text-fg-muted text-xs">
+            <span className="text-fg-muted text-[13px]">
               {unitWord(comparisonUnitInfo, 2)}
             </span>
           </div>
           {precoPorConteudo !== null ? (
-            <p className="text-fg text-xs tabular-nums">
+            <p className="text-fg text-sm tabular-nums">
               = {PRECO_POR_UNIDADE.format(precoPorConteudo)} por{" "}
               {unitWord(comparisonUnitInfo)}
             </p>
@@ -190,14 +190,14 @@ export function ManualPriceForm({
       ) : (
         <>
           {conversionDefinitionId && conversionName && !naoFornece ? (
-            <div className="border-primary/20 bg-primary-soft rounded-md border p-2">
+            <div className="flex flex-col gap-1.5">
               <input
                 type="hidden"
                 name="conversionDefinitionId"
                 value={conversionDefinitionId}
               />
               <label
-                className="text-fg-muted mb-1 block text-xs"
+                className="text-fg mb-1 block text-sm font-medium"
                 htmlFor={`conversao-${supplierQuotationItemId}`}
               >
                 {conversionName}
@@ -212,7 +212,7 @@ export function ManualPriceForm({
                 inputMode="decimal"
                 required={conversionRequired}
                 placeholder={`Para comparar por ${comparisonUnit ?? "unidade"}`}
-                className="h-7 w-full text-sm"
+                className="h-11 w-full text-base"
               />
             </div>
           ) : null}
@@ -231,18 +231,18 @@ export function ManualPriceForm({
             required={!naoFornece}
             disabled={naoFornece}
             placeholder={`por ${pricingUnit}`}
-            className="h-7 w-28 text-sm"
+            className="h-11 w-36 text-base"
           />
         </>
       )}
 
-      <label className="text-fg-subtle flex items-center gap-1.5 text-xs">
+      <label className="text-fg-muted flex min-h-11 items-center gap-2 text-sm">
         <input
           type="checkbox"
           name="doesNotSupply"
           checked={naoFornece}
           onChange={(e) => setNaoFornece(e.target.checked)}
-          className="size-3"
+          className="size-5"
         />
         não fornece
       </label>
@@ -251,26 +251,25 @@ export function ManualPriceForm({
         name="notes"
         maxLength={200}
         placeholder="observação (opcional)"
-        className="h-7 w-full text-xs"
+        className="h-11 w-full text-base"
       />
 
       {state.error ? (
         <p
           role="alert"
-          className="text-destructive flex items-start gap-1 text-xs"
+          className="text-destructive flex items-start gap-1.5 text-sm font-medium"
         >
-          <AlertCircle className="mt-0.5 size-3 shrink-0" aria-hidden />
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
           {state.error}
         </p>
       ) : null}
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
         <SubmitButton />
         <Button
           type="button"
-          size="sm"
           variant="ghost"
-          className="text-fg-subtle h-7 px-1.5 text-xs"
+          className="text-fg-muted h-11 px-3 text-[13px]"
           onClick={() => setAberto(false)}
         >
           Cancelar

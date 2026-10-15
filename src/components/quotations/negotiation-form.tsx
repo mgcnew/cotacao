@@ -8,6 +8,7 @@ import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemedSelect } from "@/components/ui/themed-select";
+import { cn } from "@/lib/utils";
 import { NEGOTIATION_CHANNELS } from "@/features/quotations/channels";
 import {
   recordNegotiation,
@@ -17,7 +18,7 @@ import {
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending}>
+    <Button type="submit" disabled={pending} className="h-11">
       {pending ? "Registrando…" : "Registrar"}
     </Button>
   );
@@ -35,12 +36,15 @@ export function NegotiationForm({
   currentPrice,
   supplierName,
   productName,
+  emphasis = false,
 }: {
   responseItemId: string;
   roundId: string;
   currentPrice: number;
   supplierName: string;
   productName: string;
+  /** Item acima da melhor referência: é onde negociar rende, então a ação sobe de peso. */
+  emphasis?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [state, formAction] = useActionState<NegotiationState, FormData>(
@@ -52,12 +56,15 @@ export function NegotiationForm({
     return (
       <Button
         type="button"
-        size="sm"
-        variant="ghost"
-        className="text-fg-subtle hover:text-fg h-6 gap-1 px-1.5 text-xs"
+        variant={emphasis ? "outline" : "ghost"}
+        aria-label={`Negociar ${productName} com ${supplierName}`}
+        className={cn(
+          "h-11 gap-1.5 px-2.5 text-[13px] sm:h-9",
+          emphasis ? "text-fg" : "text-fg-muted hover:text-fg",
+        )}
         onClick={() => setOpen(true)}
       >
-        <Handshake className="size-3" aria-hidden />
+        <Handshake className="size-4" aria-hidden />
         Negociar
       </Button>
     );
@@ -67,20 +74,20 @@ export function NegotiationForm({
     <form
       key={state.savedAt}
       action={formAction}
-      className="border-border bg-surface-sunken mt-2 flex flex-col gap-2 rounded-lg border p-2 text-left"
+      className="border-border bg-surface-sunken mt-2 flex flex-col gap-3 rounded-lg border p-3 text-left"
       onSubmit={() => setOpen(true)}
     >
       <input type="hidden" name="responseItemId" value={responseItemId} />
       <input type="hidden" name="roundId" value={roundId} />
 
-      <p className="text-fg-subtle text-xs">
+      <p className="text-fg-muted text-[13px]">
         {productName} · {supplierName}
       </p>
 
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor={`preco-${responseItemId}`}
-          className="text-fg-muted text-xs"
+          className="text-fg text-sm font-medium"
         >
           Novo preço (atual: {currentPrice.toFixed(2).replace(".", ",")})
         </label>
@@ -90,7 +97,7 @@ export function NegotiationForm({
           required
           inputMode="decimal"
           placeholder="0,00"
-          className="h-7 text-sm"
+          className="h-11 text-base"
         />
       </div>
 
@@ -110,15 +117,16 @@ export function NegotiationForm({
         name="notes"
         maxLength={300}
         placeholder="Observação (opcional)"
-        className="h-7 text-sm"
+        aria-label="Observação (opcional)"
+        className="h-11 text-base"
       />
 
       {state.error ? (
         <p
           role="alert"
-          className="text-destructive flex items-start gap-1 text-xs"
+          className="text-destructive flex items-start gap-1.5 text-sm font-medium"
         >
-          <AlertCircle className="mt-0.5 size-3 shrink-0" aria-hidden />
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
           {state.error}
         </p>
       ) : null}
@@ -127,9 +135,8 @@ export function NegotiationForm({
         <SubmitButton />
         <Button
           type="button"
-          size="sm"
           variant="ghost"
-          className="text-fg-subtle"
+          className="text-fg-muted h-11"
           onClick={() => setOpen(false)}
         >
           Cancelar
