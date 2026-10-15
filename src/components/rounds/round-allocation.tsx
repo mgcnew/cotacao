@@ -8,7 +8,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import { AllocateForm, ApplyRecommendationsForm, ConfirmOrdersForm } from "@/components/allocations/allocation-forms";
+import {
+  AllocateForm,
+  ApplyRecommendationsForm,
+  ConfirmOrdersBar,
+  type OrderPreview,
+} from "@/components/allocations/allocation-forms";
 import { EmptyState } from "@/components/layout/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,7 +46,7 @@ function candidatesFor(row: Row, dados: DadosDaAlocacao): Candidate[] {
     .filter((supplier) => supplier.removed_at === null)
     .flatMap((supplier) => {
       const cell = row.cells.get(supplier.id);
-      return cell && !cell.doesNotSupply && cell.currentPrice !== null
+      return cell && !cell.doesNotSupply && cell.isAvailable !== false && cell.currentPrice !== null
         ? [{
             id: supplier.supplier_id,
             name: supplier.suppliers.name,
@@ -74,6 +79,30 @@ function candidatesFor(row: Row, dados: DadosDaAlocacao): Candidate[] {
     );
 }
 
+/** O que já foi decidido para o item (rascunho e confirmado), para o saldo do formulário. */
+function decidedFor(row: Row, dados: DadosDaAlocacao) {
+  return (dados.allocationsByItem.get(row.itemId) ?? []).map((allocation) => ({
+    supplierId: allocation.supplierId,
+    quantity: allocation.allocatedQuantity,
+    status: allocation.status,
+  }));
+}
+
+function bucketTotals(supplier: SupplierBucket) {
+  let saved = 0;
+  let suggested = 0;
+  let withoutConversion = 0;
+  for (const { allocation } of supplier.decisions) {
+    if (allocation.estimatedPricingQuantity === null) withoutConversion += 1;
+    else saved += allocation.estimatedPricingQuantity * allocation.selectedPrice;
+  }
+  for (const { row, winner } of supplier.recommendations) {
+    if (winner.pricingFactor === null) withoutConversion += 1;
+    else suggested += row.requestedQuantity * winner.pricingFactor * winner.price;
+  }
+  return { saved, suggested, total: saved + suggested, withoutConversion };
+}
+
 /** A proposta é automática, mas só vira rascunho depois de uma ação explícita. */
 export function AlocacaoConteudo({
   dados,
@@ -92,7 +121,6 @@ export function AlocacaoConteudo({
   const recommendations: Recommendation[] = [];
   const partial: { row: Row; missing: number; candidates: Candidate[] }[] = [];
   const withoutPrice: Row[] = [];
-  let covered = 0;
 
   const confirmedQuantity = (row: Row) =>
     (allocationsByItem.get(row.itemId) ?? [])
@@ -127,11 +155,10 @@ export function AlocacaoConteudo({
     }
 
     if (row.commercialStatus !== "open") {
-      if (missing <= 0) covered += 1;
       continue;
     }
-    if (missing <= 0) covered += 1;
-    else if (decisions.length > 0) partial.push({ row, missing, candidates });
+    if (missing <= 0) continue;
+    if (decisions.length > 0) partial.push({ row, missing, candidates });
     else if (candidates.length > 0) {
       const recommendation = { row, candidates, winner: candidates[0] };
       recommendations.push(recommendation);
@@ -140,21 +167,59 @@ export function AlocacaoConteudo({
   }
 
   const supplierBuckets = [...buckets.values()].sort((a, b) => a.name.localeCompare(b.name));
-  const decisionItemCount = workingRows.filter(
-    (row) => row.commercialStatus === "open" || (allocationsByItem.get(row.itemId)?.length ?? 0) > 0,
-  ).length;
-  const calculableRecommendations = recommendations.filter(
-    (item) => item.winner.pricingFactor !== null,
-  );
-  const proposalTotal = calculableRecommendations.reduce(
-    (sum, item) =>
-      sum +
-      item.row.requestedQuantity *
-        (item.winner.pricingFactor ?? 0) *
-        item.winner.price,
-    0,
-  );
   const attentionCount = partial.length + withoutPrice.length;
+  const totals = supplierBuckets.reduce(
+    (acc, bucket) => {
+      const t = bucketTotals(bucket);
+      return {
+        saved: acc.saved + t.saved,
+        suggested: acc.suggested + t.suggested,
+        withoutConversion: acc.withoutConversion + t.withoutConversion,
+      };
+    },
+    { saved: 0, suggested: 0, withoutConversion: 0 },
+  );
+  const decisionTotal = totals.saved + totals.suggested;
+  // Quanto a sugestão economiza sobre a 2ª melhor oferta do mesmo item, só onde
+  // as duas têm total calculável para a quantidade pedida.
+  const savingOverSecond = recommendations.reduce((sum, item) => {
+    const second = item.candidates[1];
+    const { winner, row } = item;
+    if (!second || winner.pricingFactor === null || second.pricingFactor === null) return sum;
+    const gain =
+      row.requestedQuantity * second.pricingFactor * second.price -
+      row.requestedQuantity * winner.pricingFactor * winner.price;
+    return gain > 0 ? sum + gain : sum;
+  }, 0);
+
+  // O que o botão final vai gerar: um pedido por fornecedor, só com rascunhos.
+  const orderPreviews: OrderPreview[] = [];
+  let draftCount = 0;
+  let draftGrandTotal = 0;
+  let draftWithoutConversion = 0;
+  const previewBySupplier = new Map<string, OrderPreview>();
+  for (const row of rows) {
+    for (const allocation of allocationsByItem.get(row.itemId) ?? []) {
+      if (allocation.status !== "draft") continue;
+      const name = supplierName.get(allocation.supplierId) ?? "Fornecedor";
+      const preview =
+        previewBySupplier.get(allocation.supplierId) ??
+        { supplierName: name, itemCount: 0, total: null, withoutConversion: 0, items: [] };
+      preview.itemCount += 1;
+      preview.items.push({ name: row.productName, quantity: `${QTY.format(allocation.allocatedQuantity)} ${row.purchaseUnit}` });
+      if (allocation.estimatedPricingQuantity === null) {
+        preview.withoutConversion += 1;
+        draftWithoutConversion += 1;
+      } else {
+        const value = allocation.estimatedPricingQuantity * allocation.selectedPrice;
+        preview.total = (preview.total ?? 0) + value;
+        draftGrandTotal += value;
+      }
+      draftCount += 1;
+      previewBySupplier.set(allocation.supplierId, preview);
+    }
+  }
+  orderPreviews.push(...[...previewBySupplier.values()].sort((a, b) => a.supplierName.localeCompare(b.supplierName)));
   const remainingCount = attentionCount + recommendations.length;
   const totalResolved = rows.filter(isResolved).length;
 
@@ -188,7 +253,7 @@ export function AlocacaoConteudo({
               </span>
             </span>
           </span>
-          <Button asChild size="sm" variant="outline">
+          <Button asChild variant="outline" className="h-11 sm:h-9">
             <Link href={`/compras/${round.id}#encerrar-rodada`}>
               Ver o que falta
             </Link>
@@ -217,14 +282,21 @@ export function AlocacaoConteudo({
                   <p className="text-fg text-sm font-semibold">
                     {totalResolved} de {rows.length} itens fechados
                   </p>
-                  <p className="text-fg-muted mt-0.5 text-xs">
+                  <p className="text-fg-muted mt-0.5 text-[13px]">
                     Abaixo aparecem somente os {workingRows.length} que ainda
                     precisam de decisão ou confirmação.
                   </p>
                 </div>
                 <Badge variant="outline">{workingRows.length} pendentes</Badge>
               </div>
-              <div className="bg-surface-muted mt-3 h-1.5 overflow-hidden rounded-full">
+              <div
+                role="progressbar"
+                aria-label="Itens fechados"
+                aria-valuemin={0}
+                aria-valuemax={rows.length}
+                aria-valuenow={totalResolved}
+                className="bg-surface-muted mt-3 h-1.5 overflow-hidden rounded-full"
+              >
                 <span
                   className="bg-primary block h-full rounded-full"
                   style={{ width: `${rows.length > 0 ? (totalResolved / rows.length) * 100 : 0}%` }}
@@ -243,15 +315,39 @@ export function AlocacaoConteudo({
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-fg flex items-center gap-2 text-base font-semibold"><Sparkles className="text-primary size-4" aria-hidden /> Proposta de compra</h2>
-                <p className="text-fg-muted text-sm">O menor preço vigente fica pré-selecionado. Revise as exceções e aplique as sugestões ao rascunho.</p>
+                <p className="text-fg-muted text-sm">O menor preço vigente já vem escolhido. Salve as sugestões e, depois, gere os pedidos.</p>
               </div>
               {podeDecidir && round.status === "active" && recommendations.length > 0 ? <ApplyRecommendationsForm roundId={round.id} itemCount={recommendations.length} /> : null}
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              <Summary label="Cobertos" value={`${covered}/${decisionItemCount}`} detail="quantidade já decidida" />
-              <Summary label="Sugestões" value={String(recommendations.length)} detail="menores preços disponíveis" />
-              <Summary label="Total sugerido" value={MONEY.format(proposalTotal)} detail={`${calculableRecommendations.length}/${recommendations.length} sugestões calculáveis`} alert={calculableRecommendations.length < recommendations.length} />
-              <Summary label="Atenção" value={String(attentionCount)} detail="sem preço ou incompletos" alert={attentionCount > 0} />
+            <div className="border-border bg-surface rounded-xl border p-4">
+              <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+                <div aria-live="polite">
+                  <p className="text-fg-muted text-sm">Total da decisão</p>
+                  <p className="text-fg text-2xl font-semibold tabular-nums">{MONEY.format(decisionTotal)}</p>
+                  <p className="text-fg-muted text-[13px] tabular-nums">
+                    escolhas salvas {MONEY.format(totals.saved)} · sugestões {MONEY.format(totals.suggested)}
+                    {totals.withoutConversion > 0 ? <span className="text-warning"> · {totals.withoutConversion} {totals.withoutConversion === 1 ? "item" : "itens"} sem conversão, fora do total</span> : null}
+                  </p>
+                </div>
+                <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                  <div>
+                    <dt className="text-fg-muted text-[13px]">Falta decidir</dt>
+                    <dd className="text-fg font-semibold tabular-nums">{recommendations.length + attentionCount} {recommendations.length + attentionCount === 1 ? "item" : "itens"}</dd>
+                  </div>
+                  {savingOverSecond > 0 ? (
+                    <div>
+                      <dt className="text-fg-muted text-[13px]">Economia sobre a 2ª oferta</dt>
+                      <dd className="text-success font-semibold tabular-nums">{MONEY.format(savingOverSecond)}</dd>
+                    </div>
+                  ) : null}
+                  {withoutPrice.length > 0 ? (
+                    <div>
+                      <dt className="text-fg-muted text-[13px]">Sem preço</dt>
+                      <dd className="text-warning font-semibold tabular-nums">{withoutPrice.length}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </div>
             </div>
           </section>
           )}
@@ -270,11 +366,11 @@ export function AlocacaoConteudo({
               <div className="mt-3 space-y-3">
                 {partial.map(({ row, missing, candidates }) => (
                   <div key={row.itemId} className="border-border bg-surface flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2.5">
-                    <div className="min-w-48 flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-muted text-xs">Faltam {QTY.format(missing)} {row.purchaseUnit} para cobrir</p></div>
-                    {podeDecidir && candidates.length > 0 && round.status === "active" ? <AllocateForm roundId={round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={missing} initialSupplierId={candidates[0].id} buttonLabel="Completar" /> : null}
+                    <div className="min-w-48 flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-muted text-[13px]">Faltam {QTY.format(missing)} {row.purchaseUnit} para cobrir</p></div>
+                    {podeDecidir && candidates.length > 0 && round.status === "active" ? <AllocateForm roundId={round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={missing} initialSupplierId={candidates[0].id} buttonLabel="Completar" requestedQuantity={row.requestedQuantity} decided={decidedFor(row, dados)} /> : null}
                   </div>
                 ))}
-                {withoutPrice.map((row) => <div key={row.itemId} className="border-border bg-surface flex items-center gap-3 rounded-lg border px-3 py-2.5"><div className="flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-muted text-xs">{row.requiresPresentationComparison ? "Falta informar a apresentação em uma ou mais propostas" : "Nenhum fornecedor respondeu com preço"}</p></div><Badge variant="destructive">{row.requiresPresentationComparison ? "conversão pendente" : "sem preço"}</Badge></div>)}
+                {withoutPrice.map((row) => <div key={row.itemId} className="border-border bg-surface flex items-center gap-3 rounded-lg border px-3 py-2.5"><div className="flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-muted text-[13px]">{row.requiresPresentationComparison ? "Falta informar a apresentação em uma ou mais propostas" : "Nenhum fornecedor respondeu com preço"}</p></div><Badge variant="destructive">{row.requiresPresentationComparison ? "conversão pendente" : "sem preço"}</Badge></div>)}
               </div>
             </section>
           ) : null}
@@ -289,7 +385,15 @@ export function AlocacaoConteudo({
         </>
       )}
 
-      {podeConfirmar && rascunhos.length > 0 && round.status === "active" ? <div className="mb-8"><ConfirmOrdersForm roundId={round.id} draftCount={rascunhos.length} supplierCount={fornecedoresNoRascunho.size} /></div> : null}
+      {podeConfirmar && rascunhos.length > 0 && fornecedoresNoRascunho.size > 0 && round.status === "active" ? (
+        <ConfirmOrdersBar
+          roundId={round.id}
+          draftCount={draftCount > 0 ? draftCount : rascunhos.length}
+          orders={orderPreviews}
+          grandTotal={draftGrandTotal}
+          withoutConversion={draftWithoutConversion}
+        />
+      ) : null}
       {orders.length > 0 ? <GeneratedOrders orders={orders} /> : null}
     </>
   );
@@ -381,13 +485,13 @@ function CompletedRoundResult({ dados }: { dados: DadosDaAlocacao }) {
               <p className="text-fg mt-2 text-lg font-semibold tabular-nums">
                 {MONEY.format(supplier.awarded)}
               </p>
-              <p className="text-fg-subtle text-xs">valor estimado adjudicado</p>
+              <p className="text-fg-muted text-[13px]">valor estimado adjudicado</p>
               {supplier.uncalculatedWins > 0 ? (
-                <p className="text-warning mt-1 text-xs">
+                <p className="text-warning mt-1 text-[13px]">
                   {supplier.uncalculatedWins} {supplier.uncalculatedWins === 1 ? "item sem conversão" : "itens sem conversão"}
                 </p>
               ) : null}
-              <div className="text-fg-muted mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              <div className="text-fg-muted mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[13px]">
                 <span>{supplier.losses} perdidos</span>
                 <span>{supplier.noResponse} sem preço</span>
                 {supplier.unavailable > 0 ? (
@@ -418,7 +522,7 @@ function CompletedRoundResult({ dados }: { dados: DadosDaAlocacao }) {
                   {groupName}
                 </span>
                 <Badge variant="outline">{rows.length} itens</Badge>
-                <ChevronDown className="text-fg-subtle size-4" aria-hidden />
+                <ChevronDown className="text-fg-muted size-4" aria-hidden />
               </summary>
               <div className="divide-border divide-y">
                 {rows.map((row) => (
@@ -443,7 +547,7 @@ function CompletedItemResult({ row, dados }: { row: Row; dados: DadosDaAlocacao 
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-fg text-sm font-semibold">{row.productName}</h3>
-          <p className="text-fg-subtle text-xs">
+          <p className="text-fg-muted text-[13px]">
             {QTY.format(row.requestedQuantity)} {row.purchaseUnit} · preço por {row.pricingUnit}
           </p>
         </div>
@@ -516,7 +620,7 @@ function CompletedItemResult({ row, dados }: { row: Row; dados: DadosDaAlocacao 
               }
             >
               <div className="flex min-w-0 items-start justify-between gap-2">
-                <p className="text-fg min-w-0 text-xs font-semibold wrap-anywhere">
+                <p className="text-fg min-w-0 text-[13px] font-semibold wrap-anywhere">
                   {supplier.suppliers.name}
                 </p>
                 {wins.length > 0 ? (
@@ -530,24 +634,24 @@ function CompletedItemResult({ row, dados }: { row: Row; dados: DadosDaAlocacao 
                   <p className="text-success mt-1 text-sm font-semibold tabular-nums">
                     {MONEY.format(selectedPrice ?? 0)} / {row.pricingUnit}
                   </p>
-                  <p className="text-fg-muted text-xs">
+                  <p className="text-fg-muted text-[13px]">
                     {QTY.format(wonQuantity)} {row.purchaseUnit} adjudicados
                   </p>
                   {cell?.negotiated && cell.quotedPrice !== null ? (
-                    <p className="text-fg-subtle text-xs line-through tabular-nums">
+                    <p className="text-fg-muted text-[13px] line-through tabular-nums">
                       Original: {MONEY.format(cell.quotedPrice)}
                     </p>
                   ) : null}
                   {packagingChoiceResult !== 0 ? (
-                    <p className={packagingChoiceResult > 0 ? "text-success mt-1 text-xs font-medium" : "text-danger mt-1 text-xs font-medium"}>
+                    <p className={packagingChoiceResult > 0 ? "text-success mt-1 text-[13px] font-medium" : "text-danger mt-1 text-[13px] font-medium"}>
                       Escolha da embalagem: {MONEY.format(packagingChoiceResult)}
                     </p>
                   ) : null}
                 </>
               ) : cell?.doesNotSupply ? (
-                <p className="text-fg-subtle mt-1 text-xs">Não fornece</p>
+                <p className="text-fg-muted mt-1 text-[13px]">Não fornece</p>
               ) : cell?.isAvailable === false ? (
-                <p className="text-fg-subtle mt-1 text-xs">
+                <p className="text-fg-muted mt-1 text-[13px]">
                   Sem disponibilidade nesta cotação
                 </p>
               ) : hasPrice ? (
@@ -556,13 +660,13 @@ function CompletedItemResult({ row, dados }: { row: Row; dados: DadosDaAlocacao 
                     {MONEY.format(cell.currentPrice ?? 0)} / {row.pricingUnit}
                   </p>
                   {cell?.negotiated && cell.quotedPrice !== null ? (
-                    <p className="text-fg-subtle text-xs line-through tabular-nums">
+                    <p className="text-fg-muted text-[13px] line-through tabular-nums">
                       Original: {MONEY.format(cell.quotedPrice)}
                     </p>
                   ) : null}
                 </>
               ) : (
-                <p className="text-fg-subtle mt-1 text-xs">Sem preço informado</p>
+                <p className="text-fg-muted mt-1 text-[13px]">Sem preço informado</p>
               )}
             </div>
           );
@@ -629,7 +733,7 @@ function CompletedSummary({
           </p>
         </div>
         {showReportAction ? (
-          <Button asChild size="sm" variant="outline">
+          <Button asChild variant="outline" className="h-11 sm:h-9">
             <Link href={`/compras/${dados.round.id}/relatorio`}>
               Abrir relatório gerencial
             </Link>
@@ -661,8 +765,8 @@ function ResolvedItems({
       <summary className="bg-surface-sunken flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
         <CheckCircle2 className="text-success size-4" aria-hidden />
         <span className="min-w-0 flex-1">Já fechados ({rows.length})</span>
-        <span className="text-fg-muted text-xs font-normal">Consultar</span>
-        <ChevronDown className="text-fg-subtle size-4" aria-hidden />
+        <span className="text-fg-muted text-[13px] font-normal">Consultar</span>
+        <ChevronDown className="text-fg-muted size-4" aria-hidden />
       </summary>
       <ul className="divide-border divide-y">
         {rows.map((row) => {
@@ -673,11 +777,11 @@ function ResolvedItems({
             <li key={row.itemId} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <div className="min-w-48 flex-1">
                 <p className="text-fg text-sm font-medium">{row.productName}</p>
-                <p className="text-fg-subtle text-xs">
+                <p className="text-fg-muted text-[13px]">
                   {row.groupName} · {QTY.format(row.requestedQuantity)} {row.purchaseUnit}
                 </p>
               </div>
-              <div className="text-fg-muted text-xs">
+              <div className="text-fg-muted text-[13px]">
                 {decisions.length > 0
                   ? decisions
                       .map(
@@ -699,38 +803,16 @@ function ResolvedItems({
 }
 
 function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados: DadosDaAlocacao }) {
-  const total = supplier.recommendations.reduce(
-    (sum, item) =>
-      sum +
-      (item.winner.pricingFactor === null
-        ? 0
-        : item.row.requestedQuantity *
-          item.winner.pricingFactor *
-          item.winner.price),
-    0,
-  ) + supplier.decisions.reduce(
-    (sum, item) =>
-      sum +
-      (item.allocation.estimatedPricingQuantity ?? 0) *
-        item.allocation.selectedPrice,
-    0,
-  );
+  const { total, withoutConversion: uncalculated } = bucketTotals(supplier);
   const itemCount = supplier.decisions.length + supplier.recommendations.length;
-  const uncalculated =
-    supplier.recommendations.filter(
-      (item) => item.winner.pricingFactor === null,
-    ).length +
-    supplier.decisions.filter(
-      (item) => item.allocation.estimatedPricingQuantity === null,
-    ).length;
   return (
     <section className="border-border bg-surface overflow-hidden rounded-xl border">
       <header className="bg-surface-sunken border-border flex flex-wrap items-center gap-3 border-b px-4 py-3">
         <span className="border-border bg-surface rounded-lg border p-2"><Store className="text-fg-muted size-4" aria-hidden /></span>
-        <div className="min-w-0 flex-1"><h3 className="text-fg font-semibold">{supplier.name}</h3><p className="text-fg-muted text-xs">{itemCount} {itemCount === 1 ? "item" : "itens"} · futuro pedido agrupado</p></div>
+        <div className="min-w-0 flex-1"><h3 className="text-fg font-semibold">{supplier.name}</h3><p className="text-fg-muted text-[13px]">{itemCount} {itemCount === 1 ? "item" : "itens"} · vira 1 pedido</p></div>
         <span className="text-right">
           <span className="text-fg block font-semibold tabular-nums">{MONEY.format(total)}</span>
-          {uncalculated > 0 ? <span className="text-warning block text-[11px]">{uncalculated} sem conversão</span> : null}
+          {uncalculated > 0 ? <span className="text-warning block text-[13px]">{uncalculated} sem conversão</span> : null}
         </span>
       </header>
       <ul className="divide-border divide-y">
@@ -739,20 +821,20 @@ function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados:
             <ItemName row={row} quantity={allocation.allocatedQuantity} />
             <Price price={allocation.selectedPrice} pricingQuantity={allocation.estimatedPricingQuantity} unit={row.pricingUnit} />
             {allocation.packagingChoiceResultEstimated !== null ? (
-              <span className={allocation.packagingChoiceResultEstimated >= 0 ? "text-success text-xs font-medium" : "text-danger text-xs font-medium"}>
+              <span className={allocation.packagingChoiceResultEstimated >= 0 ? "text-success text-[13px] font-medium" : "text-danger text-[13px] font-medium"}>
                 embalagem {MONEY.format(allocation.packagingChoiceResultEstimated)}
               </span>
             ) : null}
-            <Badge variant={allocation.status === "confirmed" ? "default" : "outline"}>{allocation.status === "confirmed" ? "confirmada" : "rascunho"}</Badge>
-            {dados.podeDecidir && allocation.status === "draft" ? <form action={cancelAllocation.bind(null, allocation.allocationId, dados.round.id)}><Button type="submit" size="sm" variant="ghost" className="text-fg-subtle hover:text-destructive">Desfazer</Button></form> : null}
+            <Badge variant={allocation.status === "confirmed" ? "default" : "outline"}>{allocation.status === "confirmed" ? "no pedido" : "escolha salva"}</Badge>
+            {dados.podeDecidir && allocation.status === "draft" ? <form action={cancelAllocation.bind(null, allocation.allocationId, dados.round.id)}><Button type="submit" variant="ghost" aria-label={`Desfazer a escolha de ${row.productName}`} className="text-fg-muted hover:text-destructive h-11 sm:h-9">Desfazer</Button></form> : null}
           </li>
         ))}
         {supplier.recommendations.map(({ row, candidates, winner }) => (
           <li key={row.itemId} className="bg-primary/[0.025] flex flex-wrap items-center gap-3 px-4 py-3">
             <ItemName row={row} quantity={row.requestedQuantity} />
             <Price price={winner.price} pricingQuantity={winner.pricingFactor === null ? null : row.requestedQuantity * winner.pricingFactor} unit={row.pricingUnit} comparisonPrice={row.requiresPresentationComparison ? winner.comparisonPrice : null} comparisonUnit={row.comparisonUnit} best />
-            <Badge variant="secondary">melhor preço · sugestão</Badge>
-            {dados.podeDecidir && dados.round.status === "active" ? <AllocateForm roundId={dados.round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={row.requestedQuantity} initialSupplierId={winner.id} buttonLabel="Revisar escolha" /> : null}
+            <Badge variant="outline">sugestão</Badge>
+            {dados.podeDecidir && dados.round.status === "active" ? <AllocateForm roundId={dados.round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={row.requestedQuantity} initialSupplierId={winner.id} buttonLabel="Alterar" requestedQuantity={row.requestedQuantity} decided={decidedFor(row, dados)} /> : null}
           </li>
         ))}
       </ul>
@@ -761,16 +843,16 @@ function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados:
 }
 
 function ItemName({ row, quantity }: { row: Row; quantity: number }) {
-  return <div className="min-w-48 flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-subtle text-xs">{row.groupName} · {QTY.format(quantity)} {row.purchaseUnit}</p></div>;
+  return <div className="min-w-48 flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-muted text-[13px]">{row.groupName} · {QTY.format(quantity)} {row.purchaseUnit}</p></div>;
 }
 
 function Price({ price, pricingQuantity, unit, comparisonPrice = null, comparisonUnit = null, best = false }: { price: number; pricingQuantity: number | null; unit: string; comparisonPrice?: number | null; comparisonUnit?: string | null; best?: boolean }) {
   const hasComparison = comparisonPrice !== null && comparisonUnit !== null;
-  return <div className="text-right text-sm tabular-nums"><p className={best ? "text-success font-semibold" : "text-fg"}>{MONEY.format(hasComparison ? comparisonPrice : price)} <span className="text-fg-subtle text-xs font-normal">/{hasComparison ? comparisonUnit : unit}</span></p>{hasComparison ? <p className="text-fg-subtle text-xs">pacote {MONEY.format(price)} / {unit}</p> : null}{pricingQuantity === null ? <p className="text-warning text-xs">total sem conversão</p> : <p className="text-fg-muted text-xs">{MONEY.format(pricingQuantity * price)}</p>}</div>;
+  return <div className="text-right text-sm tabular-nums"><p className={best ? "text-success font-semibold" : "text-fg"}>{MONEY.format(hasComparison ? comparisonPrice : price)} <span className="text-fg-muted text-[13px] font-normal">/{hasComparison ? comparisonUnit : unit}</span></p>{hasComparison ? <p className="text-fg-muted text-[13px]">pacote {MONEY.format(price)} / {unit}</p> : null}{pricingQuantity === null ? <p className="text-warning text-[13px]">total sem conversão</p> : <p className="text-fg-muted text-[13px]">{MONEY.format(pricingQuantity * price)}</p>}</div>;
 }
 
 function Summary({ label, value, detail, alert = false }: { label: string; value: string; detail: string; alert?: boolean }) {
-  return <div className="border-border rounded-xl border p-3"><p className="text-fg-muted text-xs">{label}</p><p className={alert ? "text-warning mt-1 text-xl font-semibold tabular-nums" : "text-fg mt-1 text-xl font-semibold tabular-nums"}>{value}</p><p className="text-fg-subtle text-xs">{detail}</p></div>;
+  return <div className="border-border rounded-xl border p-3"><p className="text-fg-muted text-[13px]">{label}</p><p className={alert ? "text-warning mt-1 text-xl font-semibold tabular-nums" : "text-fg mt-1 text-xl font-semibold tabular-nums"}>{value}</p><p className="text-fg-muted text-[13px]">{detail}</p></div>;
 }
 
 function GeneratedOrders({ orders }: { orders: DadosDaAlocacao["orders"] }) {
@@ -779,7 +861,7 @@ function GeneratedOrders({ orders }: { orders: DadosDaAlocacao["orders"] }) {
       <h2 className="text-fg mb-1 flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4" aria-hidden /> Pedidos gerados</h2>
       <p className="text-fg-muted mb-3 text-sm">Gerar o pedido não o envia. Cada um nasce em rascunho até alguém abrir e mandar ao fornecedor.</p>
       <ul className="flex flex-col gap-2">
-        {orders.map((order) => <li key={order.id} className="border-border bg-surface flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3"><div><Link href={`/pedidos/${order.id}`} className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline">#{order.orderNumber} · {order.supplierName}</Link><p className="text-fg-subtle text-xs">{order.itemCount} {order.itemCount === 1 ? "item" : "itens"}{order.deliveryDueDate ? ` · entrega ${order.deliveryDueDate}` : ""}</p></div><div className="flex items-center gap-3"><Badge variant={order.status === "draft" ? "outline" : "secondary"}>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Badge><Button asChild size="sm" variant="outline"><Link href={`/pedidos/${order.id}`}>{order.status === "draft" ? "Enviar" : "Abrir"}</Link></Button></div></li>)}
+        {orders.map((order) => <li key={order.id} className="border-border bg-surface flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3"><div><Link href={`/pedidos/${order.id}`} className="text-fg hover:text-primary font-medium underline-offset-4 hover:underline">#{order.orderNumber} · {order.supplierName}</Link><p className="text-fg-muted text-[13px]">{order.itemCount} {order.itemCount === 1 ? "item" : "itens"}{order.deliveryDueDate ? ` · entrega ${order.deliveryDueDate}` : ""}</p></div><div className="flex items-center gap-3"><Badge variant={order.status === "draft" ? "outline" : "secondary"}>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Badge><Button asChild variant="outline" className="h-11 sm:h-9"><Link href={`/pedidos/${order.id}`}>{order.status === "draft" ? "Enviar" : "Abrir"}</Link></Button></div></li>)}
       </ul>
     </section>
   );

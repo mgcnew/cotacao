@@ -134,6 +134,48 @@ export async function allocateItem(
     .eq("status", "draft")
     .maybeSingle();
 
+  // A soma do que já foi decidido para o item nunca passa do pedido. Digitar
+  // 800 onde se queria 80 viraria um pedido real; o banco só exige "> 0".
+  // O rascunho deste mesmo par é substituído pelo novo valor, então fica fora.
+  const [{ data: item }, { data: decided, error: decidedError }] =
+    await Promise.all([
+      supabase
+        .from("quotation_items")
+        .select("requested_quantity")
+        .eq("company_id", company.companyId)
+        .eq("id", parsed.data.quotationItemId)
+        .maybeSingle(),
+      supabase
+        .from("purchase_allocations")
+        .select("id, allocated_quantity")
+        .eq("company_id", company.companyId)
+        .eq("purchase_round_id", parsed.data.roundId)
+        .eq("quotation_item_id", parsed.data.quotationItemId)
+        .in("status", ["draft", "confirmed"]),
+    ]);
+
+  if (decidedError) {
+    return {
+      error: `Falha ao conferir o que já foi decidido: ${decidedError.message}`,
+    };
+  }
+  if (item) {
+    const requested = Number(item.requested_quantity);
+    const alreadyDecided = (decided ?? [])
+      .filter((allocation) => allocation.id !== existing?.id)
+      .reduce((sum, allocation) => sum + Number(allocation.allocated_quantity), 0);
+    const balance = Math.max(0, requested - alreadyDecided);
+    if (parsed.data.quantity > balance + 1e-9) {
+      const fmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+      return {
+        error:
+          balance > 0
+            ? `Quantidade acima do saldo: o item pede ${fmt.format(requested)}, já há ${fmt.format(alreadyDecided)} decididos e restam ${fmt.format(balance)}.`
+            : `Este item já tem toda a quantidade decidida (${fmt.format(requested)}). Desfaça uma escolha para realocar.`,
+      };
+    }
+  }
+
   const payload = {
     allocated_quantity: parsed.data.quantity,
     selected_price: roundMoney(Number(priceRow.current_price)),
