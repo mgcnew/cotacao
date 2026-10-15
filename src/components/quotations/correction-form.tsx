@@ -1,26 +1,64 @@
 "use client";
 
-import { AlertCircle, PencilLine } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  PackageCheck,
+  PackageX,
+  PencilLine,
+} from "lucide-react";
 import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ThemedSelect } from "@/components/ui/themed-select";
 import { packagingFactorLabel, unitWord } from "@/features/products/units";
 import {
   correctResponseItem,
   type CorrectionState,
 } from "@/features/quotations/correction";
+import { cn } from "@/lib/utils";
 
 type Situacao = "sim" | "sem_estoque" | "nao";
+
+/**
+ * As mesmas três respostas do link do fornecedor, na voz de quem confere.
+ *
+ * Empilhadas, e não lado a lado como na página dele: esta coluna da
+ * comparação tem ~210px, e três rótulos não cabem em linha sem quebrar.
+ * Selecionado = cor sólida + ícone + texto, nunca só a cor.
+ */
+const SITUACOES = [
+  {
+    value: "sim",
+    label: "Tem disponível",
+    icon: PackageCheck,
+    idleIcon: "text-success",
+    activeClass: "border-success bg-success text-surface",
+  },
+  {
+    value: "sem_estoque",
+    label: "Sem estoque agora",
+    icon: Clock3,
+    idleIcon: "text-warning",
+    activeClass: "border-warning bg-warning text-surface",
+  },
+  {
+    value: "nao",
+    label: "Não trabalha com o produto",
+    icon: PackageX,
+    idleIcon: "text-destructive",
+    activeClass: "border-destructive bg-destructive text-surface",
+  },
+] as const;
 
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending}>
-      {pending ? "Corrigindo…" : "Corrigir"}
+    <Button type="submit" disabled={pending} className="h-11">
+      {pending ? "Salvando…" : "Salvar correção"}
     </Button>
   );
 }
@@ -73,6 +111,8 @@ export function CorrectionForm({
     pricingUnitInfo !== null &&
     comparisonUnitInfo !== null;
   const [open, setOpen] = React.useState(false);
+  // A confirmação vale só até o formulário ser fechado; reabrir começa limpo.
+  const [reconhecidoEm, setReconhecidoEm] = React.useState<number | undefined>();
   const [situacao, setSituacao] = React.useState<Situacao>(
     doesNotSupply ? "nao" : isAvailable === false ? "sem_estoque" : "sim",
   );
@@ -88,43 +128,69 @@ export function CorrectionForm({
         type="button"
         size="sm"
         variant="ghost"
-        className="text-fg-subtle hover:text-fg h-6 gap-1 px-1.5 text-xs"
+        className="text-fg-muted hover:text-fg h-9 gap-1.5 px-2 text-[13px]"
         onClick={() => setOpen(true)}
       >
-        <PencilLine className="size-3" aria-hidden />
+        <PencilLine className="size-4" aria-hidden />
         Corrigir
       </Button>
     );
   }
 
+  const campo = "h-11 text-base";
+
   return (
     <form
       key={state.savedAt}
       action={formAction}
-      className="border-border bg-surface-sunken mt-2 flex flex-col gap-2 rounded-lg border p-2 text-left"
+      className="border-border bg-surface-sunken mt-2 flex flex-col gap-3 rounded-lg border p-3 text-left"
     >
       <input type="hidden" name="responseItemId" value={responseItemId} />
       <input type="hidden" name="roundId" value={roundId} />
 
-      <p className="text-fg-subtle text-xs">
-        {productName} · {supplierName}
+      <p className="text-fg-muted text-[13px] leading-snug wrap-anywhere">
+        <strong className="text-fg font-medium">{productName}</strong> ·{" "}
+        {supplierName}
       </p>
 
-      <ThemedSelect
-        id={`corr-fornece-${responseItemId}`}
-        name="supplies"
-        value={situacao}
-        onValueChange={(next) => setSituacao(next as Situacao)}
-        ariaLabel="O fornecedor trabalha com este produto?"
-        options={[
-          { value: "sim", label: "Fornece este produto" },
-          { value: "sem_estoque", label: "Sem disponibilidade agora" },
-          { value: "nao", label: "Não trabalha com este produto" },
-        ]}
-      />
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="text-fg mb-1.5 text-sm font-medium">
+          O fornecedor trabalha com este produto?
+        </legend>
+        {SITUACOES.map((opcao) => {
+          const ativa = situacao === opcao.value;
+          const Icone = opcao.icon;
+          return (
+            <label
+              key={opcao.value}
+              className={cn(
+                "border-border bg-surface hover:border-fg-subtle has-focus-visible:ring-ring/50 flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-3 text-sm font-semibold transition-colors has-focus-visible:ring-3",
+                ativa && opcao.activeClass,
+              )}
+            >
+              <input
+                type="radio"
+                name="supplies"
+                value={opcao.value}
+                checked={ativa}
+                onChange={() => setSituacao(opcao.value)}
+                className="sr-only"
+              />
+              <Icone
+                className={cn("size-5 shrink-0", !ativa && opcao.idleIcon)}
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1">{opcao.label}</span>
+              {ativa ? (
+                <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+              ) : null}
+            </label>
+          );
+        })}
+      </fieldset>
 
       {situacao !== "sim" && currentPrice !== null ? (
-        <p className="text-fg-subtle text-xs">
+        <p className="text-fg-muted text-[13px] leading-snug">
           O preço de R$ {currentPrice.toFixed(2).replace(".", ",")} sai da
           comparação, e a alocação em rascunho para este fornecedor é desfeita.
         </p>
@@ -134,61 +200,84 @@ export function CorrectionForm({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor={`corr-preco-${responseItemId}`}
-            className="text-fg-muted text-xs"
+            className="text-fg text-sm font-medium"
           >
             {embalagem
               ? `Preço de 1 ${unitWord(pricingUnitInfo)}`
               : `Preço por ${pricingUnit}`}
-            {currentPrice !== null
-              ? ` (atual: ${currentPrice.toFixed(2).replace(".", ",")})`
-              : ""}
+            {currentPrice !== null ? (
+              <span className="text-fg-muted font-normal">
+                {" "}
+                (atual: {currentPrice.toFixed(2).replace(".", ",")})
+              </span>
+            ) : null}
           </label>
-          <Input
-            id={`corr-preco-${responseItemId}`}
-            name="price"
-            inputMode="decimal"
-            placeholder="0,00"
-            className="h-7 text-sm"
-          />
+          <div className="relative">
+            <span
+              aria-hidden
+              className="text-fg-muted pointer-events-none absolute inset-y-0 left-3 flex items-center text-base"
+            >
+              R$
+            </span>
+            <Input
+              id={`corr-preco-${responseItemId}`}
+              name="price"
+              inputMode="decimal"
+              required
+              placeholder="0,00"
+              className={cn(campo, "pl-10 tabular-nums")}
+            />
+          </div>
         </div>
       ) : null}
 
       {fornece && conversionDefinitionId && conversionName ? (
-        <div className="border-primary/20 bg-primary-soft rounded-md border p-2">
+        <div className="flex flex-col gap-1.5">
           <input type="hidden" name="conversionDefinitionId" value={conversionDefinitionId} />
           <label
             htmlFor={`corr-conversao-${responseItemId}`}
-            className="text-fg-muted mb-1 block text-xs"
+            className="text-fg text-sm font-medium"
           >
             {embalagem
               ? `${packagingFactorLabel(pricingUnitInfo!)} (${unitWord(comparisonUnitInfo, 2)})`
               : `${conversionName}${conversionUnit ? ` (${conversionUnit})` : ""}`}
-            {currentConversionFactor !== null
-              ? ` (atual: ${currentConversionFactor.toLocaleString("pt-BR")})`
-              : ""}
+            {currentConversionFactor !== null ? (
+              <span className="text-fg-muted font-normal">
+                {" "}
+                (atual: {currentConversionFactor.toLocaleString("pt-BR")})
+              </span>
+            ) : null}
           </label>
           <Input
             id={`corr-conversao-${responseItemId}`}
             name="conversionFactor"
             inputMode="decimal"
             required={conversionRequired && currentConversionFactor === null}
-            placeholder="Deixe vazio para manter o valor atual"
-            className="h-7 text-sm"
+            placeholder="Vazio = manter"
+            className={cn(campo, "tabular-nums")}
           />
         </div>
       ) : null}
 
-      <Input
-        name="notes"
-        maxLength={300}
-        placeholder="Observação (opcional)"
-        className="h-7 text-sm"
-      />
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor={`corr-obs-${responseItemId}`}
+          className="text-fg text-sm font-medium"
+        >
+          Observação <span className="text-fg-muted font-normal">(opcional)</span>
+        </label>
+        <Input
+          id={`corr-obs-${responseItemId}`}
+          name="notes"
+          maxLength={300}
+          className={campo}
+        />
+      </div>
 
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor={`corr-motivo-${responseItemId}`}
-          className="text-fg-muted text-xs"
+          className="text-fg text-sm font-medium"
         >
           Motivo <span className="text-destructive">*</span>
         </label>
@@ -197,35 +286,46 @@ export function CorrectionForm({
           name="reason"
           required
           maxLength={300}
-          placeholder="Ex.: fornecedor confirmou por telefone"
-          className="h-7 text-sm"
+          placeholder="Ex.: confirmou por telefone"
+          className={campo}
         />
+        <p className="text-fg-muted text-[13px]">
+          Fica registrado o que mudou, o motivo e quem corrigiu.
+        </p>
       </div>
 
       {state.error ? (
         <p
           role="alert"
-          className="text-destructive flex items-start gap-1 text-xs"
+          className="text-destructive flex items-start gap-1.5 text-sm font-medium"
         >
-          <AlertCircle className="mt-0.5 size-3 shrink-0" aria-hidden />
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
           {state.error}
         </p>
       ) : null}
 
-      <p className="text-fg-subtle text-xs">
-        Fica registrado o que mudou, o motivo e quem corrigiu.
-      </p>
+      {state.savedAt && state.savedAt !== reconhecidoEm ? (
+        <p
+          role="status"
+          className="text-success flex items-start gap-1.5 text-sm font-medium"
+        >
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+          Correção registrada.
+        </p>
+      ) : null}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <SubmitButton />
         <Button
           type="button"
-          size="sm"
           variant="ghost"
-          className="text-fg-subtle"
-          onClick={() => setOpen(false)}
+          className="text-fg-muted h-11"
+          onClick={() => {
+            setReconhecidoEm(state.savedAt);
+            setOpen(false);
+          }}
         >
-          Cancelar
+          {state.savedAt && state.savedAt !== reconhecidoEm ? "Fechar" : "Cancelar"}
         </Button>
       </div>
     </form>
