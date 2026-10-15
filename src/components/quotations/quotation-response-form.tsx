@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -61,34 +60,42 @@ function formatarCentavos(entrada: string): string {
   const inteiro = Number(preenchido.slice(0, -2)).toLocaleString("pt-BR");
   return `${inteiro},${preenchido.slice(-2)}`;
 }
-/** A disponibilidade vem antes do preço para nenhuma alternativa passar batida. */
+
+/**
+ * As três respostas possíveis, lado a lado em qualquer largura.
+ *
+ * O rótulo é curto de propósito: o celular mostra três colunas de ~110px, e a
+ * explicação completa de cada uma vive uma vez só, no cabeçalho da página e no
+ * `title`/`aria-label` do botão — não repetida em cada item.
+ *
+ * Selecionado = cor sólida + ícone de confirmação + texto; nunca só a cor.
+ * `text-surface` sobre o fundo sólido acompanha o tema: branco no claro e
+ * escuro no escuro, onde os tokens de estado ficam claros.
+ */
 const RESPONSE_OPTIONS = [
   {
     value: "priced",
-    label: "Tenho disponível",
-    description: "Consigo atender e vou informar o preço",
+    label: "Tenho",
+    full: "Tenho disponível e vou informar o preço",
     icon: PackageCheck,
-    iconClass: "bg-success-soft text-success",
-    activeClass:
-      "border-success/50 bg-success-soft ring-success/15 ring-2",
+    idleIcon: "text-success",
+    activeClass: "border-success bg-success text-surface",
   },
   {
     value: "unavailable",
-    label: "Sem disponibilidade agora",
-    description: "Trabalho com o produto, mas não consigo atender desta vez",
+    label: "Sem estoque agora",
+    full: "Trabalho com o produto, mas não consigo atender desta vez",
     icon: Clock3,
-    iconClass: "bg-warning-soft text-warning",
-    activeClass:
-      "border-warning/50 bg-warning-soft ring-warning/15 ring-2",
+    idleIcon: "text-warning",
+    activeClass: "border-warning bg-warning text-surface",
   },
   {
     value: "does_not_supply",
-    label: "Não trabalho com este produto",
-    description: "Não forneço este item",
+    label: "Não trabalho",
+    full: "Não trabalho com este produto",
     icon: PackageX,
-    iconClass: "bg-destructive-soft text-destructive",
-    activeClass:
-      "border-destructive/45 bg-destructive-soft ring-destructive/10 ring-2",
+    idleIcon: "text-destructive",
+    activeClass: "border-destructive bg-destructive text-surface",
   },
 ] as const;
 
@@ -110,39 +117,106 @@ type SuspiciousPrice = {
   historicalAt: string | null;
 };
 
-function SubmitButton({
-  completed,
-  total,
-}: {
-  completed: number;
-  total: number;
-}) {
-  const { pending } = useFormStatus();
-  const ready = completed === total;
+/** Ordem pedida pelo grupo: aplica a quem ainda não respondeu, ou desfaz. */
+type BulkSignal = { nonce: number; value: ResponseStatus; undo: boolean };
+
+type Draft = {
+  status: ResponseStatus;
+  price: string;
+  attributes: Record<string, string>;
+  obs: string;
+};
+
+const draftKey = (token: string, id: string) => `cotacao:${token}:${id}`;
+
+const initialDraftCache = new Map<string, string>();
+
+/**
+ * Rascunhos deste link, lidos uma única vez por carregamento da página.
+ *
+ * Vai por `useSyncExternalStore` para o servidor renderizar vazio e o cliente
+ * restaurar depois, sem descompasso de hidratação e sem `setState` em efeito. O
+ * valor fica em cache: o que o fornecedor digita depois não reabre o rascunho.
+ */
+function readInitialDrafts(token: string, ids: string[]): string {
+  const cached = initialDraftCache.get(token);
+  if (cached !== undefined) return cached;
+  const found: Record<string, string> = {};
+  try {
+    for (const id of ids) {
+      const raw = window.localStorage.getItem(draftKey(token, id));
+      if (raw) found[id] = raw;
+    }
+  } catch {
+    // armazenamento bloqueado: sem rascunho
+  }
+  const json = JSON.stringify(found);
+  initialDraftCache.set(token, json);
+  return json;
+}
+
+const subscribeNone = () => () => {};
+
+function parseDraft(raw: string | undefined): Draft | null {
+  if (!raw) return null;
+  try {
+    const draft = JSON.parse(raw) as Partial<Draft>;
+    const status =
+      draft.status === "priced" ||
+      draft.status === "unavailable" ||
+      draft.status === "does_not_supply"
+        ? draft.status
+        : "";
+    return {
+      status,
+      price: typeof draft.price === "string" ? draft.price : "",
+      obs: typeof draft.obs === "string" ? draft.obs : "",
+      attributes:
+        draft.attributes && typeof draft.attributes === "object"
+          ? (draft.attributes as Record<string, string>)
+          : {},
+    };
+  } catch {
+    return null;
+  }
+}
+
+function prefersReducedMotion() {
   return (
-    <Button
-      type="submit"
-      size="lg"
-      disabled={pending}
-      className="w-full sm:w-auto"
-    >
-      {pending
-        ? "Enviando…"
-        : ready
-          ? `Enviar ${total === 1 ? "resposta" : `${total} respostas`}`
-          : `Revisar ${total - completed} ${total - completed === 1 ? "pendente" : "pendentes"}`}
-    </Button>
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
 }
 
+/** Leva o fornecedor ao próximo item, sem deixar a tela parada onde estava. */
+function scrollToNextCard(currentId: string) {
+  const cards = Array.from(
+    document.querySelectorAll<HTMLElement>('article[id^="cotacao-item-"]'),
+  );
+  const index = cards.findIndex((c) => c.id === `cotacao-item-${currentId}`);
+  const next = cards[index + 1];
+  if (!next) return;
+  next.scrollIntoView({
+    behavior: prefersReducedMotion() ? "auto" : "smooth",
+    block: "start",
+  });
+}
+
 function ItemCard({
+  token,
   item,
+  flagged,
+  bulk,
+  initialDraft,
   onResolvedChange,
   onHistoricalPresentationChange,
   onSuspiciousPriceChange,
-  showValidation,
 }: {
+  token: string;
   item: PublicQuotationItem;
+  flagged: boolean;
+  bulk?: BulkSignal;
+  initialDraft: Draft | null;
   onResolvedChange: (id: string, resolved: boolean) => void;
   onHistoricalPresentationChange: (
     id: string,
@@ -152,14 +226,18 @@ function ItemCard({
     id: string,
     suspicious: SuspiciousPrice | null,
   ) => void;
-  showValidation: boolean;
 }) {
   const id = item.supplier_quotation_item_id;
-  const [status, setStatus] = React.useState<ResponseStatus>("");
-  const [price, setPrice] = React.useState("");
+  const [status, setStatus] = React.useState<ResponseStatus>(
+    initialDraft?.status ?? "",
+  );
+  const [price, setPrice] = React.useState(initialDraft?.price ?? "");
+  const [obs, setObs] = React.useState(initialDraft?.obs ?? "");
+  const [obsOpen, setObsOpen] = React.useState(Boolean(initialDraft?.obs));
+  const [commaTyped, setCommaTyped] = React.useState(false);
   const [attributeValues, setAttributeValues] = React.useState<Record<string, string>>(
-    () =>
-      Object.fromEntries(
+    () => ({
+      ...Object.fromEntries(
         item.attributes.map((attribute) => [
           attribute.attribute_definition_id,
           attribute.is_conversion_factor &&
@@ -168,6 +246,8 @@ function ItemCard({
             : "",
         ]),
       ),
+      ...(initialDraft?.attributes ?? {}),
+    }),
   );
   const priced = status === "priced";
   const numericPrice = Number(price.replace(/\./g, "").replace(",", "."));
@@ -190,11 +270,11 @@ function ItemCard({
     (validPrice && !missingRequiredAttribute && !invalidConversionAttribute);
   const validationMessage =
     status === ""
-      ? "Escolha se consegue atender este produto."
+      ? "Toque em uma das três opções."
       : priced && !validPrice
       ? price.trim()
         ? "Informe um preço válido e maior que zero."
-        : "Informe o preço ou diga que não consegue atender."
+        : "Informe o preço, ou toque em outra opção."
       : priced && missingRequiredAttribute
         ? `Informe ${missingRequiredAttribute.name.toLocaleLowerCase("pt-BR")}.`
         : priced && invalidConversionAttribute
@@ -232,17 +312,73 @@ function ItemCard({
     priceRatio !== null &&
     Math.abs(numericPrice - (historicalPrice ?? 0)) >= 2 &&
     (priceRatio >= 3 || priceRatio <= 1 / 3);
+  // Sem histórico não há como comparar; um preço abaixo de dez centavos quase
+  // sempre é a vírgula digitada onde não devia ("4,5" vira 0,45).
+  const veryLowPrice = validPrice && numericPrice < 0.1 && !suspiciousPrice;
 
-  function escolherStatus(proximo: ResponseStatus) {
-    setStatus(proximo);
-    if (proximo === "priced") {
-      window.requestAnimationFrame(() =>
-        document.getElementById(`preco_${id}`)?.focus(),
-      );
-    } else {
-      setPrice("");
+  const dirtyRef = React.useRef(false);
+  const [bulkApplied, setBulkApplied] = React.useState(false);
+  const [seenBulkNonce, setSeenBulkNonce] = React.useState(0);
+
+  // Ordem do grupo ("Não trabalho com os que faltam") e seu desfazer, aplicada
+  // na própria renderização: é estado derivado de uma prop, não de um efeito.
+  if (bulk && bulk.nonce !== seenBulkNonce) {
+    setSeenBulkNonce(bulk.nonce);
+    if (bulk.undo) {
+      if (bulkApplied) {
+        setBulkApplied(false);
+        setStatus("");
+        setPrice("");
+      }
+    } else if (status === "") {
+      setBulkApplied(true);
+      setStatus(bulk.value);
     }
   }
+
+  function escolherStatus(proximo: ResponseStatus) {
+    dirtyRef.current = true;
+    setStatus(proximo);
+    setBulkApplied(false);
+    if (proximo === "priced") {
+      // O campo de preço nasce depois deste clique; leva-o para o meio da tela
+      // antes de focar, senão o teclado e a barra fixa o cobrem.
+      window.setTimeout(() => {
+        const field = document.getElementById(`preco_${id}`);
+        field?.scrollIntoView({
+          behavior: prefersReducedMotion() ? "auto" : "smooth",
+          block: "center",
+        });
+        field?.focus({ preventScroll: true });
+      }, 60);
+    } else {
+      setPrice("");
+      setCommaTyped(false);
+      // Resposta sem preço encerra o item: segue para o próximo.
+      window.setTimeout(() => scrollToNextCard(id), 280);
+    }
+  }
+
+  // Rascunho: o WhatsApp costuma matar o navegador interno e levar tudo junto.
+  // Só grava depois de uma ação do fornecedor, para o primeiro render (ainda
+  // vazio) nunca apagar o que está guardado.
+  React.useEffect(() => {
+    if (seenBulkNonce > 0) dirtyRef.current = true;
+  }, [seenBulkNonce]);
+
+  React.useEffect(() => {
+    if (!dirtyRef.current) return;
+    try {
+      if (status === "" && !price && !obs) {
+        window.localStorage.removeItem(draftKey(token, id));
+        return;
+      }
+      const draft: Draft = { status, price, attributes: attributeValues, obs };
+      window.localStorage.setItem(draftKey(token, id), JSON.stringify(draft));
+    } catch {
+      // sem armazenamento, sem rascunho
+    }
+  }, [token, id, status, price, obs, attributeValues]);
 
   React.useEffect(() => {
     onResolvedChange(id, resolved);
@@ -301,116 +437,100 @@ function ItemCard({
     reusesHistoricalPresentation,
   ]);
 
+  const needsAttention = flagged && !resolved;
+
   return (
     <article
       id={`cotacao-item-${id}`}
       className={cn(
-        "border-border bg-surface scroll-mt-24 overflow-hidden rounded-xl border transition-colors",
-        resolved && "border-success/35",
-        showValidation && validationMessage && "border-destructive/60",
+        "border-border bg-surface scroll-mt-4 rounded-xl border transition-colors",
+        resolved && "border-success/45",
+        needsAttention && "border-warning",
       )}
     >
       <input type="hidden" name="itemId" value={id} />
       <input type="hidden" name={`nome_${id}`} value={item.product_name} />
+      {/* O status viaja escondido; a escolha é deliberadamente explícita. */}
+      <input type="hidden" name={`status_${id}`} value={status} />
 
-      <header className="border-border flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-fg font-medium">{item.product_name}</p>
-          <p className="text-fg-muted mt-0.5 text-sm">
-            Quantidade solicitada:{" "}
-            <strong className="text-fg tabular-nums">
-              {QTY.format(Number(item.requested_quantity))}{" "}
-              {item.purchase_unit.symbol}
-            </strong>
-          </p>
-          {item.notes ? (
-            <p className="text-fg-subtle mt-1 text-xs">{item.notes}</p>
+      <div className="flex flex-col gap-3 p-3 sm:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-fg text-base leading-snug font-semibold wrap-anywhere">
+              {item.product_name}
+            </p>
+            <p className="text-fg-muted mt-0.5 text-sm">
+              Quantidade:{" "}
+              <strong className="text-fg tabular-nums">
+                {QTY.format(Number(item.requested_quantity))}{" "}
+                {item.purchase_unit.symbol}
+              </strong>
+            </p>
+            {item.notes ? (
+              <p className="text-fg-muted mt-1 text-sm">{item.notes}</p>
+            ) : null}
+          </div>
+          {resolved ? (
+            <span className="text-success flex shrink-0 items-center gap-1 text-sm font-medium">
+              <CheckCircle2 className="size-5" aria-hidden />
+              <span className="sr-only sm:not-sr-only">Respondido</span>
+            </span>
+          ) : needsAttention ? (
+            <span className="bg-warning-soft text-warning flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-sm font-medium">
+              <AlertCircle className="size-4" aria-hidden />
+              Falta responder
+            </span>
           ) : null}
         </div>
-        <span
-          className={cn(
-            "rounded-full px-2.5 py-1 text-xs font-medium",
-            resolved
-              ? "bg-success-soft text-success"
-              : "bg-warning-soft text-warning",
-          )}
-        >
-          {resolved ? "Preenchido" : "Pendente"}
-        </span>
-      </header>
 
-      <div className="flex flex-col gap-4 p-4">
-        {/* O status viaja escondido, mas a escolha é deliberadamente explícita. */}
-        <input type="hidden" name={`status_${id}`} value={status} />
+        <fieldset className="grid grid-cols-3 gap-2">
+          <legend className="sr-only">
+            Disponibilidade de {item.product_name}
+          </legend>
+          {RESPONSE_OPTIONS.map((option) => {
+            const active = status === option.value;
+            const OptionIcon = option.icon;
+            return (
+              <label
+                key={option.value}
+                title={option.full}
+                className={cn(
+                  "border-border bg-surface hover:border-fg-subtle has-focus-visible:ring-ring/50 relative flex min-h-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border px-1.5 py-2 text-center text-sm leading-tight font-semibold transition-colors has-focus-visible:ring-3",
+                  active && option.activeClass,
+                )}
+              >
+                <input
+                  type="radio"
+                  name={`resposta_${id}`}
+                  value={option.value}
+                  checked={active}
+                  data-response-status={option.value}
+                  aria-label={option.full}
+                  onChange={() => escolherStatus(option.value)}
+                  className="sr-only"
+                />
+                <OptionIcon
+                  className={cn("size-5", !active && option.idleIcon)}
+                  aria-hidden
+                />
+                <span>{option.label}</span>
+                {active ? (
+                  <CheckCircle2
+                    className="absolute top-1 right-1 size-4"
+                    aria-hidden
+                  />
+                ) : null}
+              </label>
+            );
+          })}
+        </fieldset>
 
-        {showValidation && validationMessage ? (
-          <p
-            role="alert"
-            className="bg-destructive-soft text-destructive flex items-start gap-2 rounded-lg px-3 py-2 text-sm"
-          >
+        {needsAttention && validationMessage ? (
+          <p role="alert" className="text-warning flex items-start gap-2 text-sm font-medium">
             <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
             {validationMessage}
           </p>
         ) : null}
-
-        <div
-          role="group"
-          aria-label={`Disponibilidade de ${item.product_name}`}
-          className="border-border bg-surface-sunken flex flex-col gap-3 rounded-xl border p-3 sm:p-4"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-fg text-sm font-semibold">
-              Você consegue fornecer este produto nesta cotação?
-            </p>
-            <span className="bg-primary-soft text-primary rounded-full px-2.5 py-1 text-[11px] font-semibold">
-              Resposta obrigatória
-            </span>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {RESPONSE_OPTIONS.map((option) => {
-              const active = status === option.value;
-              const OptionIcon = option.icon;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  data-response-status={option.value}
-                  aria-pressed={active}
-                  onClick={() => escolherStatus(option.value)}
-                  className={cn(
-                    "border-border bg-surface hover:border-fg-subtle focus-visible:border-ring focus-visible:ring-ring/50 min-h-24 rounded-xl border p-3 text-left transition-[border-color,background-color,box-shadow] focus-visible:ring-3 focus-visible:outline-none",
-                    active && option.activeClass,
-                  )}
-                >
-                  <span className="flex items-start gap-3">
-                    <span
-                      className={cn(
-                        "grid size-9 shrink-0 place-items-center rounded-lg",
-                        option.iconClass,
-                      )}
-                    >
-                      <OptionIcon className="size-4.5" aria-hidden />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="text-fg block text-sm font-semibold">
-                        {option.label}
-                      </span>
-                      <span className="text-fg-muted mt-1 block text-xs leading-snug">
-                        {option.description}
-                      </span>
-                    </span>
-                    {active ? (
-                      <CheckCircle2
-                        className="text-fg size-4.5 shrink-0"
-                        aria-hidden
-                      />
-                    ) : null}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {priced && packaging && conversionAttribute ? (
           <PackagingSale
@@ -418,86 +538,98 @@ function ItemCard({
             itemId={id}
             attr={conversionAttribute}
             price={price}
-            onPriceChange={setPrice}
-            priceInvalid={showValidation && !validPrice}
+            onPriceChange={(value) => {
+              dirtyRef.current = true;
+              setCommaTyped(false);
+              setPrice(value);
+            }}
+            priceInvalid={flagged && !validPrice}
             factor={rawFactor}
-            onFactorChange={(value) =>
+            onFactorChange={(value) => {
+              dirtyRef.current = true;
               setAttributeValues((current) => ({
                 ...current,
                 [conversionAttribute.attribute_definition_id]: value,
-              }))
-            }
-            factorInvalid={showValidation && Boolean(invalidConversionAttribute)}
+              }));
+            }}
+            factorInvalid={flagged && Boolean(invalidConversionAttribute)}
             numericFactor={numericFactor}
             normalizedPrice={normalizedPrice}
+            onAdvance={() => scrollToNextCard(id)}
           />
         ) : null}
 
-        <div
-          className={cn("grid gap-3", !packaging && "sm:grid-cols-[11rem_1fr]")}
-        >
-          {priced ? (
-            packaging ? null : (
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor={`preco_${id}`}
-                  className="text-fg text-sm font-medium"
-                >
-                  Preço por {item.pricing_unit.symbol}
-                </label>
-                <Input
-                  id={`preco_${id}`}
-                  name={`preco_${id}`}
-                  // Só dígitos entram, então o teclado numérico simples basta —
-                  // uma tecla de vírgula aqui seria uma tecla que não faz nada.
-                  inputMode="numeric"
-                  enterKeyHint="next"
-                  placeholder="0,00"
-                  value={price}
-                  aria-invalid={showValidation && !validPrice}
-                  onChange={(event) => setPrice(formatarCentavos(event.target.value))}
-                />
-              </div>
-            )
-          ) : status === "" ? (
-            <div className="bg-surface-sunken text-fg-muted flex items-center rounded-lg px-3 py-2 text-sm">
-              Escolha uma opção acima para continuar.
-            </div>
-          ) : (
-            <div className="bg-surface-sunken text-fg-muted flex items-center rounded-lg px-3 py-2 text-sm">
-              Preço não necessário para a opção escolhida.
-            </div>
-          )}
-
+        {priced && !packaging ? (
           <div className="flex flex-col gap-1.5">
             <label
-              htmlFor={`obs_${id}`}
+              htmlFor={`preco_${id}`}
               className="text-fg text-sm font-medium"
             >
-              Observação <span className="text-fg-subtle">(opcional)</span>
+              Preço por {item.pricing_unit.symbol}
             </label>
-            <Input
-              id={`obs_${id}`}
-              name={`obs_${id}`}
-              placeholder="Marca, prazo, condição ou substituição…"
-              maxLength={300}
-            />
+            <div className="relative sm:max-w-xs">
+              <span
+                aria-hidden
+                className="text-fg-muted pointer-events-none absolute inset-y-0 left-3 flex items-center text-base"
+              >
+                R$
+              </span>
+              <Input
+                id={`preco_${id}`}
+                name={`preco_${id}`}
+                // Só dígitos entram, então o teclado numérico simples basta —
+                // uma tecla de vírgula aqui seria uma tecla que não faz nada.
+                inputMode="numeric"
+                enterKeyHint="next"
+                placeholder="0,00"
+                autoComplete="off"
+                value={price}
+                aria-invalid={flagged && !validPrice}
+                aria-describedby={`preco_dica_${id}`}
+                onChange={(event) => {
+                  dirtyRef.current = true;
+                  const typed = (event.nativeEvent as InputEvent).data;
+                  setCommaTyped(typed === "," || typed === ".");
+                  setPrice(formatarCentavos(event.target.value));
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  // Enter aqui significa "próximo", não "enviar tudo".
+                  event.preventDefault();
+                  if (validPrice) scrollToNextCard(id);
+                }}
+                className="h-12 pl-10 text-lg tabular-nums"
+              />
+            </div>
+            <p
+              id={`preco_dica_${id}`}
+              className={cn(
+                "text-[13px]",
+                commaTyped || veryLowPrice ? "text-warning font-medium" : "text-fg-muted",
+              )}
+              role={commaTyped || veryLowPrice ? "status" : undefined}
+            >
+              {commaTyped
+                ? "Não precisa de vírgula: digite só os números. 450 vira R$ 4,50."
+                : veryLowPrice
+                  ? `Confira: R$ ${formatUnitPrice(numericPrice)} é um valor muito baixo. Para R$ 5,00, digite 500.`
+                  : "Digite só os números: 450 vira R$ 4,50."}
+            </p>
           </div>
-        </div>
+        ) : null}
 
         {suspiciousPrice && historicalPrice !== null ? (
           <div className="border-warning/35 bg-warning-soft text-warning flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
             <div>
               <strong className="block">Confira este preço antes de enviar.</strong>
-              <span className="text-fg-muted mt-0.5 block text-xs leading-relaxed">
+              <span className="text-fg-muted mt-0.5 block text-[13px] leading-relaxed">
                 O valor está bem diferente do último preço pago à sua empresa:{" "}
                 R$ {formatUnitPrice(historicalPrice)}
                 {item.last_supplier_price_at
                   ? ` em ${new Intl.DateTimeFormat("pt-BR").format(new Date(item.last_supplier_price_at))}`
-                  : ""}. Se não puder atender agora, escolha “Sem disponibilidade”;
-                se não fornecer este item, escolha “Não trabalho com este
-                produto”.
+                  : ""}. Se não puder atender agora, escolha “Sem estoque
+                agora”; se não fornecer este item, escolha “Não trabalho”.
               </span>
             </div>
           </div>
@@ -505,15 +637,15 @@ function ItemCard({
 
         {priced &&
         (packaging ? otherAttributes.length > 0 : item.attributes.length > 0) ? (
-          <section className="border-border border-t pt-4">
+          <section className="flex flex-col gap-3">
             {conversionAttribute && !packaging ? (
-              <div className="border-primary/25 bg-primary-soft mb-3 rounded-xl border p-3">
-                <div className="mb-3 flex items-start gap-2">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-start gap-2">
                   <Calculator className="text-primary mt-0.5 size-4 shrink-0" aria-hidden />
                   <div>
-                    <h3 className="text-fg text-sm font-semibold">Apresentação ofertada</h3>
-                    <p className="text-fg-muted mt-0.5 text-xs">
-                      Informe quantas {item.comparison_unit?.symbol ?? "unidades"} vêm em cada {item.pricing_unit.symbol}. Assim o comprador compara pacotes de tamanhos diferentes corretamente.
+                    <h3 className="text-fg text-sm font-semibold">Quanto vem em cada {item.pricing_unit.symbol}</h3>
+                    <p className="text-fg-muted mt-0.5 text-[13px]">
+                      Informe quantas {item.comparison_unit?.symbol ?? "unidades"} vêm em cada {item.pricing_unit.symbol}, para o comprador comparar tamanhos diferentes.
                     </p>
                   </div>
                 </div>
@@ -522,53 +654,81 @@ function ItemCard({
                   itemId={id}
                   priced={priced}
                   value={attributeValues[conversionAttribute.attribute_definition_id] ?? ""}
-                  onChange={(value) =>
+                  onChange={(value) => {
+                    dirtyRef.current = true;
                     setAttributeValues((current) => ({
                       ...current,
                       [conversionAttribute.attribute_definition_id]: value,
-                    }))
-                  }
+                    }));
+                  }}
                 />
                 {conversionAttribute.suggested_value_numeric !== null ? (
-                  <p className="text-fg-subtle mt-1.5 text-xs">
-                    Valor da última cotação
+                  <p className="text-fg-muted text-[13px]">
+                    Igual à última cotação
                     {conversionAttribute.suggested_confirmed_at
-                      ? `, confirmado em ${new Intl.DateTimeFormat("pt-BR").format(new Date(conversionAttribute.suggested_confirmed_at))}`
+                      ? ` (${new Intl.DateTimeFormat("pt-BR").format(new Date(conversionAttribute.suggested_confirmed_at))})`
                       : ""}
-                    . Você confirmará no envio ou poderá alterar agora.
+                    . Altere se mudou.
                   </p>
                 ) : null}
                 {normalizedPrice !== null && item.comparison_unit ? (
-                  <div className="border-primary/20 bg-surface mt-3 rounded-lg border px-3 py-2 text-sm">
+                  <p className="text-sm">
                     <span className="text-fg-muted">Custo comparável: </span>
                     <strong className="text-primary tabular-nums">
                       R$ {formatUnitPrice(normalizedPrice)} / {item.comparison_unit.symbol}
                     </strong>
-                  </div>
+                  </p>
                 ) : null}
               </div>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
-            {otherAttributes.map((attr) => {
-              return (
+              {otherAttributes.map((attr) => (
                 <AttributeField
                   key={attr.attribute_definition_id}
                   attr={attr}
                   itemId={id}
                   priced={priced}
                   value={attributeValues[attr.attribute_definition_id] ?? ""}
-                  onChange={(value) =>
+                  onChange={(value) => {
+                    dirtyRef.current = true;
                     setAttributeValues((current) => ({
                       ...current,
                       [attr.attribute_definition_id]: value,
-                    }))
-                  }
+                    }));
+                  }}
                 />
-              );
-            })}
+              ))}
             </div>
           </section>
         ) : null}
+
+        {/* Observação é opcional: fica recolhida e o campo continua no formulário. */}
+        {status !== "" && !obsOpen ? (
+          <button
+            type="button"
+            onClick={() => setObsOpen(true)}
+            className="text-primary focus-visible:ring-ring/50 -my-1 min-h-11 self-start rounded-md text-sm font-medium underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:outline-none"
+          >
+            + Observação (marca, prazo, substituição)
+          </button>
+        ) : null}
+        <div className={cn("flex flex-col gap-1.5", !obsOpen && "hidden")}>
+          <label htmlFor={`obs_${id}`} className="text-fg text-sm font-medium">
+            Observação <span className="text-fg-muted font-normal">(opcional)</span>
+          </label>
+          <Input
+            id={`obs_${id}`}
+            name={`obs_${id}`}
+            placeholder="Marca, prazo, condição ou substituição…"
+            maxLength={300}
+            value={obs}
+            onChange={(event) => {
+              dirtyRef.current = true;
+              setObs(event.target.value);
+            }}
+            className="h-11"
+          />
+        </div>
       </div>
     </article>
   );
@@ -599,6 +759,7 @@ function PackagingSale({
   factorInvalid,
   numericFactor,
   normalizedPrice,
+  onAdvance,
 }: {
   item: PublicQuotationItem;
   itemId: string;
@@ -611,6 +772,7 @@ function PackagingSale({
   factorInvalid: boolean;
   numericFactor: number;
   normalizedPrice: number | null;
+  onAdvance: () => void;
 }) {
   const fieldName = `attr_${itemId}_${attr.attribute_definition_id}__${attr.data_type}`;
   // Nada de artigo definido antes do nome da unidade: "o preço do caixa" sai
@@ -643,11 +805,11 @@ function PackagingSale({
   return (
     <section
       aria-label={`Como você vende ${item.product_name}`}
-      className="border-border bg-surface-sunken flex flex-col gap-3 rounded-xl border p-3 sm:p-4"
+      className="flex flex-col gap-3"
     >
       <div>
         <h3 className="text-fg text-sm font-semibold">Como você vende</h3>
-        <p className="text-fg-muted mt-0.5 text-xs">
+        <p className="text-fg-muted mt-0.5 text-[13px]">
           Quanto custa 1 {embalagem} e quanto vem dentro. É assim que o
           comprador compara embalagens de tamanhos diferentes.
         </p>
@@ -664,7 +826,7 @@ function PackagingSale({
           <div className="relative">
             <span
               aria-hidden
-              className="text-fg-subtle pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm"
+              className="text-fg-muted pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm"
             >
               R$
             </span>
@@ -681,7 +843,12 @@ function PackagingSale({
               onChange={(event) =>
                 onPriceChange(formatarCentavos(event.target.value))
               }
-              className="h-11 pl-9 tabular-nums"
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                document.getElementById(fieldName)?.focus();
+              }}
+              className="h-12 pl-10 text-lg tabular-nums"
             />
           </div>
         </div>
@@ -707,12 +874,17 @@ function PackagingSale({
               aria-invalid={factorInvalid}
               min="0.000001"
               onChange={(event) => onFactorChange(event.target.value)}
-              className="h-11 w-24 tabular-nums"
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                onAdvance();
+              }}
+              className="h-12 w-28 text-lg tabular-nums"
             />
             <span className="text-fg text-sm">{conteudoVarios}</span>
           </div>
           {attr.suggested_value_numeric !== null ? (
-            <p className="text-fg-subtle text-xs">
+            <p className="text-fg-muted text-[13px]">
               Valor da última cotação
               {attr.suggested_confirmed_at
                 ? `, confirmado em ${new Intl.DateTimeFormat("pt-BR").format(new Date(attr.suggested_confirmed_at))}`
@@ -733,14 +905,14 @@ function PackagingSale({
               </span>
             </p>
             {totalConteudo !== null ? (
-              <p className="text-fg-muted mt-1 text-xs tabular-nums">
+              <p className="text-fg-muted mt-1 text-[13px] tabular-nums">
                 {QTY.format(pedido)} {unitWord(item.purchase_unit, pedido)} ={" "}
                 {QTY.format(totalConteudo)} {conteudoVarios} no total
               </p>
             ) : null}
           </>
         ) : (
-          <p className="text-fg-subtle text-sm">{faltando}</p>
+          <p className="text-fg-muted text-sm">{faltando}</p>
         )}
       </div>
     </section>
@@ -802,10 +974,10 @@ export function QuotationResponseForm({
   token: string;
   items: PublicQuotationItem[];
 }) {
-  const [state, formAction] = useActionState<SubmitQuotationState, FormData>(
-    submitQuotation,
-    { error: null },
-  );
+  const [state, formAction, pending] = useActionState<
+    SubmitQuotationState,
+    FormData
+  >(submitQuotation, { error: null });
   const [resolved, setResolved] = React.useState<Record<string, boolean>>({});
   const [historicalPresentations, setHistoricalPresentations] = React.useState<
     Record<string, HistoricalPresentation>
@@ -816,7 +988,8 @@ export function QuotationResponseForm({
   const [confirmationOpen, setConfirmationOpen] = React.useState(false);
   const [priceConfirmationOpen, setPriceConfirmationOpen] =
     React.useState(false);
-  const [showValidation, setShowValidation] = React.useState(false);
+  const [flagged, setFlagged] = React.useState<Record<string, boolean>>({});
+  const [bulk, setBulk] = React.useState<Record<string, BulkSignal>>({});
   const formRef = React.useRef<HTMLFormElement>(null);
   const allowHistoricalSubmit = React.useRef(false);
   const allowSuspiciousSubmit = React.useRef(false);
@@ -824,6 +997,7 @@ export function QuotationResponseForm({
   const completed = pendentes.filter(
     (item) => resolved[item.supplier_quotation_item_id],
   ).length;
+  const remaining = pendentes.length - completed;
   const progress =
     pendentes.length > 0 ? (completed / pendentes.length) * 100 : 0;
   const updateResolved = React.useCallback((id: string, value: boolean) => {
@@ -877,17 +1051,53 @@ export function QuotationResponseForm({
   );
   const reusedPresentations = Object.values(historicalPresentations);
   const pricesToConfirm = Object.values(suspiciousPrices);
+  const draftsJson = React.useSyncExternalStore(
+    subscribeNone,
+    () =>
+      readInitialDrafts(
+        token,
+        pendentes.map((item) => item.supplier_quotation_item_id),
+      ),
+    () => "{}",
+  );
+  const drafts = React.useMemo(() => {
+    const raw = JSON.parse(draftsJson) as Record<string, string>;
+    const parsed: Record<string, Draft> = {};
+    for (const [id, value] of Object.entries(raw)) {
+      const draft = parseDraft(value);
+      if (draft && draft.status) parsed[id] = draft;
+    }
+    return parsed;
+  }, [draftsJson]);
+  const restoredCount = Object.keys(drafts).length;
 
-  function focusFirstPending() {
+  // Resposta enviada: o rascunho deste link não tem mais função.
+  React.useEffect(() => {
+    if (!state.submitted) return;
+    try {
+      for (const item of items) {
+        window.localStorage.removeItem(
+          draftKey(token, item.supplier_quotation_item_id),
+        );
+      }
+    } catch {
+      // nada a limpar
+    }
+  }, [state.submitted, items, token]);
+
+  function goToFirstPending(options: { flag: boolean }) {
     const firstPending = pendentes.find(
       (item) => !resolved[item.supplier_quotation_item_id],
     );
     if (!firstPending) return;
+    const id = firstPending.supplier_quotation_item_id;
+    if (options.flag) setFlagged((current) => ({ ...current, [id]: true }));
 
-    const card = document.getElementById(
-      `cotacao-item-${firstPending.supplier_quotation_item_id}`,
-    );
-    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const card = document.getElementById(`cotacao-item-${id}`);
+    card?.scrollIntoView({
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+      block: "start",
+    });
     const selectedStatus = card?.querySelector<HTMLInputElement>(
       'input[name^="status_"]',
     )?.value;
@@ -941,12 +1151,15 @@ export function QuotationResponseForm({
 
   if (state.submitted) {
     return (
-      <div className="border-border bg-success-soft text-success flex flex-col items-center gap-2 rounded-2xl border px-6 py-10 text-center">
+      <div
+        role="status"
+        className="border-border bg-success-soft text-success flex flex-col items-center gap-2 rounded-2xl border px-6 py-10 text-center"
+      >
         <CheckCircle2 className="size-7" aria-hidden />
-        <p className="font-semibold">Resposta enviada com sucesso.</p>
+        <p className="text-lg font-semibold">Resposta enviada com sucesso.</p>
         <p className="max-w-md text-sm">
           O comprador já recebeu seus preços e disponibilidades. Se precisar
-          corrigir algo, fale diretamente com ele.
+          corrigir algo, fale diretamente com ele. Pode fechar esta página.
         </p>
       </div>
     );
@@ -976,16 +1189,19 @@ export function QuotationResponseForm({
     groups.set(item.group, list);
   }
 
+  const allDone = completed === pendentes.length;
+
   return (
     <form
       ref={formRef}
       action={formAction}
       className="flex flex-col gap-5"
       onSubmit={(event) => {
-        if (completed !== pendentes.length) {
+        if (!allDone) {
+          // Enter no teclado ou envio forçado com itens faltando: leva ao
+          // primeiro, sem pintar a página inteira de erro.
           event.preventDefault();
-          setShowValidation(true);
-          focusFirstPending();
+          goToFirstPending({ flag: true });
           return;
         }
         if (pricesToConfirm.length > 0 && !allowSuspiciousSubmit.current) {
@@ -1005,59 +1221,93 @@ export function QuotationResponseForm({
         allowSuspiciousSubmit.current = false;
       }}
       onInvalid={(event) => {
-        setShowValidation(true);
-        event.currentTarget
-          .querySelector(":invalid")
-          ?.closest("article")
-          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        const card = (event.target as HTMLElement).closest("article");
+        const itemId = card?.id.replace("cotacao-item-", "");
+        if (itemId) setFlagged((current) => ({ ...current, [itemId]: true }));
+        card?.scrollIntoView({ behavior: "smooth", block: "center" });
       }}
     >
       <input type="hidden" name="token" value={token} />
 
-      <section className="border-border bg-surface sticky top-2 z-20 rounded-xl border p-3 shadow-sm sm:top-4">
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-fg-muted flex items-center gap-2">
-            <PackageCheck className="text-primary size-4" aria-hidden />
-            Progresso do preenchimento
-          </span>
-          <strong className="text-fg tabular-nums">
-            {completed}/{pendentes.length}
-          </strong>
-        </div>
-        <div className="bg-surface-muted mt-2 h-2 overflow-hidden rounded-full">
-          <div
-            className="bg-primary h-full rounded-full transition-[width]"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <p className="text-fg-subtle mt-2 text-xs">
-          Em cada produto, escolha uma das três opções. Ao informar preço,
-          digite só os números — os dois últimos são os centavos.
+      {restoredCount > 0 ? (
+        <p
+          role="status"
+          className="bg-primary-soft text-fg rounded-lg px-3 py-2 text-sm"
+        >
+          Retomamos de onde você parou: {restoredCount}{" "}
+          {restoredCount === 1 ? "resposta" : "respostas"} neste aparelho.
         </p>
-      </section>
+      ) : null}
 
-      {[...groups.entries()].map(([group, groupItems]) => (
-        <section key={group} className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3 px-1">
-            <h2 className="text-fg-muted text-xs font-semibold tracking-wider uppercase">
-              {group}
-            </h2>
-            <span className="text-fg-subtle text-xs">
-              {groupItems.length} {groupItems.length === 1 ? "item" : "itens"}
-            </span>
-          </div>
-          {groupItems.map((item) => (
-            <ItemCard
-              key={item.supplier_quotation_item_id}
-              item={item}
-              onResolvedChange={updateResolved}
-              onHistoricalPresentationChange={updateHistoricalPresentation}
-              onSuspiciousPriceChange={updateSuspiciousPrice}
-              showValidation={showValidation}
-            />
-          ))}
-        </section>
-      ))}
+      {[...groups.entries()].map(([group, groupItems]) => {
+        const unresolvedInGroup = groupItems.filter(
+          (item) => !resolved[item.supplier_quotation_item_id],
+        ).length;
+        const groupBulk = bulk[group];
+        const appliedByGroup = groupBulk && !groupBulk.undo;
+        return (
+          <section key={group} className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1">
+              <h2 className="text-fg text-base font-semibold">
+                {group}{" "}
+                <span className="text-fg-muted text-sm font-normal">
+                  · {groupItems.length}{" "}
+                  {groupItems.length === 1 ? "item" : "itens"}
+                </span>
+              </h2>
+              {appliedByGroup ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setBulk((current) => ({
+                      ...current,
+                      [group]: {
+                        nonce: (current[group]?.nonce ?? 0) + 1,
+                        value: "",
+                        undo: true,
+                      },
+                    }))
+                  }
+                  className="text-primary focus-visible:ring-ring/50 min-h-11 rounded-md text-sm font-medium underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:outline-none"
+                >
+                  Desfazer “Não trabalho” em bloco
+                </button>
+              ) : unresolvedInGroup >= 2 ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setBulk((current) => ({
+                      ...current,
+                      [group]: {
+                        nonce: (current[group]?.nonce ?? 0) + 1,
+                        value: "does_not_supply",
+                        undo: false,
+                      },
+                    }))
+                  }
+                  className="text-primary focus-visible:ring-ring/50 min-h-11 rounded-md text-sm font-medium underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:outline-none"
+                >
+                  Não trabalho com os {unresolvedInGroup} que faltam
+                </button>
+              ) : null}
+            </div>
+            {groupItems.map((item) => (
+              <ItemCard
+                // O rascunho chega depois da hidratação: remonta o cartão uma vez.
+                key={`${item.supplier_quotation_item_id}${drafts[item.supplier_quotation_item_id] ? ":r" : ""}`}
+                token={token}
+                initialDraft={drafts[item.supplier_quotation_item_id] ?? null}
+                item={item}
+                flagged={Boolean(flagged[item.supplier_quotation_item_id])}
+                bulk={bulk[group]}
+                onResolvedChange={updateResolved}
+                onHistoricalPresentationChange={updateHistoricalPresentation}
+                onSuspiciousPriceChange={updateSuspiciousPrice}
+              />
+            ))}
+          </section>
+        );
+      })}
 
       {state.error ? (
         <p
@@ -1069,12 +1319,54 @@ export function QuotationResponseForm({
         </p>
       ) : null}
 
-      <div className="border-border bg-surface sticky bottom-0 z-20 -mx-3 flex flex-col gap-2 border-t px-3 py-3 shadow-[0_-8px_20px_-16px_rgba(0,0,0,.45)] sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:rounded-xl sm:border">
-        <p className="text-fg-subtle text-center text-xs sm:max-w-sm sm:text-left">
-          Confirme se tem, está sem disponibilidade ou não trabalha com cada
-          produto antes de enviar.
-        </p>
-        <SubmitButton completed={completed} total={pendentes.length} />
+      {/* Uma barra só, colada ao polegar: quanto falta e o próximo passo. */}
+      <div className="border-border bg-surface sticky bottom-0 z-20 -mx-3 border-t px-3 py-2.5 shadow-[0_-8px_20px_-16px_rgba(0,0,0,.45)] sm:mx-0 sm:rounded-xl sm:border">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1" aria-live="polite">
+            <p className="text-fg text-sm tabular-nums">
+              <strong>{completed}</strong> de {pendentes.length} respondidos
+              {remaining > 0 ? (
+                <span className="text-fg-muted"> · faltam {remaining}</span>
+              ) : null}
+            </p>
+            <div
+              className="bg-surface-muted mt-1.5 h-1.5 overflow-hidden rounded-full"
+              role="progressbar"
+              aria-label="Itens respondidos"
+              aria-valuemin={0}
+              aria-valuemax={pendentes.length}
+              aria-valuenow={completed}
+            >
+              <div
+                className="bg-primary h-full rounded-full transition-[width]"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+          {allDone ? (
+            <Button
+              type="submit"
+              size="lg"
+              disabled={pending}
+              className="h-12 shrink-0"
+            >
+              {pending
+                ? "Enviando…"
+                : pendentes.length === 1
+                  ? "Enviar resposta"
+                  : `Enviar ${pendentes.length} respostas`}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="lg"
+              className="h-12 shrink-0"
+              onClick={() => goToFirstPending({ flag: false })}
+            >
+              {completed === 0 ? "Começar" : "Próximo item"}
+            </Button>
+          )}
+        </div>
       </div>
 
       <Dialog
@@ -1096,7 +1388,7 @@ export function QuotationResponseForm({
                   <span className="text-fg block font-medium wrap-anywhere">
                     {entry.productName}
                   </span>
-                  <span className="text-fg-muted mt-1 block text-xs">
+                  <span className="text-fg-muted mt-1 block text-[13px]">
                     Digitado:{" "}
                     <strong className="text-warning tabular-nums">
                       R$ {formatUnitPrice(entry.enteredPrice)}

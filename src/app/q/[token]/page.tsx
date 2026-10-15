@@ -1,4 +1,4 @@
-import { Link2Off, PackageSearch, ShieldCheck } from "lucide-react";
+import { Link2Off, ShieldCheck } from "lucide-react";
 
 import { CompanyAvatar } from "@/components/company/company-avatar";
 import { QuotationResponseForm } from "@/components/quotations/quotation-response-form";
@@ -33,67 +33,52 @@ export default async function CotacaoPublicaPage({
   }
 
   const respondidos = quotation.items.filter((i) => i.already_answered).length;
+  const total = quotation.items.length;
 
   return (
     <main className="bg-surface-sunken min-h-dvh px-3 py-4 sm:px-6 sm:py-8">
       <div className="mx-auto w-full max-w-3xl">
-        <header className="border-border bg-surface mb-4 overflow-hidden rounded-2xl border shadow-xs sm:mb-6">
-          <div className="border-border border-b p-4 sm:p-5">
-            <p className="text-primary text-[11px] font-semibold tracking-[0.14em] uppercase">
-              Solicitação de cotação
-            </p>
-            <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h1 className="text-fg text-2xl font-semibold tracking-tight">
-                  {quotation.purchase_round.title}
-                </h1>
-                <p className="text-fg-muted mt-1 max-w-xl text-sm">
-                  Em cada produto, escolha se tem disponível, se está sem
-                  disponibilidade agora ou se não trabalha com o item. Você
-                  poderá revisar tudo antes de enviar.
-                </p>
-              </div>
-              <span className="bg-primary-soft text-primary rounded-full px-3 py-1 text-xs font-medium">
-                {quotation.items.length}{" "}
-                {quotation.items.length === 1 ? "item" : "itens"}
-              </span>
+        {/*
+          Cabeçalho curto de propósito: no celular, tudo o que vem antes do
+          primeiro produto empurra as três respostas para fora da tela. Quem
+          pede, o que fazer e quanto falta cabem aqui em três linhas; o
+          restante (convite pessoal) desce para o rodapé.
+        */}
+        <header className="border-border bg-surface mb-4 rounded-2xl border p-4 shadow-xs sm:mb-6 sm:p-5">
+          <div className="flex items-start gap-3">
+            <CompanyAvatar
+              name={quotation.company.name}
+              logoPath={quotation.company.logo_path}
+              className="size-10 shrink-0 rounded-lg"
+            />
+            <div className="min-w-0">
+              <h1 className="text-fg text-xl leading-tight font-semibold tracking-tight text-balance sm:text-2xl">
+                {quotation.company.name} pede preço de {total}{" "}
+                {total === 1 ? "item" : "itens"}
+              </h1>
+              <p className="text-fg-muted mt-0.5 text-sm">
+                {quotation.purchase_round.title}
+                {respondidos > 0
+                  ? ` · ${respondidos} de ${total} já respondidos`
+                  : ""}
+              </p>
             </div>
           </div>
-          <div className="grid gap-3 p-4 text-sm sm:grid-cols-2 sm:p-5">
-            <div className="flex items-start gap-2.5">
-              <CompanyAvatar
-                name={quotation.company.name}
-                logoPath={quotation.company.logo_path}
-                className="size-8 rounded-lg"
-              />
-              <div>
-                <p className="text-fg-subtle text-xs">Comprador</p>
-                <p className="text-fg font-medium">{quotation.company.name}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-2.5">
-              <PackageSearch
-                className="text-fg-subtle mt-0.5 size-4 shrink-0"
-                aria-hidden
-              />
-              <div>
-                <p className="text-fg-subtle text-xs">Fornecedor convidado</p>
-                <p className="text-fg font-medium">{quotation.supplier.name}</p>
-                {respondidos > 0 ? (
-                  <p className="text-fg-muted text-xs">
-                    {respondidos} de {quotation.items.length} já respondidos
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          </div>
+          <p className="text-fg mt-3 text-sm leading-relaxed">
+            Em cada produto toque em uma opção:{" "}
+            <strong>Tenho</strong> (e informe o preço),{" "}
+            <strong>Sem estoque agora</strong> (trabalha com o produto, mas não
+            consegue desta vez) ou <strong>Não trabalho</strong> com ele.
+          </p>
         </header>
 
         <QuotationResponseForm token={token} items={quotation.items} />
 
-        <p className="text-fg-subtle mt-6 flex items-center justify-center gap-1.5 text-center text-xs sm:mt-8">
-          <ShieldCheck className="size-3.5" aria-hidden /> Este link é pessoal e
-          identifica sua empresa. Não repasse.
+        <p className="text-fg-muted mt-6 flex items-start justify-center gap-1.5 text-center text-[13px] sm:mt-8">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            Link pessoal de {quotation.supplier.name}. Não repasse.
+          </span>
         </p>
       </div>
     </main>
