@@ -4781,6 +4781,14 @@ export type Database = {
         Args: { p_company_id: string; p_purchase_round_id: string };
         Returns: Json;
       };
+      rpc_confirm_receipt_prices_from_nfe: {
+        Args: {
+          p_company_id: string;
+          p_import_id: string;
+          p_receipt_id: string;
+        };
+        Returns: Json;
+      };
       rpc_confirm_receipt_prices: {
         Args: {
           p_company_id: string;

@@ -237,7 +237,7 @@ export function HistoricalNfeOrderSuggestion({
   );
 }
 
-function ComparisonTable({ rows }: { rows: ComparisonRow[] }) {
+export function ComparisonTable({ rows }: { rows: ComparisonRow[] }) {
   return (
     <div className="border-border bg-surface mt-4 overflow-hidden rounded-lg border">
       <div className="bg-surface-sunken text-fg-muted hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-3 px-3 py-2 text-xs font-medium sm:grid">

@@ -678,3 +678,47 @@ export async function receiveOrderWithHistoricalNfe(
   revalidatePath("/fornecedores", "layout");
   redirect(receiptId ? `/recebimentos/${receiptId}#xml-nfe` : "/recebimentos");
 }
+
+/**
+ * Confirma os preços de um pedido já baixado sem nota usando esta NF-e.
+ *
+ * A nota sai do histórico fiscal independente e passa a valer pelo
+ * recebimento, para a mesma compra não contar duas vezes. Só o preço muda; as
+ * quantidades da baixa ficam como foram conferidas.
+ */
+export async function confirmPricesWithHistoricalNfe(
+  importId: string,
+  receiptId: string,
+  orderId: string,
+  _previous: HistoricalNfeTransferState,
+): Promise<HistoricalNfeTransferState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.post")) {
+    return { error: "Seu papel não permite confirmar preços." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("rpc_confirm_receipt_prices_from_nfe", {
+    p_company_id: company.companyId,
+    p_import_id: importId,
+    p_receipt_id: receiptId,
+  });
+  if (error) {
+    return {
+      error: error.message.includes("Could not find the function")
+        ? "Falta aplicar a migration 0121 no banco para usar esta opção."
+        : `Não foi possível confirmar os preços: ${error.message}`,
+    };
+  }
+
+  revalidatePath("/recebimentos/historico");
+  revalidatePath(`/recebimentos/historico/${importId}`);
+  revalidatePath("/recebimentos");
+  revalidatePath(`/pedidos/${orderId}`);
+  revalidatePath("/pedidos");
+  revalidatePath("/dashboard");
+  revalidatePath("/produtos", "layout");
+  revalidatePath("/fornecedores", "layout");
+  redirect("/recebimentos");
+}

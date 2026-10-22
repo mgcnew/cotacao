@@ -3,12 +3,16 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { HistoricalNfeOrderSuggestion } from "@/components/receipts/historical-nfe-order-suggestion";
+import { HistoricalNfePendingPriceSuggestion } from "@/components/receipts/historical-nfe-pending-price-suggestion";
 import { HistoricalNfeReconciliationForm } from "@/components/receipts/historical-nfe-reconciliation-form";
 import { HistoricalNfeTransferForm } from "@/components/receipts/historical-nfe-transfer-form";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { suggestOrdersForImport } from "@/features/receipts/historical-order-match";
+import {
+  suggestOrdersForImport,
+  suggestPendingPriceReceiptsForImport,
+} from "@/features/receipts/historical-order-match";
 import { getHistoricalNfeImport } from "@/features/receipts/historical-queries";
 import {
   historicalListHref,
@@ -61,6 +65,15 @@ export default async function ConciliacaoNfeHistoricaPage({
     permissions.has("receipt.post") && permissions.has("receipt.create");
   const orderSuggestions = podeDarEntrada
     ? await suggestOrdersForImport(company.companyId, history, data.items)
+    : [];
+  // O pedido já baixado sem nota é o outro destino possível da mesma nota: lá o
+  // que falta é confirmar o preço, não dar entrada.
+  const pendingPriceSuggestions = permissions.has("receipt.post")
+    ? await suggestPendingPriceReceiptsForImport(
+        company.companyId,
+        history,
+        data.items,
+      )
     : [];
   const productCatalog =
     history.status === "draft" && permissions.has("product.create")
@@ -132,6 +145,14 @@ export default async function ConciliacaoNfeHistoricaPage({
           posted={history.status === "posted"}
           suggestions={orderSuggestions}
           listQuery={listQuery}
+        />
+      ) : null}
+
+      {pendingPriceSuggestions.length > 0 ? (
+        <HistoricalNfePendingPriceSuggestion
+          importId={history.id}
+          issuedDay={DIA_DA_LOJA.format(new Date(history.issued_at))}
+          suggestions={pendingPriceSuggestions}
         />
       ) : null}
 

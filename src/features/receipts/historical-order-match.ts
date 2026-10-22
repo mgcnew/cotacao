@@ -93,6 +93,16 @@ export type OpenOrder = {
   arrivalDay?: string | null;
 };
 
+/**
+ * Pedido já baixado SEM nota: o recebimento está conferido, mas o preço de ao
+ * menos um item ainda é o negociado. A nota que chegar depois pode confirmá-lo.
+ */
+export type PendingPriceOrder = OpenOrder & {
+  receiptId: string;
+  /** Produtos cujo preço ainda não foi confirmado, neste recebimento. */
+  unverifiedProductIds: string[];
+};
+
 export type InvoiceLine = {
   productId: string | null;
   ignored: boolean;
@@ -129,10 +139,11 @@ export type MatchEvidence = {
 /** A nota cabe na janela do pedido? */
 function dentroDaJanela(issuedDay: string, order: OpenOrder): boolean {
   const inicio = somarDias(order.createdDay, -1);
-  const fim = somarDias(
-    order.deliveryDueDate ?? order.createdDay,
-    JANELA_APOS_PRAZO_DIAS,
-  );
+  const prazo = order.deliveryDueDate ?? order.createdDay;
+  // Pedido que chegou depois do prazo: a nota acompanha a chegada, não o prazo.
+  const referencia =
+    order.arrivalDay && order.arrivalDay > prazo ? order.arrivalDay : prazo;
+  const fim = somarDias(referencia, JANELA_APOS_PRAZO_DIAS);
   return issuedDay >= inicio && issuedDay <= fim;
 }
 
@@ -275,6 +286,85 @@ export async function listOpenOrdersForMatch(
 }
 
 /**
+ * Recebimentos já conferidos com preço a confirmar, do jeito que o casamento
+ * enxerga um pedido. Um item por recebimento: o mesmo pedido, baixado em duas
+ * entregas sem nota, aparece duas vezes, cada uma com a sua chegada.
+ */
+export async function listUnverifiedPriceOrdersForMatch(
+  companyId: string,
+  supplierIds?: string[],
+): Promise<PendingPriceOrder[]> {
+  if (supplierIds && supplierIds.length === 0) return [];
+  const supabase = await createServerSupabaseClient();
+  let query = supabase
+    .from("receipts")
+    .select(
+      `
+      id,
+      received_at,
+      checked_at,
+      receipt_items!inner (
+        price_unverified,
+        order_revision_items!inner ( product_id )
+      ),
+      orders!inner (
+        id,
+        order_number,
+        supplier_id,
+        created_at,
+        current_revision:order_revisions!orders_current_revision_fk (
+          delivery_due_date,
+          order_revision_items (
+            product_id,
+            product_name_snapshot,
+            requested_quantity,
+            agreed_price,
+            purchase_unit:units!order_revision_items_company_id_purchase_unit_id_fkey ( symbol ),
+            pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( symbol )
+          )
+        )
+      )
+    `,
+    )
+    .eq("company_id", companyId)
+    .eq("status", "posted")
+    .eq("receipt_items.price_unverified", true);
+  if (supplierIds) query = query.in("orders.supplier_id", supplierIds);
+  const { data, error } = await query;
+  // Antes da migration 0120 a coluna não existe; sem ela não há o que casar, e
+  // a tela de notas existia antes disto e precisa continuar abrindo.
+  if (error || !data) return [];
+
+  return data.map((receipt) => {
+    const order = receipt.orders;
+    const arrival = receipt.received_at ?? receipt.checked_at;
+    return {
+      id: order.id,
+      orderNumber: order.order_number,
+      supplierId: order.supplier_id,
+      createdDay: diaDaLoja(order.created_at),
+      deliveryDueDate: order.current_revision?.delivery_due_date ?? null,
+      arrivalDay: arrival ? diaDaLoja(arrival) : null,
+      lines: (order.current_revision?.order_revision_items ?? []).map(
+        (item) => ({
+          productId: item.product_id,
+          productName: item.product_name_snapshot,
+          requestedQuantity: Number(item.requested_quantity),
+          purchaseUnit: item.purchase_unit?.symbol ?? "",
+          agreedPrice: Number(item.agreed_price),
+          pricingUnit: item.pricing_unit?.symbol ?? "",
+        }),
+      ),
+      openReceiptId: null,
+      receiptId: receipt.id,
+      unverifiedProductIds: (receipt.receipt_items ?? []).map(
+        (item) => item.order_revision_items.product_id,
+      ),
+    };
+  });
+}
+
+/**
  * Números de pedido citados no XML (`<xPed>`, no grupo de compra ou em cada
  * item).
  *
@@ -410,7 +500,11 @@ async function listStoredInvoices(
 export async function listImportsLookingLikeOrders(
   companyId: string,
 ): Promise<Map<string, number[]>> {
-  const orders = await listOpenOrdersForMatch(companyId);
+  // Pedido ainda aberto ou já baixado sem nota: nos dois a nota ajuda.
+  const orders: OpenOrder[] = [
+    ...(await listOpenOrdersForMatch(companyId)),
+    ...(await listUnverifiedPriceOrdersForMatch(companyId)),
+  ];
   const result = new Map<string, number[]>();
   if (orders.length === 0) return result;
 
@@ -434,7 +528,8 @@ export async function listImportsLookingLikeOrders(
       .filter(({ evidence }) => evidence?.qualifies)
       .sort((a, b) => b.evidence!.score - a.evidence!.score)
       .map(({ order }) => order.orderNumber);
-    if (numeros.length > 0) result.set(invoice.importId, numeros);
+    // O mesmo pedido pode aparecer duas vezes (duas entregas baixadas sem nota).
+    if (numeros.length > 0) result.set(invoice.importId, [...new Set(numeros)]);
   }
   return result;
 }
@@ -700,4 +795,111 @@ export async function suggestOrdersForImport(
         })),
     })),
   );
+}
+
+export type PendingPriceSuggestion = {
+  receiptId: string;
+  orderId: string;
+  orderNumber: number;
+  /** Dia em que a mercadoria chegou, quando se sabe. */
+  arrivalDay: string | null;
+  deliveryDueDate: string | null;
+  createdDay: string;
+  evidence: MatchEvidence;
+  comparison: ComparisonRow[];
+  /** Itens sem preço confirmado que esta nota consegue confirmar. */
+  fillableItems: number;
+  /** Itens do recebimento ainda sem preço confirmado. */
+  pendingItems: number;
+};
+
+/**
+ * O caminho inverso para o pedido JÁ baixado sem nota: a nota importada
+ * aponta para o recebimento cujos preços ela pode confirmar.
+ *
+ * Mesmo critério das sugestões de pedido aberto — fornecedor, janela (que aqui
+ * acompanha a chegada), itens, preços e `xPed`. A diferença é o que acontece
+ * depois: em vez de abrir uma chegada, confirma os preços do que já foi
+ * conferido.
+ */
+export async function suggestPendingPriceReceiptsForImport(
+  companyId: string,
+  history: {
+    id: string;
+    status: string;
+    supplier_id: string | null;
+    issued_at: string;
+    storage_path: string;
+  },
+  items: {
+    product_id: string | null;
+    reconciliation_status: string;
+    description: string;
+    commercialQuantity: number;
+    commercial_unit: string | null;
+    practicedPrice: number | null;
+  }[],
+): Promise<PendingPriceSuggestion[]> {
+  if (!["draft", "posted"].includes(history.status) || !history.supplier_id)
+    return [];
+  const orders = await listUnverifiedPriceOrdersForMatch(companyId, [
+    history.supplier_id,
+  ]);
+  if (orders.length === 0) return [];
+
+  const invoice: InvoiceForMatch = {
+    supplierId: history.supplier_id,
+    issuedAt: history.issued_at,
+    lines: items.map((item) => ({
+      productId: item.product_id,
+      ignored: item.reconciliation_status === "ignored",
+      description: item.description,
+      quantity: item.commercialQuantity,
+      unit: item.commercial_unit,
+      practicedPrice: item.practicedPrice,
+    })),
+  };
+  if (!orders.some((order) => evaluateInvoiceForOrder(invoice, order)))
+    return [];
+
+  invoice.purchaseOrderRefs = await readPurchaseOrderRefs(
+    history.id,
+    history.storage_path,
+  );
+
+  const pricedProducts = new Set(
+    items
+      .filter(
+        (item) =>
+          item.reconciliation_status === "matched" &&
+          item.product_id &&
+          item.practicedPrice !== null,
+      )
+      .map((item) => item.product_id),
+  );
+
+  return orders
+    .map((order) => ({
+      order,
+      evidence: evaluateInvoiceForOrder(invoice, order),
+    }))
+    .flatMap(({ order, evidence }) =>
+      evidence?.qualifies ? [{ order, evidence }] : [],
+    )
+    .sort((a, b) => b.evidence.score - a.evidence.score)
+    .slice(0, 4)
+    .map(({ order, evidence }) => ({
+      receiptId: order.receiptId,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      arrivalDay: order.arrivalDay ?? null,
+      deliveryDueDate: order.deliveryDueDate,
+      createdDay: order.createdDay,
+      evidence,
+      comparison: buildComparison(invoice, order),
+      fillableItems: order.unverifiedProductIds.filter((id) =>
+        pricedProducts.has(id),
+      ).length,
+      pendingItems: order.unverifiedProductIds.length,
+    }));
 }

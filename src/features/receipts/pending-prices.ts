@@ -4,7 +4,7 @@ import {
   TOLERANCIA_PRECO,
   rankInvoicesForOrder,
   type MatchEvidence,
-  type OpenOrder,
+  listUnverifiedPriceOrdersForMatch,
 } from "@/features/receipts/historical-order-match";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -179,17 +179,17 @@ export async function listPendingPriceConfirmations(
 
   // As notas candidatas de cada recebimento, da mais parecida para a menos: a
   // mesma pontuação do casamento comum, com a chegada como data de referência.
-  const orders = await listOrdersForRanking(supabase, companyId, [
-    ...new Set(groups.map((group) => group.orderId)),
-  ]);
+  const orders = new Map(
+    (await listUnverifiedPriceOrdersForMatch(companyId)).map((order) => [
+      order.receiptId,
+      order,
+    ]),
+  );
   await Promise.all(
     groups.map(async (group) => {
-      const order = orders.get(group.orderId);
+      const order = orders.get(group.receiptId);
       if (!order) return;
-      const ranked = await rankInvoicesForOrder(companyId, {
-        ...order,
-        arrivalDay: group.receivedAt ? diaDaLoja(group.receivedAt) : null,
-      });
+      const ranked = await rankInvoicesForOrder(companyId, order);
       const known = new Map(
         (invoicesBySupplier.get(group.supplierId) ?? []).map((invoice) => [
           invoice.importId,
@@ -234,17 +234,6 @@ export async function listPendingPriceConfirmations(
   );
 }
 
-const DIA_DA_LOJA = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/Sao_Paulo",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
-function diaDaLoja(instante: string): string {
-  return DIA_DA_LOJA.format(new Date(instante));
-}
-
 /** Uma frase com o porquê, para a pessoa decidir sem abrir a nota. */
 function describeEvidence(
   evidence: MatchEvidence,
@@ -270,59 +259,4 @@ function describeEvidence(
       : `emitida ${Math.abs(daysFromArrival)} ${Math.abs(daysFromArrival) === 1 ? "dia" : "dias"} ${daysFromArrival < 0 ? "antes" : "depois"} ${reference}`,
   );
   return parts.join(" · ");
-}
-
-/** Os pedidos como o casamento os enxerga, só com o que a pontuação usa. */
-async function listOrdersForRanking(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  companyId: string,
-  orderIds: string[],
-): Promise<Map<string, OpenOrder>> {
-  const result = new Map<string, OpenOrder>();
-  if (orderIds.length === 0) return result;
-  const { data } = await supabase
-    .from("orders")
-    .select(
-      `
-      id,
-      order_number,
-      supplier_id,
-      created_at,
-      current_revision:order_revisions!orders_current_revision_fk (
-        delivery_due_date,
-        order_revision_items (
-          product_id,
-          product_name_snapshot,
-          requested_quantity,
-          agreed_price,
-          purchase_unit:units!order_revision_items_company_id_purchase_unit_id_fkey ( symbol ),
-          pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( symbol )
-        )
-      )
-    `,
-    )
-    .eq("company_id", companyId)
-    .in("id", orderIds);
-
-  for (const order of data ?? []) {
-    result.set(order.id, {
-      id: order.id,
-      orderNumber: order.order_number,
-      supplierId: order.supplier_id,
-      createdDay: diaDaLoja(order.created_at),
-      deliveryDueDate: order.current_revision?.delivery_due_date ?? null,
-      lines: (order.current_revision?.order_revision_items ?? []).map(
-        (item) => ({
-          productId: item.product_id,
-          productName: item.product_name_snapshot,
-          requestedQuantity: Number(item.requested_quantity),
-          purchaseUnit: item.purchase_unit?.symbol ?? "",
-          agreedPrice: Number(item.agreed_price),
-          pricingUnit: item.pricing_unit?.symbol ?? "",
-        }),
-      ),
-      openReceiptId: null,
-    });
-  }
-  return result;
 }
