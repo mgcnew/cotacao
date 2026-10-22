@@ -33,7 +33,18 @@ const tabs = [
   },
 ] as const;
 
-export function RoundModalNav({ roundId }: { roundId: string }) {
+/**
+ * `substituir` é o que as abas fazem com o histórico: no modal, trocar de aba
+ * não pode empilhar entradas — o "voltar" fecha o modal. Na página, cada aba é
+ * um passo, e o "voltar" do navegador deve andar entre elas.
+ */
+export function RoundModalNav({
+  roundId,
+  substituir = true,
+}: {
+  roundId: string;
+  substituir?: boolean;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   if (pathname.endsWith("/relatorio")) return null;
@@ -64,7 +75,7 @@ export function RoundModalNav({ roundId }: { roundId: string }) {
             <Link
               key={key}
               href={href}
-              replace
+              replace={substituir}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "text-fg-muted hover:text-fg relative flex h-11 min-w-0 items-center justify-center gap-1 px-1 text-xs font-medium transition-colors sm:gap-1.5 sm:px-3 sm:text-sm",
