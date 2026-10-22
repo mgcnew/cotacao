@@ -85,6 +85,12 @@ export type OpenOrder = {
   deliveryDueDate: string | null;
   lines: OrderLine[];
   openReceiptId: string | null;
+  /**
+   * Dia em que a mercadoria chegou, quando já se sabe (AAAA-MM-DD). A nota é
+   * emitida perto da entrega, então este dia aproxima melhor a data dela do
+   * que o prazo combinado — que num pedido atrasado já passou há muito.
+   */
+  arrivalDay?: string | null;
 };
 
 export type InvoiceLine = {
@@ -139,7 +145,21 @@ export function evaluateInvoiceForOrder(
     return null;
   const issuedDay = diaDaLoja(invoice.issuedAt);
   if (!dentroDaJanela(issuedDay, order)) return null;
+  return scoreInvoiceForOrder(invoice, order);
+}
 
+/**
+ * O conteúdo e a data, sem exigir a janela do pedido aberto.
+ *
+ * Para quem já sabe em que conjunto de notas procurar — as do fornecedor num
+ * período que quem chama escolheu. O critério de `qualifies` é o mesmo de
+ * `evaluateInvoiceForOrder`; só a janela fica de fora.
+ */
+export function scoreInvoiceForOrder(
+  invoice: InvoiceForMatch,
+  order: OpenOrder,
+): MatchEvidence {
+  const issuedDay = diaDaLoja(invoice.issuedAt);
   const byProduct = new Map(order.lines.map((line) => [line.productId, line]));
   const relevant = invoice.lines.filter((line) => !line.ignored);
   const inOrder = relevant.filter(
@@ -164,7 +184,8 @@ export function evaluateInvoiceForOrder(
   const qualifies = citedInInvoice || (share >= MIN_NOTA_NO_PEDIDO && priceOk);
 
   const cobertura = order.lines.length > 0 ? covered / order.lines.length : 0;
-  const referencia = order.deliveryDueDate ?? order.createdDay;
+  const referencia =
+    order.arrivalDay ?? order.deliveryDueDate ?? order.createdDay;
   const proximidade = Math.max(
     0,
     1 - Math.abs(distanciaEmDias(issuedDay, referencia)) / 10,
@@ -416,6 +437,50 @@ export async function listImportsLookingLikeOrders(
     if (numeros.length > 0) result.set(invoice.importId, numeros);
   }
   return result;
+}
+
+/** Nota candidata a um pedido, com a evidência e a distância da chegada. */
+export type RankedInvoice = {
+  importId: string;
+  evidence: MatchEvidence;
+  /** Dias entre a emissão da nota e a chegada (ou o prazo, se não houver). */
+  daysFromArrival: number;
+};
+
+/**
+ * Notas do histórico fiscal ordenadas pelo quanto se parecem com um pedido que
+ * JÁ foi baixado — o caso do recebimento sem nota, que saiu da lista de
+ * pedidos abertos e portanto do casamento comum.
+ *
+ * Usa a mesma pontuação do casamento comum (itens, preço, proximidade da
+ * data, `xPed`). A busca é limitada a notas emitidas da véspera do pedido até
+ * `JANELA_APOS_PRAZO_DIAS` depois da chegada ou do prazo, o que vier por
+ * último. Ordena e marca quem passa no critério; quem decide é a pessoa.
+ */
+export async function rankInvoicesForOrder(
+  companyId: string,
+  order: OpenOrder,
+): Promise<RankedInvoice[]> {
+  const referencia =
+    order.arrivalDay ?? order.deliveryDueDate ?? order.createdDay;
+  const ultimo =
+    order.deliveryDueDate && order.deliveryDueDate > referencia
+      ? order.deliveryDueDate
+      : referencia;
+  const stored = await listStoredInvoices(
+    companyId,
+    [order.supplierId],
+    somarDias(order.createdDay, -1),
+    somarDias(ultimo, JANELA_APOS_PRAZO_DIAS),
+  );
+  const withRefs = await withRefsWhereTheyMatter(stored, [order]);
+  return withRefs
+    .map((invoice) => ({
+      importId: invoice.importId,
+      evidence: scoreInvoiceForOrder(invoice, order),
+      daysFromArrival: distanciaEmDias(diaDaLoja(invoice.issuedAt), referencia),
+    }))
+    .sort((a, b) => b.evidence.score - a.evidence.score);
 }
 
 export type InvoiceSuggestion = {

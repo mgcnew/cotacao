@@ -59,6 +59,8 @@ export function ConfirmPricesForm({
     {},
   );
   const [noteId, setNoteId] = React.useState("");
+  const best = receipt.invoices[0];
+  const selected = receipt.invoices.find((entry) => entry.importId === noteId);
 
   function aplicarNota(importId: string) {
     setNoteId(importId);
@@ -100,27 +102,70 @@ export function ConfirmPricesForm({
       <input type="hidden" name="orderId" value={receipt.orderId} />
 
       {receipt.invoices.length ? (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <FileText className="text-fg-subtle size-4" aria-hidden />
-          <label
-            htmlFor={`nota-${receipt.receiptId}`}
-            className="text-fg-muted"
-          >
-            Preencher com uma NF-e já importada:
-          </label>
-          <select
-            id={`nota-${receipt.receiptId}`}
-            value={noteId}
-            onChange={(event) => aplicarNota(event.target.value)}
-            className="border-border bg-surface text-fg h-8 rounded-md border px-2 text-sm"
-          >
-            <option value="">Escolher…</option>
-            {receipt.invoices.map((invoice) => (
-              <option key={invoice.importId} value={invoice.importId}>
-                {invoice.label} · {DATE.format(new Date(invoice.issuedAt))}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col gap-2">
+          {best?.qualifies ? (
+            <div className="border-primary-solid/40 bg-primary-soft flex flex-wrap items-start justify-between gap-2 rounded-lg border px-3 py-2">
+              <div className="min-w-0 text-sm">
+                <p className="text-fg font-medium">
+                  Nota sugerida: {best.label}
+                </p>
+                <p className="text-fg-muted text-xs">{best.summary}</p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant={noteId === best.importId ? "ghost" : "outline"}
+                disabled={noteId === best.importId}
+                onClick={() => aplicarNota(best.importId)}
+              >
+                {noteId === best.importId ? "Em uso" : "Usar esta nota"}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-fg-subtle text-xs">
+              Nenhuma nota bate com este pedido o bastante para sugerir. Veja a
+              lista abaixo, da mais parecida para a menos.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <FileText className="text-fg-subtle size-4" aria-hidden />
+            <label
+              htmlFor={`nota-${receipt.receiptId}`}
+              className="text-fg-muted"
+            >
+              Preencher com uma NF-e já importada:
+            </label>
+            <select
+              id={`nota-${receipt.receiptId}`}
+              value={noteId}
+              onChange={(event) => aplicarNota(event.target.value)}
+              className="border-border bg-surface text-fg h-8 max-w-full rounded-md border px-2 text-sm"
+            >
+              <option value="">Escolher…</option>
+              {receipt.invoices.map((invoice) => (
+                <option key={invoice.importId} value={invoice.importId}>
+                  {invoice.label} · {DATE.format(new Date(invoice.issuedAt))}
+                  {invoice.qualifies ? " · parece deste pedido" : ""}
+                  {invoice.prices.length ? "" : " · sem preços conciliados"}
+                </option>
+              ))}
+            </select>
+          </div>
+          {selected && !selected.prices.length ? (
+            <p className="text-warning text-xs">
+              Esta nota ainda não tem produtos conciliados, então não há preço
+              para preencher.{" "}
+              <Link
+                href="/recebimentos/historico"
+                className="underline underline-offset-2"
+              >
+                Concilie no Histórico fiscal
+              </Link>
+              .
+            </p>
+          ) : selected ? (
+            <p className="text-fg-subtle text-xs">{selected.summary}</p>
+          ) : null}
         </div>
       ) : (
         <p className="text-fg-subtle text-xs">

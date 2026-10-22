@@ -1,5 +1,11 @@
 import "server-only";
 
+import {
+  TOLERANCIA_PRECO,
+  rankInvoicesForOrder,
+  type MatchEvidence,
+  type OpenOrder,
+} from "@/features/receipts/historical-order-match";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -36,6 +42,10 @@ export type PendingPriceInvoice = {
     price: number;
     pricingQuantity: number | null;
   }[];
+  /** Passa no critério do casamento comum: o conteúdo bate com o pedido. */
+  qualifies: boolean;
+  /** Por que esta nota parece (ou não) ser deste pedido, em uma frase. */
+  summary: string;
 };
 
 export type PendingPriceReceipt = {
@@ -155,29 +165,164 @@ export async function listPendingPriceConfirmations(
           ]
         : [],
     );
-    if (prices.length === 0) continue;
     const list = invoicesBySupplier.get(nota.supplier_id) ?? [];
     list.push({
       importId: nota.id,
       label: `NF-e ${nota.invoice_number}${nota.invoice_series ? `/${nota.invoice_series}` : ""}`,
       issuedAt: nota.issued_at,
       prices,
+      qualifies: false,
+      summary: "",
     });
     invoicesBySupplier.set(nota.supplier_id, list);
   }
 
-  for (const group of groups) {
-    // Só as notas que cobrem ao menos um produto deste recebimento.
-    const products = new Set(group.items.map((item) => item.productId));
-    group.invoices = (invoicesBySupplier.get(group.supplierId) ?? []).filter(
-      (invoice) =>
-        invoice.prices.some((price) => products.has(price.productId)),
-    );
-  }
+  // As notas candidatas de cada recebimento, da mais parecida para a menos: a
+  // mesma pontuação do casamento comum, com a chegada como data de referência.
+  const orders = await listOrdersForRanking(supabase, companyId, [
+    ...new Set(groups.map((group) => group.orderId)),
+  ]);
+  await Promise.all(
+    groups.map(async (group) => {
+      const order = orders.get(group.orderId);
+      if (!order) return;
+      const ranked = await rankInvoicesForOrder(companyId, {
+        ...order,
+        arrivalDay: group.receivedAt ? diaDaLoja(group.receivedAt) : null,
+      });
+      const known = new Map(
+        (invoicesBySupplier.get(group.supplierId) ?? []).map((invoice) => [
+          invoice.importId,
+          invoice,
+        ]),
+      );
+      const products = new Set(group.items.map((item) => item.productId));
+      group.invoices = ranked
+        .flatMap((entry) => {
+          const invoice = known.get(entry.importId);
+          if (!invoice) return [];
+          // Fica quem passa no critério, ou ao menos tem preço de produto
+          // deste recebimento: uma nota que não traz nada dele não ajuda.
+          const useful =
+            entry.evidence.qualifies ||
+            invoice.prices.some((price) => products.has(price.productId));
+          return useful
+            ? [
+                {
+                  ...invoice,
+                  qualifies: entry.evidence.qualifies,
+                  summary: describeEvidence(
+                    entry.evidence,
+                    entry.daysFromArrival,
+                    Boolean(group.receivedAt),
+                  ),
+                },
+              ]
+            : [];
+        })
+        // Quem passa no critério vem antes de quem só tem pontuação alta; a
+        // ordenação é estável, então dentro de cada grupo segue a pontuação.
+        .sort((a, b) => Number(b.qualifies) - Number(a.qualifies))
+        .slice(0, 8);
+    }),
+  );
 
   return groups.sort((a, b) =>
     (a.receivedAt ?? a.checkedAt ?? "").localeCompare(
       b.receivedAt ?? b.checkedAt ?? "",
     ),
   );
+}
+
+const DIA_DA_LOJA = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function diaDaLoja(instante: string): string {
+  return DIA_DA_LOJA.format(new Date(instante));
+}
+
+/** Uma frase com o porquê, para a pessoa decidir sem abrir a nota. */
+function describeEvidence(
+  evidence: MatchEvidence,
+  daysFromArrival: number,
+  hasArrival: boolean,
+): string {
+  const parts: string[] = [];
+  if (evidence.citedInInvoice) parts.push("cita este pedido");
+  if (evidence.invoiceLines > 0) {
+    parts.push(
+      `${evidence.invoiceLinesInOrder} de ${evidence.invoiceLines} itens da nota são deste pedido`,
+    );
+  }
+  if (evidence.pricedLines > 0) {
+    parts.push(
+      `${evidence.pricedLinesWithinTolerance} de ${evidence.pricedLines} preços até ${Math.round(TOLERANCIA_PRECO * 100)}% do combinado`,
+    );
+  }
+  const reference = hasArrival ? "da chegada" : "do prazo";
+  parts.push(
+    daysFromArrival === 0
+      ? `emitida no dia ${reference}`
+      : `emitida ${Math.abs(daysFromArrival)} ${Math.abs(daysFromArrival) === 1 ? "dia" : "dias"} ${daysFromArrival < 0 ? "antes" : "depois"} ${reference}`,
+  );
+  return parts.join(" · ");
+}
+
+/** Os pedidos como o casamento os enxerga, só com o que a pontuação usa. */
+async function listOrdersForRanking(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+  orderIds: string[],
+): Promise<Map<string, OpenOrder>> {
+  const result = new Map<string, OpenOrder>();
+  if (orderIds.length === 0) return result;
+  const { data } = await supabase
+    .from("orders")
+    .select(
+      `
+      id,
+      order_number,
+      supplier_id,
+      created_at,
+      current_revision:order_revisions!orders_current_revision_fk (
+        delivery_due_date,
+        order_revision_items (
+          product_id,
+          product_name_snapshot,
+          requested_quantity,
+          agreed_price,
+          purchase_unit:units!order_revision_items_company_id_purchase_unit_id_fkey ( symbol ),
+          pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( symbol )
+        )
+      )
+    `,
+    )
+    .eq("company_id", companyId)
+    .in("id", orderIds);
+
+  for (const order of data ?? []) {
+    result.set(order.id, {
+      id: order.id,
+      orderNumber: order.order_number,
+      supplierId: order.supplier_id,
+      createdDay: diaDaLoja(order.created_at),
+      deliveryDueDate: order.current_revision?.delivery_due_date ?? null,
+      lines: (order.current_revision?.order_revision_items ?? []).map(
+        (item) => ({
+          productId: item.product_id,
+          productName: item.product_name_snapshot,
+          requestedQuantity: Number(item.requested_quantity),
+          purchaseUnit: item.purchase_unit?.symbol ?? "",
+          agreedPrice: Number(item.agreed_price),
+          pricingUnit: item.pricing_unit?.symbol ?? "",
+        }),
+      ),
+      openReceiptId: null,
+    });
+  }
+  return result;
 }
