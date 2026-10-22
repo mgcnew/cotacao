@@ -8,6 +8,8 @@ import {
   requireActiveCompany,
   requireUser,
 } from "@/lib/auth/dal";
+import { getCompany } from "@/features/company/queries";
+import { quickPricingQuantity } from "@/features/receipts/quick-receipt";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { roundedMoneyString, roundMoney } from "@/lib/money";
 
@@ -831,7 +833,8 @@ export async function postDraftReceipt(
     order_revision_item_id: string;
     logistic_quantity_received: string;
     pricing_quantity_received: string;
-    practiced_price: string;
+    practiced_price?: string;
+    price_unverified?: boolean;
     receipt_access_key?: string;
     notes?: string;
   }[] = [];
@@ -841,7 +844,10 @@ export async function postDraftReceipt(
     const pricing = sameUnitIds.has(id)
       ? logistic
       : decimal(formData.get(`prec_${id}`));
-    const price = moneyDecimal(formData.get(`preco_${id}`));
+    // "Sem a nota agora": o item entra com o preço negociado, marcado como
+    // não conferido, e o preço real é confirmado depois, quando a nota chegar.
+    const semNota = formData.get(`semnota_${id}`) === "on";
+    const price = semNota ? "" : moneyDecimal(formData.get(`preco_${id}`));
     const name = String(formData.get(`nome_${id}`) ?? "este item");
     if (
       formData.get(`manual_required_${id}`) === "1" &&
@@ -863,13 +869,15 @@ export async function postDraftReceipt(
         error: `Em "${name}", confirme que a linha da nota é mesmo deste produto ou desfaça a associação.`,
       };
     }
-    if (!logistic || !pricing || !price) {
+    if (!logistic || !pricing || (!semNota && !price)) {
       return {
-        error: `Em "${name}", preencha quantidade recebida, quantidade de precificação e preço da nota.`,
+        error: semNota
+          ? `Em "${name}", preencha quantidade recebida e quantidade de precificação.`
+          : `Em "${name}", preencha quantidade recebida, quantidade de precificação e preço da nota.`,
       };
     }
     if (
-      ![logistic, pricing, price].every(
+      ![logistic, pricing, ...(semNota ? [] : [price])].every(
         (value) => Number.isFinite(Number(value)) && Number(value) >= 0,
       ) ||
       Number(logistic) <= 0
@@ -880,7 +888,9 @@ export async function postDraftReceipt(
       order_revision_item_id: id,
       logistic_quantity_received: logistic,
       pricing_quantity_received: pricing,
-      practiced_price: price,
+      ...(semNota
+        ? { price_unverified: true }
+        : { practiced_price: price }),
       receipt_access_key:
         String(formData.get(`xml_${id}`) ?? "").trim() || undefined,
       notes: String(formData.get(`obs_${id}`) ?? "").trim() || undefined,
@@ -921,6 +931,16 @@ export async function postDraftReceipt(
     if (error.message.includes("já conferida")) {
       return { error: "Esta chegada já foi conferida por outra pessoa." };
     }
+    // O banco antigo não conhece `price_unverified` e recusa o item sem preço.
+    if (
+      error.message.includes("Dados inválidos") &&
+      items.some((item) => item.price_unverified)
+    ) {
+      return {
+        error:
+          "Falta aplicar a migration 0120 no banco para conferir itens sem nota.",
+      };
+    }
     return { error: `Não foi possível finalizar: ${error.message}` };
   }
 
@@ -929,4 +949,259 @@ export async function postDraftReceipt(
   revalidatePath(`/pedidos/${orderId}`);
   revalidatePath("/pedidos");
   redirect("/recebimentos");
+}
+
+/**
+ * "Chegou conforme pedido": registra a chegada e dá a baixa de todo o saldo em
+ * um passo, com o preço de cada item marcado como "a confirmar".
+ *
+ * Existe para o pedido que chegou e não pôde ser conferido no dia — a nota não
+ * estava em mãos. Em vez de digitar um preço que talvez não seja o real, o
+ * saldo é baixado e o preço fica pendente de confirmação, visível na lista de
+ * Recebimentos até a nota aparecer.
+ *
+ * As quantidades são recalculadas aqui, do banco: o que o navegador mostrou
+ * não é fonte de verdade. Se algum item não tiver quantidade de precificação
+ * conhecida, nada é gravado e a pessoa é mandada à conferência normal.
+ */
+export async function receiveOrderAsOrdered(
+  _previous: ReceiptActionState,
+  formData: FormData,
+): Promise<ReceiptActionState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.create") || !permissions.has("receipt.post")) {
+    return { error: "Seu papel não permite dar entrada neste pedido." };
+  }
+
+  const orderId = String(formData.get("orderId") ?? "");
+  const day = String(formData.get("receivedDay") ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day))) {
+    return { error: "Informe o dia em que a mercadoria chegou." };
+  }
+  const { timezone } = await getCompany(company.companyId);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(
+    new Date(),
+  );
+  if (day > today) {
+    return { error: "O dia de chegada não pode ser no futuro." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select(
+      `
+      id,
+      status,
+      current_revision:order_revisions!orders_current_revision_fk (
+        order_revision_items (
+          id,
+          requested_quantity,
+          purchase_unit_id,
+          pricing_unit_id,
+          estimated_pricing_quantity,
+          receipt_items ( logistic_quantity_received )
+        )
+      ),
+      receipts ( id, status )
+    `,
+    )
+    .eq("company_id", company.companyId)
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (orderError) {
+    return { error: `Não foi possível ler o pedido: ${orderError.message}` };
+  }
+  if (!order) return { error: "Pedido não encontrado." };
+  if (order.status !== "awaiting_delivery" && order.status !== "partially_received") {
+    return { error: "Este pedido não está aguardando entrega." };
+  }
+  if ((order.receipts ?? []).some((receipt) => receipt.status === "draft")) {
+    return {
+      error: "Este pedido já tem uma chegada aguardando conferência.",
+    };
+  }
+
+  const items: {
+    order_revision_item_id: string;
+    logistic_quantity_received: number;
+    pricing_quantity_received: number;
+    price_unverified: true;
+  }[] = [];
+  for (const item of order.current_revision?.order_revision_items ?? []) {
+    const requested = Number(item.requested_quantity);
+    const received = (item.receipt_items ?? []).reduce(
+      (sum, receiptItem) => sum + Number(receiptItem.logistic_quantity_received),
+      0,
+    );
+    const pending = Math.max(requested - received, 0);
+    if (pending <= 0) continue;
+    const pricing = quickPricingQuantity({
+      sameUnit: item.purchase_unit_id === item.pricing_unit_id,
+      requestedQuantity: requested,
+      pendingQuantity: pending,
+      estimatedPricingQuantity:
+        item.estimated_pricing_quantity === null
+          ? null
+          : Number(item.estimated_pricing_quantity),
+    });
+    if (pricing === null) {
+      return {
+        error:
+          "Há itens em unidades diferentes sem quantidade estimada. Use “Conferir” para informar o que chegou.",
+      };
+    }
+    items.push({
+      order_revision_item_id: item.id,
+      logistic_quantity_received: pending,
+      pricing_quantity_received: pricing,
+      price_unverified: true,
+    });
+  }
+  if (items.length === 0) {
+    return { error: "Este pedido não tem saldo a receber." };
+  }
+
+  // Meio-dia em Brasília: o dia escolhido é o dia que aparece, sem virar para o
+  // anterior ou o seguinte por causa do fuso.
+  const receivedAt = new Date(`${day}T15:00:00Z`).toISOString();
+  const arrival = await supabase.rpc("rpc_register_order_arrival", {
+    p_company_id: company.companyId,
+    p_order_id: orderId,
+    p_received_at: receivedAt,
+    p_notes: "Baixa sem nota: preços a confirmar.",
+  });
+  if (arrival.error) {
+    return {
+      error: arrival.error.message.includes("já possui uma chegada")
+        ? "Este pedido já está aguardando conferência."
+        : `Não foi possível registrar a chegada: ${arrival.error.message}`,
+    };
+  }
+  const receiptId = (arrival.data as { receipt_id?: string } | null)?.receipt_id;
+  if (!receiptId) return { error: "A chegada foi registrada sem identificador." };
+
+  const posted = await supabase.rpc("rpc_post_draft_receipt_with_documents", {
+    p_company_id: company.companyId,
+    p_receipt_id: receiptId,
+    p_items: items,
+  });
+  if (posted.error) {
+    revalidatePath("/recebimentos");
+    return {
+      error: posted.error.message.includes("price_unverified")
+        ? "Falta aplicar a migration 0120 no banco para dar baixa sem nota."
+        : `A chegada foi registrada, mas a baixa falhou: ${posted.error.message}. Finalize em “Conferir agora”.`,
+    };
+  }
+
+  revalidatePath("/recebimentos");
+  revalidatePath(`/pedidos/${orderId}`);
+  revalidatePath("/pedidos");
+  revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
+  return { error: null, savedAt: Date.now(), receiptId };
+}
+
+/**
+ * Grava os preços reais de itens que foram recebidos sem nota.
+ *
+ * Aceita confirmação parcial: o que estiver em branco continua pendente. Preço
+ * muito distante do combinado precisa de um "confere" explícito, porque o que
+ * passa aqui vira histórico do produto e referência de preço do fornecedor.
+ */
+export async function confirmReceiptPrices(
+  _previous: ReceiptActionState,
+  formData: FormData,
+): Promise<ReceiptActionState> {
+  const company = await requireActiveCompany();
+  const permissions = await getPermissions(company.companyId);
+  if (!permissions.has("receipt.post")) {
+    return { error: "Seu papel não permite confirmar preços." };
+  }
+
+  const receiptId = String(formData.get("receiptId") ?? "");
+  const orderId = String(formData.get("orderId") ?? "");
+  const itemIds = [...new Set(formData.getAll("itemId").map(String))];
+
+  const supabase = await createServerSupabaseClient();
+  const agreed = await supabase
+    .from("receipt_items")
+    .select(
+      "id, order_revision_items!inner ( agreed_price, product_name_snapshot, purchase_unit_id, pricing_unit_id )",
+    )
+    .eq("company_id", company.companyId)
+    .eq("receipt_id", receiptId)
+    .in("id", itemIds.length ? itemIds : ["00000000-0000-0000-0000-000000000000"]);
+  if (agreed.error) {
+    return { error: `Não foi possível validar os preços: ${agreed.error.message}` };
+  }
+  const reference = new Map(
+    (agreed.data ?? []).map((row) => [row.id, row.order_revision_items]),
+  );
+
+  const items: {
+    receipt_item_id: string;
+    practiced_price: string;
+    pricing_quantity_received?: string;
+  }[] = [];
+  for (const id of itemIds) {
+    const price = moneyDecimal(formData.get(`preco_${id}`));
+    if (!price) continue;
+    const ref = reference.get(id);
+    const name = ref?.product_name_snapshot ?? "este item";
+    if (!Number.isFinite(Number(price)) || Number(price) < 0) {
+      return { error: `Preço inválido em "${name}".` };
+    }
+    const negotiated = Number(ref?.agreed_price ?? 0);
+    const far =
+      negotiated > 0 &&
+      (Number(price) / negotiated > 3 || Number(price) / negotiated < 1 / 3);
+    if (far && formData.get(`confere_${id}`) !== "on") {
+      return {
+        error: `Em "${name}", o preço está muito distante do combinado. Confira e marque “Confere” para seguir.`,
+      };
+    }
+    const sameUnit = ref?.purchase_unit_id === ref?.pricing_unit_id;
+    const pricing = sameUnit ? "" : decimal(formData.get(`prec_${id}`));
+    if (pricing && (!Number.isFinite(Number(pricing)) || Number(pricing) < 0)) {
+      return { error: `Quantidade de precificação inválida em "${name}".` };
+    }
+    items.push({
+      receipt_item_id: id,
+      practiced_price: price,
+      ...(pricing ? { pricing_quantity_received: pricing } : {}),
+    });
+  }
+  if (items.length === 0) {
+    return { error: "Informe o preço de ao menos um produto." };
+  }
+
+  const invoiceTotal = moneyDecimal(formData.get("invoiceTotal"));
+  const { error } = await supabase.rpc("rpc_confirm_receipt_prices", {
+    p_company_id: company.companyId,
+    p_receipt_id: receiptId,
+    p_items: items,
+    p_invoice_number:
+      String(formData.get("invoiceNumber") ?? "").trim() || undefined,
+    p_invoice_series:
+      String(formData.get("invoiceSeries") ?? "").trim() || undefined,
+    p_invoice_total: invoiceTotal ? Number(invoiceTotal) : undefined,
+  });
+  if (error) {
+    if (error.message.includes("Could not find the function")) {
+      return { error: "Falta aplicar a migration 0120 no banco." };
+    }
+    return { error: `Não foi possível confirmar os preços: ${error.message}` };
+  }
+
+  revalidatePath("/recebimentos");
+  revalidatePath(`/pedidos/${orderId}`);
+  revalidatePath("/pedidos");
+  revalidatePath("/dashboard");
+  revalidatePath("/produtos", "layout");
+  revalidatePath("/fornecedores", "layout");
+  return { error: null, savedAt: Date.now(), receiptId };
 }

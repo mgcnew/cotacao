@@ -2,6 +2,7 @@ import "server-only";
 
 import { getCurrentRevision, getOrder } from "@/features/orders/queries";
 import type { NfeFiscalTotals } from "@/features/receipts/nfe";
+import { canReceiveAsOrdered } from "@/features/receipts/quick-receipt";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function listReceivingBoard(companyId: string) {
@@ -22,6 +23,9 @@ export async function listReceivingBoard(companyId: string) {
           product_name_snapshot,
           requested_quantity,
           agreed_price,
+          purchase_unit_id,
+          pricing_unit_id,
+          estimated_pricing_quantity,
           purchase_unit:units!order_revision_items_company_id_purchase_unit_id_fkey ( symbol ),
           pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( symbol ),
           receipt_items ( logistic_quantity_received )
@@ -59,6 +63,11 @@ export async function listReceivingBoard(companyId: string) {
         agreedPrice: Number(item.agreed_price),
         purchaseUnit: item.purchase_unit?.symbol ?? "",
         pricingUnit: item.pricing_unit?.symbol ?? "",
+        sameUnit: item.purchase_unit_id === item.pricing_unit_id,
+        estimatedPricingQuantity:
+          item.estimated_pricing_quantity === null
+            ? null
+            : Number(item.estimated_pricing_quantity),
       };
     });
     const draft =
@@ -70,6 +79,8 @@ export async function listReceivingBoard(companyId: string) {
       supplierName: order.suppliers.name,
       deliveryDueDate: revision?.delivery_due_date ?? null,
       items,
+      /** Dá para baixar tudo "conforme pedido" sem ninguém digitar quantidade. */
+      canReceiveAsOrdered: canReceiveAsOrdered(items),
       draftReceipt: draft
         ? {
             id: draft.id,

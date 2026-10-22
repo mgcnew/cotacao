@@ -640,12 +640,28 @@ export function ReceiptConferenceForm({
                       />
                     </div>
                   ) : null}
-                  <div className="flex flex-col gap-1">
+                  <div className="grid grid-cols-[auto_1fr] items-center gap-x-1.5 gap-y-1">
                     <label
                       htmlFor={`preco_${item.id}`}
-                      className="text-fg-muted text-xs"
+                      className="text-fg-muted col-span-2 text-xs"
                     >
                       Preço da nota
+                    </label>
+                    {/* O checkbox precisa vir ANTES do campo, como irmão: é
+                        assim que o `peer-checked` enxerga o estado dele.
+                        Marcado, a action ignora o preço digitado e grava o
+                        combinado, marcado como a confirmar. */}
+                    <input
+                      type="checkbox"
+                      id={`semnota_${item.id}`}
+                      name={`semnota_${item.id}`}
+                      className="peer"
+                    />
+                    <label
+                      htmlFor={`semnota_${item.id}`}
+                      className="text-fg-muted text-xs"
+                    >
+                      Sem a nota agora (confirmar o preço depois)
                     </label>
                     <Input
                       id={`preco_${item.id}`}
@@ -654,7 +670,7 @@ export function ReceiptConferenceForm({
                       defaultValue={decimalInput(
                         imported?.practicedPrice ?? item.agreedPrice,
                       )}
-                      className="h-8"
+                      className="col-span-2 h-8 peer-checked:pointer-events-none peer-checked:opacity-40"
                     />
                   </div>
                 </div>

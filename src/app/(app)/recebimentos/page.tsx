@@ -1,4 +1,4 @@
-import { PackageCheck } from "lucide-react";
+import { BadgeDollarSign, PackageCheck } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -6,10 +6,13 @@ import { EmptyState } from "@/components/layout/empty-state";
 import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
 import { ArrivalDialog } from "@/components/receipts/arrival-dialog";
+import { ConfirmPricesForm } from "@/components/receipts/confirm-prices-form";
+import { QuickReceiveDialog } from "@/components/receipts/quick-receive-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { getCompany } from "@/features/company/queries";
+import { listPendingPriceConfirmations } from "@/features/receipts/pending-prices";
 import {
   listReceivingBoard,
   listRecentPostedReceipts,
@@ -38,13 +41,14 @@ export default async function RecebimentosPage({
   const rawPage = Number(
     Array.isArray(params.pagina) ? params.pagina[0] : params.pagina,
   );
-  const [board, history, companyDetails] = await Promise.all([
+  const [board, history, companyDetails, pendingPrices] = await Promise.all([
     listReceivingBoard(company.companyId),
     listRecentPostedReceipts(
       company.companyId,
       Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
     ),
     getCompany(company.companyId),
+    listPendingPriceConfirmations(company.companyId),
   ]);
   const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
@@ -59,8 +63,166 @@ export default async function RecebimentosPage({
     if (!b.deliveryDueDate) return -1;
     return a.deliveryDueDate.localeCompare(b.deliveryDueDate);
   });
+  const isLate = (row: (typeof expected)[number]) =>
+    Boolean(row.deliveryDueDate && row.deliveryDueDate < today);
+  const lateOnes = expected.filter(isLate);
+  const dueToday = expected.filter((row) => row.deliveryDueDate === today);
+  const upcoming = expected.filter(
+    (row) => !row.deliveryDueDate || row.deliveryDueDate > today,
+  );
+  const rawFilter = Array.isArray(params.filtro)
+    ? params.filtro[0]
+    : params.filtro;
+  const filter =
+    rawFilter === "atrasadas" ||
+    rawFilter === "hoje" ||
+    rawFilter === "proximas"
+      ? rawFilter
+      : "todas";
+  const shown =
+    filter === "atrasadas"
+      ? lateOnes
+      : filter === "hoje"
+        ? dueToday
+        : filter === "proximas"
+          ? upcoming
+          : expected;
+  const groupBySupplier = params.agrupar === "fornecedor";
+  const oldestLateDays = lateOnes[0]?.deliveryDueDate
+    ? Math.round(
+        (Date.parse(today) - Date.parse(lateOnes[0].deliveryDueDate)) /
+          86_400_000,
+      )
+    : 0;
+  const filterHref = (next: string, group = groupBySupplier) => {
+    const query = new URLSearchParams();
+    if (next !== "todas") query.set("filtro", next);
+    if (group) query.set("agrupar", "fornecedor");
+    const text = query.toString();
+    return `/recebimentos${text ? `?${text}` : ""}`;
+  };
+  const supplierGroups = (() => {
+    const groups = new Map<string, typeof shown>();
+    for (const row of shown) {
+      groups.set(row.supplierName, [
+        ...(groups.get(row.supplierName) ?? []),
+        row,
+      ]);
+    }
+    return [...groups.entries()];
+  })();
   const canRegister = permissions.has("receipt.create");
   const canPost = permissions.has("receipt.post");
+
+  function renderExpected(row: (typeof expected)[number]) {
+    const pendingItems = row.items.filter((item) => item.pendingQuantity > 0);
+    const deliveryLabel = !row.deliveryDueDate
+      ? "Sem data prevista"
+      : row.deliveryDueDate < today
+        ? `Atrasada · ${formatDay(row.deliveryDueDate)}`
+        : row.deliveryDueDate === today
+          ? "Chega hoje"
+          : `Prevista · ${formatDay(row.deliveryDueDate)}`;
+    const deliveryTone =
+      row.deliveryDueDate && row.deliveryDueDate < today
+        ? "destructive"
+        : row.deliveryDueDate === today
+          ? "secondary"
+          : "outline";
+    return (
+      <article
+        key={row.orderId}
+        className="border-border bg-surface rounded-xl border p-3 sm:p-4"
+      >
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <Link
+              href={`/pedidos/${row.orderId}`}
+              className="text-fg block truncate font-semibold hover:underline"
+            >
+              Pedido #{row.orderNumber} · {row.supplierName}
+            </Link>
+            <div className="mt-1 sm:hidden">
+              <Badge variant={deliveryTone}>{deliveryLabel}</Badge>
+              <p className="text-fg-muted mt-1.5 text-xs">
+                {pendingItems.length}{" "}
+                {pendingItems.length === 1 ? "produto" : "produtos"}
+              </p>
+            </div>
+            <p className="text-fg-muted mt-1 hidden items-center gap-2 text-sm sm:flex">
+              {row.deliveryDueDate
+                ? `Previsto para ${formatDay(row.deliveryDueDate)}`
+                : "Sem data prevista"}
+              {row.deliveryDueDate && row.deliveryDueDate <= today ? (
+                <Badge variant={deliveryTone}>
+                  {row.deliveryDueDate === today
+                    ? "Chega hoje"
+                    : `Atrasada ${Math.round((Date.parse(today) - Date.parse(row.deliveryDueDate)) / 86_400_000)} d`}
+                </Badge>
+              ) : null}
+            </p>
+          </div>
+          {canRegister ? (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {canPost && row.canReceiveAsOrdered ? (
+                <QuickReceiveDialog
+                  orderId={row.orderId}
+                  orderNumber={row.orderNumber}
+                  supplierName={row.supplierName}
+                  defaultDay={
+                    row.deliveryDueDate && row.deliveryDueDate <= today
+                      ? row.deliveryDueDate
+                      : today
+                  }
+                  maxDay={today}
+                  items={pendingItems.map((item) => ({
+                    id: item.id,
+                    name: item.productName,
+                    quantity: item.pendingQuantity,
+                    unit: item.purchaseUnit,
+                  }))}
+                />
+              ) : null}
+              <ArrivalDialog
+                orderId={row.orderId}
+                orderNumber={row.orderNumber}
+                supplierName={row.supplierName}
+              />
+            </div>
+          ) : null}
+        </div>
+        <details className="border-border mt-3 rounded-lg border sm:hidden">
+          <summary className="text-fg-muted cursor-pointer px-3 py-2 text-xs font-medium">
+            Ver {pendingItems.length}{" "}
+            {pendingItems.length === 1 ? "produto" : "produtos"}
+          </summary>
+          <ul className="border-border text-fg-muted space-y-1 border-t px-3 py-2 text-xs">
+            {pendingItems.map((item) => (
+              <li key={item.id} className="flex justify-between gap-3">
+                <span className="min-w-0 wrap-anywhere">
+                  {item.productName}
+                </span>
+                <span className="shrink-0 tabular-nums">
+                  {QTY.format(item.pendingQuantity)} {item.purchaseUnit}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+        <ul className="text-fg-muted mt-3 hidden gap-x-6 gap-y-1 text-sm sm:grid sm:grid-cols-2">
+          {pendingItems.map((item) => (
+            <li key={item.id} className="flex justify-between gap-3">
+              <span>{item.productName}</span>
+              <span className="shrink-0 tabular-nums">
+                {QTY.format(item.pendingQuantity)} {item.purchaseUnit} ·{" "}
+                {MONEY.format(item.agreedPrice)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </article>
+    );
+  }
 
   return (
     <div className="w-full">
@@ -86,12 +248,24 @@ export default async function RecebimentosPage({
         }
       />
 
-      <div className="mb-6 hidden gap-3 sm:grid sm:grid-cols-3">
+      <div className="mb-6 hidden gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-5">
+        <Metric
+          label="Atrasadas"
+          value={String(lateOnes.length)}
+          hint="Entrega prevista já passou"
+          tone={lateOnes.length ? "bad" : "neutral"}
+        />
         <Metric
           label="A conferir"
           value={String(board.awaitingCheck.length)}
           hint="Chegaram e ainda não deram entrada"
           tone={board.awaitingCheck.length ? "bad" : "neutral"}
+        />
+        <Metric
+          label="Preços a confirmar"
+          value={String(pendingPrices.length)}
+          hint="Baixa feita sem a nota"
+          tone={pendingPrices.length ? "bad" : "neutral"}
         />
         <Metric
           label="Entregas previstas"
@@ -178,105 +352,125 @@ export default async function RecebimentosPage({
         )}
       </section>
 
+      {pendingPrices.length ? (
+        <section id="confirmar-precos" className="mb-8 scroll-mt-20">
+          <div className="mb-3 flex items-start gap-3">
+            <span className="bg-surface-sunken border-border rounded-lg border p-2">
+              <BadgeDollarSign className="text-fg-muted size-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-fg font-semibold">Preços a confirmar</h2>
+              <p className="text-fg-muted text-sm">
+                Pedidos que já deram baixa sem nota. Até confirmar, o preço vale
+                o combinado e não aparece como divergência.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            {pendingPrices.map((receipt) => (
+              <details
+                key={receipt.receiptId}
+                className="group border-border bg-surface rounded-xl border"
+                open={pendingPrices.length === 1}
+              >
+                <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                  <div className="min-w-0">
+                    <p className="text-fg font-semibold">
+                      Pedido #{receipt.orderNumber} · {receipt.supplierName}
+                    </p>
+                    <p className="text-fg-subtle text-xs">
+                      {receipt.receivedAt || receipt.checkedAt
+                        ? `Baixa em ${DATE.format(new Date((receipt.receivedAt ?? receipt.checkedAt)!))} · `
+                        : ""}
+                      {receipt.items.length}{" "}
+                      {receipt.items.length === 1 ? "produto" : "produtos"} sem
+                      preço confirmado
+                    </p>
+                  </div>
+                  <Badge variant="outline">
+                    {receipt.invoices.length
+                      ? `${receipt.invoices.length} NF-e para usar`
+                      : "A confirmar"}
+                  </Badge>
+                </summary>
+                <div className="border-border border-t p-4">
+                  <ConfirmPricesForm receipt={receipt} canConfirm={canPost} />
+                </div>
+              </details>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="mb-8">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-fg font-semibold">Entregas previstas</h2>
             <p className="text-fg-muted text-sm">
-              Pedidos confirmados que ainda devem chegar.
+              {lateOnes.length
+                ? `${lateOnes.length} ${lateOnes.length === 1 ? "atrasada" : "atrasadas"}, a mais antiga há ${oldestLateDays} ${oldestLateDays === 1 ? "dia" : "dias"}. Pedidos confirmados que ainda devem chegar.`
+                : "Pedidos confirmados que ainda devem chegar."}
             </p>
           </div>
           <Badge variant="outline" className="sm:hidden">
             {expected.length}
           </Badge>
         </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Link
+            href={filterHref("todas")}
+            aria-current={filter === "todas" ? "page" : undefined}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${filter === "todas" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
+          >
+            Todas ({expected.length})
+          </Link>
+          <Link
+            href={filterHref("atrasadas")}
+            aria-current={filter === "atrasadas" ? "page" : undefined}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${filter === "atrasadas" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
+          >
+            Atrasadas ({lateOnes.length})
+          </Link>
+          <Link
+            href={filterHref("hoje")}
+            aria-current={filter === "hoje" ? "page" : undefined}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${filter === "hoje" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
+          >
+            Hoje ({dueToday.length})
+          </Link>
+          <Link
+            href={filterHref("proximas")}
+            aria-current={filter === "proximas" ? "page" : undefined}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${filter === "proximas" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
+          >
+            Próximas ({upcoming.length})
+          </Link>
+          <Link
+            href={filterHref(filter, !groupBySupplier)}
+            className="text-primary ml-auto text-xs font-medium underline underline-offset-2"
+          >
+            {groupBySupplier ? "Ver em lista" : "Agrupar por fornecedor"}
+          </Link>
+        </div>
         <div className="flex flex-col gap-3">
-          {expected.map((row) => {
-            const pendingItems = row.items.filter(
-              (item) => item.pendingQuantity > 0,
-            );
-            const deliveryLabel = !row.deliveryDueDate
-              ? "Sem data prevista"
-              : row.deliveryDueDate < today
-                ? `Atrasada · ${formatDay(row.deliveryDueDate)}`
-                : row.deliveryDueDate === today
-                  ? "Chega hoje"
-                  : `Prevista · ${formatDay(row.deliveryDueDate)}`;
-            const deliveryTone =
-              row.deliveryDueDate && row.deliveryDueDate < today
-                ? "destructive"
-                : row.deliveryDueDate === today
-                  ? "secondary"
-                  : "outline";
-            return (
-              <article
-                key={row.orderId}
-                className="border-border bg-surface rounded-xl border p-3 sm:p-4"
-              >
-                <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <Link
-                      href={`/pedidos/${row.orderId}`}
-                      className="text-fg block truncate font-semibold hover:underline"
-                    >
-                      Pedido #{row.orderNumber} · {row.supplierName}
-                    </Link>
-                    <div className="mt-1 sm:hidden">
-                      <Badge variant={deliveryTone}>{deliveryLabel}</Badge>
-                      <p className="text-fg-muted mt-1.5 text-xs">
-                        {pendingItems.length}{" "}
-                        {pendingItems.length === 1 ? "produto" : "produtos"}
-                      </p>
-                    </div>
-                    <p className="text-fg-muted mt-1 hidden text-sm sm:block">
-                      {row.deliveryDueDate
-                        ? `Previsto para ${formatDay(row.deliveryDueDate)}`
-                        : "Sem data prevista"}
-                    </p>
-                  </div>
-                  {canRegister ? (
-                    <ArrivalDialog
-                      orderId={row.orderId}
-                      orderNumber={row.orderNumber}
-                      supplierName={row.supplierName}
-                    />
-                  ) : null}
+          {groupBySupplier
+            ? supplierGroups.map(([supplier, rows]) => (
+                <div key={supplier} className="flex flex-col gap-2">
+                  <h3 className="text-fg-muted mt-2 text-sm font-semibold">
+                    {supplier}{" "}
+                    <span className="text-fg-subtle font-normal">
+                      · {rows.length} {rows.length === 1 ? "pedido" : "pedidos"}
+                    </span>
+                  </h3>
+                  {rows.map(renderExpected)}
                 </div>
-                <details className="border-border mt-3 rounded-lg border sm:hidden">
-                  <summary className="text-fg-muted cursor-pointer px-3 py-2 text-xs font-medium">
-                    Ver {pendingItems.length}{" "}
-                    {pendingItems.length === 1 ? "produto" : "produtos"}
-                  </summary>
-                  <ul className="border-border text-fg-muted space-y-1 border-t px-3 py-2 text-xs">
-                    {pendingItems.map((item) => (
-                      <li key={item.id} className="flex justify-between gap-3">
-                        <span className="min-w-0 wrap-anywhere">
-                          {item.productName}
-                        </span>
-                        <span className="shrink-0 tabular-nums">
-                          {QTY.format(item.pendingQuantity)} {item.purchaseUnit}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-                <ul className="text-fg-muted mt-3 hidden gap-x-6 gap-y-1 text-sm sm:grid sm:grid-cols-2">
-                  {pendingItems.map((item) => (
-                    <li key={item.id} className="flex justify-between gap-3">
-                      <span>{item.productName}</span>
-                      <span className="shrink-0 tabular-nums">
-                        {QTY.format(item.pendingQuantity)} {item.purchaseUnit} ·{" "}
-                        {MONEY.format(item.agreedPrice)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            );
-          })}
-          {!expected.length ? (
+              ))
+            : shown.map(renderExpected)}
+          {!shown.length ? (
             <p className="text-fg-muted text-sm">
-              Nenhuma entrega prevista no momento.
+              {expected.length
+                ? "Nenhuma entrega neste filtro."
+                : "Nenhuma entrega prevista no momento."}
             </p>
           ) : null}
         </div>

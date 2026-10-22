@@ -3104,6 +3104,7 @@ export type Database = {
           notes: string | null;
           order_revision_item_id: string;
           practiced_price: number;
+          price_unverified: boolean;
           pricing_quantity_received: number;
           receipt_id: string;
         };
@@ -3115,6 +3116,7 @@ export type Database = {
           notes?: string | null;
           order_revision_item_id: string;
           practiced_price: number;
+          price_unverified?: boolean;
           pricing_quantity_received: number;
           receipt_id: string;
         };
@@ -3126,6 +3128,7 @@ export type Database = {
           notes?: string | null;
           order_revision_item_id?: string;
           practiced_price?: number;
+          price_unverified?: boolean;
           pricing_quantity_received?: number;
           receipt_id?: string;
         };
@@ -4776,6 +4779,17 @@ export type Database = {
       };
       rpc_complete_round: {
         Args: { p_company_id: string; p_purchase_round_id: string };
+        Returns: Json;
+      };
+      rpc_confirm_receipt_prices: {
+        Args: {
+          p_company_id: string;
+          p_invoice_number?: string;
+          p_invoice_series?: string;
+          p_invoice_total?: number;
+          p_items: Json;
+          p_receipt_id: string;
+        };
         Returns: Json;
       };
       rpc_confirm_allocations_generate_orders: {
