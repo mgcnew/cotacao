@@ -19,7 +19,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCnpj } from "@/features/company/cnpj";
-import { getCompany } from "@/features/company/queries";
 import { listCategories } from "@/features/products/queries";
 import { carregarFornecedor } from "@/features/suppliers/central";
 import { parseSupplierTab, type SupplierTab } from "@/features/suppliers/tabs";
@@ -370,18 +369,16 @@ async function AbaModeloDeCompra({ id }: { id: string }) {
     products,
     categories,
     permissions,
-    companyDetails,
   ] = await Promise.all([
     listSupplierPurchaseSchedules(company.companyId, id),
     listSupplierScheduleTemplateItems(company.companyId, id),
     listScheduleProductOptions(company.companyId),
     listCategories(company.companyId),
     getPermissions(company.companyId),
-    getCompany(company.companyId),
   ]);
 
   const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: companyDetails?.timezone ?? "America/Sao_Paulo",
+    timeZone: company.companyTimezone,
   }).format(new Date());
 
   return (

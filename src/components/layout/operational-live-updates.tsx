@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
-import { createClient } from "@/lib/supabase/client";
+import { loadBrowserClient, whenIdle } from "@/lib/supabase/realtime";
 
 const SUPPLIER_RESPONSE_EVENTS = new Set([
   "quotation.response_submitted",
@@ -24,31 +24,45 @@ export function OperationalLiveUpdates({ companyId }: { companyId: string }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`supplier-responses:${companyId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "domain_events",
-          filter: `company_id=eq.${companyId}`,
-        },
-        (payload) => {
-          if (!SUPPLIER_RESPONSE_EVENTS.has(payload.new.event_type as string)) {
-            return;
-          }
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
 
-          if (timer.current) clearTimeout(timer.current);
-          timer.current = setTimeout(() => router.refresh(), 250);
-        },
-      )
-      .subscribe();
+    // Depois que a tela abriu: o cliente do Supabase é pesado e este aviso não
+    // tem pressa. Ver `lib/supabase/realtime.ts`.
+    const cancelIdle = whenIdle(() => {
+      void loadBrowserClient().then((supabase) => {
+        if (cancelled) return;
+        const channel = supabase
+          .channel(`supplier-responses:${companyId}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "domain_events",
+              filter: `company_id=eq.${companyId}`,
+            },
+            (payload) => {
+              if (
+                !SUPPLIER_RESPONSE_EVENTS.has(payload.new.event_type as string)
+              ) {
+                return;
+              }
+
+              if (timer.current) clearTimeout(timer.current);
+              timer.current = setTimeout(() => router.refresh(), 250);
+            },
+          )
+          .subscribe();
+        unsubscribe = () => void supabase.removeChannel(channel);
+      });
+    });
 
     return () => {
+      cancelled = true;
+      cancelIdle();
       if (timer.current) clearTimeout(timer.current);
-      void supabase.removeChannel(channel);
+      unsubscribe?.();
     };
   }, [companyId, router]);
 

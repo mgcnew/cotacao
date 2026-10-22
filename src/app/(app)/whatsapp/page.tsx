@@ -48,7 +48,6 @@ import {
   listWhatsAppMessages,
 } from "@/features/whatsapp/queries";
 import { normalizeWhatsAppPhone } from "@/features/whatsapp/normalize";
-import { getCompany } from "@/features/company/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
 
@@ -152,21 +151,18 @@ export default async function WhatsAppPage({
   };
   const canSend = permissions.has("purchase_round.send");
   const canManage = permissions.has("role.manage");
-  const [connection, companyDetails] = await Promise.all([
-    getWhatsAppConnection(company.companyId),
-    getCompany(company.companyId),
-  ]);
+  const connection = await getWhatsAppConnection(company.companyId);
   const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: companyDetails.timezone,
+    timeZone: company.companyTimezone,
   });
   const timeFormatter = new Intl.DateTimeFormat("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: companyDetails.timezone,
+    timeZone: company.companyTimezone,
   });
 
   if (!connection) {

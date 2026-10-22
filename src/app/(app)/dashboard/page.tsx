@@ -28,7 +28,6 @@ import {
   MetricsSkeleton,
   SectionTitleSkeleton,
 } from "@/components/layout/page-skeleton";
-import { getCompany } from "@/features/company/queries";
 import { listRecentActivity } from "@/features/dashboard/activity";
 import { getAttentionItems } from "@/features/dashboard/attention";
 import { getMonthFinancials } from "@/features/dashboard/financial";
@@ -129,7 +128,7 @@ export default async function DashboardPage() {
             </section>
           }
         >
-          <Financial companyId={company.companyId} />
+          <Financial companyId={company.companyId} timezone={company.companyTimezone} />
         </Suspense>
       ) : null}
 
@@ -412,10 +411,16 @@ async function Panorama({
   );
 }
 
-async function Financial({ companyId }: { companyId: string }) {
-  const company = await getCompany(companyId);
-  if (!company) return null;
-  const financial = await getMonthFinancials(companyId, company.timezone);
+async function Financial({
+  companyId,
+  timezone,
+}: {
+  companyId: string;
+  timezone: string;
+}) {
+  // O fuso já vem com a sessão: perguntar de novo à tabela de empresas custava
+  // uma ida ao banco EM SÉRIE antes de o financeiro poder começar.
+  const financial = await getMonthFinancials(companyId, timezone);
 
   return (
     <section
@@ -524,7 +529,7 @@ async function Financial({ companyId }: { companyId: string }) {
                 value={financial.economiaRealizada}
                 de={financial.de}
                 ate={financial.ate}
-                timezone={company.timezone}
+                timezone={timezone}
                 tone={
                   financial.economiaRealizada > 0
                     ? "good"
@@ -553,7 +558,7 @@ async function Financial({ companyId }: { companyId: string }) {
                 value={financial.impactoDivergencias}
                 de={financial.de}
                 ate={financial.ate}
-                timezone={company.timezone}
+                timezone={timezone}
                 tone={
                   financial.impactoDivergencias > 0
                     ? "bad"

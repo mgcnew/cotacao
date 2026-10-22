@@ -8,7 +8,6 @@ import {
   requireActiveCompany,
   requireUser,
 } from "@/lib/auth/dal";
-import { getCompany } from "@/features/company/queries";
 import { quickPricingQuantity } from "@/features/receipts/quick-receipt";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { roundedMoneyString, roundMoney } from "@/lib/money";
@@ -524,7 +523,9 @@ export async function forgetSupplierProductAlias(
     },
   );
   if (error) {
-    return { error: `Não foi possível desfazer a associação: ${error.message}` };
+    return {
+      error: `Não foi possível desfazer a associação: ${error.message}`,
+    };
   }
 
   revalidatePath(`/recebimentos/${receiptId}`);
@@ -589,7 +590,9 @@ export async function addInvoiceItemToOrder(
     .maybeSingle();
 
   if (receiptError) {
-    return { error: `Não foi possível ler o recebimento: ${receiptError.message}` };
+    return {
+      error: `Não foi possível ler o recebimento: ${receiptError.message}`,
+    };
   }
   if (!receipt) return { error: "Recebimento não encontrado." };
 
@@ -603,7 +606,9 @@ export async function addInvoiceItemToOrder(
   });
 
   if (error) {
-    return { error: `Não foi possível acrescentar ao pedido: ${error.message}` };
+    return {
+      error: `Não foi possível acrescentar ao pedido: ${error.message}`,
+    };
   }
 
   revalidatePath(`/recebimentos/${receiptId}`);
@@ -888,9 +893,7 @@ export async function postDraftReceipt(
       order_revision_item_id: id,
       logistic_quantity_received: logistic,
       pricing_quantity_received: pricing,
-      ...(semNota
-        ? { price_unverified: true }
-        : { practiced_price: price }),
+      ...(semNota ? { price_unverified: true } : { practiced_price: price }),
       receipt_access_key:
         String(formData.get(`xml_${id}`) ?? "").trim() || undefined,
       notes: String(formData.get(`obs_${id}`) ?? "").trim() || undefined,
@@ -979,10 +982,9 @@ export async function receiveOrderAsOrdered(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day))) {
     return { error: "Informe o dia em que a mercadoria chegou." };
   }
-  const { timezone } = await getCompany(company.companyId);
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(
-    new Date(),
-  );
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: company.companyTimezone,
+  }).format(new Date());
   if (day > today) {
     return { error: "O dia de chegada não pode ser no futuro." };
   }
@@ -1015,7 +1017,10 @@ export async function receiveOrderAsOrdered(
     return { error: `Não foi possível ler o pedido: ${orderError.message}` };
   }
   if (!order) return { error: "Pedido não encontrado." };
-  if (order.status !== "awaiting_delivery" && order.status !== "partially_received") {
+  if (
+    order.status !== "awaiting_delivery" &&
+    order.status !== "partially_received"
+  ) {
     return { error: "Este pedido não está aguardando entrega." };
   }
   if ((order.receipts ?? []).some((receipt) => receipt.status === "draft")) {
@@ -1033,7 +1038,8 @@ export async function receiveOrderAsOrdered(
   for (const item of order.current_revision?.order_revision_items ?? []) {
     const requested = Number(item.requested_quantity);
     const received = (item.receipt_items ?? []).reduce(
-      (sum, receiptItem) => sum + Number(receiptItem.logistic_quantity_received),
+      (sum, receiptItem) =>
+        sum + Number(receiptItem.logistic_quantity_received),
       0,
     );
     const pending = Math.max(requested - received, 0);
@@ -1080,8 +1086,10 @@ export async function receiveOrderAsOrdered(
         : `Não foi possível registrar a chegada: ${arrival.error.message}`,
     };
   }
-  const receiptId = (arrival.data as { receipt_id?: string } | null)?.receipt_id;
-  if (!receiptId) return { error: "A chegada foi registrada sem identificador." };
+  const receiptId = (arrival.data as { receipt_id?: string } | null)
+    ?.receipt_id;
+  if (!receiptId)
+    return { error: "A chegada foi registrada sem identificador." };
 
   const posted = await supabase.rpc("rpc_post_draft_receipt_with_documents", {
     p_company_id: company.companyId,
@@ -1134,9 +1142,14 @@ export async function confirmReceiptPrices(
     )
     .eq("company_id", company.companyId)
     .eq("receipt_id", receiptId)
-    .in("id", itemIds.length ? itemIds : ["00000000-0000-0000-0000-000000000000"]);
+    .in(
+      "id",
+      itemIds.length ? itemIds : ["00000000-0000-0000-0000-000000000000"],
+    );
   if (agreed.error) {
-    return { error: `Não foi possível validar os preços: ${agreed.error.message}` };
+    return {
+      error: `Não foi possível validar os preços: ${agreed.error.message}`,
+    };
   }
   const reference = new Map(
     (agreed.data ?? []).map((row) => [row.id, row.order_revision_items]),

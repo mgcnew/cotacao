@@ -8,7 +8,6 @@ import { ShoppingListQuickAdd } from "@/components/shopping-list/quick-add";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Input } from "@/components/ui/input";
-import { getCompany } from "@/features/company/queries";
 import {
   removeShoppingListItem,
   updateShoppingListItem,
@@ -32,19 +31,18 @@ export default async function ShoppingListPage({
   searchParams,
 }: PageProps<"/lista-compras">) {
   const company = await requireActiveCompany();
-  const [products, data, permissions, params, companyDetails, suggestions] =
+  const [products, data, permissions, params, suggestions] =
     await Promise.all([
       listShoppingProducts(company.companyId),
       getOpenShoppingList(company.companyId),
       getPermissions(company.companyId),
       searchParams,
-      getCompany(company.companyId),
       listPurchaseSuggestions(company.companyId),
     ]);
   const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
-    timeZone: companyDetails.timezone,
+    timeZone: company.companyTimezone,
   });
   const canManage =
     permissions.has("product.update") ||

@@ -11,7 +11,6 @@ import { QuickReceiveDialog } from "@/components/receipts/quick-receive-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import { getCompany } from "@/features/company/queries";
 import { listPendingPriceConfirmations } from "@/features/receipts/pending-prices";
 import {
   listReceivingBoard,
@@ -41,22 +40,21 @@ export default async function RecebimentosPage({
   const rawPage = Number(
     Array.isArray(params.pagina) ? params.pagina[0] : params.pagina,
   );
-  const [board, history, companyDetails, pendingPrices] = await Promise.all([
+  const [board, history, pendingPrices] = await Promise.all([
     listReceivingBoard(company.companyId),
     listRecentPostedReceipts(
       company.companyId,
       Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
     ),
-    getCompany(company.companyId),
     listPendingPriceConfirmations(company.companyId),
   ]);
   const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
-    timeZone: companyDetails.timezone,
+    timeZone: company.companyTimezone,
   });
   const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: companyDetails.timezone,
+    timeZone: company.companyTimezone,
   }).format(new Date());
   const expected = [...board.expected].sort((a, b) => {
     if (!a.deliveryDueDate) return b.deliveryDueDate ? 1 : 0;
