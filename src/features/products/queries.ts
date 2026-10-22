@@ -51,6 +51,48 @@ export async function listProducts(companyId: string) {
   return rows;
 }
 
+/**
+ * Só `id` e `nome` dos produtos ativos, para escolher um produto — sem códigos
+ * de barras, categorias nem unidades.
+ *
+ * A montagem de uma rodada lia o catálogo completo (`listProducts`: ~430 KB por
+ * mil produtos) para usar dois campos de cada linha. As páginas saem juntas, e
+ * só se o catálogo passar delas é que se continua — ver
+ * `listOrderEditableProducts` para o porquê de paginar.
+ */
+export async function listActiveProductNames(companyId: string) {
+  const supabase = await createServerSupabaseClient();
+  const PAGE = 1000;
+  const PARALLEL = 3;
+
+  const fetchPage = async (start: number) => {
+    const page = await supabase
+      .from("products")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .order("name")
+      .order("id")
+      .range(start, start + PAGE - 1);
+    if (page.error) {
+      throw new Error(`Falha ao listar produtos: ${page.error.message}`);
+    }
+    return page.data ?? [];
+  };
+
+  const rows: { id: string; name: string }[] = [];
+  let start = 0;
+  for (;;) {
+    const pages = await Promise.all(
+      Array.from({ length: PARALLEL }, (_, i) => fetchPage(start + i * PAGE)),
+    );
+    for (const page of pages) rows.push(...page);
+    if (pages.some((page) => page.length < PAGE)) break;
+    start += PARALLEL * PAGE;
+  }
+  return rows;
+}
+
 export type ProductListRow = {
   id: string;
   name: string;

@@ -9,6 +9,7 @@ import {
   getDraftRevision,
   getOrder,
   getOrderMessageContext,
+  listOrderEditableProducts,
   listOrderSendContacts,
 } from "@/features/orders/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
@@ -1320,4 +1321,17 @@ export async function closeOrderBalance(
   revalidatePath(`/pedidos/${orderId}`);
   revalidatePath("/pedidos");
   return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * O catálogo ativo, para o seletor de produto de um pedido ou de uma conferência.
+ *
+ * Existe para NÃO ir junto com a página: eram ~300 KB e duas idas ao banco em
+ * toda abertura de Pedido ou Conferência, para um seletor que quase nunca é
+ * usado. Aqui o navegador pede quando a pessoa foca o campo. Quem lê o catálogo
+ * continua sendo o próprio usuário, sob a mesma RLS de antes.
+ */
+export async function loadOrderableCatalog() {
+  const company = await requireActiveCompany();
+  return listOrderEditableProducts(company.companyId);
 }

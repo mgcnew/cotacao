@@ -54,7 +54,10 @@ export type DirectOrderOptions = {
       priority: string;
     }[];
   }[];
+  /** Só os produtos que a tela já conhece; o catálogo vem sob demanda. */
   products: OrderableProduct[];
+  /** Existe ao menos um produto ativo — o aviso de "falta cadastro" depende disto, não de `products`. */
+  hasProducts: boolean;
   shoppingItems?: {
     id: string;
     productId: string;
@@ -81,7 +84,7 @@ export function CamposDoPedidoDireto({
   initialSupplierId,
   initialItems,
   idPrefixo = "",
-}: DirectOrderOptions & { idPrefixo?: string }) {
+}: Omit<DirectOrderOptions, "hasProducts"> & { idPrefixo?: string }) {
   const idFornecedor = `${idPrefixo}supplierId`;
   const idPrazo = `${idPrefixo}deliveryDueDate`;
   const [supplierId, setSupplierId] = useState(
@@ -221,6 +224,9 @@ export function CamposDoPedidoDireto({
 
       <OrderItemRows
         products={products}
+        // Quem abre o pedido direto vai escolher produtos: o catálogo vem logo
+        // depois da tela, sem segurá-la.
+        eagerCatalog
         shoppingItems={shoppingItems}
         supplierTemplates={selectedSupplier?.purchaseTemplates ?? []}
         idPrefix={idPrefixo}
@@ -240,9 +246,9 @@ export function CamposDoPedidoDireto({
  * Antes eram duas redações do mesmo aviso, uma em cada lugar. Aviso que muda de
  * palavra conforme o embrulho é aviso que envelhece pela metade.
  */
-export function FaltaCadastro({ suppliers, products }: DirectOrderOptions) {
+export function FaltaCadastro({ suppliers, hasProducts }: DirectOrderOptions) {
   const faltaFornecedor = suppliers.length === 0;
-  if (!faltaFornecedor && products.length > 0) return null;
+  if (!faltaFornecedor && hasProducts) return null;
 
   return (
     <div className="border-border bg-surface-sunken flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3">

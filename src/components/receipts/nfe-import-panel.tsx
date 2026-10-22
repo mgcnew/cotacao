@@ -16,6 +16,7 @@ import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useOrderableCatalog } from "@/components/orders/use-orderable-catalog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import {
@@ -503,7 +504,6 @@ export function NfeImportPanel({
   supplierDocument,
   canUpdateSupplier,
   canReviseOrder,
-  catalogProducts,
   existingDocuments,
   value,
   onChange,
@@ -516,7 +516,6 @@ export function NfeImportPanel({
   supplierDocument: string | null;
   canUpdateSupplier: boolean;
   canReviseOrder: boolean;
-  catalogProducts: { id: string; name: string; purchaseUnit: string; pricingUnit: string }[];
   existingDocuments: {
     id: string;
     fileName: string;
@@ -880,6 +879,10 @@ export function NfeImportPanel({
     return `${xmlItem.receiptAccessKey}:${xmlItem.lineNumber}`;
   }
 
+  // O catálogo só é buscado quando alguém foca o campo de produto: a imensa
+  // maioria das conferências nunca acrescenta um produto que o pedido não tinha.
+  const catalog = useOrderableCatalog();
+  const catalogProducts = catalog.products;
   const catalogOptions = React.useMemo(
     () =>
       catalogProducts.map((product) => ({
@@ -1603,7 +1606,13 @@ export function NfeImportPanel({
                             }
                             options={catalogOptions}
                             placeholder="Digite o nome do produto no catálogo…"
-                            emptyMessage="Nenhum produto encontrado. Cadastre-o antes."
+                            emptyMessage={
+                              catalog.failed
+                                ? "Não foi possível carregar os produtos. Tente de novo."
+                                : "Nenhum produto encontrado. Cadastre-o antes."
+                            }
+                            onOpen={catalog.load}
+                            loading={catalog.loading}
                           />
                           <div className="grid gap-2 sm:grid-cols-[8rem_10rem_auto] sm:items-end">
                             <div className="flex flex-col gap-1.5">

@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useOrderableCatalog } from "@/components/orders/use-orderable-catalog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import type {
   SupplierPurchaseSuggestion,
@@ -327,13 +328,21 @@ function SupplierTemplateSuggestions({
  * seria outro item, não uma correção. Para isso, remove-se e acrescenta-se.
  */
 export function OrderItemRows({
-  products,
+  products: knownProducts,
+  eagerCatalog = false,
   seeds,
   shoppingItems = [],
   supplierTemplates = [],
   idPrefix = "",
 }: {
+  /**
+   * Os produtos que a tela já conhece — os das linhas que já existem, da lista
+   * de compras e dos modelos —, com unidades. NÃO é o catálogo: ele vem sob
+   * demanda, quando alguém escolhe um produto.
+   */
   products: OrderableProduct[];
+  /** Busca o catálogo logo após abrir, para telas onde se vai escolher produto. */
+  eagerCatalog?: boolean;
   seeds: ItemSeed[];
   shoppingItems?: {
     id: string;
@@ -352,6 +361,15 @@ export function OrderItemRows({
     seeds.map((seed, index) => ({ ...seed, key: index })),
   );
   const [selectedShopping, setSelectedShopping] = React.useState<string[]>([]);
+  const catalog = useOrderableCatalog({ eager: eagerCatalog });
+  // Os conhecidos primeiro: são os que já têm linha, e o catálogo repete alguns.
+  const products = React.useMemo(() => {
+    const known = new Set(knownProducts.map((product) => product.id));
+    return [
+      ...knownProducts,
+      ...catalog.products.filter((product) => !known.has(product.id)),
+    ];
+  }, [knownProducts, catalog.products]);
   const productOptions = React.useMemo(
     () =>
       products.map((product) => ({
@@ -541,7 +559,13 @@ export function OrderItemRows({
                         ),
                     )}
                     placeholder="Digite o nome do produto…"
-                    emptyMessage="Nenhum produto encontrado."
+                    emptyMessage={
+                      catalog.failed
+                        ? "Não foi possível carregar os produtos. Tente de novo."
+                        : "Nenhum produto encontrado."
+                    }
+                    onOpen={catalog.load}
+                    loading={catalog.loading}
                   />
                 )}
               </div>

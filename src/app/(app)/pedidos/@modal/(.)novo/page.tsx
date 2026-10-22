@@ -64,7 +64,7 @@ async function Conteudo({
   }
 
   const options = await listDirectOrderOptions(company.companyId);
-  const { suppliers, products } = options;
+  const { suppliers } = options;
   const requestedSupplier = Array.isArray(query.fornecedor)
     ? query.fornecedor[0]
     : query.fornecedor;
@@ -96,7 +96,7 @@ async function Conteudo({
       notes: item.notes,
     }));
 
-  if (suppliers.length === 0 || products.length === 0) {
+  if (suppliers.length === 0 || !options.hasProducts) {
     return (
       <DialogBody>
         <FaltaCadastro {...options} />

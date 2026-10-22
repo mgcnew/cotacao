@@ -2,7 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 
-import { listProducts } from "@/features/products/queries";
+import { listActiveProductNames } from "@/features/products/queries";
 import { listPendingShoppingItems } from "@/features/shopping-list/queries";
 import {
   getRound,
@@ -70,7 +70,7 @@ export const carregarRodada = cache(async (roundId: string) => {
 
   const [products, shoppingItems, selectableSuppliers, contatos, supplierGroups, latestReminders] =
     await Promise.all([
-      podeMontar ? listProducts(company.companyId) : Promise.resolve([]),
+      podeMontar ? listActiveProductNames(company.companyId) : Promise.resolve([]),
       podeMontar
         ? listPendingShoppingItems(company.companyId)
         : Promise.resolve([]),

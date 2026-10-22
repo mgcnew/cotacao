@@ -29,6 +29,8 @@ export function SearchableSelect({
   focusKey,
   required = false,
   className,
+  onOpen,
+  loading = false,
 }: {
   id: string;
   name: string;
@@ -45,6 +47,13 @@ export function SearchableSelect({
   focusKey?: string | number;
   required?: boolean;
   className?: string;
+  /**
+   * Chamado quando o campo recebe o foco — para quem entrega as opções sob
+   * demanda e só começa a buscá-las agora.
+   */
+  onOpen?: () => void;
+  /** As opções ainda estão a caminho: mostra "Carregando…" em vez de "nenhum resultado". */
+  loading?: boolean;
 }) {
   const controlled = value !== undefined;
   const [internalValue, setInternalValue] = React.useState(defaultValue);
@@ -72,7 +81,7 @@ export function SearchableSelect({
     )
     .slice(0, 8);
   const selected = options.find((option) => option.id === selectedId) ?? null;
-  const showSuggestions = open && options.length > 0;
+  const showSuggestions = open && (options.length > 0 || loading);
 
   function changeValue(nextValue: string) {
     if (!controlled) setInternalValue(nextValue);
@@ -128,7 +137,10 @@ export function SearchableSelect({
                   ? `${id}-option-${suggestions[activeIndex].id}`
                   : undefined
               }
-              onFocus={() => setOpen(true)}
+              onFocus={() => {
+                setOpen(true);
+                onOpen?.();
+              }}
               onChange={(event) => {
                 setQuery(event.target.value);
                 changeValue("");
@@ -219,7 +231,7 @@ export function SearchableSelect({
             ))}
             {suggestions.length === 0 ? (
               <li className="text-fg-muted px-3 py-3 text-sm" role="status">
-                {emptyMessage}
+                {loading ? "Carregando produtos…" : emptyMessage}
               </li>
             ) : null}
           </ul>

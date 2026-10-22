@@ -28,7 +28,7 @@ import {
   getCurrentRevision,
   getDraftRevision,
   getOrder,
-  listOrderEditableProducts,
+  listOrderableProductsByIds,
   getOrderMessageContext,
   listOrderDivergences,
   listOrderReceipts,
@@ -174,7 +174,7 @@ export async function PedidoContent({ id }: { id: string }) {
   const podeCriarRevisao =
     podeRevisar && !draft && REVISAVEL.includes(order.status);
 
-  // O catálogo só é carregado quando há de fato um formulário para preencher.
+  // Os produtos só são lidos quando há de fato um formulário para preencher.
   // Catálogo e painel de envio são independentes. Antes o segundo só começava
   // depois de quatro consultas do formulário de pedido direto, embora este
   // detalhe use apenas os produtos daquele pacote.
@@ -182,8 +182,13 @@ export async function PedidoContent({ id }: { id: string }) {
     order.status === "awaiting_delivery" ||
     order.status === "partially_received";
   const [products, envio, notasDoHistorico] = await Promise.all([
+    // Só os produtos que as linhas já têm, com unidade. O catálogo inteiro vem
+    // do navegador, quando alguém for escolher um produto novo.
     podeMexerNoRascunho || podeCriarRevisao
-      ? listOrderEditableProducts(company.companyId)
+      ? listOrderableProductsByIds(company.companyId, [
+          ...(revision?.items ?? []).map((item) => item.productId),
+          ...(draft?.items ?? []).map((item) => item.productId),
+        ])
       : Promise.resolve([]),
     // Contatos e mensagem só interessam quando existe rascunho para enviar. A
     // prévia vai sem link de propósito: o link ainda não foi gerado.

@@ -29,7 +29,7 @@ export default async function NovoPedidoPage({
   if (!permissions.has("order.create")) redirect("/pedidos");
 
   const options = await listDirectOrderOptions(company.companyId);
-  const { suppliers, products } = options;
+  const { suppliers } = options;
   const requestedSupplier = Array.isArray(query.fornecedor)
     ? query.fornecedor[0]
     : query.fornecedor;
@@ -73,7 +73,7 @@ export default async function NovoPedidoPage({
         }
       />
 
-      {suppliers.length === 0 || products.length === 0 ? (
+      {suppliers.length === 0 || !options.hasProducts ? (
         <FaltaCadastro {...options} />
       ) : (
         <DirectOrderForm

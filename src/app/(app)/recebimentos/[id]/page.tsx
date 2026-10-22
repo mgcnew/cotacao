@@ -6,7 +6,6 @@ import { PageHeader } from "@/components/layout/page-header";
 import { ReceiptConferenceForm } from "@/components/receipts/conference-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { listOrderEditableProducts } from "@/features/orders/queries";
 import { getReceiptConference } from "@/features/receipts/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
@@ -30,11 +29,9 @@ export default async function ConferenciaPage({
   const data = await getReceiptConference(company.companyId, id);
   if (!data) notFound();
 
-  // O catálogo inteiro, porque o produto que veio na nota sem estar no pedido
-  // pode ser qualquer um — não só os que a rodada cotou.
-  const catalogProducts = permissions.has("order.revise")
-    ? await listOrderEditableProducts(company.companyId)
-    : [];
+  // O catálogo inteiro NÃO vem aqui: o produto que veio na nota sem estar no
+  // pedido pode ser qualquer um, mas quase nenhuma conferência precisa disso, e
+  // ele pesa ~300 KB. O seletor o busca quando alguém foca o campo.
   const { receipt, order, revision } = data;
 
   return (
@@ -147,7 +144,6 @@ export default async function ConferenciaPage({
           supplierDocument={data.supplierDocument}
           canUpdateSupplier={permissions.has("supplier.update")}
           canReviseOrder={permissions.has("order.revise")}
-          catalogProducts={catalogProducts}
           existingDocuments={receipt.documents}
         />
       ) : (

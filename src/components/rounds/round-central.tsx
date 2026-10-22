@@ -37,7 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { listProducts } from "@/features/products/queries";
+import type { listActiveProductNames } from "@/features/products/queries";
 import type { DadosDaRodada } from "@/features/rounds/central";
 import { GRUPO_PADRAO } from "@/features/rounds/groups";
 import type {
@@ -233,7 +233,7 @@ type Grupo = { id: string; name: string; status: string };
 type Item = Awaited<ReturnType<typeof listRoundItems>>[number];
 type RoundSupplier = Awaited<ReturnType<typeof listRoundSuppliers>>[number];
 type Contatos = Awaited<ReturnType<typeof listRoundSupplierContacts>>;
-type Produto = Awaited<ReturnType<typeof listProducts>>[number];
+type Produto = Awaited<ReturnType<typeof listActiveProductNames>>[number];
 
 /** A rodada em preparação: a trilha de montagem. */
 function Montagem({
@@ -267,7 +267,8 @@ function Montagem({
   const temFornecedores = roundSuppliers.length > 0;
   const pronto = temItens && temFornecedores;
 
-  const produtosAtivos = products.filter((p) => p.is_active);
+  // Já chegam só os ativos: a consulta filtra no banco, em vez de trazer tudo.
+  const produtosAtivos = products;
   const disponiveis = selectableSuppliers.filter(
     (s) => !roundSuppliers.some((rs) => rs.supplier_id === s.id),
   );

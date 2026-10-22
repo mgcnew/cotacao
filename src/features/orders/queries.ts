@@ -137,7 +137,7 @@ type DirectOrderTemplateRow = {
 export async function listDirectOrderOptions(companyId: string) {
   const supabase = await createServerSupabaseClient();
 
-  const [suppliers, products, shoppingItems, supplierNotices, templateItems] =
+  const [suppliers, hasProducts, shoppingItems, supplierNotices, templateItems] =
     await Promise.all([
       supabase
         .from("suppliers")
@@ -145,7 +145,7 @@ export async function listDirectOrderOptions(companyId: string) {
         .eq("company_id", companyId)
         .eq("status", "active")
         .order("name"),
-      listOrderEditableProducts(companyId),
+      hasActiveProducts(companyId),
       listPendingShoppingItems(companyId),
       supabase
         .from("supplier_notices")
@@ -208,9 +208,13 @@ export async function listDirectOrderOptions(companyId: string) {
   const templateProductIds = [
     ...new Set(templateRows.map((row) => row.product_id)),
   ];
-  const latestPrices =
+  // Os produtos que a tela já precisa conhecer — os da lista de compras e dos
+  // modelos de compra, que chegam com unidade e tudo — e os últimos preços são
+  // independentes: saem juntos. O resto do catálogo só é buscado quando a
+  // pessoa for escolher um produto (ver `loadOrderableCatalog`).
+  const [latestPrices, products] = await Promise.all([
     templateSupplierIds.length > 0 && templateProductIds.length > 0
-      ? await supabase
+      ? supabase
           .from("v_latest_supplier_product_price")
           .select(
             "supplier_id, product_id, practiced_price, occurred_at, source",
@@ -218,7 +222,12 @@ export async function listDirectOrderOptions(companyId: string) {
           .eq("company_id", companyId)
           .in("supplier_id", templateSupplierIds)
           .in("product_id", templateProductIds)
-      : { data: [], error: null };
+      : Promise.resolve({ data: [], error: null }),
+    listOrderableProductsByIds(companyId, [
+      ...templateProductIds,
+      ...shoppingItems.map((item) => item.productId),
+    ]),
+  ]);
   if (latestPrices.error) {
     throw new Error(
       `Falha ao carregar os últimos preços pagos: ${latestPrices.error.message}`,
@@ -309,51 +318,111 @@ export async function listDirectOrderOptions(companyId: string) {
       })),
     })),
     products,
+    hasProducts,
     shoppingItems,
   };
 }
 
-/** Catálogo mínimo usado para editar ou revisar um pedido existente. */
-/**
- * Catálogo ativo para editar um rascunho ou abrir uma revisão.
- *
- * Pagina por `range`: sem isso o PostgREST devolve só as mil primeiras linhas
- * e o item que falta no pedido pode ser justamente um dos que não vieram.
- */
-export async function listOrderEditableProducts(companyId: string) {
-  const supabase = await createServerSupabaseClient();
-  const data = [];
-
-  for (let start = 0; ; start += 1000) {
-    const page = await supabase
-      .from("products")
-      .select(
-        `
+const ORDERABLE_SELECT = `
       id,
       name,
       purchase_unit:units!products_company_id_purchase_unit_id_fkey ( symbol ),
       pricing_unit:units!products_company_id_pricing_unit_id_fkey ( symbol )
-    `,
-      )
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .order("name")
-      .order("id")
-      .range(start, start + 999);
+    `;
 
-    if (page.error) {
-      throw new Error(`Falha ao listar produtos: ${page.error.message}`);
-    }
-    data.push(...(page.data ?? []));
-    if ((page.data?.length ?? 0) < 1000) break;
-  }
+type OrderableProductRow = {
+  id: string;
+  name: string;
+  purchase_unit: { symbol: string } | null;
+  pricing_unit: { symbol: string } | null;
+};
 
-  return data.map((product) => ({
+function toOrderable(product: OrderableProductRow) {
+  return {
     id: product.id,
     name: product.name,
     purchaseUnit: product.purchase_unit?.symbol ?? "",
     pricingUnit: product.pricing_unit?.symbol ?? "",
-  }));
+  };
+}
+
+/**
+ * O catálogo ativo inteiro, na forma mínima que o pedido precisa.
+ *
+ * Só se chama quando alguém vai de fato escolher um produto (ver
+ * `loadOrderableCatalog`): são ~150 KB por mil produtos, e a maioria das visitas
+ * a um pedido ou a uma conferência nunca acrescenta nenhum.
+ *
+ * Pagina por `range`: sem isso o PostgREST devolve só as mil primeiras linhas
+ * e o item que falta no pedido pode ser justamente um dos que não vieram. As
+ * primeiras páginas saem JUNTAS — antes eram em série, uma ida de rede por
+ * mil produtos —, e só se o catálogo passar delas é que se continua.
+ */
+export async function listOrderEditableProducts(companyId: string) {
+  const supabase = await createServerSupabaseClient();
+  const PAGE = 1000;
+  const PARALLEL = 3;
+
+  const fetchPage = async (start: number) => {
+    const page = await supabase
+      .from("products")
+      .select(ORDERABLE_SELECT)
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .order("name")
+      .order("id")
+      .range(start, start + PAGE - 1);
+    if (page.error) {
+      throw new Error(`Falha ao listar produtos: ${page.error.message}`);
+    }
+    return (page.data ?? []) as unknown as OrderableProductRow[];
+  };
+
+  const data: OrderableProductRow[] = [];
+  let start = 0;
+  for (;;) {
+    const pages = await Promise.all(
+      Array.from({ length: PARALLEL }, (_, i) => fetchPage(start + i * PAGE)),
+    );
+    for (const page of pages) data.push(...page);
+    // Uma página incompleta é a última: não há o que buscar depois dela.
+    if (pages.some((page) => page.length < PAGE)) break;
+    start += PARALLEL * PAGE;
+  }
+
+  return data.map(toOrderable);
+}
+
+/**
+ * Só os produtos pedidos, com as unidades — o que um pedido existente precisa
+ * para mostrar as linhas que já tem, sem trazer o catálogo.
+ */
+export async function listOrderableProductsByIds(
+  companyId: string,
+  productIds: string[],
+) {
+  const ids = [...new Set(productIds.filter(Boolean))];
+  if (ids.length === 0) return [];
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select(ORDERABLE_SELECT)
+    .eq("company_id", companyId)
+    .in("id", ids);
+  if (error) throw new Error(`Falha ao listar produtos: ${error.message}`);
+  return ((data ?? []) as unknown as OrderableProductRow[]).map(toOrderable);
+}
+
+/** Há ao menos um produto ativo? Uma contagem, sem trazer nenhuma linha. */
+export async function hasActiveProducts(companyId: string) {
+  const supabase = await createServerSupabaseClient();
+  const { count, error } = await supabase
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", companyId)
+    .eq("is_active", true);
+  if (error) throw new Error(`Falha ao contar produtos: ${error.message}`);
+  return (count ?? 0) > 0;
 }
 
 export type OrderListRow = {
