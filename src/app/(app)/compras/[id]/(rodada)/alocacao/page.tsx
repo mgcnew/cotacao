@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { AlocacaoConteudo } from "@/components/rounds/round-allocation";
+import { NavegacaoDaRodada } from "@/components/rounds/round-nav";
 import { carregarAlocacao } from "@/features/rounds/alocacao";
 
 /**
@@ -17,5 +18,10 @@ export default async function AlocacaoPage({
 
   if (!dados) notFound();
 
-  return <AlocacaoConteudo dados={dados} />;
+  return (
+    <>
+      <NavegacaoDaRodada roundId={id} atual="alocacao" />
+      <AlocacaoConteudo dados={dados} />
+    </>
+  );
 }

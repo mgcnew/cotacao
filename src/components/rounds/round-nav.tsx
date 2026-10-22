@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button";
 /**
  * Alterna as duas ferramentas da área de decisão.
  *
- * Ela existe porque, no modal, o cabeçalho é da RODADA — nome e resumo, que não
+ * Ela existe porque o cabeçalho da rodada é da RODADA — nome e resumo, que não
  * mudam. Quem diz "você está na comparação" é o corpo, e é daqui que se anda
- * para as vizinhas sem fechar nada.
+ * entre as duas ferramentas da aba Decisão: comparar as respostas (e negociar)
+ * e decidir a compra (resumo, melhores preços por fornecedor e geração dos
+ * pedidos).
  *
  * São links de verdade, não botões com estado: cada view é uma URL, então o
- * voltar do navegador anda entre elas e um link colado abre a view certa em
- * página inteira.
+ * voltar do navegador anda entre elas e um link colado abre a view certa.
  */
 export function NavegacaoDaRodada({
   roundId,
@@ -24,12 +25,12 @@ export function NavegacaoDaRodada({
     <div className="mb-5 flex flex-wrap items-center gap-2">
       <span className="text-fg-muted mr-1 text-sm">Ferramenta:</span>
       <Button asChild size="sm" variant={atual === "comparacao" ? "default" : "outline"}>
-        <Link href={`/compras/${roundId}/comparacao`} replace>
+        <Link href={`/compras/${roundId}/comparacao`}>
           Comparar respostas
         </Link>
       </Button>
       <Button asChild size="sm" variant={atual === "alocacao" ? "default" : "outline"}>
-        <Link href={`/compras/${roundId}/alocacao`} replace>
+        <Link href={`/compras/${roundId}/alocacao`}>
           Decidir compra
         </Link>
       </Button>
