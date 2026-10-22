@@ -41,6 +41,7 @@ export type ComparisonCell = {
 
 export type ComparisonRow = {
   itemId: string;
+  productId: string;
   commercialStatus: string;
   supplierQuotationItemBySupplier: Map<string, string>;
   productName: string;
@@ -400,6 +401,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
 
     return {
       itemId: item.id,
+      productId: item.product_id,
       commercialStatus: item.commercial_status,
       supplierQuotationItemBySupplier: linkBySupplier,
       productName: item.products.name,

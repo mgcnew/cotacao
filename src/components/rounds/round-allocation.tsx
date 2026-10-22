@@ -20,6 +20,12 @@ import { Button } from "@/components/ui/button";
 import { cancelAllocation } from "@/features/allocations/actions";
 import { ORDER_STATUS_LABEL } from "@/features/orders/queries";
 import type { DadosDaAlocacao } from "@/features/rounds/alocacao";
+import {
+  LIMITE_ALTA,
+  LIMITE_RUIDO,
+  compararComUltimoPago,
+} from "@/features/rounds/last-paid";
+import { cn } from "@/lib/utils";
 
 const MONEY = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
@@ -180,6 +186,19 @@ export function AlocacaoConteudo({
     { saved: 0, suggested: 0, withoutConversion: 0 },
   );
   const decisionTotal = totals.saved + totals.suggested;
+  // Quantos itens a decidir estão pelo menos `LIMITE_ALTA` acima do último
+  // pago: é o que merece um olhar antes de gerar os pedidos.
+  const acimaDoUltimo = [
+    ...recommendations.map(({ row, winner }) => ({ productId: row.productId, supplierId: winner.id, price: winner.price, unit: row.pricingUnit })),
+    ...supplierBuckets.flatMap((bucket) =>
+      bucket.decisions
+        .filter(({ allocation }) => allocation.status === "draft")
+        .map(({ row, allocation }) => ({ productId: row.productId, supplierId: allocation.supplierId, price: allocation.selectedPrice, unit: row.pricingUnit })),
+    ),
+  ].filter((item) => {
+    const comparacao = compararComUltimoPago(dados.ultimosPagos, item.productId, item.supplierId, item.price, item.unit);
+    return comparacao !== null && comparacao.diff >= LIMITE_ALTA;
+  }).length;
   // Quanto a sugestão economiza sobre a 2ª melhor oferta do mesmo item, só onde
   // as duas têm total calculável para a quantidade pedida.
   const savingOverSecond = recommendations.reduce((sum, item) => {
@@ -338,6 +357,12 @@ export function AlocacaoConteudo({
                     <div>
                       <dt className="text-fg-muted text-[13px]">Economia sobre a 2ª oferta</dt>
                       <dd className="text-success font-semibold tabular-nums">{MONEY.format(savingOverSecond)}</dd>
+                    </div>
+                  ) : null}
+                  {acimaDoUltimo > 0 ? (
+                    <div>
+                      <dt className="text-fg-muted text-[13px]">Acima do último pago</dt>
+                      <dd className="text-warning font-semibold tabular-nums">{acimaDoUltimo} {acimaDoUltimo === 1 ? "item" : "itens"}</dd>
                     </div>
                   ) : null}
                   {withoutPrice.length > 0 ? (
@@ -820,6 +845,7 @@ function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados:
           <li key={allocation.allocationId} className="flex flex-wrap items-center gap-3 px-4 py-3">
             <ItemName row={row} quantity={allocation.allocatedQuantity} />
             <Price price={allocation.selectedPrice} pricingQuantity={allocation.estimatedPricingQuantity} unit={row.pricingUnit} />
+            <VsUltimoPago dados={dados} productId={row.productId} supplierId={allocation.supplierId} price={allocation.selectedPrice} unit={row.pricingUnit} />
             {allocation.packagingChoiceResultEstimated !== null ? (
               <span className={allocation.packagingChoiceResultEstimated >= 0 ? "text-success text-[13px] font-medium" : "text-danger text-[13px] font-medium"}>
                 embalagem {MONEY.format(allocation.packagingChoiceResultEstimated)}
@@ -833,12 +859,39 @@ function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados:
           <li key={row.itemId} className="bg-primary/[0.025] flex flex-wrap items-center gap-3 px-4 py-3">
             <ItemName row={row} quantity={row.requestedQuantity} />
             <Price price={winner.price} pricingQuantity={winner.pricingFactor === null ? null : row.requestedQuantity * winner.pricingFactor} unit={row.pricingUnit} comparisonPrice={row.requiresPresentationComparison ? winner.comparisonPrice : null} comparisonUnit={row.comparisonUnit} best />
+            <VsUltimoPago dados={dados} productId={row.productId} supplierId={winner.id} price={winner.price} unit={row.pricingUnit} />
             <Badge variant="outline">sugestão</Badge>
             {dados.podeDecidir && dados.round.status === "active" ? <AllocateForm roundId={dados.round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={row.requestedQuantity} initialSupplierId={winner.id} buttonLabel="Alterar" requestedQuantity={row.requestedQuantity} decided={decidedFor(row, dados)} /> : null}
           </li>
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * O preço desta proposta contra o último que a empresa pagou pelo mesmo
+ * produto. Sem referência comparável (nunca comprado, outra unidade, pagamento
+ * muito antigo), não aparece nada — um traço no lugar só pareceria dado.
+ */
+function VsUltimoPago({ dados, productId, supplierId, price, unit }: { dados: DadosDaAlocacao; productId: string; supplierId: string; price: number; unit: string }) {
+  const comparacao = compararComUltimoPago(dados.ultimosPagos, productId, supplierId, price, unit);
+  if (!comparacao) return null;
+  const { diff, referencia, mesmoFornecedor } = comparacao;
+  const alta = diff >= LIMITE_ALTA;
+  const igual = Math.abs(diff) < LIMITE_RUIDO;
+  const queda = diff <= -LIMITE_RUIDO;
+  const pct = `${diff > 0 ? "+" : ""}${Math.round(diff * 100)}%`;
+  const quando = new Date(referencia.at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
+  const quem = mesmoFornecedor ? "" : ` a ${dados.supplierName.get(referencia.supplierId) ?? "outro fornecedor"}`;
+  return (
+    <p
+      className={cn("text-[13px] tabular-nums", alta ? "text-warning font-medium" : queda ? "text-success" : "text-fg-muted")}
+      title={`Último pago${quem}: ${MONEY.format(referencia.price)}/${referencia.unit} em ${quando}`}
+    >
+      {igual ? "≈ último pago" : `${diff > 0 ? "▲" : "▼"} ${pct} vs último pago`}
+      <span className="text-fg-subtle font-normal"> · {MONEY.format(referencia.price)} em {quando}{quem}</span>
+    </p>
   );
 }
 

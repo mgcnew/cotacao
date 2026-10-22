@@ -7,7 +7,55 @@ import {
   listRoundOrders,
 } from "@/features/allocations/queries";
 import { carregarRodadaBasica } from "@/features/rounds/central";
+import {
+  IDADE_MAXIMA_DIAS,
+  type UltimosPagosPorProduto,
+} from "@/features/rounds/last-paid";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+/**
+ * O último preço efetivamente pago, por produto e fornecedor.
+ *
+ * É informação de apoio: se a leitura falhar, a decisão continua valendo sem
+ * ela. Uma tela de decisão que não abre porque um indicador não carregou seria
+ * pior que uma sem o indicador.
+ */
+async function listarUltimosPagos(
+  companyId: string,
+  productIds: string[],
+): Promise<UltimosPagosPorProduto> {
+  const pagos: UltimosPagosPorProduto = new Map();
+  if (productIds.length === 0) return pagos;
+  const supabase = await createServerSupabaseClient();
+  const desde = new Date(Date.now() - IDADE_MAXIMA_DIAS * 86_400_000);
+  const { data, error } = await supabase
+    .from("v_latest_supplier_product_price")
+    .select("supplier_id, product_id, practiced_price, pricing_unit_symbol, occurred_at")
+    .eq("company_id", companyId)
+    .in("product_id", productIds)
+    .gte("occurred_at", desde.toISOString());
+  if (error || !data) return pagos;
+  for (const row of data) {
+    if (
+      !row.product_id ||
+      !row.supplier_id ||
+      row.practiced_price === null ||
+      !row.pricing_unit_symbol ||
+      !row.occurred_at
+    )
+      continue;
+    const lista = pagos.get(row.product_id) ?? [];
+    lista.push({
+      price: Number(row.practiced_price),
+      unit: row.pricing_unit_symbol,
+      at: row.occurred_at,
+      supplierId: row.supplier_id,
+    });
+    pagos.set(row.product_id, lista);
+  }
+  return pagos;
+}
 
 /**
  * A decisão de compra, para a página inteira e para o modal.
@@ -33,6 +81,9 @@ export const carregarAlocacao = cache(async (roundId: string) => {
   if (!round) return null;
 
   const rascunhos = board.allocations.filter((a) => a.status === "draft");
+  const ultimosPagos = await listarUltimosPagos(company.companyId, [
+    ...new Set(board.rows.map((row) => row.productId)),
+  ]);
 
   return {
     companyName: company.companyName,
@@ -42,6 +93,7 @@ export const carregarAlocacao = cache(async (roundId: string) => {
     allocationsByItem: board.allocationsByItem,
     orders,
     rascunhos,
+    ultimosPagos,
     fornecedoresNoRascunho: new Set(rascunhos.map((a) => a.supplierId)),
     supplierName: new Map(
       board.suppliers.map((s) => [s.supplier_id, s.suppliers.name]),
