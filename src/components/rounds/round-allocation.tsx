@@ -26,6 +26,7 @@ import {
   compararComUltimoPago,
 } from "@/features/rounds/last-paid";
 import { situacaoDoLimite } from "@/features/rounds/purchase-limit";
+import { OffersPopover, type Offer } from "@/components/rounds/offers-popover";
 import { cn } from "@/lib/utils";
 
 const MONEY = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -84,6 +85,44 @@ function candidatesFor(row: Row, dados: DadosDaAlocacao): Candidate[] {
       (a, b) =>
         a.comparisonPrice - b.comparisonPrice || a.name.localeCompare(b.name),
     );
+}
+
+/**
+ * Todas as ofertas com preço para o item, da mais barata para a mais cara.
+ *
+ * Independe de `candidatesFor`: aquela devolve vazio quando as propostas não
+ * têm base comum de comparação, e justamente aí a pessoa mais quer ver os
+ * números lado a lado.
+ */
+function ofertasDoItem(row: Row, dados: DadosDaAlocacao): { offers: Offer[]; withoutOffer: number } {
+  const ativos = dados.suppliers.filter((supplier) => supplier.removed_at === null);
+  const offers = ativos.flatMap((supplier) => {
+    const cell = row.cells.get(supplier.id);
+    return cell && !cell.doesNotSupply && cell.isAvailable !== false && cell.currentPrice !== null
+      ? [{
+          supplierId: supplier.supplier_id,
+          name: supplier.suppliers.name,
+          price: cell.currentPrice,
+          quotedPrice: cell.quotedPrice,
+          negotiated: cell.negotiated,
+          comparisonPrice: cell.normalizedPrice,
+        }]
+      : [];
+  });
+  // Misturar normalizado de uns com bruto de outros não tem unidade comum: se
+  // algum não tem base, ninguém usa a comparação.
+  const normalizado = row.requiresPresentationComparison && offers.length > 0 && offers.every((offer) => offer.comparisonPrice !== null);
+  const lista = offers
+    .map((offer) => ({ ...offer, comparisonPrice: normalizado ? offer.comparisonPrice : null }))
+    .sort((a, b) => (a.comparisonPrice ?? a.price) - (b.comparisonPrice ?? b.price) || a.name.localeCompare(b.name));
+  return { offers: lista, withoutOffer: ativos.length - lista.length };
+}
+
+/** O ícone ao lado do preço: só aparece quando há com o que comparar. */
+function Ofertas({ row, dados, supplierId }: { row: Row; dados: DadosDaAlocacao; supplierId: string }) {
+  const { offers, withoutOffer } = ofertasDoItem(row, dados);
+  if (offers.length < 2) return null;
+  return <OffersPopover productName={row.productName} unit={row.pricingUnit} comparisonUnit={row.comparisonUnit} chosenSupplierId={supplierId} offers={offers} withoutOffer={withoutOffer} />;
 }
 
 /** O que já foi decidido para o item (rascunho e confirmado), para o saldo do formulário. */
@@ -860,6 +899,7 @@ function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados:
           <li key={allocation.allocationId} className="flex flex-wrap items-center gap-3 px-4 py-3">
             <ItemName row={row} quantity={allocation.allocatedQuantity} />
             <Price price={allocation.selectedPrice} pricingQuantity={allocation.estimatedPricingQuantity} unit={row.pricingUnit} />
+            <Ofertas row={row} dados={dados} supplierId={allocation.supplierId} />
             <VsUltimoPago dados={dados} productId={row.productId} supplierId={allocation.supplierId} price={allocation.selectedPrice} unit={row.pricingUnit} />
             {allocation.packagingChoiceResultEstimated !== null ? (
               <span className={allocation.packagingChoiceResultEstimated >= 0 ? "text-success text-[13px] font-medium" : "text-danger text-[13px] font-medium"}>
@@ -874,6 +914,7 @@ function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados:
           <li key={row.itemId} className="bg-primary/[0.025] flex flex-wrap items-center gap-3 px-4 py-3">
             <ItemName row={row} quantity={row.requestedQuantity} />
             <Price price={winner.price} pricingQuantity={winner.pricingFactor === null ? null : row.requestedQuantity * winner.pricingFactor} unit={row.pricingUnit} comparisonPrice={row.requiresPresentationComparison ? winner.comparisonPrice : null} comparisonUnit={row.comparisonUnit} best />
+            <Ofertas row={row} dados={dados} supplierId={winner.id} />
             <VsUltimoPago dados={dados} productId={row.productId} supplierId={winner.id} price={winner.price} unit={row.pricingUnit} />
             <Badge variant="outline">sugestão</Badge>
             {dados.podeDecidir && dados.round.status === "active" ? <AllocateForm roundId={dados.round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={row.requestedQuantity} initialSupplierId={winner.id} buttonLabel="Alterar" requestedQuantity={row.requestedQuantity} decided={decidedFor(row, dados)} /> : null}
