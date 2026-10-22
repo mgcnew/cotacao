@@ -25,6 +25,7 @@ import {
   LIMITE_RUIDO,
   compararComUltimoPago,
 } from "@/features/rounds/last-paid";
+import { situacaoDoLimite } from "@/features/rounds/purchase-limit";
 import { cn } from "@/lib/utils";
 
 const MONEY = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -188,6 +189,7 @@ export function AlocacaoConteudo({
   const decisionTotal = totals.saved + totals.suggested;
   // Quantos itens a decidir estão pelo menos `LIMITE_ALTA` acima do último
   // pago: é o que merece um olhar antes de gerar os pedidos.
+  const acimaDoLimite = supplierBuckets.filter((bucket) => situacaoDoLimite(bucketTotals(bucket).total, dados.limites.get(bucket.id))?.tipo === "acima").length;
   const acimaDoUltimo = [
     ...recommendations.map(({ row, winner }) => ({ productId: row.productId, supplierId: winner.id, price: winner.price, unit: row.pricingUnit })),
     ...supplierBuckets.flatMap((bucket) =>
@@ -223,7 +225,7 @@ export function AlocacaoConteudo({
       const name = supplierName.get(allocation.supplierId) ?? "Fornecedor";
       const preview =
         previewBySupplier.get(allocation.supplierId) ??
-        { supplierName: name, itemCount: 0, total: null, withoutConversion: 0, items: [] };
+        { supplierName: name, itemCount: 0, total: null, withoutConversion: 0, items: [], limit: dados.limites.get(allocation.supplierId) ?? null };
       preview.itemCount += 1;
       preview.items.push({ name: row.productName, quantity: `${QTY.format(allocation.allocatedQuantity)} ${row.purchaseUnit}` });
       if (allocation.estimatedPricingQuantity === null) {
@@ -357,6 +359,12 @@ export function AlocacaoConteudo({
                     <div>
                       <dt className="text-fg-muted text-[13px]">Economia sobre a 2ª oferta</dt>
                       <dd className="text-success font-semibold tabular-nums">{MONEY.format(savingOverSecond)}</dd>
+                    </div>
+                  ) : null}
+                  {acimaDoLimite > 0 ? (
+                    <div>
+                      <dt className="text-fg-muted text-[13px]">Acima do limite</dt>
+                      <dd className="text-warning font-semibold tabular-nums">{acimaDoLimite} {acimaDoLimite === 1 ? "fornecedor" : "fornecedores"}</dd>
                     </div>
                   ) : null}
                   {acimaDoUltimo > 0 ? (
@@ -838,6 +846,13 @@ function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados:
         <span className="text-right">
           <span className="text-fg block font-semibold tabular-nums">{MONEY.format(total)}</span>
           {uncalculated > 0 ? <span className="text-warning block text-[13px]">{uncalculated} sem conversão</span> : null}
+          {(() => {
+            const situacao = situacaoDoLimite(total, dados.limites.get(supplier.id));
+            if (!situacao) return null;
+            return situacao.tipo === "acima"
+              ? <span className="text-warning block text-[13px] font-medium" title="Limite de compras do cadastro do fornecedor. É um aviso: a decisão continua sua.">acima do limite de {MONEY.format(situacao.limite)} (+{MONEY.format(situacao.excesso)})</span>
+              : <span className="text-fg-muted block text-[13px]" title="Limite de compras do cadastro do fornecedor.">{Math.round(situacao.uso * 100)}% do limite de {MONEY.format(situacao.limite)}</span>;
+          })()}
         </span>
       </header>
       <ul className="divide-border divide-y">

@@ -25,6 +25,7 @@ import {
   type AllocationState,
   type RecommendationState,
 } from "@/features/allocations/actions";
+import { situacaoDoLimite } from "@/features/rounds/purchase-limit";
 
 const MONEY = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
@@ -348,6 +349,8 @@ export type OrderPreview = {
   total: number | null;
   withoutConversion: number;
   items: { name: string; quantity: string }[];
+  /** Limite de compras do fornecedor, quando cadastrado. */
+  limit?: number | null;
 };
 
 /**
@@ -442,6 +445,14 @@ export function ConfirmOrdersBar({
                     {order.itemCount} {order.itemCount === 1 ? "item" : "itens"}:{" "}
                     {order.items.map((item) => `${item.name} (${item.quantity})`).join(" · ")}
                   </p>
+                  {(() => {
+                    const situacao = situacaoDoLimite(order.total ?? 0, order.limit);
+                    return situacao?.tipo === "acima" ? (
+                      <p className="text-warning mt-1 text-[13px] font-medium">
+                        Acima do limite de compras deste fornecedor ({MONEY.format(situacao.limite)}) em {MONEY.format(situacao.excesso)}.
+                      </p>
+                    ) : null;
+                  })()}
                 </li>
               ))}
             </ul>

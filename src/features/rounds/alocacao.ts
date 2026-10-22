@@ -15,6 +15,31 @@ import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
+ * O limite de compras que o cadastro guarda, por fornecedor da rodada.
+ *
+ * Também é apoio: se a leitura falhar, a decisão abre sem o aviso.
+ */
+async function listarLimites(
+  companyId: string,
+  supplierIds: string[],
+): Promise<Map<string, number>> {
+  const limites = new Map<string, number>();
+  if (supplierIds.length === 0) return limites;
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("suppliers")
+    .select("id, purchase_limit")
+    .eq("company_id", companyId)
+    .in("id", supplierIds);
+  if (error || !data) return limites;
+  for (const row of data) {
+    const limite = Number(row.purchase_limit);
+    if (row.purchase_limit !== null && limite > 0) limites.set(row.id, limite);
+  }
+  return limites;
+}
+
+/**
  * O último preço efetivamente pago, por produto e fornecedor.
  *
  * É informação de apoio: se a leitura falhar, a decisão continua valendo sem
@@ -81,8 +106,13 @@ export const carregarAlocacao = cache(async (roundId: string) => {
   if (!round) return null;
 
   const rascunhos = board.allocations.filter((a) => a.status === "draft");
-  const ultimosPagos = await listarUltimosPagos(company.companyId, [
-    ...new Set(board.rows.map((row) => row.productId)),
+  const [ultimosPagos, limites] = await Promise.all([
+    listarUltimosPagos(company.companyId, [
+      ...new Set(board.rows.map((row) => row.productId)),
+    ]),
+    listarLimites(company.companyId, [
+      ...new Set(board.suppliers.map((supplier) => supplier.supplier_id)),
+    ]),
   ]);
 
   return {
@@ -94,6 +124,7 @@ export const carregarAlocacao = cache(async (roundId: string) => {
     orders,
     rascunhos,
     ultimosPagos,
+    limites,
     fornecedoresNoRascunho: new Set(rascunhos.map((a) => a.supplierId)),
     supplierName: new Map(
       board.suppliers.map((s) => [s.supplier_id, s.suppliers.name]),
