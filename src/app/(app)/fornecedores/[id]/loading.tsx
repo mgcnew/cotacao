@@ -1,15 +1,12 @@
 import {
   CardSkeleton,
-  PageHeaderSkeleton,
-  PageSkeleton,
   SectionTitleSkeleton,
 } from "@/components/layout/page-skeleton";
 
-/** Casca do fornecedor: dados cadastrais e os contatos. */
+/** Esqueleto do miolo do fornecedor. Cabeçalho e abas vêm do `layout.tsx`. */
 export default function Loading() {
   return (
-    <PageSkeleton>
-      <PageHeaderSkeleton />
+    <>
       <div className="mb-6">
         <CardSkeleton lines={4} />
       </div>
@@ -17,6 +14,6 @@ export default function Loading() {
         <SectionTitleSkeleton lines={2} />
         <CardSkeleton lines={3} />
       </section>
-    </PageSkeleton>
+    </>
   );
 }

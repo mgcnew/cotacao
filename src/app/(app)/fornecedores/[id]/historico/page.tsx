@@ -1,14 +1,16 @@
 import { Eye, FileText } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { QuotationHistory } from "@/components/history/quotation-history";
 import { PurchasePriceHistory } from "@/components/history/purchase-price-history";
-import { PageHeader } from "@/components/layout/page-header";
+import {
+  MetricsSkeleton,
+  TableSkeleton,
+} from "@/components/layout/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SupplierTabs } from "@/components/suppliers/supplier-tabs";
-import { DialogBody } from "@/components/ui/dialog";
 import {
   getQuotationHistory,
   parseHistoryFilters,
@@ -53,24 +55,35 @@ export default async function HistoricoFornecedorPage({
   searchParams,
 }: PageProps<"/fornecedores/[id]/historico">) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  return <HistoricoFornecedorContent id={id} query={query} />;
+  return (
+    // A `key` faz o esqueleto reaparecer a cada filtro: sem ela a tela ficaria
+    // parada nos dados antigos até os novos chegarem.
+    <Suspense
+      key={JSON.stringify(query)}
+      fallback={
+        <div className="flex flex-col gap-4">
+          <MetricsSkeleton count={5} />
+          <TableSkeleton rows={6} columns={5} />
+        </div>
+      }
+    >
+      <HistoricoFornecedorContent id={id} query={query} />
+    </Suspense>
+  );
 }
 
 /**
- * O histórico comercial do fornecedor, na página inteira e no modal da lista.
+ * O histórico comercial do fornecedor — a aba "Histórico comercial".
  *
- * Os filtros continuam apontando para `/fornecedores/<id>/historico`, a mesma
- * rota que o modal intercepta: filtrar troca os dados sem fechar a caixa nem
- * perder a lista montada atrás.
+ * Cabeçalho e abas: `layout.tsx` ao lado. Os filtros apontam para
+ * `/fornecedores/<id>/historico` e só trocam os dados.
  */
 export async function HistoricoFornecedorContent({
   id,
   query,
-  emModal = false,
 }: {
   id: string;
   query: Record<string, string | string[] | undefined>;
-  emModal?: boolean;
 }) {
   if (!UUID.test(id)) notFound();
 
@@ -94,17 +107,14 @@ export async function HistoricoFornecedorContent({
 
   if (!supplier) notFound();
 
-  const content = (
+  return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {/* No modal a situação já está no cabeçalho, ao lado do nome. */}
-        {emModal ? null : (
-          <Badge
-            variant={supplier.status === "active" ? "default" : "secondary"}
-          >
-            {STATUS_LABEL[supplier.status] ?? supplier.status}
-          </Badge>
-        )}
+        <Badge
+          variant={supplier.status === "active" ? "default" : "secondary"}
+        >
+          {STATUS_LABEL[supplier.status] ?? supplier.status}
+        </Badge>
         <p className="text-fg-muted text-sm">{EXPLICACAO}</p>
       </div>
 
@@ -200,27 +210,5 @@ export async function HistoricoFornecedorContent({
         basePath={`/fornecedores/${id}/historico`}
       />
     </>
-  );
-
-  if (emModal) {
-    return <DialogBody>{content}</DialogBody>;
-  }
-
-  return (
-    <div className="w-full">
-      <PageHeader
-        title={supplier.name}
-        description="Produtos efetivamente comprados, preços praticados e participações em cotações."
-        action={
-          <Button asChild size="sm" variant="ghost">
-            <Link href="/fornecedores">Voltar</Link>
-          </Button>
-        }
-      />
-      <div className="border-border -mx-4 mb-6 border-b sm:mx-0">
-        <SupplierTabs supplierId={id} />
-      </div>
-      {content}
-    </div>
   );
 }

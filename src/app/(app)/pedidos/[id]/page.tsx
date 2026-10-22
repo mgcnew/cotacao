@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
-import { RouteModal } from "@/components/layout/route-modal";
 import {
   CloseBalanceForm,
   ResolveDivergenceForm,
@@ -18,7 +17,6 @@ import { SendOrderControls } from "@/components/orders/send-order-controls";
 import { ArrivalDialog } from "@/components/receipts/arrival-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DialogBody } from "@/components/ui/dialog";
 import {
   ORDER_DIVERGENCE_STATUS_LABEL,
   ORDER_DIVERGENCE_TYPE_LABEL,
@@ -133,13 +131,7 @@ export default async function PedidoPage({
   return <PedidoContent id={id} />;
 }
 
-export async function PedidoContent({
-  id,
-  emModal = false,
-}: {
-  id: string;
-  emModal?: boolean;
-}) {
+export async function PedidoContent({ id }: { id: string }) {
   const company = await requireActiveCompany();
 
   const [order, permissions] = await Promise.all([
@@ -702,21 +694,6 @@ export async function PedidoContent({
       {ORDER_STATUS_LABEL[order.status] ?? order.status}
     </Badge>
   );
-
-  if (emModal) {
-    return (
-      <RouteModal
-        size="xl"
-        titulo={`Pedido #${order.order_number}`}
-        descricao={description}
-        acao={status}
-      >
-        <DialogBody className="min-h-0 overflow-y-auto">
-          <div className="w-full">{content}</div>
-        </DialogBody>
-      </RouteModal>
-    );
-  }
 
   return (
     <div className="w-full">

@@ -5,11 +5,9 @@ import { redirect } from "next/navigation";
 import { EmptyState } from "@/components/layout/empty-state";
 import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
-import { RouteModal } from "@/components/layout/route-modal";
 import { ResolveDivergenceForm } from "@/components/orders/divergence-forms";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DialogBody } from "@/components/ui/dialog";
 import { listPendingCommercialDivergences } from "@/features/orders/commercial-divergences";
 import { COMMERCIAL_DIVERGENCE_TYPE_LABEL } from "@/features/orders/divergences";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
@@ -36,11 +34,7 @@ export default async function CommercialDivergencesPage() {
   return <CommercialDivergencesContent />;
 }
 
-export async function CommercialDivergencesContent({
-  emModal = false,
-}: {
-  emModal?: boolean;
-}) {
+export async function CommercialDivergencesContent() {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
   if (
@@ -260,25 +254,6 @@ export async function CommercialDivergencesContent({
 
   const description =
     "Decida o que fazer quando a nota ou a mercadoria vier diferente do pedido. Cada decisão fica registrada no histórico.";
-
-  if (emModal) {
-    return (
-      <RouteModal
-        size="xl"
-        titulo="Divergências do recebimento"
-        descricao={description}
-        acao={
-          <Badge variant={rows.length ? "destructive" : "secondary"}>
-            {rows.length} {rows.length === 1 ? "pendência" : "pendências"}
-          </Badge>
-        }
-      >
-        <DialogBody className="min-h-0 overflow-y-auto">
-          <div className="w-full">{content}</div>
-        </DialogBody>
-      </RouteModal>
-    );
-  }
 
   return (
     <div className="w-full">

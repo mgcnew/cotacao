@@ -4,16 +4,12 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { CardSkeleton, SectionTitleSkeleton } from "@/components/layout/page-skeleton";
-import { PageHeader } from "@/components/layout/page-header";
 import { ContactForm } from "@/components/suppliers/contact-form";
 import { SupplierScheduleManager } from "@/components/suppliers/supplier-schedule-manager";
 import { SupplierNoticeDialog } from "@/components/suppliers/supplier-notice-dialog";
 import { SupplierNoticeStatusActions } from "@/components/suppliers/supplier-notice-status";
-import { SupplierStatusToggle } from "@/components/suppliers/supplier-status-toggle";
-import { SupplierTabs } from "@/components/suppliers/supplier-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DialogBody } from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -75,7 +71,10 @@ export default async function FornecedorPage({
 }
 
 /**
- * O fornecedor, servindo à página inteira e ao modal da lista.
+ * O miolo do fornecedor: a aba pedida em `?aba=`.
+ *
+ * Cabeçalho e faixa de abas moram no `layout.tsx` ao lado e não remontam ao
+ * trocar de aba — o que troca é só isto.
  *
  * POR QUE CADA ABA CARREGA O SEU
  *
@@ -90,16 +89,14 @@ export default async function FornecedorPage({
 export async function FornecedorContent({
   id,
   aba,
-  emModal = false,
 }: {
   id: string;
   aba: SupplierTab;
-  emModal?: boolean;
 }) {
   const supplier = await carregarFornecedor(id);
   if (!supplier) notFound();
 
-  const corpo = (
+  return (
     <Suspense
       key={aba}
       fallback={
@@ -116,60 +113,17 @@ export async function FornecedorContent({
       ) : aba === "avisos" ? (
         <AbaAvisos id={id} />
       ) : (
-        <AbaCadastro id={id} emModal={emModal} />
+        <AbaCadastro id={id} />
       )}
     </Suspense>
   );
-
-  if (emModal) return <DialogBody>{corpo}</DialogBody>;
-
-  return (
-    <div className="w-full">
-      <PageHeader
-        title={supplier.name}
-        description={
-          supplier.legal_name ??
-          "Contatos, categorias atendidas e situação do fornecedor."
-        }
-        action={
-          <>
-            <Button asChild size="sm" variant="ghost">
-              <Link href="/fornecedores">Voltar</Link>
-            </Button>
-            <Badge
-              variant={supplier.status === "active" ? "default" : "secondary"}
-            >
-              {STATUS_LABEL[supplier.status] ?? supplier.status}
-            </Badge>
-            <PodeEditar>
-              <SupplierStatusToggle
-                supplierId={supplier.id}
-                status={supplier.status}
-              />
-            </PodeEditar>
-          </>
-        }
-      />
-      <div className="border-border -mx-4 mb-6 border-b sm:mx-0">
-        <SupplierTabs supplierId={id} />
-      </div>
-      {corpo}
-    </div>
-  );
-}
-
-/** Esconde o filho de quem não pode editar o fornecedor. */
-async function PodeEditar({ children }: { children: React.ReactNode }) {
-  const company = await requireActiveCompany();
-  const permissions = await getPermissions(company.companyId);
-  return permissions.has("supplier.update") ? <>{children}</> : null;
 }
 
 // ============================================================
 // ABAS
 // ============================================================
 
-async function AbaCadastro({ id, emModal }: { id: string; emModal: boolean }) {
+async function AbaCadastro({ id }: { id: string }) {
   const company = await requireActiveCompany();
   const [supplier, categories, linkedIds, permissions] = await Promise.all([
     carregarFornecedor(id),
@@ -199,17 +153,14 @@ async function AbaCadastro({ id, emModal }: { id: string; emModal: boolean }) {
               : "sem limite definido"}
           </p>
         </div>
-        {/* No modal a situação já está no cabeçalho, ao lado do nome. */}
-        {emModal ? null : (
-          <div>
-            <p className="text-fg-subtle text-xs">Situação</p>
-            <Badge
-              variant={supplier.status === "active" ? "default" : "secondary"}
-            >
-              {STATUS_LABEL[supplier.status] ?? supplier.status}
-            </Badge>
-          </div>
-        )}
+        <div>
+          <p className="text-fg-subtle text-xs">Situação</p>
+          <Badge
+            variant={supplier.status === "active" ? "default" : "secondary"}
+          >
+            {STATUS_LABEL[supplier.status] ?? supplier.status}
+          </Badge>
+        </div>
         {supplier.notes ? (
           <div className="sm:col-span-3">
             <p className="text-fg-subtle text-xs">Observações</p>

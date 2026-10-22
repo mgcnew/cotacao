@@ -27,13 +27,9 @@ const TABS = [
 /**
  * A faixa que diz em que área do fornecedor você está.
  *
- * Serve à página inteira e ao modal. No modal ela mora no `layout.tsx`, junto
- * com o cabeçalho, e por isso não remonta ao trocar de aba — o que troca é só
- * o miolo abaixo dela.
- *
- * `replace` de propósito: as abas não são passos de uma navegação, e empilhar
- * cada troca faria o "voltar" percorrer a visita inteira antes de fechar o
- * modal ou sair da tela.
+ * Mora no `layout.tsx` do fornecedor, junto com o cabeçalho, e por isso não
+ * remonta ao trocar de aba — o que troca é só o miolo abaixo dela. Cada aba é
+ * um passo de navegação: o "voltar" do navegador anda entre elas.
  */
 export function SupplierTabs({ supplierId }: { supplierId: string }) {
   const pathname = usePathname();
@@ -60,7 +56,6 @@ export function SupplierTabs({ supplierId }: { supplierId: string }) {
             <Link
               key={key}
               href={href}
-              replace
               aria-current={active ? "page" : undefined}
               className={cn(
                 "text-fg-muted hover:text-fg relative flex h-11 items-center justify-center gap-1.5 px-2.5 text-xs font-medium whitespace-nowrap transition-colors sm:px-3 sm:text-sm",

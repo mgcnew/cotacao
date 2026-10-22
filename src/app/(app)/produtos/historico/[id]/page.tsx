@@ -4,10 +4,8 @@ import { notFound } from "next/navigation";
 import { QuotationHistory } from "@/components/history/quotation-history";
 import { PurchasePriceHistory } from "@/components/history/purchase-price-history";
 import { PageHeader } from "@/components/layout/page-header";
-import { RouteModal } from "@/components/layout/route-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DialogBody } from "@/components/ui/dialog";
 import {
   getQuotationHistory,
   parseHistoryFilters,
@@ -35,20 +33,17 @@ export default async function ProdutoPage({
 }
 
 /**
- * O histórico do produto, servindo à página inteira e ao modal da lista.
+ * O histórico do produto em página.
  *
- * Os filtros continuam apontando para `/produtos/historico/<id>`, a mesma rota
- * que o modal intercepta: filtrar por período ou fornecedor troca os dados sem
- * fechar a caixa, e o catálogo segue montado atrás com sua página e rolagem.
+ * Os filtros apontam para `/produtos/historico/<id>`: filtrar por período ou
+ * fornecedor só troca os dados.
  */
 export async function ProdutoContent({
   id,
   query,
-  emModal = false,
 }: {
   id: string;
   query: Record<string, string | string[] | undefined>;
-  emModal?: boolean;
 }) {
   if (!UUID.test(id)) notFound();
 
@@ -102,13 +97,10 @@ export async function ProdutoContent({
             {product.pricing_unit?.symbol ?? "—"}
           </p>
         </div>
-        {/* No modal a situação já está no cabeçalho, ao lado do nome. */}
-        {emModal ? null : (
-          <div>
-            <p className="text-fg-subtle text-xs">Situação</p>
-            {situacao}
-          </div>
-        )}
+        <div>
+          <p className="text-fg-subtle text-xs">Situação</p>
+          {situacao}
+        </div>
         {barcodes.length > 0 ? (
           <div className="sm:col-span-2 lg:col-span-5">
             <p className="text-fg-subtle text-xs">Códigos de barras</p>
@@ -152,21 +144,6 @@ export async function ProdutoContent({
       </section>
     </>
   );
-
-  if (emModal) {
-    return (
-      <RouteModal
-        size="xl"
-        titulo={product.name}
-        descricao={DESCRICAO}
-        acao={situacao}
-      >
-        <DialogBody className="min-h-0 overflow-y-auto">
-          <div className="w-full">{content}</div>
-        </DialogBody>
-      </RouteModal>
-    );
-  }
 
   return (
     <div className="w-full">
