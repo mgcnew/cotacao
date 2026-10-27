@@ -21,6 +21,10 @@ export const SITUACOES_COMPOSTAS = {
   abertos: "Em aberto",
   atrasados: "Atrasados",
   entrega_hoje: "Entrega hoje",
+  // Os dois abaixo vêm dos alertas do dashboard: o número do alerta e o tamanho
+  // desta lista saem das mesmas condições (`rpc_list_orders_page`, 0122).
+  revisao_pendente: "Revisão aguardando envio",
+  divergencia_fornecedor: "Divergência do fornecedor",
 } as const;
 
 export type OrderFilters = {

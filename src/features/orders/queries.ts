@@ -468,16 +468,29 @@ export async function listOrders(
   pagination: { page: number; pageSize: number } = { page: 1, pageSize: 10 },
 ): Promise<OrderPagePayload> {
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.rpc("rpc_list_orders_page", {
-    p_company_id: companyId,
-    p_page: pagination.page,
-    p_page_size: pagination.pageSize,
-    p_situation: filters.situacao ?? undefined,
-    p_supplier_id: filters.fornecedorId ?? undefined,
-    p_from: filters.de ?? undefined,
-    p_to: filters.ate ?? undefined,
-    p_order_number: filters.numero ?? undefined,
-  });
+  const chamar = (situacao: string | null) =>
+    supabase.rpc("rpc_list_orders_page", {
+      p_company_id: companyId,
+      p_page: pagination.page,
+      p_page_size: pagination.pageSize,
+      p_situation: situacao ?? undefined,
+      p_supplier_id: filters.fornecedorId ?? undefined,
+      p_from: filters.de ?? undefined,
+      p_to: filters.ate ?? undefined,
+      p_order_number: filters.numero ?? undefined,
+    });
+
+  let { data, error } = await chamar(filters.situacao);
+  // Um link do dashboard para um recorte novo, num banco que ainda não recebeu
+  // a migration 0122, cairia em "Situação de pedido inválida" e derrubaria a
+  // lista. Cai na lista de abertos: menos exata, mas a pessoa vê os pedidos.
+  if (
+    error?.message.includes("Situação de pedido inválida") &&
+    (filters.situacao === "revisao_pendente" ||
+      filters.situacao === "divergencia_fornecedor")
+  ) {
+    ({ data, error } = await chamar("abertos"));
+  }
 
   if (error) throw new Error(`Falha ao listar pedidos: ${error.message}`);
   const payload = data as unknown as OrderPagePayload | null;

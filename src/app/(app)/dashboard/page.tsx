@@ -1,18 +1,17 @@
 import {
   CalendarDays,
+  ChevronRight,
   MessageCircle,
-  PackageCheck,
   ShoppingCart,
-  TrendingDown,
   WalletCards,
 } from "lucide-react";
 import Link from "next/link";
 import { cache, Suspense } from "react";
 
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
-import { DashboardMetric } from "@/components/dashboard/dashboard-metric";
 import { FinancialJourneyMetric } from "@/components/dashboard/financial-journey-metric";
 import { FirstSteps } from "@/components/dashboard/first-steps";
+import { SectionError } from "@/components/dashboard/section-error";
 import { PrioritiesCard } from "@/components/dashboard/priorities-card";
 import {
   StatusStrip,
@@ -47,15 +46,40 @@ const MONTH = new Intl.DateTimeFormat("pt-BR", {
   month: "long",
   year: "numeric",
 });
-const TODAY = new Intl.DateTimeFormat("pt-BR", {
-  weekday: "long",
-  day: "2-digit",
-  month: "long",
-});
-const TIME = new Intl.DateTimeFormat("pt-BR", {
-  hour: "2-digit",
-  minute: "2-digit",
-});
+/**
+ * Falha de UM bloco não derruba a página.
+ *
+ * Os blocos do painel são independentes e cada um espera dentro do seu
+ * `<Suspense>`. Um `throw` ali, porém, sobe até a raiz e troca a página inteira
+ * — e o bloco que falhava podia ser a atividade recente, que é o que menos
+ * importa, levando junto a lista de prioridades, que é o que mais importa.
+ *
+ * Os erros de controle de fluxo do Next (redirecionar, 404) têm de passar
+ * adiante: são eles que fazem a navegação funcionar.
+ */
+function erroDeFluxoDoNext(erro: unknown): boolean {
+  if (typeof erro !== "object" || erro === null || !("digest" in erro)) {
+    return false;
+  }
+  const digest = (erro as { digest?: unknown }).digest;
+  return (
+    typeof digest === "string" &&
+    (digest.startsWith("NEXT_") || digest === "DYNAMIC_SERVER_USAGE")
+  );
+}
+
+async function protegida(
+  nome: string,
+  renderizar: () => Promise<React.ReactNode>,
+): Promise<React.ReactNode> {
+  try {
+    return await renderizar();
+  } catch (erro) {
+    if (erroDeFluxoDoNext(erro)) throw erro;
+    console.error(`[dashboard] ${nome}:`, erro);
+    return <SectionError nome={nome} />;
+  }
+}
 
 /**
  * Tudo o que o painel de hoje precisa, lido uma vez.
@@ -111,13 +135,28 @@ const carregarPainel = cache(
 export default async function DashboardPage() {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
+  // Data e hora no fuso DA EMPRESA. Sem `timeZone`, este Server Component usava
+  // o do servidor (UTC na Vercel): à noite o painel mostrava o dia seguinte.
+  const agora = new Date();
+  const hoje = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    timeZone: company.companyTimezone,
+  }).format(agora);
+  const hora = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: company.companyTimezone,
+  }).format(agora);
 
   return (
     <div className="w-full">
       <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
+          {/* Mesmo nome do menu e do ícone instalado: eram três para o mesmo lugar. */}
           <h1 className="text-fg text-2xl font-semibold tracking-tight sm:text-3xl">
-            Central de compras
+            Central operacional
           </h1>
           <p className="text-fg-muted mt-1 text-sm">
             {company.companyName} · {company.roleName}
@@ -130,9 +169,9 @@ export default async function DashboardPage() {
             {/* Só a inicial maiúscula: `capitalize` escrevia "27 De Outubro". O
                 `span` é o que faz `first-letter` valer — num contêiner flex
                 ele é ignorado. */}
-            <span className="first-letter:uppercase">
-              {TODAY.format(new Date())}
-            </span>
+            <span className="first-letter:uppercase">{hoje}</span>
+            <span aria-hidden>·</span>
+            <span>atualizado às {hora}</span>
           </div>
           {permissions.has("purchase_round.view") ? (
             // Com nome e em qualquer tela: é a ferramenta mais usada do dia a
@@ -192,12 +231,24 @@ export default async function DashboardPage() {
       >
         <RecentActivity companyId={company.companyId} />
       </Suspense>
-
-      <p className="text-fg-muted mt-5 text-right text-xs">
-        Atualizado às {TIME.format(new Date())}
-      </p>
     </div>
   );
+}
+
+async function Prioridades(props: Parameters<typeof PrioridadesConteudo>[0]) {
+  return protegida("as prioridades de hoje", () => PrioridadesConteudo(props));
+}
+
+async function Sugestoes(props: Parameters<typeof SugestoesConteudo>[0]) {
+  return protegida("as sugestões do sistema", () => SugestoesConteudo(props));
+}
+
+async function Financial(props: Parameters<typeof ResultadoDoMes>[0]) {
+  return protegida("o resultado do mês", () => ResultadoDoMes(props));
+}
+
+async function RecentActivity(props: Parameters<typeof AtividadeConteudo>[0]) {
+  return protegida("as movimentações recentes", () => AtividadeConteudo(props));
 }
 
 /**
@@ -206,7 +257,7 @@ export default async function DashboardPage() {
  * Empresa que ainda não comprou nada vê os primeiros passos, não uma tela de
  * zeros.
  */
-async function Prioridades({
+async function PrioridadesConteudo({
   company,
   permissions,
 }: {
@@ -283,7 +334,7 @@ async function Prioridades({
 }
 
 /** O planejamento: recolhido, no fim, para não ficar entre o dia e o resultado. */
-async function Sugestoes({
+async function SugestoesConteudo({
   companyId,
   permissions,
 }: {
@@ -307,7 +358,7 @@ async function Sugestoes({
   );
 }
 
-async function Financial({
+async function ResultadoDoMes({
   companyId,
   timezone,
 }: {
@@ -317,6 +368,8 @@ async function Financial({
   // O fuso já vem com a sessão: perguntar de novo à tabela de empresas custava
   // uma ida ao banco EM SÉRIE antes de o financeiro poder começar.
   const financial = await getMonthFinancials(companyId, timezone);
+  const semDados =
+    financial.itensRecebidos === 0 && financial.cotacoesConcluidas === 0;
 
   return (
     <section
@@ -324,24 +377,15 @@ async function Financial({
       aria-labelledby="financial-title"
     >
       <header className="border-border flex flex-wrap items-center justify-between gap-3 border-b px-4 py-4 sm:px-5">
-        <div>
-          <h2
-            id="financial-title"
-            className="text-fg text-base font-semibold capitalize"
-          >
-            Resultado de {MONTH.format(new Date(`${financial.de}T12:00:00`))}
-          </h2>
-          <p className="text-fg-muted mt-0.5 text-xs">
-            Planejado ao concluir as cotações e realizado ao conferir as
-            mercadorias.
-          </p>
-        </div>
+        <h2 id="financial-title" className="text-fg text-base font-semibold">
+          Resultado de {MONTH.format(new Date(`${financial.de}T12:00:00`))}
+        </h2>
         <Button asChild size="sm" variant="outline">
           <Link href="/analises">Ver análise completa</Link>
         </Button>
       </header>
 
-      {financial.itensRecebidos === 0 && financial.cotacoesConcluidas === 0 ? (
+      {semDados ? (
         <div className="flex items-center gap-3 px-5 py-6">
           <WalletCards className="text-fg-subtle size-5" aria-hidden />
           <p className="text-fg-muted text-sm">
@@ -350,76 +394,15 @@ async function Financial({
           </p>
         </div>
       ) : (
-        <div>
-          <div className="p-4 sm:p-5">
-            <div className="mb-3">
-              <h3 className="text-fg text-sm font-semibold">
-                Cotações concluídas no mês
-              </h3>
-              <p className="text-fg-muted mt-0.5 text-xs">
-                Previsão congelada no encerramento de{" "}
-                {financial.cotacoesConcluidas}{" "}
-                {financial.cotacoesConcluidas === 1 ? "cotação" : "cotações"}.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <DashboardMetric
-                icon={TrendingDown}
-                label="Resultado estimado das negociações"
-                value={MONEY.format(financial.economiaEstimada)}
-                hint="Proposta original menos preço final dos pedidos gerados"
-                tone={
-                  financial.economiaEstimada > 0
-                    ? "good"
-                    : financial.economiaEstimada < 0
-                      ? "bad"
-                      : "neutral"
-                }
-              />
-              <DashboardMetric
-                icon={ShoppingCart}
-                label="Valor previsto dos pedidos"
-                value={MONEY.format(financial.valorPrevistoPedidos)}
-                hint="Preço final × quantidade estimada na decisão de compra"
-              />
-              <DashboardMetric
-                icon={PackageCheck}
-                label="Ganho estimado nas embalagens"
-                value={MONEY.format(
-                  financial.economiaEscolhaEmbalagensEstimada,
-                )}
-                hint="Custo por unidade do vencedor contra a melhor alternativa"
-                tone={
-                  financial.economiaEscolhaEmbalagensEstimada > 0
-                    ? "good"
-                    : financial.economiaEscolhaEmbalagensEstimada < 0
-                      ? "bad"
-                      : "neutral"
-                }
-              />
-            </div>
-          </div>
+        <div className="flex flex-col gap-4 p-4 sm:p-5">
+          {/* A resposta primeiro, em uma frase: "estou economizando?". O resto
+              é detalhe de quem quer conferir a conta. */}
+          <p className="text-fg text-lg leading-snug text-balance">
+            <FraseDoMes financial={financial} />
+          </p>
 
-          <div className="border-border border-t p-4 sm:p-5">
-            <div className="mb-3">
-              <h3 className="text-fg text-sm font-semibold">
-                Recebimentos conferidos no mês
-              </h3>
-              <p className="text-fg-muted mt-0.5 text-xs">
-                Valores efetivos de {financial.itensRecebidos}{" "}
-                {financial.itensRecebidos === 1
-                  ? "item recebido"
-                  : "itens recebidos"}
-                .
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <DashboardMetric
-                icon={WalletCards}
-                label="Valor efetivamente recebido"
-                value={MONEY.format(financial.valorRecebido)}
-                hint="Preço conferido na nota × quantidade recebida"
-              />
+          {financial.itensRecebidos > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
               <FinancialJourneyMetric
                 metric="realized"
                 value={financial.economiaRealizada}
@@ -430,21 +413,6 @@ async function Financial({
                   financial.economiaRealizada > 0
                     ? "good"
                     : financial.economiaRealizada < 0
-                      ? "bad"
-                      : "neutral"
-                }
-              />
-              <DashboardMetric
-                icon={PackageCheck}
-                label="Ganho realizado nas embalagens"
-                value={MONEY.format(
-                  financial.economiaEscolhaEmbalagensRealizada,
-                )}
-                hint="Vantagem proporcional às embalagens efetivamente recebidas"
-                tone={
-                  financial.economiaEscolhaEmbalagensRealizada > 0
-                    ? "good"
-                    : financial.economiaEscolhaEmbalagensRealizada < 0
                       ? "bad"
                       : "neutral"
                 }
@@ -464,23 +432,132 @@ async function Financial({
                 }
               />
             </div>
-          </div>
-          <div className="border-border text-fg-muted mx-4 mb-4 rounded-xl border border-dashed px-3 py-2.5 text-xs leading-relaxed">
-            <strong className="text-fg">Como ler:</strong> resultado positivo é
-            economia; resultado negativo significa que o preço terminou acima da
-            proposta inicial. A previsão considera as cotações encerradas no
-            mês. O realizado considera apenas o que já chegou. Pedidos diretos
-            entram no valor recebido, mas não geram economia contra cotação. O
-            ganho de embalagens é separado e considera exclusivamente produtos
-            com finalidade Embalagem.
-          </div>
+          ) : null}
+
+          <p className="text-fg-muted text-sm">
+            {financial.cotacoesConcluidas > 0
+              ? `${financial.cotacoesConcluidas} ${financial.cotacoesConcluidas === 1 ? "cotação concluída" : "cotações concluídas"} · pedidos previstos em ${MONEY.format(financial.valorPrevistoPedidos)}`
+              : null}
+            {financial.cotacoesConcluidas > 0 && financial.itensRecebidos > 0
+              ? " · "
+              : null}
+            {financial.itensRecebidos > 0
+              ? `${financial.itensRecebidos} ${financial.itensRecebidos === 1 ? "item recebido" : "itens recebidos"} · ${MONEY.format(financial.valorRecebido)} conferidos`
+              : null}
+          </p>
+
+          {/* Embalagens são de poucos clientes: só aparecem quando há resultado. */}
+          {financial.economiaEscolhaEmbalagensEstimada !== 0 ||
+          financial.economiaEscolhaEmbalagensRealizada !== 0 ? (
+            <p className="text-fg-muted text-sm">
+              Escolha de embalagens: ganho de{" "}
+              <strong className="text-fg tabular-nums">
+                {MONEY.format(financial.economiaEscolhaEmbalagensEstimada)}
+              </strong>{" "}
+              previsto e{" "}
+              <strong className="text-fg tabular-nums">
+                {MONEY.format(financial.economiaEscolhaEmbalagensRealizada)}
+              </strong>{" "}
+              realizado, em relação à melhor alternativa de cada produto.
+            </p>
+          ) : null}
+
+          <details className="group">
+            <summary className="text-primary focus-visible:ring-ring/40 inline-flex min-h-8 cursor-pointer list-none items-center gap-1 rounded-md text-sm font-medium outline-none focus-visible:ring-3 [&::-webkit-details-marker]:hidden">
+              <ChevronRight
+                className="size-4 transition-transform group-open:rotate-90"
+                aria-hidden
+              />
+              Como ler estes números
+            </summary>
+            <p className="text-fg-muted mt-2 text-sm leading-relaxed">
+              Economia é quanto o preço final ficou abaixo da proposta inicial;
+              se for negativa, o preço terminou acima. A previsão considera as
+              cotações encerradas no mês, e o realizado só o que já chegou.
+              Pedidos diretos entram no valor conferido, mas não geram economia
+              contra cotação. A escolha de embalagens vale só para produtos com
+              finalidade Embalagem.
+            </p>
+          </details>
         </div>
       )}
     </section>
   );
 }
 
-async function RecentActivity({ companyId }: { companyId: string }) {
+/**
+ * O mês em uma frase.
+ *
+ * Com mercadoria já conferida, a economia REALIZADA é o que importa — é dinheiro
+ * que já aconteceu — e a previsão das negociações vem como contexto. Sem nada
+ * recebido ainda, a previsão é o único número, e a frase diz que o resto vem
+ * conforme a mercadoria for conferida.
+ */
+function FraseDoMes({
+  financial,
+}: {
+  financial: Awaited<ReturnType<typeof getMonthFinancials>>;
+}) {
+  const bom = "text-success font-semibold tabular-nums";
+  const ruim = "text-destructive font-semibold tabular-nums";
+
+  if (financial.itensRecebidos > 0) {
+    const real = financial.economiaRealizada;
+    const previsto = financial.economiaEstimada;
+    return (
+      <>
+        {real > 0 ? (
+          <>
+            Você economizou <span className={bom}>{MONEY.format(real)}</span>{" "}
+            nas compras já recebidas
+          </>
+        ) : real < 0 ? (
+          <>
+            As compras já recebidas ficaram{" "}
+            <span className={ruim}>{MONEY.format(Math.abs(real))} acima</span>{" "}
+            da proposta inicial
+          </>
+        ) : (
+          <>As compras já recebidas fecharam no valor da proposta inicial</>
+        )}
+        {previsto !== 0 && financial.cotacoesConcluidas > 0 ? (
+          <span className="text-fg-muted">
+            {" "}
+            — as negociações previam {previsto > 0 ? "" : "−"}
+            {MONEY.format(Math.abs(previsto))}
+          </span>
+        ) : null}
+        .
+      </>
+    );
+  }
+
+  const previsto = financial.economiaEstimada;
+  return (
+    <>
+      {previsto > 0 ? (
+        <>
+          As negociações concluídas preveem economizar{" "}
+          <span className={bom}>{MONEY.format(previsto)}</span>
+        </>
+      ) : previsto < 0 ? (
+        <>
+          As negociações concluídas preveem preço{" "}
+          <span className={ruim}>{MONEY.format(Math.abs(previsto))} acima</span>{" "}
+          da proposta inicial
+        </>
+      ) : (
+        <>As negociações concluídas não preveem diferença de preço</>
+      )}
+      <span className="text-fg-muted">
+        {" "}
+        — o resultado real aparece conforme a mercadoria for conferida.
+      </span>
+    </>
+  );
+}
+
+async function AtividadeConteudo({ companyId }: { companyId: string }) {
   const activity = await listRecentActivity(companyId);
   if (activity.length === 0) return null;
 

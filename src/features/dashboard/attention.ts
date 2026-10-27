@@ -142,7 +142,7 @@ export async function getAttentionItems(
         href: destino(
           s.revisoesPendentes,
           s.revisaoOrderId,
-          "/pedidos?situacao=abertos",
+          "/pedidos?situacao=revisao_pendente",
         ),
         actionLabel: "Enviar revisão",
       });
@@ -199,7 +199,7 @@ export async function getAttentionItems(
       href: destino(
         s.divergenciasFornecedor,
         s.divergenciaFornecedorOrderId,
-        "/pedidos?situacao=abertos",
+        "/pedidos?situacao=divergencia_fornecedor",
       ),
       actionLabel: "Responder",
     });

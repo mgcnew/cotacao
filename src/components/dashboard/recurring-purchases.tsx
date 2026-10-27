@@ -98,7 +98,7 @@ export function PurchaseAlertRow({
                 ? `, até ${alert.preferredTime.slice(0, 5)}`
                 : ""}
               {alert.expectedDeliveryDays !== null
-                ? ` · entrega habitual ${alert.expectedDeliveryDays === 0 ? "no mesmo dia" : `em ${alert.expectedDeliveryDays} dia(s)`}`
+                ? ` · entrega habitual ${alert.expectedDeliveryDays === 0 ? "no mesmo dia" : `em ${alert.expectedDeliveryDays} ${alert.expectedDeliveryDays === 1 ? "dia" : "dias"}`}`
                 : ""}
             </p>
             {alert.notes ? (

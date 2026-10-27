@@ -43,18 +43,29 @@ type LoadState =
   | { status: "success"; data: FinancialJourney; error: null }
   | { status: "error"; data: null; error: string };
 
+/**
+ * Cada métrica diz o que é em palavras do dono da loja, e o rótulo acompanha o
+ * sinal do número: "Pago a mais nas notas R$ 120" e "Pago a menos nas notas
+ * R$ 120" são duas frases, não um número com sinal que ora é bom, ora é ruim.
+ * Antes o mesmo "positivo" significava economia num cartão e prejuízo noutro, e
+ * quem lia tinha que lembrar qual era qual.
+ */
 const DEFINITIONS = {
   realized: {
-    label: "Resultado efetivo vs. cotado",
-    hint: "Proposta original menos preço e quantidade conferidos",
+    label: "Economia realizada",
+    negativeLabel: "Gasto acima do cotado",
+    title: "Economia realizada",
+    hint: "Proposta original contra o que foi conferido na nota",
     description:
       "Mostra como cada recebimento aumentou ou reduziu o resultado em relação à proposta original.",
     formula: "(preço cotado − preço da nota) × quantidade recebida",
     icon: BadgeDollarSign,
   },
   divergence: {
-    label: "Diferença da nota x pedido",
-    hint: "Nota menos pedido: positivo indica valor pago a mais",
+    label: "Pago a mais nas notas",
+    negativeLabel: "Pago a menos nas notas",
+    title: "Notas contra pedidos",
+    hint: "Preço da nota contra o do pedido, nos itens recebidos",
     description:
       "Mostra como cada recebimento formou a diferença entre o valor combinado no pedido e o conferido na nota.",
     formula: "(preço da nota − preço do pedido) × quantidade recebida",
@@ -231,6 +242,7 @@ export function FinancialJourneyMetric({
   timezone: string;
 }) {
   const definition = DEFINITIONS[metric];
+  const cardLabel = value < 0 ? definition.negativeLabel : definition.label;
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<LoadState>({
     status: "idle",
@@ -280,18 +292,18 @@ export function FinancialJourneyMetric({
     <>
       <DashboardMetric
         icon={definition.icon}
-        label={definition.label}
-        value={MONEY.format(value)}
+        label={cardLabel}
+        value={MONEY.format(Math.abs(value))}
         hint={`${definition.hint} · Ver memória de cálculo`}
         tone={tone}
         onClick={openJourney}
-        actionLabel={`Ver memória de cálculo de ${definition.label}`}
+        actionLabel={`Ver memória de cálculo de ${definition.title}`}
       />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="lg">
           <DialogHeader>
-            <DialogTitle>{definition.label}</DialogTitle>
+            <DialogTitle>{definition.title}</DialogTitle>
             <DialogDescription>
               Memória de cálculo de {PERIOD.format(new Date(`${de}T12:00:00`))}{" "}
               a {PERIOD.format(new Date(`${ate}T12:00:00`))}.
