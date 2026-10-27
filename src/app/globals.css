@@ -416,6 +416,16 @@
     transform: none;
   }
 }
+/* Barra indeterminada sob a faixa de abas: corre da esquerda para a direita. */
+@keyframes om-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
 @keyframes om-fade {
   from {
     opacity: 0;

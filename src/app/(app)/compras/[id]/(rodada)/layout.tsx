@@ -4,7 +4,10 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { descreverRodada } from "@/components/rounds/round-central";
 import { RoundModalNav } from "@/components/rounds/round-modal-nav";
-import { carregarRodada, carregarRodadaBasica } from "@/features/rounds/central";
+import {
+  carregarRodada,
+  carregarRodadaBasica,
+} from "@/features/rounds/central";
 
 /**
  * A casca da rodada em página: cabeçalho e abas que ficam, miolo que troca.
@@ -72,7 +75,9 @@ async function Titulo({ id }: { id: string }) {
 }
 
 async function Descricao({ id }: { id: string }) {
-  const dados = await carregarRodada(id);
+  // Só o que a legenda conta — não a Central inteira (treze consultas) para
+  // escrever "12 itens · 3 grupos · 10 fornecedores".
+  const dados = await carregarRodada(id, "resumo");
   return <>{dados ? descreverRodada(dados) : "Esta rodada não existe mais."}</>;
 }
 

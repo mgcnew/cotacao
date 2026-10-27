@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemedSelect } from "@/components/ui/themed-select";
+import { AindaSemRespostas, resumoDeRespostas } from "@/components/rounds/awaiting-responses";
 import type { DadosDaComparacao } from "@/features/rounds/comparacao";
 import { formatUnitPrice } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -133,6 +134,13 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
 
   if (rows.length === 0 || suppliers.length === 0) {
     return <EmptyState icon={BarChart3} title="Nada para comparar ainda" description="A comparação aparece quando a rodada tem itens e fornecedores convidados." />;
+  }
+
+  // Ninguém deu preço ainda: não há o que comparar, e desenhar a matriz assim
+  // mostrava "falta apresentação" em tudo, como se fosse erro de quem compra.
+  const respostas = resumoDeRespostas(rows, suppliers);
+  if (dados.round.status === "active" && !respostas.comPreco) {
+    return <AindaSemRespostas roundId={dados.round.id} responderam={respostas.responderam} total={respostas.total} tela="comparar" />;
   }
 
   const currentIndex = Math.max(0, suppliers.findIndex((supplier) => supplier.id === supplierId));

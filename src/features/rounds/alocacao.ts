@@ -6,7 +6,10 @@ import {
   getAllocationBoard,
   listRoundOrders,
 } from "@/features/allocations/queries";
-import { carregarRodadaBasica } from "@/features/rounds/central";
+import {
+  carregarRodadaBasica,
+  contarGruposAbertos,
+} from "@/features/rounds/central";
 import {
   IDADE_MAXIMA_DIAS,
   type UltimosPagosPorProduto,
@@ -56,7 +59,9 @@ async function listarUltimosPagos(
   const desde = new Date(Date.now() - IDADE_MAXIMA_DIAS * 86_400_000);
   const { data, error } = await supabase
     .from("v_latest_supplier_product_price")
-    .select("supplier_id, product_id, practiced_price, pricing_unit_symbol, occurred_at")
+    .select(
+      "supplier_id, product_id, practiced_price, pricing_unit_symbol, occurred_at",
+    )
     .eq("company_id", companyId)
     .in("product_id", productIds)
     .gte("occurred_at", desde.toISOString());
@@ -96,11 +101,12 @@ async function listarUltimosPagos(
 export const carregarAlocacao = cache(async (roundId: string) => {
   const company = await requireActiveCompany();
 
-  const [round, board, orders, permissions] = await Promise.all([
+  const [round, board, orders, permissions, gruposAbertos] = await Promise.all([
     carregarRodadaBasica(roundId),
     getAllocationBoard(company.companyId, roundId),
     listRoundOrders(company.companyId, roundId),
     getPermissions(company.companyId),
+    contarGruposAbertos(roundId),
   ]);
 
   if (!round) return null;
@@ -129,6 +135,9 @@ export const carregarAlocacao = cache(async (roundId: string) => {
     supplierName: new Map(
       board.suppliers.map((s) => [s.supplier_id, s.suppliers.name]),
     ),
+    /** Concluir a rodada, que a Decisão oferece quando tudo está decidido. */
+    podeConcluir: permissions.has("purchase_round.close"),
+    gruposAbertos,
     podeVer: permissions.has("purchase_allocation.view"),
     podeDecidir: permissions.has("purchase_allocation.create"),
     // Confirmar gera pedido: sem `order.create` a RPC recusaria no fim.

@@ -184,7 +184,9 @@ export async function listRoundSupplierGroups(
     .is("removed_at", null);
 
   if (error) {
-    throw new Error(`Falha ao listar grupos dos fornecedores: ${error.message}`);
+    throw new Error(
+      `Falha ao listar grupos dos fornecedores: ${error.message}`,
+    );
   }
 
   const porFornecedor = new Map<string, string[]>();
@@ -299,4 +301,69 @@ export async function listOrdersWithDelivery(companyId: string) {
 
   if (error) throw new Error(`Falha ao listar pedidos: ${error.message}`);
   return data ?? [];
+}
+
+/**
+ * Os grupos de cada fornecedor, filtrando pela RODADA e não por uma lista de
+ * fornecedores.
+ *
+ * `listRoundSupplierGroups` pede os ids dos fornecedores da rodada, e quem os
+ * tem só os tem depois de ler os fornecedores: uma segunda ida ao banco, em
+ * série. Filtrar pela rodada, via a ligação do fornecedor com ela, deixa as
+ * duas leituras saírem juntas. O resultado é o mesmo (indexado pelo fornecedor
+ * da rodada), com a sobra inofensiva de fornecedores já retirados.
+ */
+export async function listRoundSupplierGroupsByRound(
+  companyId: string,
+  roundId: string,
+): Promise<Map<string, string[]>> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("round_supplier_groups")
+    .select(
+      "round_supplier_id, group_id, round_suppliers!inner ( purchase_round_id )",
+    )
+    .eq("company_id", companyId)
+    .eq("round_suppliers.purchase_round_id", roundId)
+    .is("removed_at", null);
+
+  if (error) {
+    throw new Error(
+      `Falha ao listar grupos dos fornecedores: ${error.message}`,
+    );
+  }
+
+  const porFornecedor = new Map<string, string[]>();
+  for (const row of data ?? []) {
+    const groups = porFornecedor.get(row.round_supplier_id) ?? [];
+    groups.push(row.group_id);
+    porFornecedor.set(row.round_supplier_id, groups);
+  }
+  return porFornecedor;
+}
+
+/** A última cobrança de cada fornecedor, pela rodada — ver a função acima. */
+export async function listLatestRoundRemindersByRound(
+  companyId: string,
+  roundId: string,
+): Promise<Map<string, string>> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("communication_logs")
+    .select(
+      "round_supplier_id, sent_at, created_at, round_suppliers!inner ( purchase_round_id )",
+    )
+    .eq("company_id", companyId)
+    .eq("message_kind", "quotation_reminder")
+    .in("status", ["sent", "delivered"])
+    .eq("round_suppliers.purchase_round_id", roundId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`Falha ao carregar cobranças: ${error.message}`);
+
+  const latest = new Map<string, string>();
+  for (const row of data ?? []) {
+    if (!row.round_supplier_id || latest.has(row.round_supplier_id)) continue;
+    latest.set(row.round_supplier_id, row.sent_at ?? row.created_at);
+  }
+  return latest;
 }

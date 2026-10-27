@@ -26,7 +26,9 @@ import {
   compararComUltimoPago,
 } from "@/features/rounds/last-paid";
 import { situacaoDoLimite } from "@/features/rounds/purchase-limit";
+import { AindaSemRespostas, resumoDeRespostas } from "@/components/rounds/awaiting-responses";
 import { OffersPopover, type Offer } from "@/components/rounds/offers-popover";
+import { CompleteRoundForm } from "@/components/rounds/round-closing";
 import { cn } from "@/lib/utils";
 
 const MONEY = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -281,13 +283,52 @@ export function AlocacaoConteudo({
   }
   orderPreviews.push(...[...previewBySupplier.values()].sort((a, b) => a.supplierName.localeCompare(b.supplierName)));
   const remainingCount = attentionCount + recommendations.length;
+  const respostas = resumoDeRespostas(rows, dados.suppliers);
+  // Tudo decidido e nada em rascunho: o único passo que falta é concluir. É um
+  // estado só — antes eram dois avisos empilhados, um amarelo e um verde, que
+  // se contradiziam e mandavam para um lugar que não existe.
+  const prontaParaConcluir =
+    round.status === "active" &&
+    rows.length > 0 &&
+    workingRows.length === 0 &&
+    rascunhos.length === 0;
   const totalResolved = rows.filter(isResolved).length;
 
   return (
     <>
       {round.status === "draft" || round.status === "cancelled" ? <p className="border-border bg-surface-sunken text-fg-muted mb-5 rounded-xl border px-4 py-3 text-sm">Esta rodada está <strong>{round.status === "draft" ? "em preparação" : "cancelada"}</strong>. Pedidos só podem ser gerados com a rodada em andamento.</p> : null}
 
-      {orders.length > 0 && round.status === "completed" ? (
+      {prontaParaConcluir ? (
+        <section
+          aria-labelledby="tudo-decidido"
+          className="border-success/30 bg-success-soft mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border px-4 py-4"
+        >
+          <div className="text-success flex min-w-0 items-start gap-3 text-sm">
+            <CheckCircle2 className="mt-0.5 size-5 shrink-0" aria-hidden />
+            <div>
+              <h2 id="tudo-decidido" className="font-semibold">
+                Tudo decidido
+                {orders.length > 0
+                  ? ` · ${orders.length} ${orders.length === 1 ? "pedido gerado" : "pedidos gerados"}`
+                  : ""}
+              </h2>
+              <p className="mt-0.5">
+                Falta só concluir a cotação para tirá-la do trabalho em aberto.
+                Os pedidos seguem o caminho deles em Pedidos.
+              </p>
+            </div>
+          </div>
+          {dados.podeConcluir ? (
+            <CompleteRoundForm
+              roundId={round.id}
+              openItemCount={rows.filter((row) => row.commercialStatus === "open").length}
+              openGroupCount={dados.gruposAbertos}
+            />
+          ) : (
+            <p className="text-fg-muted text-sm">Peça a quem pode concluir a rodada.</p>
+          )}
+        </section>
+      ) : orders.length > 0 && round.status === "completed" ? (
         <div className="border-success/30 bg-success-soft text-success mb-5 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm">
           <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
           <div>
@@ -299,41 +340,24 @@ export function AlocacaoConteudo({
           </div>
         </div>
       ) : orders.length > 0 && round.status === "active" ? (
-        <div className="border-warning/30 bg-warning/5 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm">
-          <span className="flex min-w-0 items-start gap-3">
-            <AlertTriangle className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
-            <span>
-              <strong className="text-fg block">Os pedidos saíram, mas a rodada continua aberta</strong>
-              <span className="text-fg-muted block">
-                {rascunhos.length > 0
-                  ? `${rascunhos.length} ${rascunhos.length === 1 ? "decisão ainda está" : "decisões ainda estão"} em rascunho.`
-                  : remainingCount > 0
-                    ? `${remainingCount} ${remainingCount === 1 ? "produto ainda precisa" : "produtos ainda precisam"} de decisão ou encerramento sem compra.`
-                    : "Não há decisão pendente. Conclua a rodada para tirá-la do trabalho em aberto."}
-              </span>
+        <div className="border-warning/30 bg-warning/5 mb-5 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm">
+          <AlertTriangle className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
+          <div>
+            <strong className="text-fg block">Os pedidos saíram, mas a rodada continua aberta</strong>
+            <span className="text-fg-muted block">
+              {rascunhos.length > 0
+                ? `${rascunhos.length} ${rascunhos.length === 1 ? "decisão ainda está" : "decisões ainda estão"} em rascunho.`
+                : `${remainingCount} ${remainingCount === 1 ? "produto ainda precisa" : "produtos ainda precisam"} de decisão ou encerramento sem compra.`}
             </span>
-          </span>
-          <Button asChild variant="outline" className="h-11 sm:h-9">
-            <Link href={`/compras/${round.id}#encerrar-rodada`}>
-              Ver o que falta
-            </Link>
-          </Button>
+          </div>
         </div>
       ) : null}
 
       {rows.length === 0 ? (
         <EmptyState icon={PackageCheck} title="Nada para decidir" description="A decisão de compra aparece quando a rodada tem itens e respostas de fornecedores." />
-      ) : round.status === "active" && workingRows.length === 0 ? (
-        <div className="border-success/30 bg-success-soft text-success mb-6 rounded-xl border px-4 py-5 text-sm">
-          <p className="flex items-center gap-2 font-semibold">
-            <CheckCircle2 className="size-4" aria-hidden /> Todos os {rows.length} itens estão resolvidos
-          </p>
-          <p className="mt-1">
-            Não há produto para decidir nesta tela. Se a rodada continuar em
-            andamento, confira o encerramento na Central da Rodada.
-          </p>
-        </div>
-      ) : (
+      ) : round.status === "active" && !respostas.comPreco ? (
+        <AindaSemRespostas roundId={round.id} responderam={respostas.responderam} total={respostas.total} tela="decidir" />
+      ) : round.status === "active" && workingRows.length === 0 ? null : (
         <>
           {round.status === "active" ? (
             <section className="border-primary/25 bg-primary/[0.035] mb-5 rounded-xl border p-4">
