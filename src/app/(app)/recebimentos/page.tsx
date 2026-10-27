@@ -1,4 +1,4 @@
-import { BadgeDollarSign, PackageCheck } from "lucide-react";
+import { BadgeDollarSign, ChevronDown, PackageCheck } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -286,60 +286,78 @@ export default async function RecebimentosPage({
           </p>
         </div>
         {board.awaitingCheck.length ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {board.awaitingCheck.map((row) => (
-              <article
-                key={row.orderId}
-                className="border-warning/40 bg-surface rounded-xl border p-4"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-fg font-semibold">
-                      Pedido #{row.orderNumber} · {row.supplierName}
-                    </p>
-                    <p className="text-fg-muted mt-1 text-sm">
-                      Chegou{" "}
-                      {dateTimeFormatter.format(
-                        new Date(
-                          row.draftReceipt!.receivedAt ??
-                            row.draftReceipt!.createdAt,
-                        ),
-                      )}
-                      {row.draftReceipt!.invoiceNumber
-                        ? ` · NF ${row.draftReceipt!.invoiceNumber}`
-                        : ""}
-                    </p>
+          // `items-start`: abrir os produtos de um cartão não estica o vizinho.
+          <div className="grid items-start gap-3 lg:grid-cols-2">
+            {board.awaitingCheck.map((row) => {
+              const pendingItems = row.items.filter(
+                (item) => item.pendingQuantity > 0,
+              );
+              const arrival = dateTimeFormatter.format(
+                new Date(
+                  row.draftReceipt!.receivedAt ?? row.draftReceipt!.createdAt,
+                ),
+              );
+              return (
+                <article
+                  key={row.orderId}
+                  className="border-warning/40 bg-surface rounded-xl border p-3 sm:p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-fg truncate font-semibold">
+                        Pedido #{row.orderNumber} · {row.supplierName}
+                      </p>
+                      <p className="text-fg-muted mt-0.5 text-[13px]">
+                        Chegou {arrival}
+                        {row.draftReceipt!.invoiceNumber
+                          ? ` · NF ${row.draftReceipt!.invoiceNumber}`
+                          : ""}
+                        {row.draftReceipt!.invoiceTotal !== null
+                          ? ` · ${MONEY.format(row.draftReceipt!.invoiceTotal)}`
+                          : ""}
+                      </p>
+                    </div>
+                    {canPost ? (
+                      <Button asChild size="sm" className="shrink-0">
+                        <Link href={`/recebimentos/${row.draftReceipt!.id}`}>
+                          Conferir agora
+                        </Link>
+                      </Button>
+                    ) : null}
                   </div>
-                  <Badge variant="outline">A conferir</Badge>
-                </div>
-                <ul className="text-fg-muted mt-3 space-y-1 text-sm">
-                  {row.items
-                    .filter((item) => item.pendingQuantity > 0)
-                    .map((item) => (
-                      <li key={item.id} className="flex justify-between gap-3">
-                        <span>{item.productName}</span>
-                        <span className="shrink-0 tabular-nums">
-                          {QTY.format(item.pendingQuantity)} {item.purchaseUnit}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-                  <span className="text-fg-muted text-sm">
-                    {row.draftReceipt!.invoiceTotal !== null
-                      ? `Nota: ${MONEY.format(row.draftReceipt!.invoiceTotal)}`
-                      : "Valor da nota será informado na conferência"}
-                  </span>
-                  {canPost ? (
-                    <Button asChild size="sm">
-                      <Link href={`/recebimentos/${row.draftReceipt!.id}`}>
-                        Conferir agora
-                      </Link>
-                    </Button>
+                  {/* Os produtos só abrem sob demanda: com vários pedidos
+                      esperando, a lista aberta de cada um vira uma parede. */}
+                  {pendingItems.length ? (
+                    <details className="group mt-2">
+                      <summary className="text-fg-muted hover:text-fg inline-flex cursor-pointer list-none items-center gap-1 text-xs font-medium [&::-webkit-details-marker]:hidden">
+                        <ChevronDown
+                          className="size-3.5 transition-transform group-open:rotate-180"
+                          aria-hidden
+                        />
+                        Ver {pendingItems.length}{" "}
+                        {pendingItems.length === 1 ? "produto" : "produtos"}
+                      </summary>
+                      <ul className="text-fg-muted border-border mt-2 space-y-1 border-t pt-2 text-sm">
+                        {pendingItems.map((item) => (
+                          <li
+                            key={item.id}
+                            className="flex justify-between gap-3"
+                          >
+                            <span className="min-w-0 wrap-anywhere">
+                              {item.productName}
+                            </span>
+                            <span className="shrink-0 tabular-nums">
+                              {QTY.format(item.pendingQuantity)}{" "}
+                              {item.purchaseUnit}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
                   ) : null}
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         ) : (
           <EmptyState
