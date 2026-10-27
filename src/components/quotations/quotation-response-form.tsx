@@ -283,8 +283,18 @@ function ItemCard({
   const conversionAttribute = item.attributes.find(
     (attribute) => attribute.is_conversion_factor,
   );
+  // TUDO o que é exigido tem que aparecer — inclusive um segundo fator de
+  // conversão. Antes só ficava de fora o `conversionAttribute` (o primeiro), mas
+  // o filtro aqui era `!is_conversion_factor`: um segundo fator, obrigatório,
+  // sumia da tela e continuava valendo em `missingRequiredAttribute`. O item
+  // nunca virava "respondido", a barra não andava e o envio ficava travado por
+  // um campo que o fornecedor não via.
+  //
+  // O link só entrega dois fatores quando o banco está sem a desambiguação
+  // produto-contra-categoria (migration 0111). Com ela aplicada isto não
+  // acontece; sem ela, o fornecedor ao menos consegue terminar.
   const otherAttributes = item.attributes.filter(
-    (attribute) => !attribute.is_conversion_factor,
+    (attribute) => attribute !== conversionAttribute,
   );
   // Preço e conteúdo só viram um campo só quando o item é embalagem. `purpose`
   // chega a partir da migration 0110; antes dela o fator de conversão é o
