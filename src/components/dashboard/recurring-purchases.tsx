@@ -33,6 +33,125 @@ function dueLabel(alert: PurchaseScheduleAlert) {
   return `Comprar em ${alert.daysUntil} dias`;
 }
 
+/**
+ * Uma compra recorrente como linha de lista. Serve ao bloco de sugestões (as
+ * próximas) e à lista de prioridades (as de hoje e as atrasadas): a mesma
+ * linha, com as mesmas ações, onde quer que ela caia.
+ *
+ * Os botões têm altura de toque no celular (40px) e afastamento entre si: o
+ * "Ignorar este dia" não tem desfazer, e o toque errado ao lado de "Lembrar
+ * amanhã" saía caro.
+ */
+export function PurchaseAlertRow({
+  alert,
+  canCreateRound,
+  canCreateOrder,
+  canManageSchedule,
+}: {
+  alert: PurchaseScheduleAlert;
+  canCreateRound: boolean;
+  canCreateOrder: boolean;
+  canManageSchedule: boolean;
+}) {
+  return (
+    <li className="px-4 py-4 sm:px-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <span
+            className={
+              alert.status === "overdue"
+                ? "bg-destructive-soft text-destructive grid size-9 shrink-0 place-items-center rounded-xl"
+                : "bg-primary-soft text-primary grid size-9 shrink-0 place-items-center rounded-xl"
+            }
+          >
+            {alert.status === "overdue" ? (
+              <Clock3 className="size-4" aria-hidden />
+            ) : (
+              <ShoppingCart className="size-4" aria-hidden />
+            )}
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-fg font-medium">{alert.supplierName}</h3>
+              <span
+                className={
+                  alert.status === "overdue"
+                    ? "bg-destructive-soft text-destructive rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                    : "bg-warning-soft text-warning rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                }
+              >
+                {dueLabel(alert)}
+              </span>
+            </div>
+            <p className="text-fg-muted mt-0.5 text-sm">
+              {alert.label ||
+                `Compra habitual · ${formatPurchaseWeekdays(alert.weekdays)}`}
+              {alert.categoryName ? ` · ${alert.categoryName}` : ""}
+              {alert.templateItemCount > 0
+                ? ` · ${alert.templateItemCount} ${alert.templateItemCount === 1 ? "produto no modelo" : "produtos no modelo"}`
+                : ""}
+            </p>
+            <p className="text-fg-subtle mt-1 text-xs">
+              Prevista para{" "}
+              {DATE.format(new Date(`${alert.occurrenceDate}T12:00:00`))}
+              {alert.preferredTime
+                ? `, até ${alert.preferredTime.slice(0, 5)}`
+                : ""}
+              {alert.expectedDeliveryDays !== null
+                ? ` · entrega habitual ${alert.expectedDeliveryDays === 0 ? "no mesmo dia" : `em ${alert.expectedDeliveryDays} dia(s)`}`
+                : ""}
+            </p>
+            {alert.notes ? (
+              <p className="text-fg-muted mt-1 text-xs">{alert.notes}</p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 lg:justify-end">
+          {canCreateOrder ? (
+            <Button asChild size="sm" className="h-10 sm:h-8">
+              <Link
+                href={`/pedidos/novo?fornecedor=${alert.supplierId}&agenda=${alert.id}`}
+              >
+                Montar pedido <ChevronRight aria-hidden />
+              </Link>
+            </Button>
+          ) : null}
+          {canCreateRound ? (
+            <Button asChild size="sm" variant="outline" className="h-10 sm:h-8">
+              <Link
+                href={`/compras/nova?fornecedor=${alert.supplierId}&agenda=${alert.id}`}
+              >
+                Criar cotação
+              </Link>
+            </Button>
+          ) : null}
+          {canManageSchedule ? (
+            <>
+              <form action={snoozePurchaseSchedule.bind(null, alert.id)}>
+                <Button type="submit" size="sm" variant="ghost" className="h-10 sm:h-8">
+                  Lembrar amanhã
+                </Button>
+              </form>
+              <form
+                action={dismissPurchaseSchedule.bind(
+                  null,
+                  alert.id,
+                  alert.occurrenceDate,
+                )}
+              >
+                <Button type="submit" size="sm" variant="ghost" className="h-10 sm:h-8">
+                  <Check aria-hidden /> Ignorar este dia
+                </Button>
+              </form>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </li>
+  );
+}
+
 export function RecurringPurchases({
   alerts,
   canCreateRound,
@@ -72,106 +191,13 @@ export function RecurringPurchases({
 
       <ul className="divide-border divide-y">
         {alerts.map((alert) => (
-          <li
+          <PurchaseAlertRow
             key={`${alert.id}-${alert.occurrenceDate}`}
-            className="px-4 py-4 sm:px-5"
-          >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="flex min-w-0 flex-1 items-start gap-3">
-                <span
-                  className={
-                    alert.status === "overdue"
-                      ? "bg-destructive-soft text-destructive grid size-9 shrink-0 place-items-center rounded-xl"
-                      : "bg-primary-soft text-primary grid size-9 shrink-0 place-items-center rounded-xl"
-                  }
-                >
-                  {alert.status === "overdue" ? (
-                    <Clock3 className="size-4" aria-hidden />
-                  ) : (
-                    <ShoppingCart className="size-4" aria-hidden />
-                  )}
-                </span>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-fg font-medium">
-                      {alert.supplierName}
-                    </h3>
-                    <span
-                      className={
-                        alert.status === "overdue"
-                          ? "bg-destructive-soft text-destructive rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                          : "bg-warning-soft text-warning rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                      }
-                    >
-                      {dueLabel(alert)}
-                    </span>
-                  </div>
-                  <p className="text-fg-muted mt-0.5 text-sm">
-                    {alert.label ||
-                      `Compra habitual · ${formatPurchaseWeekdays(alert.weekdays)}`}
-                    {alert.categoryName ? ` · ${alert.categoryName}` : ""}
-                    {alert.templateItemCount > 0
-                      ? ` · ${alert.templateItemCount} ${alert.templateItemCount === 1 ? "produto no modelo" : "produtos no modelo"}`
-                      : ""}
-                  </p>
-                  <p className="text-fg-subtle mt-1 text-xs">
-                    Prevista para{" "}
-                    {DATE.format(new Date(`${alert.occurrenceDate}T12:00:00`))}
-                    {alert.preferredTime
-                      ? `, até ${alert.preferredTime.slice(0, 5)}`
-                      : ""}
-                    {alert.expectedDeliveryDays !== null
-                      ? ` · entrega habitual ${alert.expectedDeliveryDays === 0 ? "no mesmo dia" : `em ${alert.expectedDeliveryDays} dia(s)`}`
-                      : ""}
-                  </p>
-                  {alert.notes ? (
-                    <p className="text-fg-muted mt-1 text-xs">{alert.notes}</p>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                {canCreateOrder ? (
-                  <Button asChild size="sm">
-                    <Link
-                      href={`/pedidos/novo?fornecedor=${alert.supplierId}&agenda=${alert.id}`}
-                    >
-                      Montar pedido <ChevronRight aria-hidden />
-                    </Link>
-                  </Button>
-                ) : null}
-                {canCreateRound ? (
-                  <Button asChild size="sm" variant="outline">
-                    <Link
-                      href={`/compras/nova?fornecedor=${alert.supplierId}&agenda=${alert.id}`}
-                    >
-                      Criar cotação
-                    </Link>
-                  </Button>
-                ) : null}
-                {canManageSchedule ? (
-                  <>
-                    <form action={snoozePurchaseSchedule.bind(null, alert.id)}>
-                      <Button type="submit" size="sm" variant="ghost">
-                        Lembrar amanhã
-                      </Button>
-                    </form>
-                    <form
-                      action={dismissPurchaseSchedule.bind(
-                        null,
-                        alert.id,
-                        alert.occurrenceDate,
-                      )}
-                    >
-                      <Button type="submit" size="sm" variant="ghost">
-                        <Check aria-hidden /> Ignorar este dia
-                      </Button>
-                    </form>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </li>
+            alert={alert}
+            canCreateRound={canCreateRound}
+            canCreateOrder={canCreateOrder}
+            canManageSchedule={canManageSchedule}
+          />
         ))}
       </ul>
     </section>

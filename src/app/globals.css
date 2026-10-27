@@ -18,7 +18,9 @@
   --bg: #f6f6f7;
   --fg: #17171a;
   --fg-muted: #5d5d66;
-  --fg-subtle: #8a8a93;
+  /* 4,9:1 sobre o fundo e 4,7:1 sobre cartões cinza: era #8a8a93 (3,4:1),
+     abaixo do AA justamente nas dicas que definem o número. */
+  --fg-subtle: #6b6b74;
   --surface: #ffffff;
   --surface-muted: #f1f1f3;
   --surface-elevated: #ffffff;

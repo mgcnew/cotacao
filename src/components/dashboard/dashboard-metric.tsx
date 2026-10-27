@@ -85,9 +85,12 @@ export function DashboardMetric({
       type="button"
       onClick={onClick}
       className={cn(className, interactiveClassName, "w-full")}
-      aria-label={actionLabel}
     >
       {content}
+      {/* Complementa o nome — rótulo, valor e dica já saem do conteúdo. Um
+          `aria-label` aqui o SUBSTITUIA, e o leitor de tela deixava de ouvir o
+          valor em R$. */}
+      {actionLabel ? <span className="sr-only">. {actionLabel}</span> : null}
     </button>
   ) : (
     <div data-slot="dashboard-metric" data-tone={tone} className={className}>

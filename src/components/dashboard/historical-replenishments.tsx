@@ -75,8 +75,8 @@ export function HistoricalReplenishments({
                   <span
                     className={
                       suggestion.confidence === "high"
-                        ? "bg-success-soft text-success rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                        : "bg-warning-soft text-warning rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                        ? "bg-success-soft text-success rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                        : "bg-warning-soft text-warning rounded-full px-2 py-0.5 text-[11px] font-semibold"
                     }
                   >
                     {suggestion.confidence === "high"

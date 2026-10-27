@@ -1,27 +1,26 @@
 import {
   CalendarDays,
-  ClipboardList,
   MessageCircle,
-  MessageSquareText,
   PackageCheck,
   ShoppingCart,
   TrendingDown,
-  TriangleAlert,
   WalletCards,
 } from "lucide-react";
 import Link from "next/link";
-import { Suspense } from "react";
+import { cache, Suspense } from "react";
 
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
-import { AttentionList } from "@/components/dashboard/attention-list";
 import { DashboardMetric } from "@/components/dashboard/dashboard-metric";
 import { FinancialJourneyMetric } from "@/components/dashboard/financial-journey-metric";
-import { DetectedPurchasePatterns } from "@/components/dashboard/detected-purchase-patterns";
 import { FirstSteps } from "@/components/dashboard/first-steps";
-import { HistoricalReplenishments } from "@/components/dashboard/historical-replenishments";
-import { RecurringPurchases } from "@/components/dashboard/recurring-purchases";
+import { PrioritiesCard } from "@/components/dashboard/priorities-card";
+import {
+  StatusStrip,
+  type StatusItem,
+} from "@/components/dashboard/status-strip";
+import { SuggestionsDisclosure } from "@/components/dashboard/suggestions-disclosure";
 import { Button } from "@/components/ui/button";
-import { Tooltip } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   CardSkeleton,
   ListSkeleton,
@@ -58,6 +57,57 @@ const TIME = new Intl.DateTimeFormat("pt-BR", {
   minute: "2-digit",
 });
 
+/**
+ * Tudo o que o painel de hoje precisa, lido uma vez.
+ *
+ * "Prioridades" e "Sugestões" são dois blocos em dois lugares da página — o
+ * financeiro fica entre eles —, mas saem das MESMAS consultas. Com `cache()`
+ * elas rodam uma vez por renderização, e cada bloco espera dentro do seu
+ * `<Suspense>` sem repetir a viagem ao banco.
+ */
+const carregarPainel = cache(
+  async (companyId: string, permissions: Set<string>) => {
+    const canSeeRounds = permissions.has("purchase_round.view");
+    const canSeeOrders = permissions.has("order.view");
+    const [
+      attention,
+      situation,
+      purchaseAlerts,
+      purchaseSuggestions,
+      detectedPatterns,
+    ] = await Promise.all([
+      getAttentionItems(companyId, permissions),
+      getSituationSummary(companyId, permissions),
+      canSeeRounds || canSeeOrders
+        ? listPurchaseScheduleAlerts(companyId)
+        : Promise.resolve([]),
+      permissions.has("product.view")
+        ? listPurchaseSuggestions(companyId)
+        : Promise.resolve([]),
+      permissions.has("supplier.update")
+        ? listDetectedPurchasePatterns(companyId)
+        : Promise.resolve([]),
+    ]);
+    const starting =
+      situation.rondasAtivas === 0 &&
+      situation.pedidosEmAberto === 0 &&
+      attention.length === 0 &&
+      purchaseAlerts.length === 0 &&
+      purchaseSuggestions.length === 0 &&
+      detectedPatterns.length === 0;
+    const steps = starting ? await getFirstSteps(companyId, permissions) : null;
+
+    return {
+      attention,
+      situation,
+      purchaseAlerts,
+      purchaseSuggestions,
+      detectedPatterns,
+      steps,
+    };
+  },
+);
+
 export default async function DashboardPage() {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
@@ -66,57 +116,50 @@ export default async function DashboardPage() {
     <div className="w-full">
       <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <p className="text-primary mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">
-            Visão operacional
-          </p>
           <h1 className="text-fg text-2xl font-semibold tracking-tight sm:text-3xl">
             Central de compras
           </h1>
           <p className="text-fg-muted mt-1 text-sm">
-            {company.companyName} · {company.roleName}. Prioridades, andamento e
-            resultado em um só lugar.
+            {company.companyName} · {company.roleName}
           </p>
         </div>
 
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-          <div className="text-fg-subtle flex items-center gap-2 text-xs capitalize">
+          <div className="text-fg-muted flex items-center gap-2 text-xs">
             <CalendarDays className="size-4" aria-hidden />
-            {TODAY.format(new Date())}
+            {/* Só a inicial maiúscula: `capitalize` escrevia "27 De Outubro". O
+                `span` é o que faz `first-letter` valer — num contêiner flex
+                ele é ignorado. */}
+            <span className="first-letter:uppercase">
+              {TODAY.format(new Date())}
+            </span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {permissions.has("purchase_round.view") ? (
-              <Tooltip content="WhatsApp Compras" side="bottom">
-                <Button
-                  asChild
-                  size="icon-sm"
-                  variant="outline"
-                  className="hidden md:inline-flex"
-                >
-                  <Link href="/whatsapp" aria-label="Abrir WhatsApp Compras">
-                    <MessageCircle aria-hidden />
-                  </Link>
-                </Button>
-              </Tooltip>
-            ) : null}
-          </div>
+          {permissions.has("purchase_round.view") ? (
+            // Com nome e em qualquer tela: é a ferramenta mais usada do dia a
+            // dia, e some justamente no celular, onde o WhatsApp mora.
+            <Button asChild size="sm" variant="outline">
+              <Link href="/whatsapp">
+                <MessageCircle aria-hidden /> WhatsApp
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </header>
 
       <Suspense
         fallback={
           <>
-            <section className="mb-6">
-              <SectionTitleSkeleton />
-              <MetricsSkeleton />
-            </section>
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,.75fr)]">
+            <div className="mb-5 flex gap-8">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-5 w-36" />
+            </div>
+            <div className="mb-6">
               <ListSkeleton rows={4} />
-              <CardSkeleton lines={5} />
             </div>
           </>
         }
       >
-        <Panorama companyId={company.companyId} permissions={permissions} />
+        <Prioridades company={company} permissions={permissions} />
       </Suspense>
 
       {permissions.has("analytics.view") ? (
@@ -128,9 +171,16 @@ export default async function DashboardPage() {
             </section>
           }
         >
-          <Financial companyId={company.companyId} timezone={company.companyTimezone} />
+          <Financial
+            companyId={company.companyId}
+            timezone={company.companyTimezone}
+          />
         </Suspense>
       ) : null}
+
+      <Suspense fallback={null}>
+        <Sugestoes companyId={company.companyId} permissions={permissions} />
+      </Suspense>
 
       <Suspense
         fallback={
@@ -143,64 +193,39 @@ export default async function DashboardPage() {
         <RecentActivity companyId={company.companyId} />
       </Suspense>
 
-      <p className="text-fg-subtle mt-5 text-right text-[11px]">
+      <p className="text-fg-muted mt-5 text-right text-xs">
         Atualizado às {TIME.format(new Date())}
       </p>
     </div>
   );
 }
 
-async function Panorama({
-  companyId,
+/**
+ * A primeira coisa da tela: o que está em curso e o que pede ação hoje.
+ *
+ * Empresa que ainda não comprou nada vê os primeiros passos, não uma tela de
+ * zeros.
+ */
+async function Prioridades({
+  company,
   permissions,
 }: {
-  companyId: string;
+  company: Awaited<ReturnType<typeof requireActiveCompany>>;
   permissions: Set<string>;
 }) {
-  const canSeeRounds = permissions.has("purchase_round.view");
-  const canSeeOrders = permissions.has("order.view");
-  const [
-    attention,
-    situation,
-    purchaseAlerts,
-    purchaseSuggestions,
-    detectedPatterns,
-  ] = await Promise.all([
-    getAttentionItems(companyId, permissions),
-    getSituationSummary(companyId, permissions),
-    canSeeRounds || canSeeOrders
-      ? listPurchaseScheduleAlerts(companyId)
-      : Promise.resolve([]),
-    permissions.has("product.view")
-      ? listPurchaseSuggestions(companyId)
-      : Promise.resolve([]),
-    permissions.has("supplier.update")
-      ? listDetectedPurchasePatterns(companyId)
-      : Promise.resolve([]),
-  ]);
-  const starting =
-    situation.rondasAtivas === 0 &&
-    situation.pedidosEmAberto === 0 &&
-    attention.length === 0 &&
-    purchaseAlerts.length === 0 &&
-    purchaseSuggestions.length === 0 &&
-    detectedPatterns.length === 0;
-  const steps = starting ? await getFirstSteps(companyId, permissions) : null;
+  const painel = await carregarPainel(company.companyId, permissions);
+  const { attention, situation, purchaseAlerts, steps } = painel;
 
   if (steps?.length) {
     return (
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,.8fr)]">
+      <section className="mb-6 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,.8fr)]">
         <FirstSteps steps={steps} />
-        <div className="border-border bg-surface relative overflow-hidden rounded-2xl border p-6 shadow-xs">
-          <div
-            className="bg-primary/8 absolute -top-16 -right-16 size-44 rounded-full"
-            aria-hidden
-          />
-          <ShoppingCart className="text-primary relative size-7" aria-hidden />
-          <h2 className="text-fg relative mt-5 text-lg font-semibold">
+        <div className="border-border bg-surface rounded-2xl border p-6 shadow-xs">
+          <ShoppingCart className="text-primary size-7" aria-hidden />
+          <h2 className="text-fg mt-5 text-base font-semibold">
             Sua operação começa aqui
           </h2>
-          <p className="text-fg-muted relative mt-2 text-sm leading-relaxed">
+          <p className="text-fg-muted mt-2 text-sm leading-relaxed">
             Depois da primeira cotação, este espaço passa a mostrar respostas,
             pedidos, atrasos e economia automaticamente.
           </p>
@@ -209,205 +234,76 @@ async function Panorama({
     );
   }
 
-  const critical = attention.filter((item) => item.severity === "high").length;
-  const responseRate =
-    situation.fornecedoresTotal > 0
-      ? Math.round(
-          (situation.fornecedoresResponderam / situation.fornecedoresTotal) *
-            100,
-        )
-      : 0;
+  const canSeeRounds = permissions.has("purchase_round.view");
+  const canSeeOrders = permissions.has("order.view");
+  const statusItems: StatusItem[] = [
+    ...(canSeeRounds
+      ? [
+          {
+            label: "Rodadas em andamento",
+            value: String(situation.rondasAtivas),
+            href: situation.rodadaUnica
+              ? `/compras/${situation.rodadaUnica.id}`
+              : "/compras",
+          },
+        ]
+      : []),
+    ...(canSeeOrders
+      ? [
+          {
+            label: "Pedidos em aberto",
+            value: String(situation.pedidosEmAberto),
+            href: "/pedidos?situacao=abertos",
+          },
+        ]
+      : []),
+    ...(canSeeRounds && situation.fornecedoresTotal > 0
+      ? [
+          {
+            label: "Fornecedores que responderam",
+            value: `${situation.fornecedoresResponderam}/${situation.fornecedoresTotal}`,
+            href: "/compras?situacao=aguardando",
+          },
+        ]
+      : []),
+  ];
 
   return (
     <>
-      {canSeeRounds || canSeeOrders ? (
-        <section className="mb-6" aria-labelledby="dashboard-summary">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2
-                id="dashboard-summary"
-                className="text-fg text-base font-semibold"
-              >
-                Resumo executivo
-              </h2>
-              <p className="text-fg-muted text-xs">
-                O pulso da operação neste momento.
-              </p>
-            </div>
-            <span
-              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                critical > 0
-                  ? "bg-destructive-soft text-destructive"
-                  : "bg-success-soft text-success"
-              }`}
-            >
-              {critical > 0
-                ? `${critical} ${critical === 1 ? "prioridade crítica" : "prioridades críticas"}`
-                : "Operação sem criticidade"}
-            </span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {canSeeRounds ? (
-              <>
-                <DashboardMetric
-                  icon={ShoppingCart}
-                  label="Rodadas em andamento"
-                  value={String(situation.rondasAtivas)}
-                  hint={
-                    situation.rodadaUnica?.title ?? "Cotações abertas agora"
-                  }
-                  href={
-                    situation.rodadaUnica
-                      ? `/compras/${situation.rodadaUnica.id}`
-                      : "/compras"
-                  }
-                  tone="info"
-                />
-                <DashboardMetric
-                  icon={MessageSquareText}
-                  label="Aguardando resposta"
-                  value={String(situation.fornecedoresPendentes)}
-                  hint={`${responseRate}% dos fornecedores já responderam`}
-                  href="/compras?situacao=aguardando"
-                  tone={
-                    situation.fornecedoresPendentes > 0 ? "neutral" : "good"
-                  }
-                />
-              </>
-            ) : null}
-            {canSeeOrders ? (
-              <>
-                <DashboardMetric
-                  icon={ClipboardList}
-                  label="Pedidos em aberto"
-                  value={String(situation.pedidosEmAberto)}
-                  hint="Enviados e ainda não recebidos por inteiro"
-                  href="/pedidos?situacao=abertos"
-                />
-                <DashboardMetric
-                  icon={TriangleAlert}
-                  label="Pedidos atrasados"
-                  value={String(situation.pedidosAtrasados)}
-                  hint={
-                    situation.pedidosAtrasados > 0
-                      ? "Prazo vencido e mercadoria pendente"
-                      : "Nenhuma entrega fora do prazo"
-                  }
-                  href="/pedidos?situacao=atrasados"
-                  tone={situation.pedidosAtrasados > 0 ? "bad" : "good"}
-                />
-              </>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-
-      <div id="assistente-compras" className="scroll-mt-20">
-        <RecurringPurchases
-          alerts={purchaseAlerts}
-          canCreateRound={permissions.has("purchase_round.create")}
-          canCreateOrder={permissions.has("order.create")}
-          canManageSchedule={permissions.has("supplier.update")}
-        />
-
-        <HistoricalReplenishments suggestions={purchaseSuggestions} />
-
-        <DetectedPurchasePatterns patterns={detectedPatterns} />
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,.75fr)]">
-        <section
-          className="border-border bg-surface overflow-hidden rounded-2xl border shadow-xs"
-          aria-labelledby="attention-title"
-        >
-          <header className="border-border flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-5">
-            <div>
-              <h2
-                id="attention-title"
-                className="text-fg text-base font-semibold"
-              >
-                Prioridades de hoje
-              </h2>
-              <p className="text-fg-muted mt-0.5 text-xs">
-                Ordenadas por urgência e prontas para ação.
-              </p>
-            </div>
-            {attention.length ? (
-              <span className="bg-surface-muted text-fg-muted grid min-w-7 place-items-center rounded-full px-2 text-xs font-semibold leading-7">
-                {attention.length}
-              </span>
-            ) : null}
-          </header>
-          <AttentionList items={attention} />
-        </section>
-
-        {canSeeRounds || canSeeOrders ? (
-          <aside
-            className="border-border bg-surface rounded-2xl border p-5 shadow-xs"
-            aria-labelledby="flow-title"
-          >
-            <h2 id="flow-title" className="text-fg text-base font-semibold">
-              Fluxo da operação
-            </h2>
-            <p className="text-fg-muted mt-0.5 text-xs">
-              Leitura rápida do trabalho em curso.
-            </p>
-
-            {canSeeRounds ? (
-              <div className="mt-5">
-                <div className="flex items-end justify-between gap-3 text-xs">
-                  <span className="text-fg-muted">Respostas das cotações</span>
-                  <strong className="text-fg tabular-nums">
-                    {situation.fornecedoresResponderam}/
-                    {situation.fornecedoresTotal}
-                  </strong>
-                </div>
-                <div className="bg-surface-muted mt-2 h-2 overflow-hidden rounded-full">
-                  <div
-                    className="bg-primary h-full rounded-full transition-[width]"
-                    style={{ width: `${responseRate}%` }}
-                  />
-                </div>
-                <p className="text-fg-subtle mt-1.5 text-[11px]">
-                  {responseRate}% concluído nas rodadas ativas
-                </p>
-              </div>
-            ) : null}
-
-            <div className="border-border mt-5 divide-y border-y">
-              {canSeeRounds ? (
-                <Link
-                  href="/compras"
-                  className="hover:text-primary flex items-center justify-between py-3 text-sm"
-                >
-                  <span className="text-fg-muted">Rodadas ativas</span>
-                  <strong className="text-fg tabular-nums">
-                    {situation.rondasAtivas}
-                  </strong>
-                </Link>
-              ) : null}
-              {canSeeOrders ? (
-                <Link
-                  href="/pedidos?situacao=abertos"
-                  className="hover:text-primary flex items-center justify-between py-3 text-sm"
-                >
-                  <span className="text-fg-muted">Pedidos em aberto</span>
-                  <strong className="text-fg tabular-nums">
-                    {situation.pedidosEmAberto}
-                  </strong>
-                </Link>
-              ) : null}
-              <div className="flex items-center justify-between py-3 text-sm">
-                <span className="text-fg-muted">Ações pendentes</span>
-                <strong className="text-fg tabular-nums">
-                  {attention.length}
-                </strong>
-              </div>
-            </div>
-          </aside>
-        ) : null}
-      </div>
+      <StatusStrip items={statusItems} />
+      <PrioritiesCard
+        attention={attention}
+        due={purchaseAlerts.filter((alert) => alert.status !== "upcoming")}
+        canCreateRound={permissions.has("purchase_round.create")}
+        canCreateOrder={permissions.has("order.create")}
+        canManageSchedule={permissions.has("supplier.update")}
+      />
     </>
+  );
+}
+
+/** O planejamento: recolhido, no fim, para não ficar entre o dia e o resultado. */
+async function Sugestoes({
+  companyId,
+  permissions,
+}: {
+  companyId: string;
+  permissions: Set<string>;
+}) {
+  const painel = await carregarPainel(companyId, permissions);
+  if (painel.steps?.length) return null;
+
+  return (
+    <SuggestionsDisclosure
+      upcoming={painel.purchaseAlerts.filter(
+        (alert) => alert.status === "upcoming",
+      )}
+      replenishments={painel.purchaseSuggestions}
+      patterns={painel.detectedPatterns}
+      canCreateRound={permissions.has("purchase_round.create")}
+      canCreateOrder={permissions.has("order.create")}
+      canManageSchedule={permissions.has("supplier.update")}
+    />
   );
 }
 

@@ -58,7 +58,7 @@ function PatternRow({ pattern }: { pattern: DetectedPurchasePattern }) {
               <h3 className="text-fg text-sm font-semibold">
                 {pattern.supplierName}
               </h3>
-              <span className="bg-success-soft text-success rounded-full px-2 py-0.5 text-[10px] font-semibold">
+              <span className="bg-success-soft text-success rounded-full px-2 py-0.5 text-[11px] font-semibold">
                 {pattern.confidencePercent}% regular
               </span>
             </div>

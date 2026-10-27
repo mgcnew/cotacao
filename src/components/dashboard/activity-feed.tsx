@@ -40,6 +40,9 @@ export function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
         const conteudo = (
           <>
             <span className="min-w-0 flex-1">
+              {entry.bySupplier ? (
+                <span className="sr-only">Fornecedor: </span>
+              ) : null}
               <span className="text-fg text-sm">{entry.label}</span>
               {entry.detail ? (
                 <span className="text-fg-muted block text-xs">

@@ -7,11 +7,20 @@ import type { AttentionItem } from "@/features/dashboard/attention";
  * A lista de pendências, na ordem em que pedem atenção.
  *
  * Cada linha é um link inteiro, e não um texto com um botão ao lado: o alvo de
- * toque no celular passa a ser a linha toda. O verbo fica visível à direita
- * porque saber que existe uma pendência não adianta sem saber o que fazer com
- * ela — é o que o documento mestre pede em 13.2.
+ * toque no celular passa a ser a linha toda. O verbo fica visível à direita,
+ * em qualquer tamanho de tela, porque saber que existe uma pendência não
+ * adianta sem saber o que fazer com ela — é o que o documento mestre pede em
+ * 13.2.
  */
-export function AttentionList({ items }: { items: AttentionItem[] }) {
+export function AttentionList({
+  items,
+  hideEmpty = false,
+}: {
+  items: AttentionItem[];
+  /** Quem renderiza outras pendências no mesmo cartão não quer o "nada pedindo atenção". */
+  hideEmpty?: boolean;
+}) {
+  if (items.length === 0 && hideEmpty) return null;
   if (items.length === 0) {
     return (
       <div className="flex items-center gap-3 px-5 py-8">
@@ -51,14 +60,16 @@ export function AttentionList({ items }: { items: AttentionItem[] }) {
               <span className="flex items-center gap-2">
                 <span className="text-fg block text-sm font-medium">{item.title}</span>
                 {item.severity === "high" ? (
-                  <span className="bg-destructive-soft text-destructive rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase">Urgente</span>
+                  <span className="bg-destructive-soft text-destructive rounded-full px-1.5 py-0.5 text-[11px] font-semibold uppercase">Urgente</span>
                 ) : null}
               </span>
               <span className="text-fg-muted block text-xs">{item.hint}</span>
             </span>
 
             <span className="text-fg-muted flex shrink-0 items-center gap-1 text-xs font-medium">
-              <span className="hidden sm:inline">{item.actionLabel}</span>
+              {/* No celular também: saber que existe a pendência não adianta
+                  sem saber o que fazer com ela. */}
+              <span>{item.actionLabel}</span>
               <ArrowRight className="size-3.5" aria-hidden />
             </span>
           </Link>
