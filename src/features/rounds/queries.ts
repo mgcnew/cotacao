@@ -122,6 +122,7 @@ export async function listRoundItems(companyId: string, roundId: string) {
       `
       id,
       group_id,
+      product_id,
       requested_quantity,
       commercial_status,
       notes,

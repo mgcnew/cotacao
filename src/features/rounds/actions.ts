@@ -5,6 +5,12 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { GRUPO_PADRAO } from "@/features/rounds/groups";
+import {
+  listRoundItems,
+  listRoundSuppliers,
+  listSelectableSuppliers,
+} from "@/features/rounds/queries";
+import { sugerirFornecedores } from "@/features/rounds/supplier-suggestions";
 import { requireActiveCompany, requireUser } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -567,6 +573,87 @@ export async function addRoundSupplier(
   if (error) return { error: descreverErroDeRpc(error.message) };
 
   revalidateRoundPaths(parsed.data.roundId);
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Convida os fornecedores sugeridos, já com os grupos que cada um cobre.
+ *
+ * A tela só diz QUEM; o que cada um recebe é recalculado aqui, a partir do que a
+ * rodada pede agora. Assim um convite feito com a tela velha (um produto saiu,
+ * um grupo mudou) não grava uma distribuição que já não vale, e ninguém fora das
+ * sugestões atuais entra por um formulário forjado.
+ */
+export async function convidarFornecedoresSugeridos(
+  _prev: RoundFormState,
+  formData: FormData,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+
+  const parsed = z
+    .object({
+      roundId: z.uuid({ error: "Rodada inválida" }),
+      supplierIds: z
+        .array(z.uuid())
+        .min(1, "Escolha ao menos um fornecedor")
+        .max(30, "Convide até 30 fornecedores por vez"),
+    })
+    .safeParse({
+      roundId: formData.get("roundId"),
+      supplierIds: formData.getAll("supplierId"),
+    });
+
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const [items, roundSuppliers, selecionaveis] = await Promise.all([
+    listRoundItems(company.companyId, parsed.data.roundId),
+    listRoundSuppliers(company.companyId, parsed.data.roundId),
+    listSelectableSuppliers(company.companyId),
+  ]);
+
+  const { sugestoes } = await sugerirFornecedores({
+    companyId: company.companyId,
+    items,
+    candidatos: selecionaveis.map((s) => ({ id: s.id, name: s.name })),
+    convidados: new Set(roundSuppliers.map((rs) => rs.supplier_id)),
+  });
+  const pedidos = new Set(parsed.data.supplierIds);
+  const aConvidar = sugestoes.filter((s) => pedidos.has(s.supplierId));
+  if (aConvidar.length === 0) {
+    return {
+      error:
+        "Estes fornecedores já foram convidados ou deixaram de ser sugeridos.",
+    };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const resultados = await Promise.all(
+    aConvidar.map(async (sugestao) => {
+      const contato = selecionaveis.find((s) => s.id === sugestao.supplierId)
+        ?.contacts[0];
+      if (!contato) return `${sugestao.name}: sem contato ativo.`;
+
+      const { error } = await supabase.rpc("rpc_upsert_round_supplier_groups", {
+        p_company_id: company.companyId,
+        p_purchase_round_id: parsed.data.roundId,
+        p_supplier_id: sugestao.supplierId,
+        p_supplier_contact_id: contato.id,
+        p_group_ids: sugestao.groupIds,
+      });
+      return error
+        ? `${sugestao.name}: ${descreverErroDeRpc(error.message)}`
+        : null;
+    }),
+  );
+  const falhas = resultados.filter((r): r is string => r !== null);
+
+  revalidateRoundPaths(parsed.data.roundId);
+  if (falhas.length > 0) {
+    const convidados = aConvidar.length - falhas.length;
+    return {
+      error: `${convidados > 0 ? `${convidados} convidado(s). ` : ""}Não foi possível convidar: ${falhas.join(" ")}`,
+    };
+  }
   return { error: null, savedAt: Date.now() };
 }
 

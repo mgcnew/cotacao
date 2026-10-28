@@ -11,6 +11,7 @@ import {
   GroupChip,
   QuotationItemRow,
 } from "@/components/rounds/round-crud-forms";
+import { SugestoesDeFornecedores } from "@/components/rounds/supplier-suggestions";
 import {
   CancelRoundForm,
   CompleteRoundForm,
@@ -448,6 +449,28 @@ function Montagem({
                   />
                 ) : null}
 
+                {podeMontar && temItens && disponiveis.length > 0 ? (
+                  <Suspense
+                    fallback={
+                      <div
+                        aria-hidden
+                        className="bg-surface-muted mb-4 h-28 animate-pulse rounded-xl"
+                      />
+                    }
+                  >
+                    <SugestoesDeFornecedores
+                      roundId={roundId}
+                      items={items}
+                      disponiveis={disponiveis.map((s) => ({
+                        id: s.id,
+                        name: s.name,
+                      }))}
+                      convidados={roundSuppliers.map((rs) => rs.supplier_id)}
+                      nomesDeGrupo={organizouGrupos ? groupName : null}
+                    />
+                  </Suspense>
+                ) : null}
+
                 {podeMontar && disponiveis.length > 0 ? (
                   <div className="mb-4">
                     <SupplierPickerForm
@@ -753,7 +776,8 @@ function Acompanhamento({
                     : "ainda não"}
                   {latestReminders.get(rs.id) ? (
                     <span className="text-fg-subtle mt-0.5 block">
-                      Cobrado {DATA_HORA.format(new Date(latestReminders.get(rs.id)!))}
+                      Cobrado{" "}
+                      {DATA_HORA.format(new Date(latestReminders.get(rs.id)!))}
                     </span>
                   ) : null}
                 </TableCell>
@@ -776,8 +800,9 @@ function Acompanhamento({
                         (item) => item.removed_at === null,
                       ).length ?? 0;
                     const indisponiveis =
-                      rs.quotation_responses?.[0]?.quotation_response_items
-                        ?.filter((item) => item.does_not_supply).length ?? 0;
+                      rs.quotation_responses?.[0]?.quotation_response_items?.filter(
+                        (item) => item.does_not_supply,
+                      ).length ?? 0;
                     const comPreco = Math.max(0, respondidos - indisponiveis);
                     const semResposta = Math.max(
                       0,
