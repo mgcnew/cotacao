@@ -128,7 +128,7 @@ export function HistoricalNfeOrderSuggestion({
                   <label
                     key={suggestion.orderId}
                     className={cn(
-                      "border-border inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
+                      "border-border relative inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
                       suggestion.orderId === chosen.orderId
                         ? "bg-surface text-fg border-warning/50"
                         : "text-fg-muted hover:bg-surface",

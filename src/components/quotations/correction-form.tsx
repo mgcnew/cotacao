@@ -165,7 +165,7 @@ export function CorrectionForm({
             <label
               key={opcao.value}
               className={cn(
-                "border-border bg-surface hover:border-fg-subtle has-focus-visible:ring-ring/50 flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-3 text-sm font-semibold transition-colors has-focus-visible:ring-3",
+                "border-border bg-surface hover:border-fg-subtle has-focus-visible:ring-ring/50 relative flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-3 text-sm font-semibold transition-colors has-focus-visible:ring-3",
                 ativa && opcao.activeClass,
               )}
             >

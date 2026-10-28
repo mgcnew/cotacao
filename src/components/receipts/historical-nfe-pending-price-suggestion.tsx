@@ -101,7 +101,7 @@ export function HistoricalNfePendingPriceSuggestion({
                   <label
                     key={suggestion.receiptId}
                     className={cn(
-                      "border-border inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
+                      "border-border relative inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
                       suggestion.receiptId === chosen.receiptId
                         ? "bg-surface text-fg border-primary-solid/50"
                         : "text-fg-muted hover:bg-surface",
