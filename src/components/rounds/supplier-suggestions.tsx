@@ -14,14 +14,36 @@ const VISIVEIS = 6;
 /** Quantos nomes de produto sem fornecedor cabem na frase antes do "e mais N". */
 const NOMES_NO_AVISO = 4;
 
+const DIA = 86_400_000;
+
+/** "há 12 dias", "há 8 meses": o suficiente para saber se a compra é recente. */
+function haQuanto(iso: string, agora: number): string {
+  const dias = Math.max(0, Math.floor((agora - Date.parse(iso)) / DIA));
+  if (dias === 0) return "hoje";
+  if (dias === 1) return "ontem";
+  if (dias < 30) return `há ${dias} dias`;
+  const meses = Math.floor(dias / 30);
+  if (meses < 12) return `há ${meses} ${meses === 1 ? "mês" : "meses"}`;
+  return "há mais de um ano";
+}
+
+function duracao(minutos: number): string {
+  if (minutos < 1) return "menos de 1 min";
+  if (minutos < 60) return `${Math.round(minutos)} min`;
+  const horas = minutos / 60;
+  return `${horas < 10 ? horas.toFixed(1).replace(".", ",") : Math.round(horas)} h`;
+}
+
 function Linha({
   roundId,
   sugestao,
   total,
   nomesDeGrupo,
   temConvidados,
+  agora,
 }: {
   roundId: string;
+  agora: number;
   sugestao: SugestaoDeFornecedor;
   total: number;
   /** Só quando a rodada tem mais de um grupo: com um só, "grupos" não informa. */
@@ -29,11 +51,18 @@ function Linha({
   temConvidados: boolean;
 }) {
   const percentual = Math.round((sugestao.cobre / total) * 100);
+  const falha =
+    sugestao.convites >= 3 && sugestao.respondeu / sugestao.convites < 0.75;
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-fg text-sm font-medium">{sugestao.name}</span>
+          {sugestao.costumaNaoResponder ? (
+            <span className="bg-destructive-soft text-destructive rounded-full px-2 py-0.5 text-[11px] font-medium">
+              Costuma não responder
+            </span>
+          ) : null}
           {sugestao.aviso ? (
             <span
               title={sugestao.aviso}
@@ -49,6 +78,19 @@ function Linha({
           {total === 1 ? "produto" : "produtos"}
           {temConvidados && sugestao.cobreOQueFalta > 0
             ? ` · ${sugestao.cobreOQueFalta} sem cobertura até agora`
+            : ""}
+          {sugestao.ultimaCompraEm
+            ? ` · última compra ${haQuanto(sugestao.ultimaCompraEm, agora)}`
+            : ""}
+        </p>
+        <p
+          className={`mt-0.5 text-xs ${falha ? "text-fg font-medium" : "text-fg-muted"}`}
+        >
+          {sugestao.convites === 0
+            ? "Ainda não cotou com você"
+            : `Respondeu ${sugestao.respondeu} de ${sugestao.convites} ${sugestao.convites === 1 ? "cotação" : "cotações"}`}
+          {sugestao.respostaTipicaMin !== null
+            ? ` · costuma responder em ${duracao(sugestao.respostaTipicaMin)}`
             : ""}
         </p>
         <div
@@ -100,7 +142,7 @@ export async function SugestoesDeFornecedores({
   nomesDeGrupo: Map<string, string> | null;
 }) {
   const company = await requireActiveCompany();
-  const { totalDeProdutos, sugestoes, semFornecedor } =
+  const { geradoEm, totalDeProdutos, sugestoes, semFornecedor } =
     await sugerirFornecedores({
       companyId: company.companyId,
       items,
@@ -111,6 +153,8 @@ export async function SugestoesDeFornecedores({
   if (sugestoes.length === 0 && semFornecedor.length === 0) return null;
 
   const aVista = sugestoes.slice(0, VISIVEIS);
+  // O convite em lote não leva quem já deixou de responder mais do que respondeu.
+  const paraOLote = aVista.filter((s) => !s.costumaNaoResponder);
   const resto = sugestoes.slice(VISIVEIS);
   const temConvidados = convidados.length > 0;
   const gruposDe = (s: SugestaoDeFornecedor) =>
@@ -127,6 +171,7 @@ export async function SugestoesDeFornecedores({
       total={totalDeProdutos}
       nomesDeGrupo={gruposDe(s)}
       temConvidados={temConvidados}
+      agora={geradoEm}
     />
   );
 
@@ -143,18 +188,19 @@ export async function SugestoesDeFornecedores({
                 Sugeridos para esta cotação
               </h3>
               <p className="text-fg-muted text-xs">
-                Quem já vendeu, ou já cotou, o que você está pedindo. O convite
-                já marca os grupos de cada um.
+                Quem já vendeu, ou já cotou, o que você está pedindo, e como
+                respondeu nas últimas cotações. O convite já marca os grupos de
+                cada um.
               </p>
             </div>
-            {aVista.length > 1 ? (
+            {paraOLote.length > 1 ? (
               <ConvidarSugeridos
                 roundId={roundId}
-                supplierIds={aVista.map((s) => s.supplierId)}
+                supplierIds={paraOLote.map((s) => s.supplierId)}
                 rotulo={
-                  sugestoes.length > VISIVEIS
-                    ? `Convidar os ${aVista.length} primeiros`
-                    : `Convidar os ${aVista.length}`
+                  sugestoes.length > paraOLote.length
+                    ? `Convidar os ${paraOLote.length} primeiros`
+                    : `Convidar os ${paraOLote.length}`
                 }
               />
             ) : null}
