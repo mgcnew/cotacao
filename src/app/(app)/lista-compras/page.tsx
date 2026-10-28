@@ -1,11 +1,13 @@
 import { ClipboardCheck, Sparkles, Trash2, UserRound } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { PurchaseSuggestions } from "@/components/shopping-list/purchase-suggestions";
 import { ShoppingListQuickAdd } from "@/components/shopping-list/quick-add";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,24 +23,117 @@ import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { parseListPagination } from "@/lib/list-pagination";
 import { cn } from "@/lib/utils";
 
+import Loading from "./loading";
+
 type ListOrigin = "all" | "assistant" | "manual";
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** O catálogo inteiro (mais de mil produtos com códigos) chega depois da tela. */
+async function AdicionarRapido({ companyId }: { companyId: string }) {
+  const products = await listShoppingProducts(companyId);
+  return <ShoppingListQuickAdd products={products} />;
+}
+
+type PropsDasAbas = {
+  origin: ListOrigin;
+  hrefForOrigin: (value: ListOrigin) => string;
+  counts: Record<ListOrigin, number>;
+};
+
+/** Espera o número de sugestões, que soma nas abas "Todos" e "Assistente". */
+async function AbasComContagem({
+  sugestoes,
+  ...props
+}: PropsDasAbas & { sugestoes: number | Promise<unknown[] | null> }) {
+  const total =
+    typeof sugestoes === "number"
+      ? sugestoes
+      : ((await sugestoes)?.length ?? null);
+  return <AbasDeOrigem {...props} sugestoes={total} />;
+}
+
+/** `sugestoes` nulo: ainda não se sabe, e as abas mostram só o que já é certo. */
+function AbasDeOrigem({
+  origin,
+  hrefForOrigin,
+  counts,
+  sugestoes,
+}: PropsDasAbas & { sugestoes: number | null }) {
+  const contar = (value: ListOrigin) => {
+    if (value === "manual") return `${counts.manual}`;
+    return sugestoes === null
+      ? `${counts[value]}+`
+      : `${counts[value] + sugestoes}`;
+  };
+  return (
+    <nav
+      data-slot="shopping-list-origin-tabs"
+      aria-label="Filtrar itens por origem"
+      className="-mb-4 flex gap-2 overflow-x-auto pb-4 sm:mb-0 sm:flex-wrap sm:overflow-visible sm:pb-0"
+    >
+      {(
+        [
+          { value: "all", label: "Todos", icon: ClipboardCheck },
+          { value: "assistant", label: "Assistente", icon: Sparkles },
+          { value: "manual", label: "Inseridos por você", icon: UserRound },
+        ] as const
+      ).map((option) => {
+        const Icon = option.icon;
+        return (
+          <Link
+            key={option.value}
+            href={hrefForOrigin(option.value)}
+            aria-current={origin === option.value ? "page" : undefined}
+            className={cn(
+              "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors sm:h-8",
+              origin === option.value
+                ? "border-primary bg-primary-soft text-primary"
+                : "border-border bg-surface text-fg-muted hover:bg-surface-muted hover:text-fg",
+            )}
+          >
+            <Icon className="size-3.5" aria-hidden />
+            {option.label} ({contar(option.value)})
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+/**
+ * A casca só lê o recorte (origem, página) e o usa de `key`: trocar de aba
+ * devolve o esqueleto, em vez de deixar a lista anterior parada até a nova
+ * chegar.
+ */
 export default async function ShoppingListPage({
   searchParams,
 }: PageProps<"/lista-compras">) {
+  const recorte = await searchParams;
+
+  return (
+    <Suspense key={JSON.stringify(recorte)} fallback={<Loading />}>
+      <ListaDeComprasConteudo searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function ListaDeComprasConteudo({
+  searchParams,
+}: Pick<PageProps<"/lista-compras">, "searchParams">) {
   const company = await requireActiveCompany();
-  const [products, data, permissions, params, suggestions] =
-    await Promise.all([
-      listShoppingProducts(company.companyId),
-      getOpenShoppingList(company.companyId),
-      getPermissions(company.companyId),
-      searchParams,
-      listPurchaseSuggestions(company.companyId),
-    ]);
+  // Começam já, mas só travam a tela quando ela as mostra (abas "Todos" e
+  // "Assistente"). Na aba padrão elas só alimentam o número das abas, que chega
+  // depois: a lista não espera por uma consulta que ela não desenha.
+  const sugestoes = listPurchaseSuggestions(company.companyId);
+  const sugestoesParaContagem = sugestoes.catch(() => null);
+  const [data, permissions, params] = await Promise.all([
+    getOpenShoppingList(company.companyId),
+    getPermissions(company.companyId),
+    searchParams,
+  ]);
   const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
@@ -60,14 +155,10 @@ export default async function ShoppingListPage({
   const filteredItems = data.items.filter(
     (item) => origin === "all" || item.origin === origin,
   );
+  const showSuggestions = origin === "all" || origin === "assistant";
+  const suggestions = showSuggestions ? await sugestoes : [];
   const pagination = parseListPagination(params, filteredItems.length);
   const visibleItems = filteredItems.slice(pagination.start, pagination.end);
-  const originCounts = {
-    all: data.items.length + suggestions.length,
-    assistant: assistantItems.length + suggestions.length,
-    manual: manualItems.length,
-  };
-  const showSuggestions = origin === "all" || origin === "assistant";
   const hasVisibleSuggestions = showSuggestions && suggestions.length > 0;
   const hrefForOrigin = (value: ListOrigin) => {
     const query = new URLSearchParams();
@@ -77,6 +168,11 @@ export default async function ShoppingListPage({
     const serialized = query.toString();
     return serialized ? `/lista-compras?${serialized}` : "/lista-compras";
   };
+  const contagemBase = {
+    all: data.items.length,
+    assistant: assistantItems.length,
+    manual: manualItems.length,
+  };
 
   return (
     <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
@@ -85,44 +181,34 @@ export default async function ShoppingListPage({
         description="Registre o que está faltando agora; decida depois se vai cotar ou comprar direto."
       />
 
-      {canManage ? <ShoppingListQuickAdd products={products} /> : null}
+      {canManage ? (
+        <Suspense
+          fallback={<Skeleton className="h-24 w-full rounded-xl sm:h-14" />}
+        >
+          <AdicionarRapido companyId={company.companyId} />
+        </Suspense>
+      ) : null}
 
       <div className="mt-4 overflow-hidden sm:overflow-visible">
-        <nav
-          data-slot="shopping-list-origin-tabs"
-          aria-label="Filtrar itens por origem"
-          className="-mb-4 flex gap-2 overflow-x-auto pb-4 sm:mb-0 sm:flex-wrap sm:overflow-visible sm:pb-0"
+        <Suspense
+          fallback={
+            <AbasDeOrigem
+              origin={origin}
+              hrefForOrigin={hrefForOrigin}
+              counts={contagemBase}
+              sugestoes={null}
+            />
+          }
         >
-          {(
-            [
-              { value: "all", label: "Todos", icon: ClipboardCheck },
-              { value: "assistant", label: "Assistente", icon: Sparkles },
-              {
-                value: "manual",
-                label: "Inseridos por você",
-                icon: UserRound,
-              },
-            ] as const
-          ).map((option) => {
-            const Icon = option.icon;
-            return (
-              <Link
-                key={option.value}
-                href={hrefForOrigin(option.value)}
-                aria-current={origin === option.value ? "page" : undefined}
-                className={cn(
-                  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors sm:h-8",
-                  origin === option.value
-                    ? "border-primary bg-primary-soft text-primary"
-                    : "border-border bg-surface text-fg-muted hover:bg-surface-muted hover:text-fg",
-                )}
-              >
-                <Icon className="size-3.5" aria-hidden />
-                {option.label} ({originCounts[option.value]})
-              </Link>
-            );
-          })}
-        </nav>
+          <AbasComContagem
+            origin={origin}
+            hrefForOrigin={hrefForOrigin}
+            counts={contagemBase}
+            sugestoes={
+              showSuggestions ? suggestions.length : sugestoesParaContagem
+            }
+          />
+        </Suspense>
       </div>
 
       {showSuggestions ? (
@@ -130,7 +216,6 @@ export default async function ShoppingListPage({
       ) : null}
 
       <div className="mt-4">
-
         {filteredItems.length === 0 && !hasVisibleSuggestions ? (
           <EmptyState
             icon={origin === "assistant" ? Sparkles : ClipboardCheck}

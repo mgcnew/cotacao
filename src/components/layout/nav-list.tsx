@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 
@@ -18,6 +18,19 @@ import { cn } from "@/lib/utils";
  * Ficar num módulo só evita o clássico: adicionar um item no menu e ele
  * aparecer em uma das duas telas apenas.
  */
+
+/**
+ * Acende o item assim que o clique acontece, sem esperar o servidor. Só aparece
+ * quando a rota não estava pré-carregada — com a casca já no cliente a troca é
+ * imediata e o estado pendente nem chega a existir.
+ *
+ * Fica dentro do `Link` porque `useLinkStatus` só enxerga o link ancestral; o
+ * estilo sai do pai por `has-[[data-pendente]]`.
+ */
+function MarcaDePendente() {
+  const { pending } = useLinkStatus();
+  return pending ? <span data-pendente aria-hidden className="hidden" /> : null;
+}
 
 export function NavLink({
   item,
@@ -44,11 +57,13 @@ export function NavLink({
         "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
         "transition-colors duration-(--dur) ease-(--ease-ds)",
         collapsed && "justify-center px-0",
+        "has-[[data-pendente]]:bg-primary-soft has-[[data-pendente]]:text-primary",
         active
           ? "bg-primary-soft text-primary font-medium"
           : "text-fg-muted hover:bg-surface-muted hover:text-fg",
       )}
     >
+      <MarcaDePendente />
       <Icon className="size-4 shrink-0" aria-hidden />
       {!collapsed && <span className="truncate">{item.label}</span>}
     </Link>

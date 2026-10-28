@@ -108,7 +108,13 @@ function ProductFilterFields({
   );
 }
 
-export default function ProdutosPage({ searchParams }: PageProps<"/produtos">) {
+export default async function ProdutosPage({
+  searchParams,
+}: PageProps<"/produtos">) {
+  // Só o recorte (busca, filtros, página), sem tocar no banco: serve de `key`
+  // para a fronteira abaixo.
+  const recorte = await searchParams;
+
   return (
     <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
@@ -121,7 +127,13 @@ export default function ProdutosPage({ searchParams }: PageProps<"/produtos">) {
         }
       />
 
-      <Suspense fallback={<TableSkeleton rows={8} columns={7} />}>
+      {/* A `key` amarra a fronteira ao recorte: filtrar ou paginar traz o
+          esqueleto de volta, em vez de manter a lista anterior parada na tela
+          até a nova chegar. */}
+      <Suspense
+        key={JSON.stringify(recorte)}
+        fallback={<TableSkeleton rows={8} columns={7} />}
+      >
         <ProdutosContent searchParams={searchParams} />
       </Suspense>
     </div>

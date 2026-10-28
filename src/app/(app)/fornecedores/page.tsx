@@ -102,9 +102,13 @@ function SupplierFilterFields({
   );
 }
 
-export default function FornecedoresPage({
+export default async function FornecedoresPage({
   searchParams,
 }: PageProps<"/fornecedores">) {
+  // Só o recorte (busca, situação, página), sem tocar no banco: serve de `key`
+  // para a fronteira abaixo.
+  const recorte = await searchParams;
+
   return (
     <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
@@ -117,7 +121,13 @@ export default function FornecedoresPage({
         }
       />
 
-      <Suspense fallback={<TableSkeleton rows={6} columns={4} />}>
+      {/* A `key` amarra a fronteira ao recorte: filtrar ou paginar traz o
+          esqueleto de volta, em vez de manter a lista anterior parada na tela
+          até a nova chegar. */}
+      <Suspense
+        key={JSON.stringify(recorte)}
+        fallback={<TableSkeleton rows={6} columns={4} />}
+      >
         <FornecedoresContent searchParams={searchParams} />
       </Suspense>
     </div>

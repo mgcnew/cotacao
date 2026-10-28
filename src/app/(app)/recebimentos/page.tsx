@@ -1,6 +1,7 @@
 import { BadgeDollarSign, ChevronDown, PackageCheck } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { Metric } from "@/components/layout/metric";
@@ -18,6 +19,8 @@ import {
 } from "@/features/receipts/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 
+import Loading from "./loading";
+
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -29,9 +32,26 @@ function formatDay(iso: string) {
   return DATE.format(new Date(year, month - 1, day));
 }
 
+/**
+ * A casca só lê o recorte (filtro, agrupamento, página) e o usa de `key`: trocar
+ * de filtro devolve o esqueleto, em vez de deixar a tela anterior parada
+ * enquanto as três consultas do quadro rodam de novo.
+ */
 export default async function RecebimentosPage({
   searchParams,
 }: PageProps<"/recebimentos">) {
+  const recorte = await searchParams;
+
+  return (
+    <Suspense key={JSON.stringify(recorte)} fallback={<Loading />}>
+      <RecebimentosConteudo searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function RecebimentosConteudo({
+  searchParams,
+}: Pick<PageProps<"/recebimentos">, "searchParams">) {
   const company = await requireActiveCompany();
   const permissions = await getPermissions(company.companyId);
   if (!permissions.has("receipt.view")) redirect("/dashboard");
