@@ -2,7 +2,7 @@
 
 import { SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
@@ -58,16 +58,21 @@ export function FilterDialog({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const atual = useSearchParams();
   const [aberto, setAberto] = React.useState(false);
 
   function aplicar(evento: React.FormEvent<HTMLFormElement>) {
     evento.preventDefault();
 
     const dados = new FormData(evento.currentTarget);
-    const busca = new URLSearchParams();
+    // Parte do recorte que não é deste modal (a busca da barra) continua
+    // valendo; trocar o filtro volta à primeira página.
+    const busca = new URLSearchParams(atual);
+    busca.delete("pagina");
     for (const [chave, valor] of dados.entries()) {
       // Campo em branco não vira parâmetro: "?situacao=&de=" polui o endereço
       // e faz um recorte vazio parecer um recorte.
+      busca.delete(chave);
       if (typeof valor === "string" && valor.trim() !== "") {
         busca.set(chave, valor.trim());
       }
@@ -84,13 +89,13 @@ export function FilterDialog({
         <Button
           type="button"
           size="sm"
-          variant={ativos > 0 ? "default" : "outline"}
+          variant="outline"
           className="gap-1.5"
         >
           <SlidersHorizontal className="size-3.5" aria-hidden />
           Filtros
           {ativos > 0 ? (
-            <span className="bg-surface/25 rounded-full px-1.5 text-xs tabular-nums">
+            <span className="bg-primary-soft text-primary rounded-sm px-1.5 text-xs tabular-nums">
               {ativos}
             </span>
           ) : null}

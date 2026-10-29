@@ -4,13 +4,13 @@ import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { FilterDialog } from "@/components/layout/filter-dialog";
+import { FilterChips, ListSearch } from "@/components/layout/list-toolbar";
 import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
 import { PageHeader } from "@/components/layout/page-header";
 import { TableSkeleton } from "@/components/layout/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -37,13 +37,11 @@ const selectClass =
   "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
 
 function SupplierFilterFields({
-  busca,
   status,
   categoria,
   categories,
   pageSize,
 }: {
-  busca: string;
   status: string;
   categoria: string | null;
   categories: { id: string; name: string }[];
@@ -51,18 +49,6 @@ function SupplierFilterFields({
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <div className="flex flex-col gap-1.5 sm:col-span-2">
-        <label htmlFor="supplier-search" className="text-fg-muted text-xs">
-          Nome, CNPJ ou contato
-        </label>
-        <Input
-          id="supplier-search"
-          name="busca"
-          defaultValue={busca}
-          placeholder="Buscar fornecedor"
-          className="h-8"
-        />
-      </div>
       <input type="hidden" name="por_pagina" value={pageSize} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor="supplier-status" className="text-fg-muted text-xs">
@@ -113,11 +99,16 @@ export default async function FornecedoresPage({
     <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
         title="Fornecedores"
-        description="Cadastro, contatos e situação da rede de fornecimento."
+        info="Cadastro, contatos e situação da rede de fornecimento."
         action={
-          <Suspense fallback={null}>
-            <NovoFornecedorAction />
-          </Suspense>
+          <>
+            <Suspense fallback={null}>
+              <ListSearch placeholder="Buscar nome, CNPJ ou contato" />
+            </Suspense>
+            <Suspense fallback={null}>
+              <NovoFornecedorAction />
+            </Suspense>
+          </>
         }
       />
 
@@ -234,15 +225,43 @@ async function FornecedoresContent({
     <>
       {suppliers.length > 0 ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <FilterDialog basePath="/fornecedores" ativos={filtrosAtivos}>
+          <FilterDialog
+            basePath="/fornecedores"
+            ativos={filtrosAtivos - Number(Boolean(busca))}
+          >
             <SupplierFilterFields
-              busca={busca}
               status={status}
               categoria={categoria}
               categories={categories}
               pageSize={pagination.pageSize}
             />
           </FilterDialog>
+          <FilterChips
+            className="contents"
+            filtros={[
+              ...(status !== "todos"
+                ? [
+                    {
+                      rotulo:
+                        { active: "Ativos", inactive: "Inativos", blocked: "Bloqueados" }[
+                          status
+                        ] ?? status,
+                      chaves: ["status"],
+                    },
+                  ]
+                : []),
+              ...(categoria
+                ? [
+                    {
+                      rotulo: `Categoria: ${
+                        categories.find((c) => c.id === categoria)?.name ?? "—"
+                      }`,
+                      chaves: ["categoria"],
+                    },
+                  ]
+                : []),
+            ]}
+          />
           <span className="text-fg-subtle text-xs sm:ml-auto">
             {counts.ativos} de {counts.total} ativos · {counts.contatos}{" "}
             contatos

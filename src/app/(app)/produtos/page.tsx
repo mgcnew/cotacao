@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { ProductRowActions } from "@/components/products/product-row-actions";
 import { FilterDialog } from "@/components/layout/filter-dialog";
+import { FilterChips, ListSearch } from "@/components/layout/list-toolbar";
 import { PageHeader } from "@/components/layout/page-header";
 import { TableSkeleton } from "@/components/layout/page-skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +21,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   Table,
@@ -43,13 +43,11 @@ import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { parseListPagination } from "@/lib/list-pagination";
 
 function ProductFilterFields({
-  busca,
   status,
   categoria,
   categories,
   pageSize,
 }: {
-  busca: string;
   status: string;
   categoria: string | null;
   categories: { id: string; name: string }[];
@@ -57,18 +55,6 @@ function ProductFilterFields({
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <div className="flex flex-col gap-1.5 sm:col-span-2">
-        <label htmlFor="product-search" className="text-fg-muted text-xs">
-          Nome do produto
-        </label>
-        <Input
-          id="product-search"
-          name="busca"
-          defaultValue={busca}
-          placeholder="Buscar produto"
-          className="h-8"
-        />
-      </div>
       <input type="hidden" name="por_pagina" value={pageSize} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor="product-status" className="text-fg-muted text-xs">
@@ -119,11 +105,16 @@ export default async function ProdutosPage({
     <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
         title="Produtos"
-        description="Catálogo único: revenda e uso interno, separados pela finalidade."
+        info="Catálogo único: revenda e uso interno, separados pela finalidade."
         action={
-          <Suspense fallback={null}>
-            <ProductCatalogActions />
-          </Suspense>
+          <>
+            <Suspense fallback={null}>
+              <ListSearch placeholder="Buscar produto" />
+            </Suspense>
+            <Suspense fallback={null}>
+              <ProductCatalogActions />
+            </Suspense>
+          </>
         }
       />
 
@@ -252,16 +243,46 @@ async function ProdutosContent({
   return (
     <>
       {catalog.catalogTotal > 0 ? (
-        <div className="mb-4 flex shrink-0 items-center">
-          <FilterDialog basePath="/produtos" ativos={filtrosAtivos}>
+        <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2">
+          <FilterDialog
+            basePath="/produtos"
+            ativos={filtrosAtivos - Number(Boolean(filters.busca))}
+          >
             <ProductFilterFields
-              busca={filters.busca}
               status={filters.status ?? "todos"}
               categoria={filters.categoriaId}
               categories={catalog.categories}
               pageSize={catalog.pageSize}
             />
           </FilterDialog>
+          <FilterChips
+            className="contents"
+            filtros={[
+              ...(filters.status
+                ? [
+                    {
+                      rotulo:
+                        filters.status === "ativos"
+                          ? "Somente ativos"
+                          : "Somente inativos",
+                      chaves: ["status"],
+                    },
+                  ]
+                : []),
+              ...(filters.categoriaId
+                ? [
+                    {
+                      rotulo: `Categoria: ${
+                        catalog.categories.find(
+                          (c) => c.id === filters.categoriaId,
+                        )?.name ?? "—"
+                      }`,
+                      chaves: ["categoria"],
+                    },
+                  ]
+                : []),
+            ]}
+          />
         </div>
       ) : null}
 

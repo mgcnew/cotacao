@@ -178,7 +178,7 @@ async function ListaDeComprasConteudo({
     <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
         title="Lista de compras"
-        description="Registre o que está faltando agora; decida depois se vai cotar ou comprar direto."
+        info="Registre o que está faltando agora; decida depois se vai cotar ou comprar direto."
       />
 
       {canManage ? (

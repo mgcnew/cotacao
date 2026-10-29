@@ -44,19 +44,6 @@ export function RoundFilterFields({ filters }: { filters: RoundFilters }) {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="busca" className="text-fg-muted text-xs">
-          Título
-        </label>
-        <Input
-          id="busca"
-          name="busca"
-          defaultValue={filters.busca ?? ""}
-          placeholder="compra semanal"
-          className="h-8"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
         <label htmlFor="de" className="text-fg-muted text-xs">
           Criadas de
         </label>

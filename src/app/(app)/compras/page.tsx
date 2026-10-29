@@ -4,13 +4,11 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
-import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
-import {
-  MetricsSkeleton,
-  TableSkeleton,
-} from "@/components/layout/page-skeleton";
+import { TableSkeleton } from "@/components/layout/page-skeleton";
 import { FilterDialog } from "@/components/layout/filter-dialog";
+import { ListSegments } from "@/components/layout/list-segments";
+import { FilterChips, ListSearch } from "@/components/layout/list-toolbar";
 import { NewRoundDialog } from "@/components/rounds/round-dialogs";
 import { RoundFilterFields } from "@/components/rounds/round-filter-bar";
 import { RoundMobileCard, RoundRow } from "@/components/rounds/round-row";
@@ -29,11 +27,11 @@ import {
   parseRoundFilters,
   type RoundFilters,
 } from "@/features/rounds/filters";
+import { listRoundsWithProgress } from "@/features/rounds/queries";
 import {
-  listRoundsWithProgress,
-  summarizeRounds,
-} from "@/features/rounds/queries";
-import { roundNextStep } from "@/features/rounds/status";
+  ROUND_STATUS_LABEL,
+  roundNextStep,
+} from "@/features/rounds/status";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { parseListPagination } from "@/lib/list-pagination";
 
@@ -67,12 +65,15 @@ export default async function ComprasPage({
     <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
         title="Compras"
-        description="Cada rodada reúne produtos, convida fornecedores, recebe preços e vira pedido."
+        info="Cada rodada reúne produtos, convida fornecedores, recebe preços e vira pedido."
         action={
           <>
+            <Suspense fallback={null}>
+              <ListSearch placeholder="Buscar rodada pelo título" />
+            </Suspense>
             <FilterDialog
               basePath="/compras"
-              ativos={contarRoundFilters(filters)}
+              ativos={contarRoundFilters(filters) - Number(Boolean(filters.busca))}
               ajuda={
                 <>
                   &quot;Em aberto&quot; é preparação e andamento juntos.
@@ -95,7 +96,7 @@ export default async function ComprasPage({
         key={JSON.stringify(filters)}
         fallback={
           <>
-            <MetricsSkeleton className="mb-4 grid-cols-2 gap-2 sm:mb-6 sm:gap-3" />
+            <div className="border-border mb-4 h-10 border-b" />
             <TableSkeleton rows={6} columns={5} />
           </>
         }
@@ -127,8 +128,17 @@ async function ListaDeRodadas({
 }) {
   const filtrando = hasAnyRoundFilter(filters);
   const podeEditarRodada = permissions.has("purchase_round.update");
-  const rounds = await listRoundsWithProgress(companyId, filters);
-  const resumo = summarizeRounds(rounds);
+  // As abas contam o recorte sem a situação; com uma situação escolhida, a
+  // lista e as contagens são duas consultas (em paralelo).
+  const [rounds, base] = await Promise.all([
+    listRoundsWithProgress(companyId, filters),
+    filters.situacao
+      ? listRoundsWithProgress(companyId, { ...filters, situacao: null })
+      : null,
+  ]);
+  const todas = base ?? rounds;
+  const conta = (teste: (r: (typeof todas)[number]) => boolean) =>
+    todas.filter(teste).length;
   const pagination = parseListPagination(paginationParams, rounds.length);
   const visibleRounds = rounds.slice(pagination.start, pagination.end);
   const presentedRounds = visibleRounds.map((round) => {
@@ -162,33 +172,62 @@ async function ListaDeRodadas({
 
   return (
     <>
-      {rounds.length > 0 ? (
-        <div className="mb-4 grid grid-cols-2 gap-2 sm:mb-6 sm:gap-3 lg:grid-cols-4">
-          <Metric
-            label={filtrando ? "Rodadas nesta seleção" : "Rodadas"}
-            value={String(resumo.quantidade)}
-            hint={`${resumo.emPreparacao} ainda em preparação`}
-          />
-          <Metric
-            label="Em andamento"
-            value={String(resumo.emAndamento)}
-            hint="cotações abertas agora"
-            href="/compras?situacao=active"
-          />
-          <Metric
-            label="Aguardando resposta"
-            value={String(resumo.aguardandoResposta)}
-            hint="fornecedores que ainda não concluíram"
-            href="/compras?situacao=aguardando"
-          />
-          <Metric
-            label="Pedidos gerados"
-            value={String(resumo.pedidosGerados)}
-            hint="decisões de compra que viraram pedido"
-            href="/pedidos"
-          />
-        </div>
+      {todas.length > 0 ? (
+        <ListSegments
+          basePath="/compras"
+          param="situacao"
+          atual={filters.situacao}
+          params={paginationParams}
+          segmentos={[
+            { valor: null, rotulo: "Todas", contagem: todas.length },
+            {
+              valor: "abertas",
+              rotulo: "Em aberto",
+              contagem: conta((r) => r.status === "draft" || r.status === "active"),
+            },
+            {
+              valor: "aguardando",
+              rotulo: "Aguardando resposta",
+              contagem: conta(
+                (r) => r.status === "active" && Number(r.suppliers_pending ?? 0) > 0,
+              ),
+            },
+            {
+              valor: "completed",
+              rotulo: "Concluídas",
+              contagem: conta((r) => r.status === "completed"),
+            },
+            {
+              valor: "cancelled",
+              rotulo: "Canceladas",
+              contagem: conta((r) => r.status === "cancelled"),
+            },
+          ]}
+        />
       ) : null}
+      <FilterChips
+        filtros={[
+          ...(filters.situacao &&
+          !["abertas", "aguardando", "completed", "cancelled"].includes(
+            filters.situacao,
+          )
+            ? [
+                {
+                  rotulo: `Situação: ${ROUND_STATUS_LABEL[filters.situacao] ?? filters.situacao}`,
+                  chaves: ["situacao"],
+                },
+              ]
+            : []),
+          ...(filters.de || filters.ate
+            ? [
+                {
+                  rotulo: `Criadas ${filters.de ? `de ${filters.de.split("-").reverse().join("/")}` : ""}${filters.ate ? ` até ${filters.ate.split("-").reverse().join("/")}` : ""}`.trim(),
+                  chaves: ["de", "ate"],
+                },
+              ]
+            : []),
+        ]}
+      />
 
       {rounds.length === 0 ? (
         <EmptyState

@@ -6,11 +6,11 @@ import { Suspense } from "react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { FilterDialog } from "@/components/layout/filter-dialog";
 import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
-import { Metric } from "@/components/layout/metric";
+import { ListSegments } from "@/components/layout/list-segments";
+import { FilterChips } from "@/components/layout/list-toolbar";
 import { PageHeader } from "@/components/layout/page-header";
 import {
   FormSkeleton,
-  MetricsSkeleton,
   TableSkeleton,
 } from "@/components/layout/page-skeleton";
 import { SendOrderDialog } from "@/components/orders/order-dialogs";
@@ -75,7 +75,7 @@ export default async function PedidosPage({
     <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
       <PageHeader
         title="Pedidos"
-        description="Da geração ao recebimento. O pedido é enviado ao fornecedor, confirmado por ele, e só então a mercadoria pode dar entrada."
+        info="Da geração ao recebimento. O pedido é enviado ao fornecedor, confirmado por ele, e só então a mercadoria pode dar entrada."
         action={
           <>
             <FilterDialog
@@ -126,7 +126,7 @@ export default async function PedidosPage({
         key={JSON.stringify(filters)}
         fallback={
           <>
-            <MetricsSkeleton className="mb-4 grid-cols-2 gap-2 sm:mb-6 sm:gap-3" />
+            <div className="border-border mb-4 h-10 border-b" />
             <TableSkeleton rows={6} columns={5} />
           </>
         }
@@ -182,6 +182,17 @@ async function ListaDePedidos({
     page: requestedPagination.page,
     pageSize: requestedPagination.pageSize,
   });
+  // As abas contam o recorte sem a situação: escolher "Atrasados" não pode
+  // zerar as outras. Só a contagem interessa, então a página é de um item.
+  const contagem = filters.situacao
+    ? (
+        await listOrders(
+          companyId,
+          { ...filters, situacao: null },
+          { page: 1, pageSize: 1 },
+        )
+      ).summary
+    : summary;
   const presentedOrders = orders.map((order) => {
     const passo = orderNextStep(order.status);
     // Sem a permissão, o passo existe mas não é desta pessoa: o botão vira
@@ -200,31 +211,47 @@ async function ListaDePedidos({
 
   return (
     <>
-      {orders.length > 0 ? (
-        <div className="mb-4 grid shrink-0 grid-cols-2 gap-2 sm:mb-6 sm:gap-3 lg:grid-cols-4">
-          <Metric
-            label={filtrando ? "Pedidos nesta seleção" : "Pedidos"}
-            value={String(summary.quantity)}
-            hint="fora os cancelados"
-          />
-          <Metric
-            label="Em rascunho"
-            value={String(summary.drafts)}
-            hint="ainda não saíram daqui"
-          />
-          <Metric
-            label="A receber"
-            value={String(summary.toReceive)}
-            hint={`${summary.awaitingConfirmation} aguardando confirmação`}
-          />
-          <Metric
-            label="Atrasados"
-            value={String(summary.overdue)}
-            hint="prazo vencido, mercadoria por vir"
-            tone={summary.overdue > 0 ? "bad" : "neutral"}
-          />
-        </div>
+      {contagem.quantity > 0 || filters.situacao ? (
+        <ListSegments
+          basePath="/pedidos"
+          param="situacao"
+          atual={filters.situacao}
+          params={paginationParams}
+          segmentos={[
+            { valor: null, rotulo: "Todos", contagem: contagem.quantity },
+            { valor: "draft", rotulo: "Rascunho", contagem: contagem.drafts },
+            {
+              valor: "awaiting_confirmation",
+              rotulo: "Aguardando confirmação",
+              contagem: contagem.awaitingConfirmation,
+            },
+            { valor: "atrasados", rotulo: "Atrasados", contagem: contagem.overdue },
+          ]}
+        />
       ) : null}
+      <FilterChips
+        filtros={[
+          ...(filters.numero
+            ? [{ rotulo: `Pedido #${filters.numero}`, chaves: ["numero"] }]
+            : []),
+          ...(filters.fornecedorId
+            ? [
+                {
+                  rotulo: `Fornecedor: ${orders[0]?.supplierName ?? "escolhido"}`,
+                  chaves: ["fornecedor"],
+                },
+              ]
+            : []),
+          ...(filters.de || filters.ate
+            ? [
+                {
+                  rotulo: `Criados ${filters.de ? `de ${filters.de.split("-").reverse().join("/")}` : ""}${filters.ate ? ` até ${filters.ate.split("-").reverse().join("/")}` : ""}`.trim(),
+                  chaves: ["de", "ate"],
+                },
+              ]
+            : []),
+        ]}
+      />
 
       {total === 0 ? (
         <EmptyState
