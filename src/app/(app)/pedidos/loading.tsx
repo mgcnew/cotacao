@@ -1,5 +1,4 @@
 import {
-  MetricsSkeleton,
   PageHeaderSkeleton,
   PageSkeleton,
   TableSkeleton,
@@ -11,7 +10,7 @@ export default function Loading() {
   return (
     <PageSkeleton>
       <PageHeaderSkeleton />
-      <MetricsSkeleton className="mb-4 grid-cols-2 gap-2 sm:mb-6 sm:gap-3" />
+      <div className="border-border mb-4 h-10 border-b" />
       <TableSkeleton rows={6} columns={5} />
     </PageSkeleton>
   );
