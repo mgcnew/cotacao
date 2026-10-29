@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
  * escolher "Concluídas" zeraria todas as outras abas.
  *
  * No celular as abas não cabem e rolam de lado: a ativa é trazida para a vista
- * ao montar, e a borda direita esmaece para dizer que há mais.
+ * ao montar, e esmaece a borda do lado em que ainda há abas escondidas.
  */
 export type Segmento = {
   /** Valor do parâmetro; `null` é "todas". */
@@ -53,20 +53,33 @@ export function ListSegments({
   }
 
   const navRef = React.useRef<HTMLElement>(null);
+  const [bordas, setBordas] = React.useState({ esquerda: false, direita: false });
+  const medir = React.useCallback(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    setBordas({
+      esquerda: nav.scrollLeft > 1,
+      direita: nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1,
+    });
+  }, []);
   React.useEffect(() => {
     navRef.current
       ?.querySelector('[aria-current="page"]')
       ?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [atual]);
+    medir();
+    window.addEventListener("resize", medir);
+    return () => window.removeEventListener("resize", medir);
+  }, [atual, medir]);
+
+  const mascara = `linear-gradient(to right, ${bordas.esquerda ? "transparent, black 2rem" : "black"}, ${bordas.direita ? "black calc(100% - 2rem), transparent" : "black"})`;
 
   return (
     <nav
       ref={navRef}
       aria-label="Situação"
-      className={cn(
-        "border-border mb-4 flex shrink-0 gap-1 overflow-x-auto border-b",
-        "max-sm:pr-8 max-sm:[mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)]",
-      )}
+      onScroll={medir}
+      style={{ maskImage: mascara, WebkitMaskImage: mascara }}
+      className="border-border mb-4 flex shrink-0 gap-1 overflow-x-auto border-b"
     >
       {segmentos.map((segmento) => {
         const ativo = segmento.valor === atual;
