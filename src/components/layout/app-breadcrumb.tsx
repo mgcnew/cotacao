@@ -124,7 +124,9 @@ export function AppBreadcrumb({ className }: { className?: string }) {
   const pathname = usePathname();
   const titulo = useTituloAtual();
   const secao = secaoDe(pathname);
-  if (!secao) return null;
+  // Sem seção conhecida, o espaço continua ocupado: é ele que mantém a busca
+  // no centro do cabeçalho.
+  if (!secao) return <div className={className} />;
 
   const resto = pathname
     .slice(secao.href.length)

@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/layout/empty-state";
 import { FilterDialog } from "@/components/layout/filter-dialog";
 import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
 import { ListSegments } from "@/components/layout/list-segments";
-import { FilterChips } from "@/components/layout/list-toolbar";
+import { FilterChips, ListSearch } from "@/components/layout/list-toolbar";
 import { PageHeader } from "@/components/layout/page-header";
 import {
   FormSkeleton,
@@ -78,9 +78,16 @@ export default async function PedidosPage({
         info="Da geração ao recebimento. O pedido é enviado ao fornecedor, confirmado por ele, e só então a mercadoria pode dar entrada."
         action={
           <>
+            <Suspense fallback={null}>
+              <ListSearch
+                placeholder="Buscar pelo nº do pedido"
+                param="numero"
+                numerico
+              />
+            </Suspense>
             <FilterDialog
               basePath="/pedidos"
-              ativos={contarOrderFilters(filters)}
+              ativos={contarOrderFilters(filters) - Number(Boolean(filters.numero))}
               ajuda={
                 <>
                   &quot;Em aberto&quot; é tudo que ainda não foi recebido nem
@@ -184,6 +191,13 @@ async function ListaDePedidos({
   });
   // As abas contam o recorte sem a situação: escolher "Atrasados" não pode
   // zerar as outras. Só a contagem interessa, então a página é de um item.
+  // Nome do fornecedor do recorte pela própria lista de fornecedores: tirá-lo
+  // da primeira linha falhava justo quando o recorte vinha vazio.
+  const fornecedorDoRecorte = filters.fornecedorId
+    ? (await listOrderFilterSuppliers(companyId)).find(
+        (s) => s.id === filters.fornecedorId,
+      )?.name
+    : null;
   const contagem = filters.situacao
     ? (
         await listOrders(
@@ -231,13 +245,10 @@ async function ListaDePedidos({
       ) : null}
       <FilterChips
         filtros={[
-          ...(filters.numero
-            ? [{ rotulo: `Pedido #${filters.numero}`, chaves: ["numero"] }]
-            : []),
           ...(filters.fornecedorId
             ? [
                 {
-                  rotulo: `Fornecedor: ${orders[0]?.supplierName ?? "escolhido"}`,
+                  rotulo: `Fornecedor: ${fornecedorDoRecorte ?? "removido"}`,
                   chaves: ["fornecedor"],
                 },
               ]

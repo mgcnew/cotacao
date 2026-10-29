@@ -1,5 +1,6 @@
 import {
   CalendarClock,
+  Check,
   CheckCircle2,
   Link2,
   NotebookPen,
@@ -376,7 +377,9 @@ function NoteCard({
                           : "border-border-strong",
                       )}
                     >
-                      {item.done ? "✓" : ""}
+                      {item.done ? (
+                        <Check className="size-3" strokeWidth={3} />
+                      ) : null}
                     </span>
                     <span
                       className={cn(

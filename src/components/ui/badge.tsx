@@ -10,7 +10,7 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-primary-line bg-primary-soft text-primary [a]:hover:bg-primary-soft/80",
+          "border-[color-mix(in_oklab,var(--info)_28%,var(--border-color))] bg-info-soft text-info [a]:hover:bg-info-soft/80",
         secondary:
           "border-border bg-surface-muted text-fg-muted [a]:hover:bg-surface-muted/80",
         destructive:

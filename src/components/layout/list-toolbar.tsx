@@ -43,18 +43,23 @@ function semChaves(
   return query ? `${basePath}?${query}` : basePath;
 }
 
-/** Campo de busca da lista, ligado ao `?busca=` da URL. */
+/** Campo de busca da lista, ligado ao `?busca=` da URL (ou a outro parâmetro). */
 export function ListSearch({
   placeholder,
+  param = "busca",
+  numerico = false,
   className,
 }: {
   placeholder: string;
+  /** Pedidos buscam pelo número (`?numero=`), que é o que o banco filtra. */
+  param?: string;
+  numerico?: boolean;
   className?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const termoNaUrl = params.get("busca") ?? "";
+  const termoNaUrl = params.get(param) ?? "";
   const [termo, setTermo] = React.useState(termoNaUrl);
 
   // Voltar e avançar no navegador trocam a URL por fora: o campo acompanha.
@@ -70,8 +75,8 @@ export function ListSearch({
     const timer = window.setTimeout(() => {
       const busca = new URLSearchParams(params);
       busca.delete("pagina");
-      if (limpo) busca.set("busca", limpo);
-      else busca.delete("busca");
+      if (limpo) busca.set(param, limpo);
+      else busca.delete(param);
       const query = busca.toString();
       // `replace`: cada letra não vira uma entrada no histórico.
       router.replace(query ? `${pathname}?${query}` : pathname, {
@@ -79,7 +84,7 @@ export function ListSearch({
       });
     }, ESPERA_MS);
     return () => window.clearTimeout(timer);
-  }, [termo, termoNaUrl, params, pathname, router]);
+  }, [termo, termoNaUrl, params, pathname, router, param]);
 
   return (
     <div className={cn("relative w-full sm:w-72", className)}>
@@ -89,6 +94,7 @@ export function ListSearch({
       />
       <input
         type="search"
+        inputMode={numerico ? "numeric" : undefined}
         data-page-search
         value={termo}
         onChange={(e) => setTermo(e.target.value)}

@@ -72,7 +72,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* Trilha à esquerda, busca no centro, sino e conta à direita. Tema,
+        {/* Trilha à esquerda, busca no centro, sino e conta à direita — as
+            duas pontas com `flex-1` para o gatilho da busca ficar no meio. Tema,
             instalar e Sair moram no menu da conta: são raros, e o Sair solto
             ao lado do sino convidava ao clique sem querer. */}
         <header
@@ -87,14 +88,16 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <AppBreadcrumb className="flex-1" />
           </Suspense>
           <CommandPalette permissions={[...permissions]} />
-          <PwaInstallButton />
-          <Suspense fallback={<NotificationSlotFallback />}>
-            <NotificationSlot companyId={activeCompany.companyId} />
-          </Suspense>
-          <CompanySwitcher
-            companies={memberships}
-            activeCompanyId={activeCompany.companyId}
-          />
+          <div className="flex items-center justify-end gap-3 md:flex-1">
+            <PwaInstallButton />
+            <Suspense fallback={<NotificationSlotFallback />}>
+              <NotificationSlot companyId={activeCompany.companyId} />
+            </Suspense>
+            <CompanySwitcher
+              companies={memberships}
+              activeCompanyId={activeCompany.companyId}
+            />
+          </div>
         </header>
 
         {/* 24px dos lados no desktop, 16px no celular — e é AQUI que a margem

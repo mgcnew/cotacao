@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -12,6 +15,9 @@ import { cn } from "@/lib/utils";
  *
  * As contagens vêm do recorte SEM a situação (mas com busca e datas): senão,
  * escolher "Concluídas" zeraria todas as outras abas.
+ *
+ * No celular as abas não cabem e rolam de lado: a ativa é trazida para a vista
+ * ao montar, e a borda direita esmaece para dizer que há mais.
  */
 export type Segmento = {
   /** Valor do parâmetro; `null` é "todas". */
@@ -37,7 +43,8 @@ export function ListSegments({
   function href(valor: string | null) {
     const busca = new URLSearchParams();
     for (const [chave, bruto] of Object.entries(params)) {
-      if (chave === param || chave === "pagina" || bruto === undefined) continue;
+      if (chave === param || chave === "pagina" || bruto === undefined)
+        continue;
       busca.set(chave, Array.isArray(bruto) ? bruto[0] : bruto);
     }
     if (valor) busca.set(param, valor);
@@ -45,10 +52,21 @@ export function ListSegments({
     return query ? `${basePath}?${query}` : basePath;
   }
 
+  const navRef = React.useRef<HTMLElement>(null);
+  React.useEffect(() => {
+    navRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [atual]);
+
   return (
     <nav
+      ref={navRef}
       aria-label="Situação"
-      className="border-border mb-4 flex shrink-0 gap-1 overflow-x-auto border-b"
+      className={cn(
+        "border-border mb-4 flex shrink-0 gap-1 overflow-x-auto border-b",
+        "max-sm:pr-8 max-sm:[mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)]",
+      )}
     >
       {segmentos.map((segmento) => {
         const ativo = segmento.valor === atual;
@@ -70,7 +88,9 @@ export function ListSegments({
             <span
               className={cn(
                 "rounded-sm px-1.5 text-xs tabular-nums",
-                ativo ? "bg-primary-soft text-primary" : "bg-surface-muted text-fg-subtle",
+                ativo
+                  ? "bg-primary-soft text-primary"
+                  : "bg-surface-muted text-fg-subtle",
               )}
             >
               {segmento.contagem}

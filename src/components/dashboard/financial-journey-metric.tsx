@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowRight,
   BadgeDollarSign,
   ChevronDown,
   ExternalLink,
@@ -150,11 +151,11 @@ function EventCard({
 
           <div className="text-fg-subtle mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums">
             <span>{MONEY.format(event.balanceBefore)}</span>
-            <span aria-hidden>→</span>
+            <ArrowRight className="size-3" aria-hidden />
             <span className={contributionClass(metric, event.contribution)}>
               {signedMoney(event.contribution)}
             </span>
-            <span aria-hidden>→</span>
+            <ArrowRight className="size-3" aria-hidden />
             <strong className="text-fg font-medium">
               {MONEY.format(event.balanceAfter)}
             </strong>

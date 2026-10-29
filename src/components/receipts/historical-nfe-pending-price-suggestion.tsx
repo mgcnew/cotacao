@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeDollarSign } from "lucide-react";
+import { BadgeDollarSign, Check } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useState } from "react";
 
@@ -127,10 +127,12 @@ export function HistoricalNfePendingPriceSuggestion({
 
           <ul className="text-fg mt-3 space-y-1 text-sm">
             {evidence.citedInInvoice ? (
-              <li>✓ O número do pedido está escrito na nota.</li>
+              <li className="flex items-start gap-1.5">
+                <Marca ok />O número do pedido está escrito na nota.
+              </li>
             ) : null}
-            <li>
-              {todosNoPedido ? "✓" : "·"}{" "}
+            <li className="flex items-start gap-1.5">
+              <Marca ok={todosNoPedido} />
               {todosNoPedido
                 ? evidence.invoiceLines === 1
                   ? "O item da nota está no pedido."
@@ -138,17 +140,20 @@ export function HistoricalNfePendingPriceSuggestion({
                 : `${evidence.invoiceLinesInOrder} de ${evidence.invoiceLines} itens da nota estão no pedido.`}
             </li>
             {evidence.pricedLines > 0 ? (
-              <li>
-                {evidence.pricedLinesWithinTolerance === evidence.pricedLines
-                  ? "✓"
-                  : "·"}{" "}
+              <li className="flex items-start gap-1.5">
+                <Marca
+                  ok={
+                    evidence.pricedLinesWithinTolerance === evidence.pricedLines
+                  }
+                />
                 {evidence.pricedLinesWithinTolerance} de {evidence.pricedLines}{" "}
                 {evidence.pricedLines === 1 ? "preço" : "preços"} a até 15% do
                 negociado.
               </li>
             ) : null}
-            <li>
-              · Nota emitida em {formatarDia(issuedDay)};{" "}
+            <li className="flex items-start gap-1.5">
+              <Marca ok={false} />
+              Nota emitida em {formatarDia(issuedDay)};{" "}
               {chosen.arrivalDay
                 ? `a mercadoria chegou em ${formatarDia(chosen.arrivalDay)}`
                 : chosen.deliveryDueDate
@@ -186,5 +191,21 @@ export function HistoricalNfePendingPriceSuggestion({
         </div>
       </div>
     </section>
+  );
+}
+
+/** Marca de evidência: confirmada (✓ desenhado) ou só informada (ponto). */
+function Marca({ ok }: { ok: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className="mt-0.5 flex size-4 shrink-0 items-center justify-center"
+    >
+      {ok ? (
+        <Check className="text-success size-3.5" />
+      ) : (
+        <span className="bg-fg-subtle size-1 rounded-full" />
+      )}
+    </span>
   );
 }

@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
-import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
 import { ArrivalDialog } from "@/components/receipts/arrival-dialog";
 import { ConfirmPricesForm } from "@/components/receipts/confirm-prices-form";
@@ -266,39 +265,40 @@ async function RecebimentosConteudo({
         }
       />
 
-      <div className="mb-6 hidden gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-5">
-        <Metric
-          label="Atrasadas"
-          value={String(lateOnes.length)}
-          hint="Entrega prevista já passou"
-          tone={lateOnes.length ? "bad" : "neutral"}
-        />
-        <Metric
-          label="A conferir"
-          value={String(board.awaitingCheck.length)}
-          hint="Chegaram e ainda não deram entrada"
-          tone={board.awaitingCheck.length ? "bad" : "neutral"}
-        />
-        <Metric
-          label="Preços a confirmar"
-          value={String(pendingPrices.length)}
-          hint="Baixa feita sem a nota"
-          tone={pendingPrices.length ? "bad" : "neutral"}
-        />
-        <Metric
-          label="Entregas previstas"
-          value={String(board.expected.length)}
-          hint="Pedidos confirmados ainda por chegar"
-        />
-        <Metric
-          label="Conferidas"
-          value={String(history.pagination.total)}
-          hint="Entradas já efetivadas"
-          tone="good"
-        />
-      </div>
+      {/* Atalhos para as seções do quadro, com a contagem de cada uma — no
+          lugar dos cinco cartões de indicador, que custavam uma faixa inteira
+          da tela para repetir os mesmos números das seções logo abaixo. */}
+      <nav
+        aria-label="Seções"
+        className="border-border mb-6 hidden flex-wrap gap-1 border-b pb-2 sm:flex"
+      >
+        {[
+          { rotulo: "Atrasadas", n: lateOnes.length, href: `${filterHref("atrasadas")}#previstas`, alerta: true },
+          { rotulo: "A conferir", n: board.awaitingCheck.length, href: "#conferir", alerta: true },
+          { rotulo: "Preços a confirmar", n: pendingPrices.length, href: "#confirmar-precos", alerta: true },
+          { rotulo: "Previstas", n: board.expected.length, href: "#previstas", alerta: false },
+          { rotulo: "Conferidas", n: history.pagination.total, href: "#conferidas", alerta: false },
+        ].map((item) => (
+          <Link
+            key={item.rotulo}
+            href={item.href}
+            className="text-fg-muted hover:bg-surface-muted hover:text-fg flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors"
+          >
+            {item.rotulo}
+            <span
+              className={
+                item.alerta && item.n > 0
+                  ? "bg-warning-soft text-warning rounded-sm px-1.5 text-xs font-medium tabular-nums"
+                  : "bg-surface-muted text-fg-subtle rounded-sm px-1.5 text-xs tabular-nums"
+              }
+            >
+              {item.n}
+            </span>
+          </Link>
+        ))}
+      </nav>
 
-      <section className="mb-8 hidden sm:block">
+      <section id="conferir" className="mb-8 hidden scroll-mt-20 sm:block">
         <div className="mb-3">
           <h2 className="text-fg font-semibold">Aguardando conferência</h2>
           <p className="text-fg-muted text-sm">
@@ -438,7 +438,7 @@ async function RecebimentosConteudo({
         </section>
       ) : null}
 
-      <section className="mb-8">
+      <section id="previstas" className="mb-8 scroll-mt-20">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-fg font-semibold">Entregas previstas</h2>
@@ -513,7 +513,7 @@ async function RecebimentosConteudo({
       </section>
 
       {history.rows.length ? (
-        <section className="hidden sm:block">
+        <section id="conferidas" className="hidden scroll-mt-20 sm:block">
           <h2 className="text-fg mb-3 font-semibold">
             Conferidos recentemente
           </h2>

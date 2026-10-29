@@ -1,5 +1,4 @@
 import { DateTimePicker } from "@/components/ui/date-time-picker";
-import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import {
@@ -88,19 +87,6 @@ export function OrderFilterFields({
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="numero" className="text-fg-muted text-xs">
-          Nº do pedido
-        </label>
-        <Input
-          id="numero"
-          name="numero"
-          inputMode="numeric"
-          placeholder="12"
-          defaultValue={filters.numero ?? ""}
-          className="h-8"
-        />
-      </div>
     </div>
   );
 }
