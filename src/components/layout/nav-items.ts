@@ -90,7 +90,6 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "WhatsApp Compras",
         icon: MessageCircle,
         permission: "purchase_round.view",
-        desktopOnly: true,
       },
     ],
   },

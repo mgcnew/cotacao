@@ -9,6 +9,7 @@ import { AppSidebar, SIDEBAR_COOKIE } from "@/components/layout/app-sidebar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { OperationalLiveUpdates } from "@/components/layout/operational-live-updates";
 import { PwaInstallButton } from "@/components/layout/pwa-install-button";
 import {
@@ -120,6 +121,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         >
           {children}
         </main>
+        <MobileTabBar permissions={[...permissions]} />
       </div>
       <Toaster />
     </div>
