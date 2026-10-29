@@ -6,6 +6,7 @@ import {
   ListUrlMemory,
 } from "@/components/layout/app-breadcrumb";
 import { AppSidebar, SIDEBAR_COOKIE } from "@/components/layout/app-sidebar";
+import { CommandPalette } from "@/components/layout/command-palette";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { OperationalLiveUpdates } from "@/components/layout/operational-live-updates";
@@ -14,6 +15,7 @@ import {
   NotificationSlot,
   NotificationSlotFallback,
 } from "@/components/layout/notification-slot";
+import { Toaster } from "@/components/ui/toaster";
 import {
   getMemberships,
   getPermissions,
@@ -83,6 +85,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <Suspense fallback={<div className="flex-1" />}>
             <AppBreadcrumb className="flex-1" />
           </Suspense>
+          <CommandPalette permissions={[...permissions]} />
           <PwaInstallButton />
           <Suspense fallback={<NotificationSlotFallback />}>
             <NotificationSlot companyId={activeCompany.companyId} />
@@ -118,6 +121,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           {children}
         </main>
       </div>
+      <Toaster />
     </div>
   );
 }

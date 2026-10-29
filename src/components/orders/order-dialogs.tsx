@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { avisar } from "@/components/ui/toaster";
 import {
   loadOrderSendPanel,
   type OrderSendPanel,
@@ -106,7 +107,10 @@ export function SendOrderDialog({
             <CorpoDoEnvio
               painel={painel}
               orderId={orderId}
-              aoEnviar={() => setAberto(false)}
+              aoEnviar={() => {
+                setAberto(false);
+                avisar("Pedido enviado ao fornecedor.");
+              }}
             />
           ) : null}
         </Suspense>

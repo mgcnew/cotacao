@@ -4,7 +4,6 @@ import { ChevronLeft } from "lucide-react";
 import * as React from "react";
 
 import { CotaProMark } from "@/components/brand/cotapro-logo";
-import { GlobalSearch } from "@/components/layout/global-search";
 import { NavLink, useVisibleNav } from "@/components/layout/nav-list";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -66,11 +65,6 @@ export function AppSidebar({
           </span>
         )}
       </div>
-
-      <GlobalSearch
-        collapsed={collapsed}
-        onExpand={() => setCollapsed(false)}
-      />
 
       {/* `min-h-0` é o que permite ao `overflow-y-auto` funcionar dentro de um
           flex: sem ele o item cresce em vez de rolar, e empurra o rodapé para

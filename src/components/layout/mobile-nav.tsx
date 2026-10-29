@@ -4,7 +4,6 @@ import { Menu, X } from "lucide-react";
 import * as React from "react";
 
 import { CotaProMark } from "@/components/brand/cotapro-logo";
-import { GlobalSearch } from "@/components/layout/global-search";
 import { NavLink, useVisibleNav } from "@/components/layout/nav-list";
 
 type Props = {
@@ -73,8 +72,6 @@ export function MobileNav({ companyName, permissions }: Props) {
                 <X className="size-4" aria-hidden />
               </button>
             </div>
-
-            <GlobalSearch onNavigate={close} />
 
             <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2">
               {mobileGroups.map((group, index) => (
