@@ -94,7 +94,7 @@ export function WhatsAppMetricsPanel({
               <div className="min-w-0">
                 <p className="text-fg-muted truncate text-xs">{label}</p>
                 <p className="text-fg mt-0.5 text-xl font-semibold tabular-nums">{value}</p>
-                <p className="text-fg-subtle mt-0.5 text-[11px] leading-tight">{detail}</p>
+                <p className="text-fg-subtle mt-0.5 text-xs leading-tight">{detail}</p>
               </div>
             </CardContent>
           </Card>

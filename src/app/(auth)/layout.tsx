@@ -37,7 +37,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
                   Jornada concluída
                 </p>
               </div>
-              <span className="bg-success-soft text-success inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium">
+              <span className="bg-success-soft text-success inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium">
                 <Check className="size-3" aria-hidden /> Conferida
               </span>
             </div>
@@ -54,7 +54,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
                   </span>
                   <div>
                     <p className="text-fg text-xs font-medium">{label}</p>
-                    <p className="text-fg-subtle mt-0.5 text-[10px]">
+                    <p className="text-fg-subtle mt-0.5 text-xs">
                       {detail}
                     </p>
                   </div>
@@ -85,7 +85,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
           <div className="w-full max-w-sm">{children}</div>
         </div>
 
-        <div className="text-fg-subtle px-5 pb-6 text-center text-[11px] sm:px-8">
+        <div className="text-fg-subtle px-5 pb-6 text-center text-xs sm:px-8">
           Acesso protegido e dados separados por empresa.
         </div>
       </section>

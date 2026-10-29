@@ -1,12 +1,21 @@
 "use client";
 
-import { Building2, Check, ChevronsUpDown, Settings2 } from "lucide-react";
+import {
+  Building2,
+  Check,
+  ChevronsUpDown,
+  LogOut,
+  Moon,
+  Settings2,
+  Sun,
+} from "lucide-react";
+import { useTheme } from "next-themes";
 import * as React from "react";
 
 import { CompanyAvatar } from "@/components/company/company-avatar";
 import { CompanyProfileDialog } from "@/components/company/company-profile-dialog";
 import { Button } from "@/components/ui/button";
-import { setActiveCompany } from "@/lib/auth/actions";
+import { setActiveCompany, signOut } from "@/lib/auth/actions";
 import type { CompanyMembership } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +34,8 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
     companies.find((company) => company.companyId === activeCompanyId) ??
     companies[0];
   const canManage = active.permissions.includes("role.manage");
+  const { resolvedTheme, setTheme } = useTheme();
+  const escuro = resolvedTheme === "dark";
 
   React.useEffect(() => {
     if (!open) return;
@@ -59,7 +70,9 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
             name={active.companyName}
             logoPath={active.companyLogoPath}
           />
-          <span className="max-w-40 truncate">{active.companyName}</span>
+          <span className="hidden max-w-40 truncate sm:inline">
+            {active.companyName}
+          </span>
           <ChevronsUpDown className="size-3.5 opacity-60" aria-hidden />
         </Button>
 
@@ -90,7 +103,7 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
 
             {companies.length > 1 ? (
               <div className="border-border border-t pt-1">
-                <p className="text-fg-subtle px-2 py-1 text-[10px] font-medium tracking-wider uppercase">
+                <p className="text-fg-subtle px-2 py-1 text-xs font-medium">
                   Trocar empresa
                 </p>
                 {companies.map((company) => {
@@ -149,6 +162,37 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
                   Perfil gerenciado por um administrador
                 </p>
               )}
+            </div>
+
+            {/* Preferências e saída: raras, por isso dentro do menu e não
+                soltas no cabeçalho. */}
+            <div className="border-border mt-1 border-t pt-1">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  setTheme(escuro ? "light" : "dark");
+                }}
+                className="text-fg-muted hover:bg-surface-muted hover:text-fg flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors"
+              >
+                {escuro ? (
+                  <Sun className="size-4" aria-hidden />
+                ) : (
+                  <Moon className="size-4" aria-hidden />
+                )}
+                {escuro ? "Usar tema claro" : "Usar tema escuro"}
+              </button>
+              <form action={signOut}>
+                <button
+                  type="submit"
+                  role="menuitem"
+                  className="text-fg-muted hover:bg-surface-muted hover:text-fg flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors"
+                >
+                  <LogOut className="size-4" aria-hidden />
+                  Sair
+                </button>
+              </form>
             </div>
           </div>
         ) : null}

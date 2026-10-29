@@ -112,7 +112,7 @@ export default async function AtributosPage({
                 <TableCell className="text-fg-muted">
                   {attr.isRequired ? "Obrigatório" : "Opcional"}
                   {attr.isConversionFactor ? (
-                    <Badge variant="secondary" className="ml-1 text-[10px]">
+                    <Badge variant="secondary" className="ml-1 text-xs">
                       converte
                     </Badge>
                   ) : null}

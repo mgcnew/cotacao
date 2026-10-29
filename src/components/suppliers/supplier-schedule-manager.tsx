@@ -283,8 +283,8 @@ function ScheduleSummary({ schedule }: { schedule: SupplierPurchaseSchedule }) {
         <span
           className={
             schedule.isActive
-              ? "bg-success-soft text-success rounded-full px-2 py-0.5 text-[11px] font-medium"
-              : "bg-surface-muted text-fg-subtle rounded-full px-2 py-0.5 text-[11px] font-medium"
+              ? "bg-success-soft text-success rounded-full px-2 py-0.5 text-xs font-medium"
+              : "bg-surface-muted text-fg-subtle rounded-full px-2 py-0.5 text-xs font-medium"
           }
         >
           {schedule.isActive ? "Ativa" : "Pausada"}
@@ -437,7 +437,7 @@ function ExistingTemplateItemForm({
       <div className="flex flex-col gap-1">
         <label
           htmlFor={`template-item-qty-${item.id}`}
-          className="text-fg-subtle text-[11px]"
+          className="text-fg-subtle text-xs"
         >
           Quantidade
         </label>
@@ -454,7 +454,7 @@ function ExistingTemplateItemForm({
       <div className="flex flex-col gap-1">
         <label
           htmlFor={`template-item-notes-${item.id}`}
-          className="text-fg-subtle text-[11px]"
+          className="text-fg-subtle text-xs"
         >
           Observação
         </label>
@@ -590,7 +590,7 @@ export function SupplierScheduleManager({
             <CalendarClock className="text-primary size-4" aria-hidden />
             Agenda de compras
             {active > 0 ? (
-              <span className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-[11px] font-medium">
+              <span className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs font-medium">
                 {active} {active === 1 ? "rotina ativa" : "rotinas ativas"}
               </span>
             ) : null}

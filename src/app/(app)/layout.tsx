@@ -1,18 +1,19 @@
-import { LogOut } from "lucide-react";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
 
-import { AppSidebar } from "@/components/layout/app-sidebar";
+import {
+  AppBreadcrumb,
+  ListUrlMemory,
+} from "@/components/layout/app-breadcrumb";
+import { AppSidebar, SIDEBAR_COOKIE } from "@/components/layout/app-sidebar";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { OperationalLiveUpdates } from "@/components/layout/operational-live-updates";
 import { PwaInstallButton } from "@/components/layout/pwa-install-button";
-import { ThemeToggle } from "@/components/layout/theme-toggle";
 import {
   NotificationSlot,
   NotificationSlotFallback,
 } from "@/components/layout/notification-slot";
-import { Button } from "@/components/ui/button";
-import { signOut } from "@/lib/auth/actions";
 import {
   getMemberships,
   getPermissions,
@@ -35,10 +36,14 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   // requireUser redireciona para /login; requireActiveCompany para /onboarding.
   await requireUser();
   const activeCompany = await requireActiveCompany();
-  const [memberships, permissions] = await Promise.all([
+  const [memberships, permissions, cookieStore] = await Promise.all([
     getMemberships(),
     getPermissions(activeCompany.companyId),
+    cookies(),
   ]);
+  // Lido no servidor para a página já nascer com a largura certa do menu,
+  // sem abrir e fechar na frente da pessoa a cada recarga.
+  const sidebarCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "1";
 
   return (
     /* A moldura ocupa a viewport e não cresce: quem rola é só o conteúdo.
@@ -54,23 +59,31 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       data-slot="app-shell"
     >
       <OperationalLiveUpdates companyId={activeCompany.companyId} />
+      <Suspense fallback={null}>
+        <ListUrlMemory />
+      </Suspense>
       <AppSidebar
         companyName={activeCompany.companyName}
         permissions={[...permissions]}
+        initialCollapsed={sidebarCollapsed}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* Trilha à esquerda, busca no centro, sino e conta à direita. Tema,
+            instalar e Sair moram no menu da conta: são raros, e o Sair solto
+            ao lado do sino convidava ao clique sem querer. */}
         <header
           data-slot="app-header"
-          className="bg-background flex h-14 shrink-0 items-center gap-2 px-4 sm:gap-4 sm:px-6"
+          className="border-border bg-surface flex h-14 shrink-0 items-center gap-3 border-b px-4 sm:px-6"
         >
           <MobileNav
             companyName={activeCompany.companyName}
             permissions={[...permissions]}
           />
-          <div className="flex-1" />
+          <Suspense fallback={<div className="flex-1" />}>
+            <AppBreadcrumb className="flex-1" />
+          </Suspense>
           <PwaInstallButton />
-          <ThemeToggle />
           <Suspense fallback={<NotificationSlotFallback />}>
             <NotificationSlot companyId={activeCompany.companyId} />
           </Suspense>
@@ -78,17 +91,6 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             companies={memberships}
             activeCompanyId={activeCompany.companyId}
           />
-          <form action={signOut}>
-            <Button
-              type="submit"
-              variant="ghost"
-              size="sm"
-              className="text-fg-muted h-8 gap-1.5 px-2 font-normal"
-            >
-              <LogOut className="size-3.5" aria-hidden />
-              Sair
-            </Button>
-          </form>
         </header>
 
         {/* 24px dos lados no desktop, 16px no celular — e é AQUI que a margem

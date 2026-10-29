@@ -132,7 +132,7 @@ function RevokeLinkForm({
           {" · "}
           {label}
         </p>
-        <p className="text-fg-subtle text-[11px]">
+        <p className="text-fg-subtle text-xs">
           Criado em {DATE_TIME.format(new Date(request.createdAt))} · vence em{" "}
           {DATE_TIME.format(new Date(request.expiresAt))}
         </p>

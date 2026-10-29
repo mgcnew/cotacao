@@ -1,5 +1,4 @@
 import { Ruler } from "lucide-react";
-import Link from "next/link";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
@@ -18,6 +17,7 @@ import { setUnitActive } from "@/features/products/actions";
 import { listUnits } from "@/features/products/queries";
 import { UNIT_KIND_LABEL } from "@/features/products/units";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { ListLink } from "@/components/layout/app-breadcrumb";
 
 export default async function UnidadesPage() {
   const company = await requireActiveCompany();
@@ -36,7 +36,7 @@ export default async function UnidadesPage() {
         description="Cada produto usa três: em que se compra, em que o fornecedor cota o preço e em que os preços são comparados entre fornecedores."
         action={
           <Button asChild size="sm" variant="ghost">
-            <Link href="/produtos">Voltar aos produtos</Link>
+            <ListLink href="/produtos">Voltar aos produtos</ListLink>
           </Button>
         }
       />

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { listPendingCommercialDivergences } from "@/features/orders/commercial-divergences";
 import { COMMERCIAL_DIVERGENCE_TYPE_LABEL } from "@/features/orders/divergences";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { ListLink } from "@/components/layout/app-breadcrumb";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -109,7 +110,7 @@ export async function CommercialDivergencesContent() {
           description="Os recebimentos estão de acordo ou todas as diferenças já foram tratadas."
           action={
             <Button asChild size="sm" variant="outline">
-              <Link href="/pedidos">Voltar aos pedidos</Link>
+              <ListLink href="/pedidos">Voltar aos pedidos</ListLink>
             </Button>
           }
         />
@@ -158,7 +159,7 @@ export async function CommercialDivergencesContent() {
                         <p className="text-destructive text-lg font-semibold tabular-nums">
                           {quantity(quantityDifference, row.purchaseUnit)}
                         </p>
-                        <p className="text-fg-subtle text-[11px]">
+                        <p className="text-fg-subtle text-xs">
                           acima do combinado
                         </p>
                       </>
@@ -175,7 +176,7 @@ export async function CommercialDivergencesContent() {
                             ? "—"
                             : MONEY.format(row.financialImpact)}
                         </p>
-                        <p className="text-fg-subtle text-[11px]">
+                        <p className="text-fg-subtle text-xs">
                           impacto total
                         </p>
                       </>
@@ -185,7 +186,7 @@ export async function CommercialDivergencesContent() {
 
                 <dl className="border-border mt-3 grid grid-cols-3 divide-x rounded-lg border py-2 text-center">
                   <div className="min-w-0 px-2">
-                    <dt className="text-fg-subtle text-[11px]">Combinado</dt>
+                    <dt className="text-fg-subtle text-xs">Combinado</dt>
                     <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">
                       {row.type === "quantity"
                         ? quantity(row.agreedQuantity, row.purchaseUnit)
@@ -195,7 +196,7 @@ export async function CommercialDivergencesContent() {
                     </dd>
                   </div>
                   <div className="border-border min-w-0 px-2">
-                    <dt className="text-fg-subtle text-[11px]">
+                    <dt className="text-fg-subtle text-xs">
                       {row.type === "quantity" ? "Recebido" : "Na nota"}
                     </dt>
                     <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">
@@ -207,7 +208,7 @@ export async function CommercialDivergencesContent() {
                     </dd>
                   </div>
                   <div className="border-border min-w-0 px-2">
-                    <dt className="text-fg-subtle text-[11px]">
+                    <dt className="text-fg-subtle text-xs">
                       {row.type === "quantity" ? "Excedente" : "Quantidade"}
                     </dt>
                     <dd className="text-fg mt-0.5 truncate text-xs font-semibold tabular-nums">

@@ -326,22 +326,22 @@ export function RoundMobileCard({
 
       <dl className="border-border mt-3 grid grid-cols-3 gap-2 border-y py-3 text-center">
         <div>
-          <dt className="text-fg-subtle text-[11px]">Produtos</dt>
+          <dt className="text-fg-subtle text-xs">Produtos</dt>
           <dd className="text-fg mt-0.5 font-medium tabular-nums">
             {round.totalItems}
           </dd>
         </div>
         <div className="border-border border-x px-1">
-          <dt className="text-fg-subtle text-[11px]">Retorno / fim</dt>
+          <dt className="text-fg-subtle text-xs">Retorno / fim</dt>
           <dd className="text-fg mt-0.5 font-medium tabular-nums">
             {round.suppliersResponded}/{round.totalSuppliers}
-            <span className="text-fg-subtle ml-1 text-[10px] font-normal">
+            <span className="text-fg-subtle ml-1 text-xs font-normal">
               · {round.suppliersFinalized} fim
             </span>
           </dd>
         </div>
         <div>
-          <dt className="text-fg-subtle text-[11px]">Pedidos</dt>
+          <dt className="text-fg-subtle text-xs">Pedidos</dt>
           <dd className="text-fg mt-0.5 font-medium tabular-nums">
             {round.ordersCreated}
           </dd>

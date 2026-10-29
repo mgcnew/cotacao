@@ -171,19 +171,19 @@ export function NfeDocumentView({
 
         <section className="mt-2 grid border-2 border-neutral-900 sm:grid-cols-2 print:grid-cols-2">
           <div className="border-b border-neutral-900 p-3 sm:border-r sm:border-b-0 print:border-r print:border-b-0">
-            <p className="text-[10px] font-semibold tracking-wide uppercase">Emitente</p>
+            <p className="text-xs font-semibold tracking-wide uppercase">Emitente</p>
             <p className="mt-1 text-sm font-semibold">{history.issuer_name ?? "—"}</p>
             <p className="text-xs">Documento: {formatDocument(history.issuer_document)}</p>
           </div>
           <div className="p-3">
-            <p className="text-[10px] font-semibold tracking-wide uppercase">Destinatário</p>
+            <p className="text-xs font-semibold tracking-wide uppercase">Destinatário</p>
             <p className="mt-1 text-sm font-semibold">{history.recipient_name ?? "—"}</p>
             <p className="text-xs">Documento: {formatDocument(history.recipient_document)}</p>
           </div>
         </section>
 
         <section className="mt-2 border-2 border-neutral-900 p-3">
-          <p className="text-[10px] font-semibold tracking-wide uppercase">Chave de acesso</p>
+          <p className="text-xs font-semibold tracking-wide uppercase">Chave de acesso</p>
           <p className="mt-1 break-all font-mono text-xs tracking-wide">
             {formatAccessKey(history.access_key)}
           </p>
@@ -194,7 +194,7 @@ export function NfeDocumentView({
             Produtos e serviços
           </div>
           <div className="overflow-x-auto print:overflow-visible">
-            <table className="w-full min-w-[720px] border-collapse text-[11px] print:min-w-0">
+            <table className="w-full min-w-[720px] border-collapse text-xs print:min-w-0">
               <thead>
                 <tr className="border-b border-neutral-900 text-left">
                   <th className="p-2">Item</th>
@@ -236,18 +236,18 @@ export function NfeDocumentView({
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-4">
             {totals.map(([label, value]) => (
               <div key={label} className="border-r border-b border-neutral-300 p-2">
-                <p className="text-[10px] uppercase text-neutral-600">{label}</p>
+                <p className="text-xs uppercase text-neutral-600">{label}</p>
                 <p className="text-xs font-medium tabular-nums">{MONEY.format(value)}</p>
               </div>
             ))}
             <div className="col-span-2 border-t-2 border-neutral-900 p-3 text-right sm:col-span-3 lg:col-span-4 print:col-span-4">
-              <p className="text-[10px] font-semibold uppercase">Valor total da NF-e</p>
+              <p className="text-xs font-semibold uppercase">Valor total da NF-e</p>
               <p className="text-lg font-bold tabular-nums">{MONEY.format(history.invoiceTotal)}</p>
             </div>
           </div>
         </section>
 
-        <footer className="mt-3 text-center text-[10px] text-neutral-600">
+        <footer className="mt-3 text-center text-xs text-neutral-600">
           Documento exibido a partir do XML da NF-e armazenado no sistema.
         </footer>
       </article>

@@ -17,6 +17,7 @@ import {
 import { setCategoryActive } from "@/features/products/actions";
 import { listCategories } from "@/features/products/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { ListLink } from "@/components/layout/app-breadcrumb";
 
 export default async function CategoriasPage() {
   const company = await requireActiveCompany();
@@ -35,7 +36,7 @@ export default async function CategoriasPage() {
         description="Classificação estrutural do produto. Não confundir com os grupos da rodada, que são organização da cotação."
         action={
           <Button asChild size="sm" variant="ghost">
-            <Link href="/produtos">Voltar aos produtos</Link>
+            <ListLink href="/produtos">Voltar aos produtos</ListLink>
           </Button>
         }
       />

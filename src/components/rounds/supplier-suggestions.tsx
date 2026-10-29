@@ -59,14 +59,14 @@ function Linha({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-fg text-sm font-medium">{sugestao.name}</span>
           {sugestao.costumaNaoResponder ? (
-            <span className="bg-destructive-soft text-destructive rounded-full px-2 py-0.5 text-[11px] font-medium">
+            <span className="bg-destructive-soft text-destructive rounded-full px-2 py-0.5 text-xs font-medium">
               Costuma não responder
             </span>
           ) : null}
           {sugestao.aviso ? (
             <span
               title={sugestao.aviso}
-              className="bg-warning-soft text-fg inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              className="bg-warning-soft text-fg inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
             >
               <AlertTriangle className="text-warning size-3" aria-hidden />
               Aviso em aberto

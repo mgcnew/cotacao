@@ -13,7 +13,12 @@ type Props = {
   companyName: string;
   /** Chaves de permissão do usuário na empresa ativa. */
   permissions: string[];
+  /** Como a pessoa deixou o menu da última vez (lido do cookie no servidor). */
+  initialCollapsed?: boolean;
 };
+
+/** Cookie e não localStorage: o layout precisa ler antes de desenhar. */
+export const SIDEBAR_COOKIE = "cotapro_menu_recolhido";
 
 /**
  * Sidebar do desktop.
@@ -21,8 +26,16 @@ type Props = {
  * Escondida abaixo de `md`: em tela estreita ela consumiria mais da metade da
  * largura. Lá quem navega é a gaveta (MobileNav), com os mesmos itens.
  */
-export function AppSidebar({ companyName, permissions }: Props) {
-  const [collapsed, setCollapsed] = React.useState(false);
+export function AppSidebar({
+  companyName,
+  permissions,
+  initialCollapsed = false,
+}: Props) {
+  const [collapsed, setCollapsedState] = React.useState(initialCollapsed);
+  const setCollapsed = React.useCallback((value: boolean) => {
+    setCollapsedState(value);
+    document.cookie = `${SIDEBAR_COOKIE}=${value ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+  }, []);
   const { groups, footer, isActive } = useVisibleNav(permissions);
 
   return (
@@ -47,7 +60,7 @@ export function AppSidebar({ companyName, permissions }: Props) {
             <span className="text-fg text-sm font-semibold tracking-tight">
               Cota<span className="text-brand">Pro</span>
             </span>
-            <span className="text-fg-subtle truncate text-[10px]">
+            <span className="text-fg-subtle truncate text-xs">
               {companyName}
             </span>
           </span>
@@ -70,7 +83,7 @@ export function AppSidebar({ companyName, permissions }: Props) {
           return (
             <section key={group.label} className={cn(index > 0 && "mt-2")}>
               {!collapsed ? (
-                <p className="text-fg-subtle px-2.5 pt-2 pb-1.5 text-[10px] font-semibold tracking-wider uppercase">
+                <p className="text-fg-subtle px-2.5 pt-2 pb-1.5 text-xs font-medium">
                   {group.label}
                 </p>
               ) : index > 0 ? (
@@ -102,7 +115,7 @@ export function AppSidebar({ companyName, permissions }: Props) {
         ))}
         <ExpandToggle
           collapsed={collapsed}
-          onToggle={() => setCollapsed((v) => !v)}
+          onToggle={() => setCollapsed(!collapsed)}
         />
       </div>
     </aside>

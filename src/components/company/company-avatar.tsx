@@ -26,7 +26,7 @@ export function CompanyAvatar({
     <span
       aria-hidden
       className={cn(
-        "bg-surface-muted text-fg-muted grid size-6 shrink-0 place-items-center rounded-md bg-cover bg-center text-[10px] font-semibold",
+        "bg-surface-muted text-fg-muted grid size-6 shrink-0 place-items-center rounded-md bg-cover bg-center text-xs font-semibold",
         className,
       )}
       style={logo ? { backgroundImage: `url("${logo}")` } : undefined}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { QuotationHistory } from "@/components/history/quotation-history";
@@ -17,6 +16,7 @@ import {
   parsePurchaseHistoryPage,
 } from "@/features/receipts/historical-queries";
 import { requireActiveCompany } from "@/lib/auth/dal";
+import { ListLink } from "@/components/layout/app-breadcrumb";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -152,7 +152,7 @@ export async function ProdutoContent({
         description={DESCRICAO}
         action={
           <Button asChild size="sm" variant="ghost">
-            <Link href="/produtos">Voltar aos produtos</Link>
+            <ListLink href="/produtos">Voltar aos produtos</ListLink>
           </Button>
         }
       />

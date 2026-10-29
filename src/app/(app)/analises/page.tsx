@@ -315,7 +315,7 @@ export default async function AnalisesPage({
                             : PERCENT.format(supplier.responseRate)}
                           )
                         </span>
-                        <p className="text-fg-subtle mt-0.5 text-[11px]">
+                        <p className="text-fg-subtle mt-0.5 text-xs">
                           {supplier.noResponses} sem resposta ·{" "}
                           {supplier.unavailable} não fornece
                         </p>
@@ -346,7 +346,7 @@ export default async function AnalisesPage({
                             : "—"}
                         </span>
                         {performance.deliveryAvailable ? (
-                          <p className="text-fg-subtle mt-0.5 text-[11px]">
+                          <p className="text-fg-subtle mt-0.5 text-xs">
                             {MONEY.format(supplier.receivedTotal)} recebido
                             {supplier.divergences > 0
                               ? ` · ${supplier.divergences} ${

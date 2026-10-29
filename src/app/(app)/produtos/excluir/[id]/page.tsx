@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -7,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DialogBody } from "@/components/ui/dialog";
 import { getProductDeleteContext } from "@/features/products/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { ListLink } from "@/components/layout/app-breadcrumb";
 
 export default async function ExcluirProdutoPage({
   params,
@@ -43,7 +43,7 @@ export async function ProductDeleteContent({
         description="A exclusão só é permitida enquanto nenhuma cotação respondida, pedido enviado ou nota fiscal conferida depender do produto."
         action={
           <Button asChild size="sm" variant="ghost">
-            <Link href="/produtos">Voltar</Link>
+            <ListLink href="/produtos">Voltar</ListLink>
           </Button>
         }
       />

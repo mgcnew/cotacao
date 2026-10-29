@@ -38,7 +38,7 @@ export default async function NegociacaoPublicaPage({
       <div className="mx-auto w-full max-w-4xl">
         <header className="border-border bg-surface mb-4 overflow-hidden rounded-2xl border shadow-xs sm:mb-6">
           <div className="border-border border-b p-4 sm:p-5">
-            <p className="text-primary text-[11px] font-semibold tracking-[0.14em] uppercase">
+            <p className="text-primary text-xs font-semibold tracking-[0.14em] uppercase">
               Referência para negociação
             </p>
             <h1 className="text-fg mt-1 text-2xl font-semibold tracking-tight">

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getReceiptConference } from "@/features/receipts/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { ListLink } from "@/components/layout/app-breadcrumb";
 
 const DATE_TIME = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
@@ -42,7 +43,7 @@ export default async function ConferenciaPage({
         action={
           <>
             <Button asChild size="sm" variant="ghost">
-              <Link href="/recebimentos">Voltar</Link>
+              <ListLink href="/recebimentos">Voltar</ListLink>
             </Button>
             <Badge
               variant={receipt.status === "posted" ? "default" : "outline"}

@@ -271,7 +271,7 @@ export function GlobalSearch({
                   </span>
                 ) : null}
               </span>
-              <span className="text-fg-subtle shrink-0 text-[10px] tracking-wide uppercase">
+              <span className="text-fg-subtle shrink-0 text-xs tracking-wide uppercase">
                 {SEARCH_KIND_LABEL[hit.kind]}
               </span>
             </button>

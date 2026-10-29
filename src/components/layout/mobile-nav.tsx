@@ -60,7 +60,7 @@ export function MobileNav({ companyName, permissions }: Props) {
                 <span className="text-fg text-sm font-semibold tracking-tight">
                   Cota<span className="text-brand">Pro</span>
                 </span>
-                <span className="text-fg-subtle truncate text-[10px]">
+                <span className="text-fg-subtle truncate text-xs">
                   {companyName}
                 </span>
               </span>
@@ -82,7 +82,7 @@ export function MobileNav({ companyName, permissions }: Props) {
                   key={group.label}
                   className={index > 0 ? "mt-2" : undefined}
                 >
-                  <p className="text-fg-subtle px-2.5 pt-2 pb-1.5 text-[10px] font-semibold tracking-wider uppercase">
+                  <p className="text-fg-subtle px-2.5 pt-2 pb-1.5 text-xs font-medium">
                     {group.label}
                   </p>
                   <div className="flex flex-col gap-0.5">

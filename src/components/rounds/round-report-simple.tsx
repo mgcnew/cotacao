@@ -148,7 +148,7 @@ export function RoundReportSimpleContent({ report }: { report: RoundReport }) {
 function SimpleMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-border min-w-0 rounded-xl border p-2.5 text-center sm:p-3">
-      <p className="text-fg-subtle text-[10px] leading-tight sm:text-xs">
+      <p className="text-fg-subtle text-xs leading-tight">
         {label}
       </p>
       <p className="text-fg mt-1 wrap-anywhere text-sm font-bold tabular-nums sm:text-lg">
@@ -240,7 +240,7 @@ function Winner({
 
   return (
     <div className="border-success/35 bg-success-soft rounded-xl border px-3 py-3">
-      <p className="text-success flex items-center gap-1.5 text-[11px] font-bold tracking-wide uppercase">
+      <p className="text-success flex items-center gap-1.5 text-xs font-bold tracking-wide uppercase">
         <span className="bg-success grid size-5 place-items-center rounded-full text-white">
           <Check className="size-3.5" strokeWidth={3} aria-hidden />
         </span>
@@ -293,7 +293,7 @@ function ParticipantOffer({
         <p className="text-fg text-sm font-semibold wrap-anywhere">
           {offer.supplierName}
         </p>
-        <Badge variant="outline" className="shrink-0 text-[10px]">
+        <Badge variant="outline" className="shrink-0 text-xs">
           {offer.outcome === "lost"
             ? "Cotou"
             : offer.outcome === "unavailable"
@@ -341,7 +341,7 @@ function Price({
 }) {
   return (
     <div className={className}>
-      <p className="text-fg-subtle text-[10px]">{label}</p>
+      <p className="text-fg-subtle text-xs">{label}</p>
       <p
         className={
           highlight

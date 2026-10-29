@@ -137,7 +137,7 @@ function EventCard({
                 >
                   {signedMoney(event.contribution)}
                 </p>
-                <p className="text-fg-subtle text-[11px] tabular-nums">
+                <p className="text-fg-subtle text-xs tabular-nums">
                   saldo {MONEY.format(event.balanceAfter)}
                 </p>
               </div>
@@ -148,7 +148,7 @@ function EventCard({
             </div>
           </div>
 
-          <div className="text-fg-subtle mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] tabular-nums">
+          <div className="text-fg-subtle mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums">
             <span>{MONEY.format(event.balanceBefore)}</span>
             <span aria-hidden>→</span>
             <span className={contributionClass(metric, event.contribution)}>
@@ -185,7 +185,7 @@ function EventCard({
                   <p className="text-fg truncate text-xs font-medium">
                     {item.productName}
                   </p>
-                  <p className="text-fg-subtle mt-0.5 text-[11px] tabular-nums">
+                  <p className="text-fg-subtle mt-0.5 text-xs tabular-nums">
                     {metric === "realized"
                       ? `${item.quoted === null ? "Sem preço cotado" : MONEY.format(item.quoted)} − ${MONEY.format(item.practiced)}`
                       : `${MONEY.format(item.practiced)} − ${MONEY.format(item.agreed)}`}{" "}
@@ -343,7 +343,7 @@ export function FinancialJourneyMetric({
               <>
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   <div className="border-border bg-surface col-span-3 rounded-xl border p-3 sm:col-span-1">
-                    <p className="text-fg-subtle text-[11px]">
+                    <p className="text-fg-subtle text-xs">
                       Resultado no período
                     </p>
                     <p
@@ -356,13 +356,13 @@ export function FinancialJourneyMetric({
                     </p>
                   </div>
                   <div className="border-border bg-surface rounded-xl border p-3">
-                    <p className="text-fg-subtle text-[11px]">Recebimentos</p>
+                    <p className="text-fg-subtle text-xs">Recebimentos</p>
                     <p className="text-fg mt-1 text-lg font-semibold tabular-nums">
                       {state.data.events.length}
                     </p>
                   </div>
                   <div className="border-border bg-surface rounded-xl border p-3">
-                    <p className="text-fg-subtle text-[11px]">
+                    <p className="text-fg-subtle text-xs">
                       Itens calculados
                     </p>
                     <p className="text-fg mt-1 text-lg font-semibold tabular-nums">

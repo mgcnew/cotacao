@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -12,6 +11,7 @@ import {
   listUnits,
 } from "@/features/products/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { ListLink } from "@/components/layout/app-breadcrumb";
 
 export default async function EditarProdutoPage({
   params,
@@ -92,7 +92,7 @@ export async function ProductEditContent({
         description="Nome, categoria e finalidade se corrigem a qualquer momento. As unidades, somente enquanto ninguém tiver cotado ou pedido sob elas."
         action={
           <Button asChild size="sm" variant="ghost">
-            <Link href="/produtos">Voltar</Link>
+            <ListLink href="/produtos">Voltar</ListLink>
           </Button>
         }
       />

@@ -44,7 +44,7 @@ export default async function PedidoPublicoPage({
       <div className="mx-auto w-full max-w-3xl">
         <header className="border-border bg-surface mb-4 overflow-hidden rounded-2xl border shadow-xs sm:mb-6">
           <div className="border-border border-b p-4 sm:p-5">
-            <p className="text-primary text-[11px] font-semibold tracking-[0.14em] uppercase">
+            <p className="text-primary text-xs font-semibold tracking-[0.14em] uppercase">
               Confirmação de pedido
             </p>
             <div className="mt-1 flex flex-wrap items-start justify-between gap-3">

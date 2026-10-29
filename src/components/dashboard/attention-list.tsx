@@ -60,7 +60,7 @@ export function AttentionList({
               <span className="flex items-center gap-2">
                 <span className="text-fg block text-sm font-medium">{item.title}</span>
                 {item.severity === "high" ? (
-                  <span className="bg-destructive-soft text-destructive rounded-full px-1.5 py-0.5 text-[11px] font-semibold uppercase">Urgente</span>
+                  <span className="bg-destructive-soft text-destructive rounded-full px-1.5 py-0.5 text-xs font-semibold uppercase">Urgente</span>
                 ) : null}
               </span>
               <span className="text-fg-muted block text-xs">{item.hint}</span>

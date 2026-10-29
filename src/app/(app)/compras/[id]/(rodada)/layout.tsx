@@ -8,6 +8,7 @@ import {
   carregarRodada,
   carregarRodadaBasica,
 } from "@/features/rounds/central";
+import { CrumbTitle, ListLink } from "@/components/layout/app-breadcrumb";
 
 /**
  * A casca da rodada em página: cabeçalho e abas que ficam, miolo que troca.
@@ -52,7 +53,7 @@ export default async function LayoutDaRodada({
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
           <Button asChild size="sm" variant="ghost">
-            <Link href="/compras">Voltar</Link>
+            <ListLink href="/compras">Voltar</ListLink>
           </Button>
           <Suspense fallback={null}>
             <AcaoRelatorio id={id} />
@@ -71,7 +72,13 @@ export default async function LayoutDaRodada({
 
 async function Titulo({ id }: { id: string }) {
   const round = await carregarRodadaBasica(id);
-  return <>{round?.title ?? "Rodada"}</>;
+  const titulo = round?.title ?? "Rodada";
+  return (
+    <>
+      <CrumbTitle title={titulo} />
+      {titulo}
+    </>
+  );
 }
 
 async function Descricao({ id }: { id: string }) {

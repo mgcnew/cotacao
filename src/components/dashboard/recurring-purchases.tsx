@@ -76,8 +76,8 @@ export function PurchaseAlertRow({
               <span
                 className={
                   alert.status === "overdue"
-                    ? "bg-destructive-soft text-destructive rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                    : "bg-warning-soft text-warning rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                    ? "bg-destructive-soft text-destructive rounded-full px-2 py-0.5 text-xs font-semibold"
+                    : "bg-warning-soft text-warning rounded-full px-2 py-0.5 text-xs font-semibold"
                 }
               >
                 {dueLabel(alert)}

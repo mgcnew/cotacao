@@ -80,7 +80,7 @@ function DropdownMenuLabel({
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
       className={cn(
-        "text-fg-subtle px-2 pt-1 pb-1.5 text-[11px] font-medium tracking-wide uppercase",
+        "text-fg-subtle px-2 pt-1 pb-1.5 text-xs font-medium tracking-wide uppercase",
         className,
       )}
       {...props}

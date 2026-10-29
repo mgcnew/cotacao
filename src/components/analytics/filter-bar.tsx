@@ -150,7 +150,7 @@ export function FilterBar({
             <Button type="button" variant="outline">
               <Filter aria-hidden /> Filtros
               {active.length ? (
-                <span className="bg-primary-solid text-primary-solid-fg ml-1 grid min-w-5 place-items-center rounded-full px-1.5 text-[11px] leading-5">
+                <span className="bg-primary-solid text-primary-solid-fg ml-1 grid min-w-5 place-items-center rounded-full px-1.5 text-xs leading-5">
                   {active.length}
                 </span>
               ) : null}
@@ -262,7 +262,7 @@ export function FilterBar({
                       emptyOptionLabel="Todos os resultados"
                     />
                   </Field>
-                  <p className="text-fg-subtle text-[11px] leading-relaxed sm:col-span-2">
+                  <p className="text-fg-subtle text-xs leading-relaxed sm:col-span-2">
                     Resultado financeiro afeta os cards e o detalhamento de
                     preços. Resultado da cotação afeta a análise de
                     fornecedores.

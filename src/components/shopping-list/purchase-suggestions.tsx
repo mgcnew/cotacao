@@ -132,8 +132,8 @@ function SuggestionCard({
         <span
           className={
             suggestion.confidence === "high"
-              ? "bg-success-soft text-success shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold"
-              : "bg-warning-soft text-warning shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold"
+              ? "bg-success-soft text-success shrink-0 rounded-full px-2 py-1 text-xs font-semibold"
+              : "bg-warning-soft text-warning shrink-0 rounded-full px-2 py-1 text-xs font-semibold"
           }
         >
           {suggestion.confidence === "high"
@@ -180,7 +180,7 @@ function SuggestionCard({
           {suggestion.demandContexts.map((context) => (
             <span
               key={`${context.name}-${context.adjustmentPercent}`}
-              className="bg-warning-soft text-warning rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              className="bg-warning-soft text-warning rounded-full px-2 py-0.5 text-xs font-semibold"
             >
               {context.name}: {context.adjustmentPercent > 0 ? "+" : ""}
               {NUMBER.format(context.adjustmentPercent)}%

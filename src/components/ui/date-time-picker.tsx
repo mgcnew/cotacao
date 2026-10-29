@@ -215,7 +215,7 @@ export function DateTimePicker({
               <span
                 key={weekday.full}
                 title={weekday.full}
-                className="text-fg-subtle grid h-7 place-items-center text-[11px] font-medium"
+                className="text-fg-subtle grid h-7 place-items-center text-xs font-medium"
               >
                 {weekday.short}
               </span>

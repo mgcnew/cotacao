@@ -398,7 +398,7 @@ export function SupplierResponseBoard({
                     </p>
                   </TableCell>
                   <TableCell className="col-span-2 block p-0 whitespace-normal md:table-cell md:p-2">
-                    <span className="text-fg-subtle mb-1 block text-[11px] md:hidden">
+                    <span className="text-fg-subtle mb-1 block text-xs md:hidden">
                       Andamento
                     </span>
                     <Badge variant={currentStatus.variant}>
@@ -415,7 +415,7 @@ export function SupplierResponseBoard({
                     </p>
                   </TableCell>
                   <TableCell className="text-fg-muted col-span-2 block p-0 text-xs md:table-cell md:p-2">
-                    <span className="text-fg-subtle mb-1 block text-[11px] md:hidden">
+                    <span className="text-fg-subtle mb-1 block text-xs md:hidden">
                       Última atividade
                     </span>
                     {latest ? dateTime.format(new Date(latest)) : "—"}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -9,6 +8,7 @@ import {
   listUnits,
 } from "@/features/products/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { ListLink } from "@/components/layout/app-breadcrumb";
 
 export default function CorrecaoUnidadesPage() {
   return <BulkProductUnitContent />;
@@ -54,7 +54,7 @@ export async function BulkProductUnitContent({
         description="Selecione grupos de produtos, aplique as unidades corretas e salve tudo uma única vez."
         action={
           <Button asChild size="sm" variant="ghost">
-            <Link href="/produtos">Voltar aos produtos</Link>
+            <ListLink href="/produtos">Voltar aos produtos</ListLink>
           </Button>
         }
       />

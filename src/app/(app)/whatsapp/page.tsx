@@ -418,7 +418,7 @@ export default async function WhatsAppPage({
                           "Conversa iniciada"}
                       </span>
                       {conversation.unread_count ? (
-                        <span className="bg-primary-solid text-primary-solid-fg grid min-w-5 place-items-center rounded-full px-1.5 text-[11px] leading-5 font-semibold">
+                        <span className="bg-primary-solid text-primary-solid-fg grid min-w-5 place-items-center rounded-full px-1.5 text-xs leading-5 font-semibold">
                           {conversation.unread_count}
                         </span>
                       ) : null}

@@ -58,7 +58,7 @@ function PatternRow({ pattern }: { pattern: DetectedPurchasePattern }) {
               <h3 className="text-fg text-sm font-semibold">
                 {pattern.supplierName}
               </h3>
-              <span className="bg-success-soft text-success rounded-full px-2 py-0.5 text-[11px] font-semibold">
+              <span className="bg-success-soft text-success rounded-full px-2 py-0.5 text-xs font-semibold">
                 {pattern.confidencePercent}% regular
               </span>
             </div>
@@ -66,7 +66,7 @@ function PatternRow({ pattern }: { pattern: DetectedPurchasePattern }) {
               {PURCHASE_INTERVAL_LABEL[pattern.intervalWeeks]} · geralmente na{" "}
               {PURCHASE_WEEKDAYS[pattern.weekday].toLowerCase()}
             </p>
-            <p className="text-fg-subtle mt-1 text-[11px]">
+            <p className="text-fg-subtle mt-1 text-xs">
               Detectado em {pattern.orderCount} datas de compra
               {pattern.historicalNfeCount > 0
                 ? `, com ${pattern.historicalNfeCount} NF-e históricas`

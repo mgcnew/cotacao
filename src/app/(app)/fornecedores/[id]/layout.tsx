@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 
 import { SupplierStatusToggle } from "@/components/suppliers/supplier-status-toggle";
@@ -7,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { carregarFornecedor } from "@/features/suppliers/central";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { CrumbTitle, ListLink } from "@/components/layout/app-breadcrumb";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "Ativo",
@@ -54,7 +54,7 @@ export default async function LayoutDoFornecedor({
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
           <Button asChild size="sm" variant="ghost">
-            <Link href="/fornecedores">Voltar</Link>
+            <ListLink href="/fornecedores">Voltar</ListLink>
           </Button>
           <Suspense fallback={<div className="h-7 w-20" />}>
             <AcoesDoCabecalho id={id} />
@@ -75,7 +75,13 @@ export default async function LayoutDoFornecedor({
 
 async function Titulo({ id }: { id: string }) {
   const supplier = await carregarFornecedor(id);
-  return <>{supplier?.name ?? "Fornecedor"}</>;
+  const nome = supplier?.name ?? "Fornecedor";
+  return (
+    <>
+      <CrumbTitle title={nome} />
+      {nome}
+    </>
+  );
 }
 
 async function Descricao({ id }: { id: string }) {

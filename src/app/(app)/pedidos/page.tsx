@@ -373,13 +373,13 @@ function OrderResponsiveRow({
 
       <dl className="border-border grid grid-cols-2 gap-2 border-y py-3 text-center sm:hidden">
         <div className="border-border min-w-0 border-r px-1">
-          <dt className="text-fg-subtle text-[11px]">Itens</dt>
+          <dt className="text-fg-subtle text-xs">Itens</dt>
           <dd className="text-fg mt-0.5 text-sm font-semibold tabular-nums">
             {order.itemCount}
           </dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-fg-subtle text-[11px]">Entrega</dt>
+          <dt className="text-fg-subtle text-xs">Entrega</dt>
           <dd
             className={
               order.isOverdue

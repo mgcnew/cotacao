@@ -296,7 +296,7 @@ export default async function ProductImportDetailPage({
                 </div>
 
                 <div className="min-w-0">
-                  <label className="text-fg-muted mb-1 block text-[10px] font-medium uppercase xl:hidden">
+                  <label className="text-fg-muted mb-1 block text-xs font-medium uppercase xl:hidden">
                     Produto
                   </label>
                   <Input
@@ -313,7 +313,7 @@ export default async function ProductImportDetailPage({
                 </div>
 
                 <div className="col-start-2 min-w-0 xl:col-start-auto">
-                  <label className="text-fg-muted mb-1 block text-[10px] font-medium uppercase xl:hidden">
+                  <label className="text-fg-muted mb-1 block text-xs font-medium uppercase xl:hidden">
                     EAN / seção
                   </label>
                   <Input
@@ -333,7 +333,7 @@ export default async function ProductImportDetailPage({
                 </div>
 
                 <div className="col-start-2 min-w-0 xl:col-start-auto">
-                  <label className="text-fg-muted mb-1 block text-[10px] font-medium uppercase xl:hidden">
+                  <label className="text-fg-muted mb-1 block text-xs font-medium uppercase xl:hidden">
                     Categoria
                   </label>
                   <ThemedSelect
@@ -351,7 +351,7 @@ export default async function ProductImportDetailPage({
                 </div>
 
                 <div className="col-start-2 min-w-0 xl:col-start-auto xl:pt-1">
-                  <label className="text-fg-muted mb-1 block text-[10px] font-medium uppercase xl:hidden">
+                  <label className="text-fg-muted mb-1 block text-xs font-medium uppercase xl:hidden">
                     Situação
                   </label>
                   <Badge

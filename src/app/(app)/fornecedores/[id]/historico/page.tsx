@@ -163,7 +163,7 @@ export async function HistoricoFornecedorContent({
                         ? ` · ${document.issuer_name}`
                         : ""}
                     </p>
-                    <p className="text-fg-subtle mt-1 truncate font-mono text-[11px]">
+                    <p className="text-fg-subtle mt-1 truncate font-mono text-xs">
                       Chave {document.access_key}
                     </p>
                   </div>

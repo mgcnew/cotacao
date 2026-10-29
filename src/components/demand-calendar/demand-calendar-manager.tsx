@@ -344,8 +344,8 @@ export function DemandCalendarManager({
                     <span
                       className={
                         event.isActive
-                          ? "bg-success-soft text-success rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                          : "bg-surface-muted text-fg-subtle rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          ? "bg-success-soft text-success rounded-full px-2 py-0.5 text-xs font-semibold"
+                          : "bg-surface-muted text-fg-subtle rounded-full px-2 py-0.5 text-xs font-semibold"
                       }
                     >
                       {event.isActive ? "Ativo" : "Pausado"}
@@ -353,8 +353,8 @@ export function DemandCalendarManager({
                     <span
                       className={
                         event.adjustmentPercent >= 0
-                          ? "bg-primary-soft text-primary rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                          : "bg-warning-soft text-warning rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          ? "bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs font-semibold"
+                          : "bg-warning-soft text-warning rounded-full px-2 py-0.5 text-xs font-semibold"
                       }
                     >
                       {event.adjustmentPercent > 0 ? "+" : ""}
@@ -364,11 +364,11 @@ export function DemandCalendarManager({
                   <p className="text-fg-muted mt-1 text-xs">
                     {typeLabel(event.eventType)} · {scopeLabel(event)}
                   </p>
-                  <p className="text-fg-subtle mt-1 text-[11px]">
+                  <p className="text-fg-subtle mt-1 text-xs">
                     {DATE.format(new Date(`${event.startDate}T12:00:00`))} até{" "}
                     {DATE.format(new Date(`${event.endDate}T12:00:00`))}
                   </p>
-                  <p className="text-fg-subtle mt-1 text-[11px]">
+                  <p className="text-fg-subtle mt-1 text-xs">
                     {recurrenceLabel(event)}
                   </p>
                   {event.notes ? (

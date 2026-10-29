@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { listProductImportBatches } from "@/features/products/import-queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
+import { ListLink } from "@/components/layout/app-breadcrumb";
 
 const STATUS: Record<string, string> = {
   draft: "Em preparação",
@@ -37,7 +38,7 @@ export default async function ProductImportsPage() {
         description="Envie a lista inteira e conclua os produtos aos poucos, sem poluir o catálogo."
         action={
           <Button asChild variant="outline" size="sm">
-            <Link href="/produtos">Voltar aos produtos</Link>
+            <ListLink href="/produtos">Voltar aos produtos</ListLink>
           </Button>
         }
       />

@@ -33,6 +33,7 @@ import {
 import { listHistoricalNfeImports } from "@/features/receipts/historical-queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
+import { ListLink } from "@/components/layout/app-breadcrumb";
 
 const BASE_PATH = "/recebimentos/historico";
 
@@ -127,7 +128,7 @@ export default async function HistoricoFiscalPage({
         description="Recupere compras antigas preservando a data e o preço efetivamente praticado."
         action={
           <Button asChild size="sm" variant="ghost">
-            <Link href="/recebimentos">Voltar aos recebimentos</Link>
+            <ListLink href="/recebimentos">Voltar aos recebimentos</ListLink>
           </Button>
         }
       />

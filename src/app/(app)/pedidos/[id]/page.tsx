@@ -45,6 +45,7 @@ import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { isEvolutionConfigured } from "@/lib/evolution/client";
 import { getWhatsAppConnection } from "@/features/whatsapp/queries";
 import { getCompanyWhatsAppTemplates } from "@/features/whatsapp/templates";
+import { CrumbTitle, ListLink } from "@/components/layout/app-breadcrumb";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -702,13 +703,14 @@ export async function PedidoContent({ id }: { id: string }) {
 
   return (
     <div className="w-full">
+      <CrumbTitle title={`Pedido #${order.order_number}`} />
       <PageHeader
         title={`Pedido #${order.order_number}`}
         description={description}
         action={
           <>
             <Button asChild size="sm" variant="ghost">
-              <Link href="/pedidos">Voltar</Link>
+              <ListLink href="/pedidos">Voltar</ListLink>
             </Button>
             {status}
           </>
