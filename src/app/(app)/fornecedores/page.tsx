@@ -26,6 +26,7 @@ import {
   normalizeListSearch,
   parseListPagination,
 } from "@/lib/list-pagination";
+import { cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "Ativo",
@@ -297,7 +298,11 @@ async function FornecedoresContent({
       ) : (
         <>
           <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-0 sm:flex-1">
+            {/* Abaixo de `sm` a linha vira ficha empilhada: razão social e
+                contato compridos empurravam a coluna Situação para fora da
+                tela e a tabela rolava de lado. */}
             <Table
+              className="block sm:table"
               containerClassName="sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain"
               containerProps={{
                 key: pagination.page,
@@ -306,7 +311,7 @@ async function FornecedoresContent({
                 tabIndex: 0,
               }}
             >
-              <TableHeader className="[&_th]:bg-surface-sunken [&_th]:sticky [&_th]:top-0 [&_th]:z-10">
+              <TableHeader className="hidden sm:table-header-group [&_th]:bg-surface-sunken [&_th]:sticky [&_th]:top-0 [&_th]:z-10">
                 <TableRow className="bg-surface-sunken hover:bg-surface-sunken">
                   {/* No celular sobram Fornecedor e Situação. CNPJ e contato
                   reaparecem embaixo do nome — e o contato é o que mais importa
@@ -319,14 +324,17 @@ async function FornecedoresContent({
                   <TableHead>Situação</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="block sm:table-row-group">
                 {visiveis.map((supplier) => {
                   const principal = supplier.supplier_contacts?.find(
                     (c) => c.is_primary && c.is_active,
                   );
                   return (
-                    <TableRow key={supplier.id}>
-                      <TableCell>
+                    <TableRow
+                      key={supplier.id}
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 px-3 py-2.5 sm:table-row sm:p-0"
+                    >
+                      <TableCell className="col-start-1 block min-w-0 p-0 whitespace-normal sm:table-cell sm:p-2">
                         <IntentPrefetchLink
                           href={`/fornecedores/${supplier.id}`}
                           className="text-fg hover:text-primary font-medium"
@@ -357,7 +365,7 @@ async function FornecedoresContent({
                               : "avisos em aberto"}
                           </span>
                         ) : null}
-                        <span className="text-fg-muted block max-w-40 text-xs whitespace-normal sm:hidden">
+                        <span className="text-fg-muted block text-xs whitespace-normal sm:hidden">
                           {principal
                             ? `${principal.name}${
                                 (principal.whatsapp ?? principal.phone)
@@ -384,7 +392,14 @@ async function FornecedoresContent({
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      {/* No celular o "Ativo" some, como em Produtos: só a
+                          exceção (inativo, bloqueado) ocupa espaço. */}
+                      <TableCell
+                        className={cn(
+                          "col-start-2 row-start-1 block p-0 sm:table-cell sm:p-2",
+                          supplier.status === "active" && "max-sm:hidden",
+                        )}
+                      >
                         <Badge
                           variant={
                             supplier.status === "active"
