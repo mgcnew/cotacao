@@ -1,21 +1,16 @@
-import { ClipboardCheck, Sparkles, Trash2, UserRound } from "lucide-react";
+import { ClipboardCheck, Sparkles, UserRound } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { PurchaseSuggestions } from "@/components/shopping-list/purchase-suggestions";
+import { DesktopListItems } from "@/components/shopping-list/desktop-list-items";
 import { MobileListItems } from "@/components/shopping-list/mobile-list-items";
 import type { PendingQuantity } from "@/components/shopping-list/mobile-quick-add";
 import { ShoppingListQuickAdd } from "@/components/shopping-list/quick-add";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import { Input } from "@/components/ui/input";
-import {
-  removeShoppingListItem,
-  updateShoppingListItem,
-} from "@/features/shopping-list/actions";
 import {
   getOpenShoppingList,
   listShoppingProducts,
@@ -167,6 +162,16 @@ async function ListaDeComprasConteudo({
   const suggestions = showSuggestions ? await sugestoes : [];
   const pagination = parseListPagination(params, filteredItems.length);
   const visibleItems = filteredItems.slice(pagination.start, pagination.end);
+  const rows = visibleItems.map((item) => ({
+    id: item.id,
+    productId: item.product_id,
+    name: item.products.name,
+    origin: item.origin === "assistant" ? ("assistant" as const) : ("manual" as const),
+    createdLabel: dateTimeFormatter.format(new Date(item.created_at)),
+    quantity: Number(item.requested_quantity),
+    unit: item.purchase_unit?.symbol ?? "un",
+    notes: item.notes ?? "",
+  }));
   const hasVisibleSuggestions = showSuggestions && suggestions.length > 0;
   const hrefForOrigin = (value: ListOrigin) => {
     const query = new URLSearchParams();
@@ -257,119 +262,8 @@ async function ListaDeComprasConteudo({
                 tabIndex={0}
                 className="sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain focus-visible:outline-none"
               >
-                <MobileListItems
-                  canManage={canManage}
-                  items={visibleItems.map((item) => ({
-                    id: item.id,
-                    productId: item.product_id,
-                    name: item.products.name,
-                    origin:
-                      item.origin === "assistant" ? "assistant" : "manual",
-                    createdLabel: dateTimeFormatter.format(
-                      new Date(item.created_at),
-                    ),
-                    quantity: Number(item.requested_quantity),
-                    unit: item.purchase_unit?.symbol ?? "un",
-                    notes: item.notes ?? "",
-                  }))}
-                />
-                {visibleItems.map((item) => (
-                  <form
-                    key={item.id}
-                    action={updateShoppingListItem}
-                    className="border-border bg-surface hidden grid-cols-[minmax(0,1fr)_7rem_minmax(10rem,0.8fr)_auto] items-end gap-3 border-b p-3 last:border-b-0 sm:grid"
-                  >
-                    <input type="hidden" name="itemId" value={item.id} />
-                    <div className="col-span-2 min-w-0 sm:col-span-1">
-                      <p className="text-fg text-sm leading-snug font-semibold sm:truncate sm:font-medium">
-                        {item.products.name}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium",
-                            item.origin === "assistant"
-                              ? "bg-primary-soft text-primary"
-                              : "bg-surface-muted text-fg-muted",
-                          )}
-                        >
-                          {item.origin === "assistant" ? (
-                            <Sparkles className="size-3" aria-hidden />
-                          ) : (
-                            <UserRound className="size-3" aria-hidden />
-                          )}
-                          {item.origin === "assistant"
-                            ? "Assistente"
-                            : "Inserido por você"}
-                        </span>
-                        <span className="text-fg-subtle">
-                          {dateTimeFormatter.format(new Date(item.created_at))}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <label
-                        htmlFor={`qty-${item.id}`}
-                        className="text-fg-muted text-xs"
-                      >
-                        Quantidade ({item.purchase_unit?.symbol ?? "un"})
-                      </label>
-                      <Input
-                        id={`qty-${item.id}`}
-                        name="quantity"
-                        defaultValue={String(item.requested_quantity).replace(
-                          ".",
-                          ",",
-                        )}
-                        inputMode="decimal"
-                        required
-                        className="h-10 text-base sm:h-8 sm:text-sm"
-                        disabled={!canManage}
-                      />
-                    </div>
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <label
-                        htmlFor={`notes-${item.id}`}
-                        className="text-fg-muted text-xs"
-                      >
-                        Observação
-                      </label>
-                      <Input
-                        id={`notes-${item.id}`}
-                        name="notes"
-                        defaultValue={item.notes ?? ""}
-                        maxLength={300}
-                        className="h-10 text-base sm:h-8 sm:text-sm"
-                        disabled={!canManage}
-                      />
-                    </div>
-                    {canManage ? (
-                      <div className="col-span-2 grid grid-cols-[minmax(0,1fr)_2.75rem] gap-2 sm:col-span-1 sm:flex sm:items-center sm:gap-1">
-                        <Button
-                          type="submit"
-                          size="sm"
-                          variant="outline"
-                          className="h-10 sm:h-7"
-                        >
-                          Salvar
-                        </Button>
-                        <Button
-                          type="submit"
-                          size="sm"
-                          variant="ghost"
-                          className="text-destructive size-10 sm:size-auto sm:h-7"
-                          formAction={removeShoppingListItem.bind(
-                            null,
-                            item.id,
-                          )}
-                          aria-label={`Remover ${item.products.name}`}
-                        >
-                          <Trash2 className="size-3.5" aria-hidden />
-                        </Button>
-                      </div>
-                    ) : null}
-                  </form>
-                ))}
+                <MobileListItems canManage={canManage} items={rows} />
+                <DesktopListItems canManage={canManage} items={rows} />
               </div>
               <DataTablePagination
                 page={pagination.page}
