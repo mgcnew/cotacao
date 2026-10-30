@@ -81,7 +81,7 @@ function searchProducts(index: IndexedProduct[], query: string) {
     .map((item) => item.product);
 }
 
-function QuantityStepper({
+export function QuantityStepper({
   name,
   value,
   onChange,
@@ -388,10 +388,11 @@ export function MobileQuickAdd({
     return product && (quantities[id] ?? 0) > 0 ? [product] : [];
   });
 
+  // A busca fica: "tang" costuma render mais de um sabor, e limpar a cada toque
+  // obrigaria a digitar de novo. O item já aparece ali com os botões de
+  // quantidade; quem quer outro produto limpa no X.
   function addFromResult(product: ShoppingProduct) {
     step(product, 1);
-    // Limpa para a próxima busca; o item aparece no alto, já com os botões.
-    setQuery("");
   }
 
   const camera = (
@@ -439,7 +440,12 @@ export function MobileQuickAdd({
                 onKeyDown={(event) => {
                   if (event.key !== "Enter") return;
                   event.preventDefault();
-                  if (results[0]) addFromResult(results[0]);
+                  // Enter é o atalho de quem digita ou usa leitor físico: soma e
+                  // limpa, pronto para o próximo código.
+                  if (results[0]) {
+                    addFromResult(results[0]);
+                    setQuery("");
+                  }
                 }}
                 role="searchbox"
                 aria-label="Buscar produto"

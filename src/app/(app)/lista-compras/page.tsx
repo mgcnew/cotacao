@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { PurchaseSuggestions } from "@/components/shopping-list/purchase-suggestions";
+import { MobileListItems } from "@/components/shopping-list/mobile-list-items";
 import type { PendingQuantity } from "@/components/shopping-list/mobile-quick-add";
 import { ShoppingListQuickAdd } from "@/components/shopping-list/quick-add";
 import { Button } from "@/components/ui/button";
@@ -254,13 +255,29 @@ async function ListaDeComprasConteudo({
                 role="region"
                 aria-label="Itens da lista de compras"
                 tabIndex={0}
-                className="space-y-3 sm:min-h-0 sm:flex-1 sm:space-y-0 sm:overflow-y-auto sm:overscroll-contain focus-visible:outline-none"
+                className="sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain focus-visible:outline-none"
               >
+                <MobileListItems
+                  canManage={canManage}
+                  items={visibleItems.map((item) => ({
+                    id: item.id,
+                    productId: item.product_id,
+                    name: item.products.name,
+                    origin:
+                      item.origin === "assistant" ? "assistant" : "manual",
+                    createdLabel: dateTimeFormatter.format(
+                      new Date(item.created_at),
+                    ),
+                    quantity: Number(item.requested_quantity),
+                    unit: item.purchase_unit?.symbol ?? "un",
+                    notes: item.notes ?? "",
+                  }))}
+                />
                 {visibleItems.map((item) => (
                   <form
                     key={item.id}
                     action={updateShoppingListItem}
-                    className="border-border bg-surface grid grid-cols-[minmax(6.5rem,0.38fr)_minmax(0,1fr)] gap-3 rounded-xl border p-4 shadow-xs sm:grid-cols-[minmax(0,1fr)_7rem_minmax(10rem,0.8fr)_auto] sm:items-end sm:rounded-none sm:border-0 sm:border-b sm:p-3 sm:shadow-none sm:last:border-b-0"
+                    className="border-border bg-surface hidden grid-cols-[minmax(0,1fr)_7rem_minmax(10rem,0.8fr)_auto] items-end gap-3 border-b p-3 last:border-b-0 sm:grid"
                   >
                     <input type="hidden" name="itemId" value={item.id} />
                     <div className="col-span-2 min-w-0 sm:col-span-1">

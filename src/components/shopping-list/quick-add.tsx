@@ -112,7 +112,11 @@ export function ShoppingListQuickAdd({
 
   return (
     <>
-      <MobileQuickAdd products={products} pending={pending} />
+      <MobileQuickAdd
+        key={pending.map((item) => `${item.productId}:${item.quantity}`).join("|")}
+        products={products}
+        pending={pending}
+      />
       <form
         ref={formRef}
         action={action}
