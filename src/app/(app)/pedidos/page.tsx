@@ -289,7 +289,9 @@ async function ListaDePedidos({
         />
       ) : (
         <div className="border-border bg-surface flex flex-col overflow-hidden rounded-xl border shadow-xs sm:min-h-0 sm:flex-1">
-          <div className="bg-surface-sunken text-fg-muted hidden shrink-0 grid-cols-[minmax(5rem,.7fr)_minmax(9rem,1.4fr)_7rem_4rem_minmax(8rem,1fr)_8rem] gap-3 border-b px-4 py-2 text-xs font-medium sm:grid">
+          <div
+            className={`bg-surface-sunken text-fg-muted hidden shrink-0 gap-3 border-b px-4 py-2 text-xs font-medium lg:grid ${COLUNAS}`}
+          >
             <span>Pedido</span>
             <span>Fornecedor</span>
             <span>Entrega</span>
@@ -328,6 +330,16 @@ async function ListaDePedidos({
   );
 }
 
+/**
+ * Colunas da lista, iguais no cabeçalho e em cada linha. A última é a do botão
+ * do próximo passo: "Enviar ao fornecedor" mede ~152px, e a coluna de 8rem o
+ * deixava vazar para o respiro da direita — o contêiner rolável ganhava uma
+ * barra lateral. Os mínimos das outras são o que cabe: Entrega é "dd/mm" ou
+ * "Sem prazo", e a Situação quebra de linha.
+ */
+const COLUNAS =
+  "lg:grid-cols-[minmax(4.5rem,.7fr)_minmax(8rem,1.4fr)_5rem_3rem_minmax(7rem,1fr)_10rem]";
+
 type PresentedOrder = {
   order: Awaited<ReturnType<typeof listOrders>>["rows"][number];
   passo: ReturnType<typeof orderNextStep>;
@@ -342,23 +354,25 @@ function OrderResponsiveRow({
   enviarAqui,
 }: PresentedOrder) {
   return (
-    <article className="grid min-w-0 gap-3 p-4 sm:grid-cols-[minmax(5rem,.7fr)_minmax(9rem,1.4fr)_7rem_4rem_minmax(8rem,1fr)_8rem] sm:items-center sm:py-3">
+    <article
+      className={`grid min-w-0 gap-3 p-4 lg:items-center lg:py-3 ${COLUNAS}`}
+    >
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="min-w-0">
           <IntentPrefetchLink
             href={`/pedidos/${order.id}`}
             className="text-fg hover:text-primary font-semibold underline-offset-4 hover:underline"
           >
-            <span className="sm:hidden">Pedido </span>#{order.orderNumber}
+            <span className="lg:hidden">Pedido </span>#{order.orderNumber}
           </IntentPrefetchLink>
           <p className="text-fg-subtle text-xs">
             {order.roundTitle ?? "Pedido direto"}
           </p>
-          <p className="text-fg mt-1 wrap-anywhere text-sm font-medium sm:hidden">
+          <p className="text-fg mt-1 wrap-anywhere text-sm font-medium lg:hidden">
             {order.supplierName}
           </p>
         </div>
-        <span className="flex max-w-full flex-wrap justify-end gap-1 sm:hidden">
+        <span className="flex max-w-full flex-wrap justify-end gap-1 lg:hidden">
           <Badge
             variant={
               order.status === "received"
@@ -375,24 +389,24 @@ function OrderResponsiveRow({
           ) : null}
         </span>
       </div>
-      <p className="text-fg hidden wrap-anywhere text-sm font-medium sm:block">
+      <p className="text-fg hidden wrap-anywhere text-sm font-medium lg:block">
         {order.supplierName}
       </p>
       <p
         className={
           order.isOverdue
-            ? "text-destructive hidden text-xs font-medium sm:block"
-            : "text-fg-muted hidden text-xs sm:block"
+            ? "text-destructive hidden text-xs font-medium lg:block"
+            : "text-fg-muted hidden text-xs lg:block"
         }
       >
         {order.deliveryDueDate
           ? formatarDia(order.deliveryDueDate)
           : "Sem prazo"}
       </p>
-      <p className="text-fg-muted hidden text-right text-sm tabular-nums sm:block">
+      <p className="text-fg-muted hidden text-right text-sm tabular-nums lg:block">
         {order.itemCount}
       </p>
-      <span className="hidden max-w-full flex-wrap gap-1 sm:flex sm:justify-start">
+      <span className="hidden max-w-full flex-wrap gap-1 lg:flex lg:justify-start">
         <Badge
           variant={
             order.status === "received"
@@ -409,7 +423,7 @@ function OrderResponsiveRow({
         ) : null}
       </span>
 
-      <dl className="border-border grid grid-cols-2 gap-2 border-y py-3 text-center sm:hidden">
+      <dl className="border-border grid grid-cols-2 gap-2 border-y py-3 text-center lg:hidden">
         <div className="border-border min-w-0 border-r px-1">
           <dt className="text-fg-subtle text-xs">Itens</dt>
           <dd className="text-fg mt-0.5 text-sm font-semibold tabular-nums">
@@ -432,7 +446,7 @@ function OrderResponsiveRow({
         </div>
       </dl>
 
-      <div className="[&_[data-slot=button]]:w-full sm:text-right sm:[&_[data-slot=button]]:w-auto">
+      <div className="[&_[data-slot=button]]:w-full lg:text-right lg:[&_[data-slot=button]]:w-auto">
         {enviarAqui ? (
           <SendOrderDialog
             orderId={order.id}

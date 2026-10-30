@@ -1,7 +1,13 @@
-"use client";
-
+import { Check, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import * as React from "react";
+
+import {
+  DropdownMenu,
+  DropdownMenuBadge,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { cn } from "@/lib/utils";
 
@@ -16,8 +22,11 @@ import { cn } from "@/lib/utils";
  * As contagens vêm do recorte SEM a situação (mas com busca e datas): senão,
  * escolher "Concluídas" zeraria todas as outras abas.
  *
- * No celular as abas não cabem e rolam de lado: a ativa é trazida para a vista
- * ao montar, e esmaece a borda do lado em que ainda há abas escondidas.
+ * Abaixo de `lg` elas viram um menu: um botão com a aba atual e a contagem, que
+ * abre com as outras. Uma faixa que rola de lado esconde abas (e a contagem
+ * delas) onde o dedo não tem como descobri-las, e pílulas empilhadas comem
+ * três linhas da tela. De `lg` para cima, onde com a barra lateral as abas
+ * cabem, são abas sublinhadas.
  */
 export type Segmento = {
   /** Valor do parâmetro; `null` é "todas". */
@@ -52,65 +61,97 @@ export function ListSegments({
     return query ? `${basePath}?${query}` : basePath;
   }
 
-  const navRef = React.useRef<HTMLElement>(null);
-  const [bordas, setBordas] = React.useState({ esquerda: false, direita: false });
-  const medir = React.useCallback(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-    setBordas({
-      esquerda: nav.scrollLeft > 1,
-      direita: nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1,
-    });
-  }, []);
-  React.useEffect(() => {
-    navRef.current
-      ?.querySelector('[aria-current="page"]')
-      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    medir();
-    window.addEventListener("resize", medir);
-    return () => window.removeEventListener("resize", medir);
-  }, [atual, medir]);
-
-  const mascara = `linear-gradient(to right, ${bordas.esquerda ? "transparent, black 2rem" : "black"}, ${bordas.direita ? "black calc(100% - 2rem), transparent" : "black"})`;
+  const atualSegmento =
+    segmentos.find((segmento) => segmento.valor === atual) ?? segmentos[0];
 
   return (
-    <nav
-      ref={navRef}
-      aria-label="Situação"
-      onScroll={medir}
-      style={{ maskImage: mascara, WebkitMaskImage: mascara }}
-      className="border-border mb-4 flex shrink-0 gap-1 overflow-x-auto border-b"
-    >
-      {segmentos.map((segmento) => {
-        const ativo = segmento.valor === atual;
-        return (
-          <Link
-            key={segmento.valor ?? "todas"}
-            href={href(segmento.valor)}
-            scroll={false}
-            aria-current={ativo ? "page" : undefined}
-            className={cn(
-              "-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors",
-              "pointer-coarse:py-3",
-              ativo
-                ? "border-primary text-fg font-medium"
-                : "text-fg-muted hover:text-fg border-transparent",
-            )}
+    <>
+      <nav aria-label="Situação" className="mb-4 shrink-0 lg:hidden">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="border-input bg-input-bg text-fg focus-visible:border-ring focus-visible:ring-ring/50 flex h-11 w-full items-center gap-2 rounded-lg border px-3 text-left text-sm font-medium shadow-xs outline-none focus-visible:ring-3"
+            >
+              <span className="min-w-0 flex-1 truncate">
+                {atualSegmento.rotulo}
+              </span>
+              <span className="bg-primary-soft text-primary rounded-sm px-1.5 text-xs tabular-nums">
+                {atualSegmento.contagem}
+              </span>
+              <ChevronDown
+                className="text-fg-subtle size-4 shrink-0"
+                aria-hidden
+              />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="w-(--radix-dropdown-menu-trigger-width)"
           >
-            {segmento.rotulo}
-            <span
+            {segmentos.map((segmento) => {
+              const ativo = segmento.valor === atualSegmento.valor;
+              return (
+                <DropdownMenuItem
+                  key={segmento.valor ?? "todas"}
+                  asChild
+                  className="min-h-11"
+                >
+                  <Link
+                    href={href(segmento.valor)}
+                    scroll={false}
+                    aria-current={ativo ? "page" : undefined}
+                  >
+                    <span className={ativo ? "font-medium" : undefined}>
+                      {segmento.rotulo}
+                    </span>
+                    {ativo ? (
+                      <Check className="text-primary" aria-hidden />
+                    ) : null}
+                    <DropdownMenuBadge>{segmento.contagem}</DropdownMenuBadge>
+                  </Link>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </nav>
+
+      <nav
+        aria-label="Situação"
+        className="border-border mb-4 hidden shrink-0 gap-1 overflow-x-auto border-b lg:flex"
+      >
+        {segmentos.map((segmento) => {
+          const ativo = segmento.valor === atual;
+          return (
+            <Link
+              key={segmento.valor ?? "todas"}
+              href={href(segmento.valor)}
+              scroll={false}
+              aria-current={ativo ? "page" : undefined}
               className={cn(
-                "rounded-sm px-1.5 text-xs tabular-nums",
+                "-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors",
+                "pointer-coarse:py-3",
                 ativo
-                  ? "bg-primary-soft text-primary"
-                  : "bg-surface-muted text-fg-subtle",
+                  ? "border-primary text-fg font-medium"
+                  : "text-fg-muted hover:text-fg border-transparent",
               )}
             >
-              {segmento.contagem}
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
+              {segmento.rotulo}
+              <span
+                className={cn(
+                  "rounded-sm px-1.5 text-xs tabular-nums",
+                  ativo
+                    ? "bg-primary-soft text-primary"
+                    : "bg-surface-muted text-fg-subtle",
+                )}
+              >
+                {segmento.contagem}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }
