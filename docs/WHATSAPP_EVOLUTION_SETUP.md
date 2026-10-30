@@ -129,3 +129,19 @@ cabeçalho do atendimento. O histórico e as novas mensagens continuam salvos,
 mas não geram contagem de não lidas nem aparecem nas filas operacionais. A aba
 **Promoções** permite consultar e reativar o contato a qualquer momento. Iniciar
 uma nova conversa ou enviar uma mensagem pelo sistema também reativa o contato.
+
+
+## 5. Como a caixa fala com o servidor
+
+A tela `/whatsapp` guarda conversas e mensagens no navegador e recebe as novas
+pelo Realtime do Supabase, sem recarregar a página. As operações dela — abrir
+conversa, enviar, marcar como lida, mudar quem responde — usam as rotas
+`/api/whatsapp/inbox/*` (regra em `src/features/whatsapp/inbox-service.ts`) e
+**não** Server Actions: o Next enfileira as actions, uma por vez e por aba, e
+o histórico do navegador entra na mesma fila, então um "enviar" esperava atrás
+de um "marcar como lida". Rotas comuns rodam em paralelo.
+
+Os avisos de entrega e leitura chegam em `MESSAGES_UPDATE`, que na Evolution v2
+traz o id do WhatsApp em `keyId` (não em `key.id`). Mensagens enviadas antes da
+correção ficaram em "enviada"; **Configurações > WhatsApp > Sincronizar** relê
+as 100 mais recentes e atualiza o que já avançou.

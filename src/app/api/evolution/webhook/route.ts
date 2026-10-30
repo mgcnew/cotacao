@@ -95,16 +95,20 @@ export async function POST(request: Request) {
 
   try {
     const status = await processEvolutionEvent(client, connection, eventType, payload);
-    await client
-      .from("whatsapp_webhook_events")
-      .update({ status, processed_at: new Date().toISOString() })
-      .eq("id", event.id);
-    if (eventType.replace(/[.\s-]+/g, "_").toUpperCase() !== "CONNECTION_UPDATE") {
-      await client
-        .from("whatsapp_connections")
-        .update({ last_event_at: new Date().toISOString() })
-        .eq("id", connection.id);
-    }
+    const processedAt = new Date().toISOString();
+    // Os dois registros são independentes: quem espera a resposta é a Evolution.
+    await Promise.all([
+      client
+        .from("whatsapp_webhook_events")
+        .update({ status, processed_at: processedAt })
+        .eq("id", event.id),
+      eventType.replace(/[.\s-]+/g, "_").toUpperCase() !== "CONNECTION_UPDATE"
+        ? client
+            .from("whatsapp_connections")
+            .update({ last_event_at: processedAt })
+            .eq("id", connection.id)
+        : Promise.resolve(),
+    ]);
     return Response.json({ ok: true, status });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "Falha ao processar webhook.";

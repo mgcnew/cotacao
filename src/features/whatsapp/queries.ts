@@ -1,8 +1,17 @@
 import "server-only";
 
+import { ORDER_STATUS_LABEL } from "@/features/orders/queries";
+import { ROUND_STATUS_LABEL } from "@/features/rounds/status";
+import {
+  CONVERSATION_COLUMNS,
+  MESSAGE_COLUMNS,
+  toInboxConversation,
+  toInboxMessage,
+  type ConversationContext,
+  type InboxConversation,
+  type InboxMessage,
+} from "@/features/whatsapp/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-
-export type WhatsAppConversation = Awaited<ReturnType<typeof listWhatsAppConversations>>[number];
 
 export async function getWhatsAppConnection(companyId: string) {
   const supabase = await createServerSupabaseClient();
@@ -44,66 +53,81 @@ export async function getWhatsAppMetrics(companyId: string, days: number): Promi
   };
 }
 
-export async function listWhatsAppConversations(
+/**
+ * Todas as conversas recentes, sem filtro: quem filtra e busca é a tela, no
+ * navegador, para trocar de aba e digitar sem esperar o servidor. O teto
+ * existe porque o PostgREST corta em `max_rows` de qualquer forma.
+ */
+export async function listInboxConversations(
   companyId: string,
-  filter = "open",
-  search = "",
-) {
+): Promise<InboxConversation[]> {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("whatsapp_conversations")
-    .select("*, suppliers(name), supplier_contacts(name, whatsapp)")
+    .select(`${CONVERSATION_COLUMNS}, suppliers(name), supplier_contacts(name)`)
     .eq("company_id", companyId)
     .order("last_message_at", { ascending: false, nullsFirst: false })
-    .limit(150);
+    .limit(300);
   if (error) throw new Error(`Falha ao carregar conversas: ${error.message}`);
-
-  const needle = search.trim().toLocaleLowerCase("pt-BR");
-  return (data ?? []).filter((conversation) => {
-    if (filter === "promotions") {
-      if (conversation.inbox_category !== "promotion") return false;
-    } else if (conversation.inbox_category === "promotion") {
-      return false;
-    }
-    if (filter === "unread" && conversation.unread_count === 0) return false;
-    if (filter === "waiting_supplier" && conversation.awaiting_side !== "supplier") return false;
-    if (filter === "waiting_buyer" && conversation.awaiting_side !== "buyer") return false;
-    if (filter === "open" && conversation.status !== "open") return false;
-    if (!needle) return true;
-    const haystack = [
-      conversation.display_name,
-      conversation.normalized_phone,
-      conversation.last_message_preview,
-      conversation.suppliers?.name,
-      conversation.supplier_contacts?.name,
-    ].filter(Boolean).join(" ").toLocaleLowerCase("pt-BR");
-    return haystack.includes(needle);
-  });
+  return (data ?? []).map((row) =>
+    toInboxConversation(row, {
+      supplierName: row.suppliers?.name,
+      contactName: row.supplier_contacts?.name,
+    }),
+  );
 }
 
-export async function listWhatsAppMessages(companyId: string, conversationId: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("whatsapp_messages")
-    .select("*")
-    .eq("company_id", companyId)
-    .eq("conversation_id", conversationId)
-    .order("occurred_at", { ascending: true })
-    .limit(250);
-  if (error) throw new Error(`Falha ao carregar mensagens: ${error.message}`);
-  return data ?? [];
-}
-
-export async function getWhatsAppConversation(companyId: string, conversationId: string) {
+/** Uma conversa só — para o link direto a uma que ficou fora das mais recentes. */
+export async function getInboxConversation(
+  companyId: string,
+  conversationId: string,
+): Promise<InboxConversation | null> {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("whatsapp_conversations")
-    .select("*, suppliers(name), supplier_contacts(name, whatsapp)")
+    .select(`${CONVERSATION_COLUMNS}, suppliers(name), supplier_contacts(name)`)
     .eq("company_id", companyId)
     .eq("id", conversationId)
     .maybeSingle();
   if (error) throw new Error(`Falha ao carregar conversa: ${error.message}`);
-  return data;
+  return data
+    ? toInboxConversation(data, {
+        supplierName: data.suppliers?.name,
+        contactName: data.supplier_contacts?.name,
+      })
+    : null;
+}
+
+export const FIRST_PAGE_OF_MESSAGES = 80;
+
+/**
+ * As mensagens MAIS RECENTES, em ordem de leitura.
+ *
+ * Antes isto lia as 250 mais antigas (`ascending` + `limit`), e uma conversa
+ * longa abria parada no passado, sem as últimas respostas do fornecedor.
+ */
+export async function listInboxMessages(
+  companyId: string,
+  conversationId: string,
+  before?: string,
+): Promise<{ messages: InboxMessage[]; hasMore: boolean }> {
+  const supabase = await createServerSupabaseClient();
+  let query = supabase
+    .from("whatsapp_messages")
+    .select(MESSAGE_COLUMNS)
+    .eq("company_id", companyId)
+    .eq("conversation_id", conversationId)
+    .order("occurred_at", { ascending: false })
+    .limit(FIRST_PAGE_OF_MESSAGES + 1);
+  if (before) query = query.lt("occurred_at", before);
+  const { data, error } = await query;
+  if (error) throw new Error(`Falha ao carregar mensagens: ${error.message}`);
+  const rows = data ?? [];
+  const hasMore = rows.length > FIRST_PAGE_OF_MESSAGES;
+  return {
+    messages: rows.slice(0, FIRST_PAGE_OF_MESSAGES).reverse().map(toInboxMessage),
+    hasMore,
+  };
 }
 
 export async function listWhatsAppContacts(companyId: string) {
@@ -135,5 +159,14 @@ export async function getWhatsAppContext(
   ]);
   if (roundResult.error) throw roundResult.error;
   if (orderResult.error) throw orderResult.error;
-  return { round: roundResult.data, order: orderResult.data };
+  const round = roundResult.data;
+  const order = orderResult.data;
+  return {
+    round: round
+      ? { id: round.id, title: round.title, statusLabel: ROUND_STATUS_LABEL[round.status] ?? round.status }
+      : null,
+    order: order
+      ? { id: order.id, statusLabel: ORDER_STATUS_LABEL[order.status] ?? order.status }
+      : null,
+  } satisfies ConversationContext;
 }

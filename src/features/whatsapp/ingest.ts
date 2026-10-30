@@ -206,15 +206,31 @@ async function ingestMessage(
   const content = messageContent(data.message);
   const timestamp = occurredAt(data.messageTimestamp ?? data.timestamp);
   const pushName = text(data.pushName);
-  const contact = await findContact(client, connection.company_id, remoteJid);
-
-  const { data: existingMessage } = await client
-    .from("whatsapp_messages")
-    .select("id, media_path, message_type")
-    .eq("connection_id", connection.id)
-    .eq("external_message_id", externalId)
-    .maybeSingle();
+  // Três leituras que não dependem uma da outra: antes eram três idas ao banco
+  // em fila, e é esse tempo que separa "o fornecedor escreveu" de "apareceu".
+  const [contact, { data: existingMessage }, { data: existingConversation, error: conversationReadError }] =
+    await Promise.all([
+      findContact(client, connection.company_id, remoteJid),
+      client
+        .from("whatsapp_messages")
+        .select("id, media_path, message_type")
+        .eq("connection_id", connection.id)
+        .eq("external_message_id", externalId)
+        .maybeSingle(),
+      client
+        .from("whatsapp_conversations")
+        .select("id, unread_count, supplier_id, supplier_contact_id, inbox_category")
+        .eq("connection_id", connection.id)
+        .eq("remote_jid", remoteJid)
+        .maybeSingle(),
+    ]);
   if (existingMessage) {
+    // A reconciliação relê mensagens já gravadas; é por aqui que as que ficaram
+    // em "enviada" antes da correção dos avisos de status recebem o que faltava.
+    const known = statusFromEvolution(data.status);
+    if (fromMe && known && known !== "sent") {
+      await updateMessage(client, connection, { keyId: externalId, status: data.status });
+    }
     if (["audio", "image"].includes(content.type) && !existingMessage.media_path) {
       await attachMedia(
         client,
@@ -228,12 +244,6 @@ async function ingestMessage(
     return "duplicate";
   }
 
-  const { data: existingConversation, error: conversationReadError } = await client
-    .from("whatsapp_conversations")
-    .select("id, unread_count, supplier_id, supplier_contact_id, inbox_category")
-    .eq("connection_id", connection.id)
-    .eq("remote_jid", remoteJid)
-    .maybeSingle();
   if (conversationReadError) throw conversationReadError;
 
   const conversationPatch = {
@@ -332,33 +342,61 @@ function statusFromEvolution(value: unknown) {
   return null;
 }
 
+/** Quanto cada situação já andou: a confirmação só pode avançar. */
+const STATUS_ORDER = ["pending", "failed", "sent", "delivered", "read", "played"] as const;
+
+function statusesBelow(status: string) {
+  const index = STATUS_ORDER.indexOf(status as (typeof STATUS_ORDER)[number]);
+  return index === -1 ? [] : ["queued", ...STATUS_ORDER.slice(0, index)];
+}
+
+/**
+ * Os identificadores que podem nomear a mensagem num aviso de status.
+ *
+ * O evento `MESSAGES_UPDATE` da Evolution v2 NÃO traz `key.id`: o id do
+ * WhatsApp vem em `keyId`, e `messageId` é o id interno da Evolution. O código
+ * só olhava `key.id` e `messageId`, então nenhuma confirmação casava com a
+ * mensagem gravada — por isso as 3 mil enviadas ficavam eternamente em
+ * "enviada" e os indicadores mostravam 0 entregues.
+ */
+function statusTargetIds(data: JsonObject, key: JsonObject) {
+  return [...new Set(
+    [text(data.keyId), text(key.id), text(data.messageId), text(data.id)].filter(
+      (value): value is string => Boolean(value),
+    ),
+  )];
+}
+
 async function updateMessage(client: ServiceClient, connection: Connection, raw: unknown, deleted = false) {
   const data = object(raw);
   const key = object(data.key);
-  const id = text(key.id) ?? text(data.messageId) ?? text(data.id);
+  const ids = statusTargetIds(data, key);
   const update = object(data.update);
   const status = deleted
     ? "deleted"
     : statusFromEvolution(data.status ?? update.status);
-  if (!id || !status) return "ignored";
+  if (ids.length === 0 || !status) return "ignored";
   const now = new Date().toISOString();
   const patch = {
     status,
     ...(status === "delivered" ? { delivered_at: now } : {}),
     ...(status === "read" || status === "played" ? { read_at: now, delivered_at: now } : {}),
   };
-  const { error } = await client
+  let query = client
     .from("whatsapp_messages")
     .update(patch)
     .eq("connection_id", connection.id)
-    .eq("external_message_id", id);
+    .in("external_message_id", ids);
+  // Aviso atrasado ("enviada" depois de "lida") não pode desfazer o que já andou.
+  if (status !== "deleted") query = query.in("status", statusesBelow(status));
+  const { error } = await query;
   if (error) throw error;
   if (["delivered", "read", "played"].includes(status)) {
     await client
       .from("communication_logs")
       .update({ status: "delivered", delivered_at: now })
       .eq("company_id", connection.company_id)
-      .eq("external_message_id", id);
+      .in("external_message_id", ids);
   }
   return "processed";
 }
