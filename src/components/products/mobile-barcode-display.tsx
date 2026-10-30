@@ -3,18 +3,20 @@
 import JsBarcode from "jsbarcode";
 import {
   Barcode,
+  ChevronLeft,
+  ChevronRight,
   Maximize2,
-  ScanBarcode,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import * as React from "react";
 
 import {
   BarcodeCameraDialog,
   type BarcodeScanOutcome,
 } from "@/components/shopping-list/barcode-camera-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,6 +26,7 @@ import {
 } from "@/features/products/barcodes";
 import type { ShoppingProduct } from "@/features/shopping-list/queries";
 import { normalizeListSearch } from "@/lib/list-pagination";
+import { cn } from "@/lib/utils";
 
 type ScannedProduct = {
   id: string;
@@ -139,7 +142,17 @@ function useStoredLabels(companyId: string, products: ShoppingProduct[]) {
   return { items, save };
 }
 
-function GeneratedBarcode({ code }: { code: string }) {
+/**
+ * O desenho do código. `compact` cabe no topo da tela junto da lista; `large`
+ * é o da tela cheia, que o leitor externo lê de mais longe.
+ */
+function GeneratedBarcode({
+  code,
+  size,
+}: {
+  code: string;
+  size: "compact" | "large";
+}) {
   const svgRef = React.useRef<SVGSVGElement>(null);
 
   React.useLayoutEffect(() => {
@@ -150,24 +163,119 @@ function GeneratedBarcode({ code }: { code: string }) {
       background: "#ffffff",
       lineColor: "#000000",
       width: barWidth,
-      height: 150,
-      margin: 16,
+      height: size === "large" ? 170 : 90,
+      margin: size === "large" ? 16 : 8,
       displayValue: true,
       font: "monospace",
-      fontSize: 22,
-      textMargin: 8,
+      fontSize: size === "large" ? 24 : 18,
+      textMargin: 6,
     });
-  }, [code]);
+  }, [code, size]);
 
   return (
-    <div className="w-full overflow-hidden rounded-xl bg-white p-2">
-      <svg
-        ref={svgRef}
-        className="mx-auto block h-auto max-h-56 w-full max-w-full"
-        role="img"
-        aria-label={`Código de barras ${code}`}
-      />
-    </div>
+    <svg
+      ref={svgRef}
+      className={cn(
+        "mx-auto block h-auto w-full max-w-full",
+        size === "large" ? "max-h-[70dvh]" : "max-h-32",
+      )}
+      role="img"
+      aria-label={`Código de barras ${code}`}
+    />
+  );
+}
+
+/**
+ * Tela cheia por sobreposição, e não pela API de tela cheia: o iPhone não a
+ * oferece para elementos comuns, justamente onde mais se usa. Mantém a tela
+ * acesa enquanto está aberta, para o brilho não cair no meio da leitura, e tem
+ * as setas aqui dentro — passar para a próxima etiqueta sem fechar.
+ */
+function BarcodeOverlay({
+  open,
+  onOpenChange,
+  current,
+  position,
+  total,
+  onStep,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  current: ScannedProduct;
+  position: number;
+  total: number;
+  onStep: (direction: -1 | 1) => void;
+}) {
+  React.useEffect(() => {
+    if (!open) return;
+    let lock: WakeLockSentinel | null = null;
+    let cancelled = false;
+    void navigator.wakeLock
+      ?.request("screen")
+      .then((sentinel) => {
+        if (cancelled) void sentinel.release();
+        else lock = sentinel;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      void lock?.release().catch(() => undefined);
+    };
+  }, [open]);
+
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          className="fixed inset-0 z-50 flex flex-col bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-black outline-none"
+        >
+          <DialogPrimitive.Title className="sr-only">
+            Código de barras de {current.name}
+          </DialogPrimitive.Title>
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-lg font-semibold">{current.name}</p>
+              <p className="font-mono text-sm text-neutral-600">{current.code}</p>
+            </div>
+            <DialogPrimitive.Close
+              aria-label="Fechar tela cheia"
+              className="grid size-11 shrink-0 place-items-center rounded-full bg-neutral-100 text-neutral-900 active:bg-neutral-200"
+            >
+              <X className="size-5" aria-hidden />
+            </DialogPrimitive.Close>
+          </div>
+          <div className="flex min-h-0 flex-1 items-center">
+            <GeneratedBarcode code={current.code} size="large" />
+          </div>
+          {total > 1 ? (
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => onStep(-1)}
+                disabled={position === 0}
+                aria-label="Etiqueta anterior"
+                className="grid size-14 place-items-center rounded-full bg-neutral-100 text-neutral-900 active:bg-neutral-200 disabled:opacity-30"
+              >
+                <ChevronLeft className="size-6" aria-hidden />
+              </button>
+              <span className="text-sm text-neutral-600 tabular-nums">
+                {position + 1} de {total}
+              </span>
+              <button
+                type="button"
+                onClick={() => onStep(1)}
+                disabled={position === total - 1}
+                aria-label="Próxima etiqueta"
+                className="grid size-14 place-items-center rounded-full bg-neutral-100 text-neutral-900 active:bg-neutral-200 disabled:opacity-30"
+              >
+                <ChevronRight className="size-6" aria-hidden />
+              </button>
+            </div>
+          ) : null}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
@@ -185,12 +293,13 @@ export function MobileBarcodeDisplay({
   const [currentKey, setCurrentKey] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
   const [entryError, setEntryError] = React.useState<string | null>(null);
-  const [fullscreenError, setFullscreenError] =
-    React.useState<string | null>(null);
+  const [expanded, setExpanded] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const displayRef = React.useRef<HTMLDivElement>(null);
   const current =
     recent.find((item) => labelKey(item) === currentKey) ?? recent[0] ?? null;
+  const position = current
+    ? recent.findIndex((item) => labelKey(item) === labelKey(current))
+    : -1;
 
   const availableLabels = React.useMemo(
     () =>
@@ -230,7 +339,6 @@ export function MobileBarcodeDisplay({
     setCurrentKey(labelKey(scanned));
     setQuery("");
     setEntryError(null);
-    setFullscreenError(null);
     if (refocus) window.setTimeout(() => inputRef.current?.focus(), 0);
     return true;
   }
@@ -283,18 +391,9 @@ export function MobileBarcodeDisplay({
     addLabel(selected, true);
   }
 
-  async function openFullscreen() {
-    if (!displayRef.current?.requestFullscreen) {
-      setFullscreenError(
-        "Este navegador não oferece o modo de tela cheia. O código continua pronto para leitura.",
-      );
-      return;
-    }
-    try {
-      await displayRef.current.requestFullscreen();
-    } catch {
-      setFullscreenError("Não foi possível abrir em tela cheia.");
-    }
+  function step(direction: -1 | 1) {
+    const target = recent[position + direction];
+    if (target) setCurrentKey(labelKey(target));
   }
 
   function removeCode(item: ScannedProduct) {
@@ -303,125 +402,39 @@ export function MobileBarcodeDisplay({
     );
     saveRecent(next);
     if (current && labelKey(current) === labelKey(item)) {
-      if (document.fullscreenElement) void document.exitFullscreen();
+      if (next.length === 0) setExpanded(false);
       setCurrentKey(next[0] ? labelKey(next[0]) : null);
     }
   }
 
   function clearCodes() {
-    if (document.fullscreenElement) void document.exitFullscreen();
+    setExpanded(false);
     saveRecent([]);
     setCurrentKey(null);
-    setFullscreenError(null);
   }
 
   return (
-    <div className="space-y-4">
-      <section className="border-border bg-surface rounded-2xl border p-4 shadow-sm">
-        <div className="flex items-start gap-3">
-          <span className="bg-primary/10 text-primary grid size-10 shrink-0 place-items-center rounded-xl">
-            <ScanBarcode className="size-5" aria-hidden />
-          </span>
-          <div>
-            <h2 className="text-fg font-semibold">Adicione uma etiqueta</h2>
-            <p className="text-fg-muted mt-1 text-sm">
-              Busque pelo produto, bipe com um leitor físico ou use a câmera.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-start gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search
-              className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4"
-              aria-hidden
-            />
-            <Input
-              ref={inputRef}
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setEntryError(null);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                addFromInput();
-              }}
-              autoComplete="off"
-              inputMode="search"
-              placeholder="Produto ou código de barras"
-              aria-label="Buscar produto ou informar código de barras"
-              className="pl-8"
-            />
-            {suggestions.length > 0 ? (
-              <div className="border-border bg-surface absolute top-full z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border p-1 shadow-lg">
-                {suggestions.map((item) => (
-                  <button
-                    key={labelKey(item)}
-                    type="button"
-                    onClick={() => addLabel(item, true)}
-                    className="hover:bg-surface-muted flex w-full min-w-0 items-center justify-between gap-3 rounded-md px-2.5 py-2 text-left"
-                  >
-                    <span className="min-w-0 truncate text-sm font-medium">
-                      {item.name}
-                    </span>
-                    <code className="text-fg-muted shrink-0 text-xs">
-                      {item.code}
-                    </code>
-                  </button>
-                ))}
+    /* O código fica preso no topo e só o que está embaixo rola. Antes a página
+       inteira rolava: para trocar de etiqueta era preciso descer até a lista,
+       escolher e subir de novo para ver o desenho. Agora escolher e ver
+       acontecem na mesma tela. */
+    <div className="flex min-h-0 flex-1 flex-col">
+      <section
+        aria-label="Código em exibição"
+        className="border-border bg-surface shrink-0 border-b px-3 pt-3 pb-2.5"
+      >
+        {current ? (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-fg truncate text-base leading-tight font-semibold">
+                  {current.name}
+                </h2>
+                <p className="text-fg-muted font-mono text-xs">{current.code}</p>
               </div>
-            ) : null}
-          </div>
-          {/* Contínuo: aqui a pessoa monta uma pilha de etiquetas de uma vez,
-              e reabrir a câmera a cada item custava mais que a leitura. */}
-          <BarcodeCameraDialog
-            onDetected={handleDetected}
-            continuous
-            successVibrationMs={35}
-            triggerLabel="Câmera"
-          />
-        </div>
-        {entryError ? (
-          <p role="alert" className="text-destructive mt-2 text-sm">
-            {entryError}
-          </p>
-        ) : null}
-        <p className="text-fg-subtle mt-2 text-xs">
-          No leitor físico, basta bipar: o Enter adiciona e deixa o campo pronto
-          para o próximo código.
-        </p>
-      </section>
-
-      {current ? (
-        <section
-          ref={displayRef}
-          className="border-border bg-surface flex flex-col gap-4 rounded-2xl border p-4 shadow-sm [&:fullscreen]:justify-center [&:fullscreen]:rounded-none [&:fullscreen]:border-0 [&:fullscreen]:bg-white [&:fullscreen]:p-4"
-        >
-          <div className="flex items-start justify-between gap-3 [&:fullscreen]:text-black">
-            <div className="min-w-0">
-              <Badge variant="outline">CODE 128</Badge>
-              <h2 className="mt-2 truncate text-lg font-semibold">
-                {current.name}
-              </h2>
-              <p className="text-fg-muted mt-0.5 font-mono text-sm [&:fullscreen]:text-neutral-700">
-                {current.code}
-              </p>
-            </div>
-            <div className="flex shrink-0 gap-1">
               <Button
                 type="button"
-                size="icon-sm"
-                variant="outline"
-                onClick={openFullscreen}
-                aria-label="Ampliar código em tela cheia"
-              >
-                <Maximize2 aria-hidden />
-              </Button>
-              <Button
-                type="button"
-                size="icon-sm"
+                size="icon"
                 variant="ghost"
                 onClick={() => removeCode(current)}
                 aria-label="Apagar este código"
@@ -429,79 +442,203 @@ export function MobileBarcodeDisplay({
                 <Trash2 aria-hidden />
               </Button>
             </div>
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              aria-label="Ampliar código em tela cheia"
+              className="focus-visible:ring-ring/50 mt-2 block w-full overflow-hidden rounded-xl bg-white p-1 outline-none focus-visible:ring-2"
+            >
+              <GeneratedBarcode code={current.code} size="compact" />
+            </button>
+            <div className="mt-2 flex items-center gap-2">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={() => step(-1)}
+                disabled={position <= 0}
+                aria-label="Etiqueta anterior"
+              >
+                <ChevronLeft aria-hidden />
+              </Button>
+              <span className="text-fg-muted flex-1 text-center text-xs tabular-nums">
+                {position + 1} de {recent.length}
+              </span>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={() => step(1)}
+                disabled={position >= recent.length - 1}
+                aria-label="Próxima etiqueta"
+              >
+                <ChevronRight aria-hidden />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setExpanded(true)}
+                className="ml-1 pointer-coarse:h-11"
+              >
+                <Maximize2 aria-hidden /> Ampliar
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-3 py-1">
+            <span className="bg-surface-muted text-fg-subtle grid size-10 shrink-0 place-items-center rounded-xl">
+              <Barcode className="size-5" aria-hidden />
+            </span>
+            <p className="text-fg-muted text-sm">
+              Leia a embalagem ou busque o produto: o código aparece aqui, fixo
+              no topo, para mostrar ao leitor.
+            </p>
           </div>
-          <GeneratedBarcode code={current.code} />
-          <p className="text-fg-subtle text-center text-xs [&:fullscreen]:text-neutral-600">
-            Aumente o brilho da tela e aponte o leitor externo para o código
-            inteiro.
-          </p>
-          {fullscreenError ? (
-            <p role="alert" className="text-destructive text-sm">
-              {fullscreenError}
+        )}
+      </section>
+
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-3">
+        <section>
+          <div className="flex items-start gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search
+                className="text-fg-subtle pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+                aria-hidden
+              />
+              <Input
+                ref={inputRef}
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setEntryError(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  addFromInput();
+                }}
+                autoComplete="off"
+                inputMode="search"
+                enterKeyHint="search"
+                placeholder="Produto ou código de barras"
+                aria-label="Buscar produto ou informar código de barras"
+                className="pl-9"
+              />
+              {suggestions.length > 0 ? (
+                <div className="border-border bg-surface absolute top-full z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border p-1 shadow-lg">
+                  {suggestions.map((item) => (
+                    <button
+                      key={labelKey(item)}
+                      type="button"
+                      onClick={() => addLabel(item, true)}
+                      className="hover:bg-surface-muted active:bg-surface-muted flex min-h-12 w-full min-w-0 items-center justify-between gap-3 rounded-md px-2.5 py-2 text-left"
+                    >
+                      <span className="min-w-0 truncate text-sm font-medium">
+                        {item.name}
+                      </span>
+                      <code className="text-fg-muted shrink-0 text-xs">
+                        {item.code}
+                      </code>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            {/* Contínuo: aqui a pessoa monta uma pilha de etiquetas de uma vez,
+                e reabrir a câmera a cada item custava mais que a leitura. */}
+            <BarcodeCameraDialog
+              onDetected={handleDetected}
+              continuous
+              successVibrationMs={35}
+              triggerLabel="Câmera"
+            />
+          </div>
+          {entryError ? (
+            <p role="alert" className="text-destructive mt-2 text-sm">
+              {entryError}
             </p>
           ) : null}
-        </section>
-      ) : (
-        <section className="border-border bg-surface-sunken rounded-2xl border border-dashed px-5 py-10 text-center">
-          <Barcode className="text-fg-subtle mx-auto size-9" aria-hidden />
-          <p className="text-fg-muted mt-3 text-sm">
-            O código para leitura aparecerá aqui.
+          <p className="text-fg-subtle mt-2 text-xs">
+            Com leitor físico, basta bipar: o Enter adiciona e deixa o campo
+            pronto para o próximo.
           </p>
         </section>
-      )}
 
-      {recent.length > 0 ? (
-        <section>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="text-fg text-sm font-semibold">
-                Etiquetas salvas ({recent.length})
-              </h2>
-              <p className="text-fg-subtle text-xs">
-                Permanecem neste aparelho mesmo ao sair da página.
-              </p>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={clearCodes}
-            >
-              <Trash2 aria-hidden /> Limpar todas
-            </Button>
-          </div>
-          <div className="space-y-2">
-            {recent.map((item) => (
-              <div
-                key={labelKey(item)}
-                className="border-border bg-surface flex w-full items-center gap-2 rounded-xl border p-1.5"
-              >
-                <button
-                  type="button"
-                  onClick={() => setCurrentKey(labelKey(item))}
-                  aria-pressed={labelKey(current) === labelKey(item)}
-                  className="hover:bg-surface-muted aria-pressed:bg-primary-soft flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left"
-                >
-                  <span className="min-w-0 truncate text-sm font-medium">
-                    {item.name}
-                  </span>
-                  <code className="text-fg-muted shrink-0 text-xs">
-                    {item.code}
-                  </code>
-                </button>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => removeCode(item)}
-                  aria-label={`Apagar código de ${item.name}`}
-                >
-                  <Trash2 aria-hidden />
-                </Button>
+        {recent.length > 0 ? (
+          <section>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h2 className="text-fg text-sm font-semibold">
+                  Etiquetas salvas ({recent.length})
+                </h2>
+                <p className="text-fg-subtle text-xs">
+                  Ficam neste aparelho. Toque para mostrar no topo.
+                </p>
               </div>
-            ))}
-          </div>
-        </section>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={clearCodes}
+              >
+                <Trash2 aria-hidden /> Limpar
+              </Button>
+            </div>
+            <ul className="space-y-1.5">
+              {recent.map((item) => {
+                const showing = current !== null && labelKey(current) === labelKey(item);
+                return (
+                  <li
+                    key={labelKey(item)}
+                    className={cn(
+                      "border-border flex items-center gap-1 rounded-xl border p-1",
+                      showing ? "border-primary-line bg-primary-soft" : "bg-surface",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setCurrentKey(labelKey(item))}
+                      aria-pressed={showing}
+                      className="active:bg-surface-muted flex min-h-12 min-w-0 flex-1 items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 text-left"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">
+                          {item.name}
+                        </span>
+                        <code className="text-fg-muted text-xs">{item.code}</code>
+                      </span>
+                      {showing ? (
+                        <span className="text-primary shrink-0 text-xs font-medium">
+                          No topo
+                        </span>
+                      ) : null}
+                    </button>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() => removeCode(item)}
+                      aria-label={`Apagar código de ${item.name}`}
+                    >
+                      <Trash2 aria-hidden />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
+      </div>
+
+      {current ? (
+        <BarcodeOverlay
+          open={expanded}
+          onOpenChange={setExpanded}
+          current={current}
+          position={position}
+          total={recent.length}
+          onStep={step}
+        />
       ) : null}
     </div>
   );

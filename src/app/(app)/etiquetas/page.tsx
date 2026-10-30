@@ -1,7 +1,6 @@
 import { Smartphone } from "lucide-react";
 import { redirect } from "next/navigation";
 
-import { PageHeader } from "@/components/layout/page-header";
 import { MobileBarcodeDisplay } from "@/components/products/mobile-barcode-display";
 import { listShoppingProducts } from "@/features/shopping-list/queries";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
@@ -14,12 +13,13 @@ export default async function EtiquetasPage() {
   const products = await listShoppingProducts(company.companyId);
 
   return (
-    <div className="w-full">
-      <div className="md:hidden">
-        <PageHeader
-          title="Código para etiquetas"
-          description="Leia a embalagem e mostre o código ao leitor do sistema de etiquetas."
-        />
+    <div
+      data-mobile-scroll="contained"
+      className="flex min-h-0 w-full flex-1 flex-col"
+    >
+      {/* No celular a página não rola: o código fica no topo e só a lista de
+          baixo rola. O título já está na barra do alto. */}
+      <div className="flex min-h-0 flex-1 flex-col md:hidden">
         <MobileBarcodeDisplay
           companyId={company.companyId}
           products={products}
