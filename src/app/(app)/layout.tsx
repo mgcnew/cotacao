@@ -8,7 +8,6 @@ import {
 import { AppSidebar, SIDEBAR_COOKIE } from "@/components/layout/app-sidebar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { CompanySwitcher } from "@/components/layout/company-switcher";
-import { MobileNav } from "@/components/layout/mobile-nav";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { OperationalLiveUpdates } from "@/components/layout/operational-live-updates";
 import { PwaInstallButton } from "@/components/layout/pwa-install-button";
@@ -80,10 +79,6 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           data-slot="app-header"
           className="border-border bg-surface flex h-14 shrink-0 items-center gap-3 border-b px-4 sm:px-6"
         >
-          <MobileNav
-            companyName={activeCompany.companyName}
-            permissions={[...permissions]}
-          />
           <Suspense fallback={<div className="flex-1" />}>
             <AppBreadcrumb className="flex-1" />
           </Suspense>
@@ -124,7 +119,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         >
           {children}
         </main>
-        <MobileTabBar permissions={[...permissions]} />
+        <MobileTabBar
+          permissions={[...permissions]}
+          companyName={activeCompany.companyName}
+        />
       </div>
       <Toaster />
     </div>

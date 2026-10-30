@@ -404,6 +404,8 @@
   --animate-ds-fade-out: om-fade-out var(--dur-out) var(--ease);
   --animate-ds-dialog-in: om-dialog-in var(--dur-dialog) var(--ease);
   --animate-ds-dialog-out: om-dialog-out var(--dur-out) var(--ease);
+  --animate-ds-sheet-in: om-sheet-in var(--dur-dialog) var(--ease);
+  --animate-ds-sheet-out: om-sheet-out var(--dur-out) var(--ease);
 }
 
 @keyframes om-in {
@@ -483,6 +485,45 @@
   to {
     opacity: 0;
     transform: scale(0.99);
+  }
+}
+
+/* Folha que sobe da borda de baixo (o "Mais" do celular): vem de onde o polegar
+   está, e sai para o mesmo lugar. */
+@keyframes om-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes om-sheet-out {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes om-sheet-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes om-sheet-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
   }
 }
 

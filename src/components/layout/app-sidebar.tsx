@@ -23,7 +23,8 @@ export const SIDEBAR_COOKIE = "cotapro_menu_recolhido";
  * Sidebar do desktop.
  *
  * Escondida abaixo de `md`: em tela estreita ela consumiria mais da metade da
- * largura. Lá quem navega é a gaveta (MobileNav), com os mesmos itens.
+ * largura. Lá quem navega é a barra de baixo (MobileTabBar), com os mesmos itens
+ * na folha do "Mais".
  */
 export function AppSidebar({
   companyName,
