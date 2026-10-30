@@ -1,4 +1,4 @@
-import { MoreHorizontal, Package } from "lucide-react";
+import { MoreHorizontal, Package, Plus } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -41,6 +41,7 @@ import {
 import { PRODUCT_PURPOSE_LABEL } from "@/features/products/purposes";
 import { getPermissions, requireActiveCompany } from "@/lib/auth/dal";
 import { parseListPagination } from "@/lib/list-pagination";
+import { cn } from "@/lib/utils";
 
 function ProductFilterFields({
   status,
@@ -109,7 +110,12 @@ export default async function ProdutosPage({
         action={
           <>
             <Suspense fallback={null}>
-              <ListSearch placeholder="Buscar produto" />
+              {/* No celular a busca divide a linha com as ações em vez de
+                  tomá-la inteira: eram três linhas antes do primeiro produto. */}
+              <ListSearch
+                placeholder="Buscar produto"
+                className="w-auto min-w-0 flex-1 sm:w-72 sm:flex-none"
+              />
             </Suspense>
             <Suspense fallback={null}>
               <ProductCatalogActions />
@@ -205,7 +211,10 @@ async function ProductCatalogActions() {
 
       {canCreate ? (
         <Button asChild size="sm">
-          <Link href="/produtos/novo">Novo produto</Link>
+          <Link href="/produtos/novo">
+            <Plus className="sm:hidden" aria-hidden />
+            <span className="max-sm:sr-only">Novo produto</span>
+          </Link>
         </Button>
       ) : null}
     </>
@@ -364,12 +373,12 @@ async function ProdutosContent({
                 {catalog.rows.map((product) => (
                   <TableRow
                     key={product.id}
-                    className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 p-3 sm:table-row sm:p-0"
+                    className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-3 py-2.5 sm:table-row sm:p-0"
                   >
                     {/* `whitespace-normal` também na tabela: nome comprido que
                         não quebra é o que empurrava a coluna de ações para
                         fora da tela em telas médias. */}
-                    <TableCell className="col-span-2 block p-0 font-medium whitespace-normal sm:table-cell sm:p-2">
+                    <TableCell className="col-start-1 block p-0 font-medium whitespace-normal sm:table-cell sm:p-2">
                       <Link
                         href={`/produtos/historico/${product.id}`}
                         className="hover:text-primary hover:underline"
@@ -403,7 +412,15 @@ async function ProdutosContent({
                       {/* Sem unidade própria, quem compara é a de precificação. */}
                       {product.comparisonUnitCode ?? product.pricingUnitCode}
                     </TableCell>
-                    <TableCell className="block p-0 sm:table-cell sm:p-2">
+                    {/* No celular o "Ativo" some: quase todo o catálogo é ativo
+                        e o selo custava uma linha por produto. Só o inativo,
+                        que é a exceção, aparece. */}
+                    <TableCell
+                      className={cn(
+                        "col-start-1 block p-0 sm:table-cell sm:p-2",
+                        product.isActive && "max-sm:hidden",
+                      )}
+                    >
                       <Badge
                         variant={product.isActive ? "default" : "secondary"}
                       >
@@ -411,7 +428,7 @@ async function ProdutosContent({
                       </Badge>
                     </TableCell>
                     {podeEditar || podeExcluir ? (
-                      <TableCell className="block justify-self-end p-0 sm:table-cell sm:p-2">
+                      <TableCell className="col-start-2 row-span-2 row-start-1 block self-center justify-self-end p-0 sm:table-cell sm:p-2">
                         <div className="flex items-center justify-end">
                           <ProductRowActions
                             productId={product.id}
