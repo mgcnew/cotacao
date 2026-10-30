@@ -138,6 +138,104 @@ export async function addShoppingListItem(
   revalidatePath("/dashboard");
   return { error: null, savedAt: Date.now() };
 }
+
+const setQuantitySchema = z.object({
+  productId: z.uuid(),
+  quantity: z.number().min(0).max(99_999),
+});
+
+/**
+ * Fixa a quantidade pedida de um produto na lista aberta (zero tira da lista).
+ *
+ * É o que a folha de adicionar do celular chama a cada toque em + ou −. Valor
+ * absoluto, e não "somar 1", porque a tela manda só o último valor depois de
+ * uma pausa: repetir ou perder uma chamada não deixa a lista errada.
+ *
+ * Não revalida a rota. Revalidar a cada toque refaz a página inteira — com o
+ * catálogo de mais de mil produtos — por trás de quem está bipando em
+ * sequência. A tela chama `refreshShoppingList` uma vez, ao terminar.
+ */
+export async function setShoppingListItemQuantity(
+  productId: string,
+  quantity: number,
+): Promise<ShoppingListState> {
+  const company = await requireManage();
+  const parsed = setQuantitySchema.safeParse({
+    productId,
+    quantity: Math.round(quantity * 1000) / 1000,
+  });
+  if (!parsed.success) return { error: "Quantidade inválida." };
+
+  const supabase = await createServerSupabaseClient();
+
+  if (parsed.data.quantity === 0) {
+    const { data: list } = await supabase
+      .from("shopping_lists")
+      .select("id")
+      .eq("company_id", company.companyId)
+      .eq("status", "open")
+      .maybeSingle();
+    if (!list) return { error: null };
+    const { error } = await supabase
+      .from("shopping_list_items")
+      .update({ status: "removed" })
+      .eq("company_id", company.companyId)
+      .eq("shopping_list_id", list.id)
+      .eq("product_id", parsed.data.productId)
+      .eq("status", "pending");
+    if (error) return { error: `Não foi possível remover: ${error.message}` };
+    return { error: null, savedAt: Date.now() };
+  }
+
+  const user = await requireUser();
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select("purchase_unit_id, is_active")
+    .eq("company_id", company.companyId)
+    .eq("id", parsed.data.productId)
+    .maybeSingle();
+  if (productError || !product?.is_active) {
+    return { error: "Produto não encontrado ou desativado." };
+  }
+
+  const listId = await getOrCreateOpenList(company.companyId, user.id);
+  const { data: current } = await supabase
+    .from("shopping_list_items")
+    .select("id")
+    .eq("company_id", company.companyId)
+    .eq("shopping_list_id", listId)
+    .eq("product_id", parsed.data.productId)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  const write = current
+    ? await supabase
+        .from("shopping_list_items")
+        .update({ requested_quantity: parsed.data.quantity })
+        .eq("id", current.id)
+        .eq("company_id", company.companyId)
+    : await supabase.from("shopping_list_items").insert({
+        company_id: company.companyId,
+        shopping_list_id: listId,
+        product_id: parsed.data.productId,
+        purchase_unit_id: product.purchase_unit_id,
+        requested_quantity: parsed.data.quantity,
+        origin: "manual",
+        added_by: user.id,
+      });
+  if (write.error) {
+    return { error: `Não foi possível salvar: ${write.error.message}` };
+  }
+  return { error: null, savedAt: Date.now() };
+}
+
+/** Atualiza a lista e a Central depois de uma sequência de `setShoppingListItemQuantity`. */
+export async function refreshShoppingList() {
+  await requireManage();
+  revalidatePath("/lista-compras");
+  revalidatePath("/dashboard");
+}
+
 export async function updateShoppingListItem(formData: FormData) {
   const company = await requireManage();
   const parsed = z

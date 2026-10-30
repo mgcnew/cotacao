@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { PurchaseSuggestions } from "@/components/shopping-list/purchase-suggestions";
+import type { PendingQuantity } from "@/components/shopping-list/mobile-quick-add";
 import { ShoppingListQuickAdd } from "@/components/shopping-list/quick-add";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,9 +33,15 @@ function first(value: string | string[] | undefined) {
 }
 
 /** O catálogo inteiro (mais de mil produtos com códigos) chega depois da tela. */
-async function AdicionarRapido({ companyId }: { companyId: string }) {
+async function AdicionarRapido({
+  companyId,
+  pending,
+}: {
+  companyId: string;
+  pending: PendingQuantity[];
+}) {
   const products = await listShoppingProducts(companyId);
-  return <ShoppingListQuickAdd products={products} />;
+  return <ShoppingListQuickAdd products={products} pending={pending} />;
 }
 
 type PropsDasAbas = {
@@ -183,9 +190,15 @@ async function ListaDeComprasConteudo({
 
       {canManage ? (
         <Suspense
-          fallback={<Skeleton className="h-24 w-full rounded-xl sm:h-14" />}
+          fallback={<Skeleton className="h-12 w-full rounded-xl sm:h-14" />}
         >
-          <AdicionarRapido companyId={company.companyId} />
+          <AdicionarRapido
+            companyId={company.companyId}
+            pending={data.items.map((item) => ({
+              productId: item.product_id,
+              quantity: Number(item.requested_quantity),
+            }))}
+          />
         </Suspense>
       ) : null}
 

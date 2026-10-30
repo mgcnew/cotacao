@@ -133,8 +133,11 @@ export function BarcodeCameraDialog({
   successVibrationMs,
   triggerLabel,
   triggerClassName,
+  onOpenChange,
 }: {
   onDetected: (code: string) => BarcodeScanOutcome;
+  /** Avisa quando o diálogo abre ou fecha, para a tela saber que a câmera está em uso. */
+  onOpenChange?: (open: boolean) => void;
   /** Segue lendo depois de cada acerto, em vez de fechar no primeiro. */
   continuous?: boolean;
   /** Duração do pulso tátil de confirmação; zero desativa a vibração. */
@@ -168,11 +171,13 @@ export function BarcodeCameraDialog({
   const controlsRef = React.useRef<IScannerControls | null>(null);
   const trackRef = React.useRef<MediaStreamTrack | null>(null);
   const onDetectedRef = React.useRef(onDetected);
+  const onOpenChangeRef = React.useRef(onOpenChange);
   const lastCodeRef = React.useRef<{ code: string; at: number } | null>(null);
 
   React.useEffect(() => {
     onDetectedRef.current = onDetected;
-  }, [onDetected]);
+    onOpenChangeRef.current = onOpenChange;
+  }, [onDetected, onOpenChange]);
 
   React.useEffect(() => {
     if (!open || !videoElement) return;
@@ -276,6 +281,7 @@ export function BarcodeCameraDialog({
             }
             activeControls.stop();
             setOpen(false);
+            onOpenChangeRef.current?.(false);
           },
         );
 
@@ -341,6 +347,7 @@ export function BarcodeCameraDialog({
       setScanned([]);
     }
     setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
   }
 
   async function toggleTorch() {

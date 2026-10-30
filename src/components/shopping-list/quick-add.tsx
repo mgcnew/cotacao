@@ -10,6 +10,10 @@ import {
   BarcodeCameraDialog,
   type BarcodeScanOutcome,
 } from "@/components/shopping-list/barcode-camera-dialog";
+import {
+  MobileQuickAdd,
+  type PendingQuantity,
+} from "@/components/shopping-list/mobile-quick-add";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -39,10 +43,17 @@ function Submit() {
   );
 }
 
+/**
+ * No celular entra `MobileQuickAdd`; este formulário é do desktop e fica oculto
+ * abaixo de `sm` (oculto também não recebe o `autoFocus`, que abria o teclado
+ * assim que a tela carregava).
+ */
 export function ShoppingListQuickAdd({
   products,
+  pending,
 }: {
   products: ShoppingProduct[];
+  pending: PendingQuantity[];
 }) {
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState<ShoppingProduct | null>(null);
@@ -100,116 +111,119 @@ export function ShoppingListQuickAdd({
   }
 
   return (
-    <form
-      ref={formRef}
-      action={action}
-      className="border-border bg-surface relative flex flex-col gap-3 rounded-xl border p-3 sm:p-4"
-    >
-      <input type="hidden" name="productId" value={selected?.id ?? ""} />
-      <div className="grid grid-cols-[minmax(6.5rem,0.38fr)_minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(10rem,0.7fr)_auto] sm:items-end">
-        <div className="relative col-span-2 flex min-w-0 flex-col gap-1.5 sm:col-span-1">
-          <label
-            htmlFor="shopping-product"
-            className="text-fg text-sm font-medium"
-          >
-            Produto
-          </label>
-          <div className="flex gap-2">
-            <div className="relative min-w-0 flex-1">
-              <Barcode
-                className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4"
-                aria-hidden
-              />
-              <Input
-                id="shopping-product"
-                autoFocus
-                autoComplete="off"
-                value={query}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setQuery(value);
-                  setSelected(null);
-                  const normalized = value
-                    .trim()
-                    .replace(/\s+/g, "")
-                    .toUpperCase();
-                  const exact = findProductByBarcode(products, normalized);
-                  if (exact) setSelected(exact);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
-                  event.preventDefault();
-                  const product = selected ?? suggestions[0];
-                  if (!product) return;
-                  choose(product);
-                  window.setTimeout(() => formRef.current?.requestSubmit(), 0);
-                }}
-                placeholder="Digite o nome ou bipe o código"
-                className="h-10 pl-8 sm:h-8"
+    <>
+      <MobileQuickAdd products={products} pending={pending} />
+      <form
+        ref={formRef}
+        action={action}
+        className="border-border bg-surface relative hidden flex-col gap-3 rounded-xl border p-4 sm:flex"
+      >
+        <input type="hidden" name="productId" value={selected?.id ?? ""} />
+        <div className="grid grid-cols-[minmax(6.5rem,0.38fr)_minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(10rem,0.7fr)_auto] sm:items-end">
+          <div className="relative col-span-2 flex min-w-0 flex-col gap-1.5 sm:col-span-1">
+            <label
+              htmlFor="shopping-product"
+              className="text-fg text-sm font-medium"
+            >
+              Produto
+            </label>
+            <div className="flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Barcode
+                  className="text-fg-subtle pointer-events-none absolute top-2 left-2.5 size-4"
+                  aria-hidden
+                />
+                <Input
+                  id="shopping-product"
+                  autoFocus
+                  autoComplete="off"
+                  value={query}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setQuery(value);
+                    setSelected(null);
+                    const normalized = value
+                      .trim()
+                      .replace(/\s+/g, "")
+                      .toUpperCase();
+                    const exact = findProductByBarcode(products, normalized);
+                    if (exact) setSelected(exact);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    const product = selected ?? suggestions[0];
+                    if (!product) return;
+                    choose(product);
+                    window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+                  }}
+                  placeholder="Digite o nome ou bipe o código"
+                  className="h-10 pl-8 sm:h-8"
+                />
+              </div>
+              <BarcodeCameraDialog
+                onDetected={handleCameraCode}
+                triggerClassName="size-10 sm:size-7"
               />
             </div>
-            <BarcodeCameraDialog
-              onDetected={handleCameraCode}
-              triggerClassName="size-10 sm:size-7"
+            {suggestions.length > 0 && !selected ? (
+              <div className="border-border bg-surface absolute top-full z-20 mt-1 w-full overflow-hidden rounded-lg border shadow-lg">
+                {suggestions.map((product) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => choose(product)}
+                    className="hover:bg-surface-muted flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm sm:min-h-0"
+                  >
+                    <span>{product.name}</span>
+                    <span className="text-fg-subtle text-xs">
+                      {product.purchaseUnit}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label
+              htmlFor="shopping-quantity"
+              className="text-fg text-sm font-medium"
+            >
+              Quantidade
+            </label>
+            <Input
+              id="shopping-quantity"
+              name="quantity"
+              required
+              defaultValue="1"
+              inputMode="decimal"
+              className="h-10 sm:h-8"
             />
           </div>
-          {suggestions.length > 0 && !selected ? (
-            <div className="border-border bg-surface absolute top-full z-20 mt-1 w-full overflow-hidden rounded-lg border shadow-lg">
-              {suggestions.map((product) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => choose(product)}
-                  className="hover:bg-surface-muted flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm sm:min-h-0"
-                >
-                  <span>{product.name}</span>
-                  <span className="text-fg-subtle text-xs">
-                    {product.purchaseUnit}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label
+              htmlFor="shopping-notes"
+              className="text-fg text-sm font-medium"
+            >
+              Observação{" "}
+              <span className="text-fg-subtle font-normal">(opcional)</span>
+            </label>
+            <Input
+              id="shopping-notes"
+              name="notes"
+              maxLength={300}
+              placeholder="Estoque crítico, para sexta…"
+              className="h-10 sm:h-8"
+            />
+          </div>
+          <Submit />
         </div>
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <label
-            htmlFor="shopping-quantity"
-            className="text-fg text-sm font-medium"
-          >
-            Quantidade
-          </label>
-          <Input
-            id="shopping-quantity"
-            name="quantity"
-            required
-            defaultValue="1"
-            inputMode="decimal"
-            className="h-10 sm:h-8"
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <label
-            htmlFor="shopping-notes"
-            className="text-fg text-sm font-medium"
-          >
-            Observação{" "}
-            <span className="text-fg-subtle font-normal">(opcional)</span>
-          </label>
-          <Input
-            id="shopping-notes"
-            name="notes"
-            maxLength={300}
-            placeholder="Estoque crítico, para sexta…"
-            className="h-10 sm:h-8"
-          />
-        </div>
-        <Submit />
-      </div>
-      <ErrorLine error={state.error} />
-      <p className="text-fg-subtle text-xs">
-        Use o botão da câmera no celular ou bipe com um leitor físico. Ao
-        reconhecer o código, o produto entra automaticamente.
-      </p>
-    </form>
+        <ErrorLine error={state.error} />
+        <p className="text-fg-subtle text-xs">
+          Use o botão da câmera no celular ou bipe com um leitor físico. Ao
+          reconhecer o código, o produto entra automaticamente.
+        </p>
+      </form>
+    </>
   );
 }
