@@ -75,13 +75,13 @@ function AbasDeOrigem({
     <nav
       data-slot="shopping-list-origin-tabs"
       aria-label="Filtrar itens por origem"
-      className="-mb-4 flex gap-2 overflow-x-auto pb-4 sm:mb-0 sm:flex-wrap sm:overflow-visible sm:pb-0"
+      className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap"
     >
       {(
         [
-          { value: "all", label: "Todos", icon: ClipboardCheck },
-          { value: "assistant", label: "Assistente", icon: Sparkles },
-          { value: "manual", label: "Inseridos por você", icon: UserRound },
+          { value: "all", label: "Todos", short: "Todos", icon: ClipboardCheck },
+          { value: "assistant", label: "Assistente", short: "Assistente", icon: Sparkles },
+          { value: "manual", label: "Inseridos por você", short: "Meus", icon: UserRound },
         ] as const
       ).map((option) => {
         const Icon = option.icon;
@@ -91,14 +91,16 @@ function AbasDeOrigem({
             href={hrefForOrigin(option.value)}
             aria-current={origin === option.value ? "page" : undefined}
             className={cn(
-              "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors sm:h-8",
+              "inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full border px-2 text-xs font-medium whitespace-nowrap transition-colors sm:h-8 sm:shrink-0 sm:px-3",
               origin === option.value
                 ? "border-primary bg-primary-soft text-primary"
                 : "border-border bg-surface text-fg-muted hover:bg-surface-muted hover:text-fg",
             )}
           >
-            <Icon className="size-3.5" aria-hidden />
-            {option.label} ({contar(option.value)})
+            <Icon className="hidden size-3.5 sm:block" aria-hidden />
+            <span className="sm:hidden">{option.short}</span>
+            <span className="hidden sm:inline">{option.label}</span> (
+            {contar(option.value)})
           </Link>
         );
       })}
@@ -208,7 +210,7 @@ async function ListaDeComprasConteudo({
         </Suspense>
       ) : null}
 
-      <div className="mt-4 overflow-hidden sm:overflow-visible">
+      <div className="mt-4">
         <Suspense
           fallback={
             <AbasDeOrigem
