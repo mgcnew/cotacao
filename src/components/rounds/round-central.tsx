@@ -51,8 +51,13 @@ import type {
   listRoundSupplierContacts,
   listRoundSuppliers,
 } from "@/features/rounds/queries";
-import { ROUND_STATUS_LABEL, roundStatusTone } from "@/features/rounds/status";
+import {
+  ITEM_STATUS_LABEL,
+  ROUND_STATUS_LABEL,
+  roundStatusTone,
+} from "@/features/rounds/status";
 
+const QTD = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
@@ -613,6 +618,25 @@ function Montagem({
   );
 }
 
+/** Quanto o fornecedor respondeu — o mesmo número na tabela e no cartão. */
+function resumoDaResposta(rs: RoundSupplier) {
+  // quotation_responses tem UNIQUE (round_supplier_id), ou seja é no máximo
+  // uma — mas o PostgREST devolve lista.
+  const respostas = rs.quotation_responses?.[0]?.quotation_response_items ?? [];
+  const respondidos = respostas.length;
+  const total =
+    rs.supplier_quotation_items?.filter((item) => item.removed_at === null)
+      .length ?? 0;
+  const indisponiveis = respostas.filter((item) => item.does_not_supply).length;
+  return {
+    respondidos,
+    total,
+    indisponiveis,
+    comPreco: Math.max(0, respondidos - indisponiveis),
+    semResposta: Math.max(0, total - respondidos),
+  };
+}
+
 /** A rodada já iniciada: quem recebeu, quem abriu, quem respondeu. */
 function Acompanhamento({
   roundId,
@@ -713,35 +737,80 @@ function Acompanhamento({
           O que está sendo cotado, com a quantidade que você pretende comprar.
         </p>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Produto</TableHead>
-              <TableHead>Grupo</TableHead>
-              <TableHead className="text-right">Quantidade</TableHead>
-              <TableHead>Cotado por</TableHead>
-              <TableHead>Situação</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => (
-              <QuotationItemRow
-                key={item.id}
-                roundId={roundId}
-                itemId={item.id}
-                productName={item.products?.name ?? "Produto"}
-                groupId={item.group_id}
-                groupName={groupName.get(item.group_id) ?? "—"}
-                quantity={Number(item.requested_quantity)}
-                purchaseUnit={item.purchase_unit?.symbol ?? ""}
-                pricingUnit={item.pricing_unit?.symbol ?? ""}
-                commercialStatus={item.commercial_status}
-                editable={false}
-                groups={groups}
-              />
-            ))}
-          </TableBody>
-        </Table>
+        {/* No celular os itens são consulta, não tarefa: ficam atrás de um
+            toque, para os fornecedores — que é onde se age — subirem. */}
+        <details className="border-border bg-surface group rounded-xl border sm:hidden">
+          <summary className="text-fg flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+            Ver {items.length} {items.length === 1 ? "item" : "itens"}
+            <span className="text-fg-subtle text-xs group-open:hidden">
+              tocar para abrir
+            </span>
+          </summary>
+          <ul className="border-border divide-border divide-y border-t">
+            {items.map((item) => {
+              const riscado =
+                item.commercial_status === "cancelled" ||
+                item.commercial_status === "closed_without_purchase";
+              return (
+                <li
+                  key={item.id}
+                  className="flex items-baseline justify-between gap-3 px-3 py-2.5 text-sm"
+                >
+                  <span className="min-w-0">
+                    <span
+                      className={`text-fg block ${riscado ? "line-through opacity-60" : ""}`}
+                    >
+                      {item.products?.name ?? "Produto"}
+                    </span>
+                    <span className="text-fg-subtle block text-xs">
+                      {groups.length > 1
+                        ? `${groupName.get(item.group_id) ?? "—"} · `
+                        : ""}
+                      {ITEM_STATUS_LABEL[item.commercial_status] ??
+                        item.commercial_status}
+                    </span>
+                  </span>
+                  <span className="text-fg-muted shrink-0 tabular-nums">
+                    {QTD.format(Number(item.requested_quantity))}{" "}
+                    {item.purchase_unit?.symbol ?? ""}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+
+        <div className="hidden sm:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Produto</TableHead>
+                <TableHead>Grupo</TableHead>
+                <TableHead className="text-right">Quantidade</TableHead>
+                <TableHead>Cotado por</TableHead>
+                <TableHead>Situação</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item) => (
+                <QuotationItemRow
+                  key={item.id}
+                  roundId={roundId}
+                  itemId={item.id}
+                  productName={item.products?.name ?? "Produto"}
+                  groupId={item.group_id}
+                  groupName={groupName.get(item.group_id) ?? "—"}
+                  quantity={Number(item.requested_quantity)}
+                  purchaseUnit={item.purchase_unit?.symbol ?? ""}
+                  pricingUnit={item.pricing_unit?.symbol ?? ""}
+                  commercialStatus={item.commercial_status}
+                  editable={false}
+                  groups={groups}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </section>
 
       <section>
@@ -777,150 +846,237 @@ function Acompanhamento({
           />
         ) : null}
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Fornecedor</TableHead>
-              <TableHead>Contato</TableHead>
-              <TableHead>Grupos</TableHead>
-              <TableHead>Enviado</TableHead>
-              <TableHead>Abriu o link</TableHead>
-              <TableHead>Respondeu</TableHead>
-              {podeEnviar ? (
-                // Cabeçalho vazio deixa a coluna sem nome para quem usa
-                // leitor de tela. O rótulo existe, apenas não é desenhado.
-                <TableHead className="w-0">
-                  <span className="sr-only">Envio</span>
-                </TableHead>
-              ) : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {roundSuppliers.map((rs) => (
-              <TableRow key={rs.id}>
-                <TableCell className="font-medium">
-                  {rs.suppliers?.name}
-                </TableCell>
-                <TableCell className="text-fg-muted">
-                  {rs.supplier_contacts?.name ?? "—"}
-                  <span className="text-fg-subtle block font-mono text-xs">
-                    {rs.supplier_contacts?.whatsapp ?? ""}
-                  </span>
-                  {podeEditar && !encerrada ? (
-                    <ContactPicker
-                      roundId={roundId}
-                      roundSupplierId={rs.id}
-                      contactId={rs.supplier_contact_id}
-                      contacts={contatos.get(rs.supplier_id) ?? []}
-                    />
-                  ) : null}
-                </TableCell>
-                <TableCell className="text-fg-muted text-xs">
-                  {(supplierGroups.get(rs.id) ?? [])
-                    .map((groupId) => groupName.get(groupId))
-                    .filter(Boolean)
-                    .join(", ") || "nenhum"}
-                </TableCell>
-                <TableCell className="text-fg-muted text-xs">
-                  {rs.first_sent_at
-                    ? DATA_HORA.format(new Date(rs.first_sent_at))
-                    : "ainda não"}
-                  {latestReminders.get(rs.id) ? (
-                    <span className="text-fg-subtle mt-0.5 block">
-                      Cobrado{" "}
-                      {DATA_HORA.format(new Date(latestReminders.get(rs.id)!))}
-                    </span>
-                  ) : null}
-                </TableCell>
-                <TableCell className="text-fg-muted text-xs">
-                  {rs.first_accessed_at
-                    ? DATA_HORA.format(new Date(rs.first_accessed_at))
-                    : "—"}
-                </TableCell>
-                <TableCell className="text-xs">
-                  {/* Contagem de itens respondidos: é o sinal que o comprador
-                      procura depois de mandar o link. */}
-                  {(() => {
-                    // quotation_responses tem UNIQUE (round_supplier_id), ou
-                    // seja é no máximo uma — mas o PostgREST devolve lista.
-                    const respondidos =
-                      rs.quotation_responses?.[0]?.quotation_response_items
-                        ?.length ?? 0;
-                    const totalAtribuidos =
-                      rs.supplier_quotation_items?.filter(
-                        (item) => item.removed_at === null,
-                      ).length ?? 0;
-                    const indisponiveis =
-                      rs.quotation_responses?.[0]?.quotation_response_items?.filter(
-                        (item) => item.does_not_supply,
-                      ).length ?? 0;
-                    const comPreco = Math.max(0, respondidos - indisponiveis);
-                    const semResposta = Math.max(
-                      0,
-                      totalAtribuidos - respondidos,
-                    );
-                    if (respondidos === 0) {
-                      return encerrada ? (
-                        <Badge variant="outline">Sem resposta</Badge>
-                      ) : (
-                        <span className="text-fg-subtle">—</span>
-                      );
+        <ul className="flex flex-col gap-2 sm:hidden">
+          {roundSuppliers.map((rs) => {
+            const resposta = resumoDaResposta(rs);
+            const grupos = (supplierGroups.get(rs.id) ?? [])
+              .map((groupId) => groupName.get(groupId))
+              .filter((name): name is string => Boolean(name));
+            const cobrado = latestReminders.get(rs.id);
+            const situacao =
+              resposta.respondidos > 0
+                ? {
+                    texto: `${resposta.respondidos} de ${resposta.total} respondidos`,
+                    tom: rs.completed_at ? "default" : "secondary",
+                  }
+                : encerrada
+                  ? { texto: "Sem resposta", tom: "outline" }
+                  : rs.first_accessed_at
+                    ? { texto: "Abriu o link", tom: "secondary" }
+                    : rs.first_sent_at
+                      ? { texto: "Enviado", tom: "outline" }
+                      : { texto: "Não enviado", tom: "outline" };
+            return (
+              <li
+                key={rs.id}
+                className="border-border bg-surface rounded-xl border p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-fg truncate text-sm font-semibold">
+                      {rs.suppliers?.name}
+                    </p>
+                    <p className="text-fg-muted truncate text-xs">
+                      {rs.supplier_contacts?.name ?? "sem contato"}
+                      {groups.length > 1
+                        ? ` · ${grupos.join(", ") || "nenhum grupo"}`
+                        : ""}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      situacao.tom as "default" | "secondary" | "outline"
                     }
-                    return (
-                      <>
-                        <Badge
-                          variant={rs.completed_at ? "default" : "secondary"}
-                        >
-                          {respondidos} de {totalAtribuidos}
-                        </Badge>
-                        <span className="text-fg-subtle mt-0.5 block">
-                          {comPreco} com preço
-                          {indisponiveis > 0
-                            ? ` · ${indisponiveis} não fornece`
-                            : ""}
-                          {semResposta > 0
-                            ? ` · ${semResposta} sem resposta`
-                            : ""}
-                        </span>
-                        <span className="text-fg-subtle mt-0.5 block">
-                          {rs.completed_at
-                            ? `Concluída em ${DATA_HORA.format(new Date(rs.completed_at))}`
-                            : encerrada
-                              ? "Parcial encerrada"
-                              : "Resposta parcial"}
-                        </span>
-                      </>
-                    );
-                  })()}
-                </TableCell>
+                    className="shrink-0"
+                  >
+                    {situacao.texto}
+                  </Badge>
+                </div>
+                <p className="text-fg-subtle mt-1.5 text-xs">
+                  {rs.first_sent_at
+                    ? `Enviado ${DATA_HORA.format(new Date(rs.first_sent_at))}`
+                    : "Ainda não enviado"}
+                  {rs.first_accessed_at
+                    ? ` · abriu ${DATA_HORA.format(new Date(rs.first_accessed_at))}`
+                    : ""}
+                  {cobrado
+                    ? ` · cobrado ${DATA_HORA.format(new Date(cobrado))}`
+                    : ""}
+                </p>
+                {resposta.respondidos > 0 ? (
+                  <p className="text-fg-subtle mt-0.5 text-xs">
+                    {resposta.comPreco} com preço
+                    {resposta.indisponiveis > 0
+                      ? ` · ${resposta.indisponiveis} não fornece`
+                      : ""}
+                    {resposta.semResposta > 0
+                      ? ` · ${resposta.semResposta} sem resposta`
+                      : ""}
+                    {rs.completed_at
+                      ? ` · concluída ${DATA_HORA.format(new Date(rs.completed_at))}`
+                      : ""}
+                  </p>
+                ) : null}
                 {podeEnviar ? (
-                  <TableCell>
-                    <SendControls
-                      roundSupplierId={rs.id}
-                      roundId={roundId}
-                      supplierName={rs.suppliers?.name ?? "fornecedor"}
-                      alreadySent={rs.first_sent_at !== null}
-                      groupSummary={(supplierGroups.get(rs.id) ?? [])
-                        .map((groupId) => groupName.get(groupId))
-                        .filter((name): name is string => Boolean(name))}
-                      itemCount={
-                        rs.supplier_quotation_items?.filter(
-                          (item) => item.removed_at === null,
-                        ).length ?? 0
-                      }
-                      contactName={rs.supplier_contacts?.name ?? null}
-                      contactWhatsapp={rs.supplier_contacts?.whatsapp ?? null}
-                      whatsappReady={whatsappReady}
-                      companyName={companyName}
-                      roundTitle={roundTitle}
-                      invitationTemplate={invitationTemplate}
-                    />
-                  </TableCell>
+                  <SendControls
+                    className="mt-3 items-stretch [&>span]:max-w-none [&>span]:text-left"
+                    roundSupplierId={rs.id}
+                    roundId={roundId}
+                    supplierName={rs.suppliers?.name ?? "fornecedor"}
+                    alreadySent={rs.first_sent_at !== null}
+                    groupSummary={grupos}
+                    itemCount={resposta.total}
+                    contactName={rs.supplier_contacts?.name ?? null}
+                    contactWhatsapp={rs.supplier_contacts?.whatsapp ?? null}
+                    whatsappReady={whatsappReady}
+                    companyName={companyName}
+                    roundTitle={roundTitle}
+                    invitationTemplate={invitationTemplate}
+                    showSummary={false}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+
+        <div className="hidden sm:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fornecedor</TableHead>
+                <TableHead>Contato</TableHead>
+                <TableHead>Grupos</TableHead>
+                <TableHead>Enviado</TableHead>
+                <TableHead>Abriu o link</TableHead>
+                <TableHead>Respondeu</TableHead>
+                {podeEnviar ? (
+                  // Cabeçalho vazio deixa a coluna sem nome para quem usa
+                  // leitor de tela. O rótulo existe, apenas não é desenhado.
+                  <TableHead className="w-0">
+                    <span className="sr-only">Envio</span>
+                  </TableHead>
                 ) : null}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {roundSuppliers.map((rs) => (
+                <TableRow key={rs.id}>
+                  <TableCell className="font-medium">
+                    {rs.suppliers?.name}
+                  </TableCell>
+                  <TableCell className="text-fg-muted">
+                    {rs.supplier_contacts?.name ?? "—"}
+                    <span className="text-fg-subtle block font-mono text-xs">
+                      {rs.supplier_contacts?.whatsapp ?? ""}
+                    </span>
+                    {podeEditar && !encerrada ? (
+                      <ContactPicker
+                        roundId={roundId}
+                        roundSupplierId={rs.id}
+                        contactId={rs.supplier_contact_id}
+                        contacts={contatos.get(rs.supplier_id) ?? []}
+                      />
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-fg-muted text-xs">
+                    {(supplierGroups.get(rs.id) ?? [])
+                      .map((groupId) => groupName.get(groupId))
+                      .filter(Boolean)
+                      .join(", ") || "nenhum"}
+                  </TableCell>
+                  <TableCell className="text-fg-muted text-xs">
+                    {rs.first_sent_at
+                      ? DATA_HORA.format(new Date(rs.first_sent_at))
+                      : "ainda não"}
+                    {latestReminders.get(rs.id) ? (
+                      <span className="text-fg-subtle mt-0.5 block">
+                        Cobrado{" "}
+                        {DATA_HORA.format(
+                          new Date(latestReminders.get(rs.id)!),
+                        )}
+                      </span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-fg-muted text-xs">
+                    {rs.first_accessed_at
+                      ? DATA_HORA.format(new Date(rs.first_accessed_at))
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {/* Contagem de itens respondidos: é o sinal que o comprador
+                      procura depois de mandar o link. */}
+                    {(() => {
+                      const {
+                        respondidos,
+                        total: totalAtribuidos,
+                        indisponiveis,
+                        comPreco,
+                        semResposta,
+                      } = resumoDaResposta(rs);
+                      if (respondidos === 0) {
+                        return encerrada ? (
+                          <Badge variant="outline">Sem resposta</Badge>
+                        ) : (
+                          <span className="text-fg-subtle">—</span>
+                        );
+                      }
+                      return (
+                        <>
+                          <Badge
+                            variant={rs.completed_at ? "default" : "secondary"}
+                          >
+                            {respondidos} de {totalAtribuidos}
+                          </Badge>
+                          <span className="text-fg-subtle mt-0.5 block">
+                            {comPreco} com preço
+                            {indisponiveis > 0
+                              ? ` · ${indisponiveis} não fornece`
+                              : ""}
+                            {semResposta > 0
+                              ? ` · ${semResposta} sem resposta`
+                              : ""}
+                          </span>
+                          <span className="text-fg-subtle mt-0.5 block">
+                            {rs.completed_at
+                              ? `Concluída em ${DATA_HORA.format(new Date(rs.completed_at))}`
+                              : encerrada
+                                ? "Parcial encerrada"
+                                : "Resposta parcial"}
+                          </span>
+                        </>
+                      );
+                    })()}
+                  </TableCell>
+                  {podeEnviar ? (
+                    <TableCell>
+                      <SendControls
+                        roundSupplierId={rs.id}
+                        roundId={roundId}
+                        supplierName={rs.suppliers?.name ?? "fornecedor"}
+                        alreadySent={rs.first_sent_at !== null}
+                        groupSummary={(supplierGroups.get(rs.id) ?? [])
+                          .map((groupId) => groupName.get(groupId))
+                          .filter((name): name is string => Boolean(name))}
+                        itemCount={
+                          rs.supplier_quotation_items?.filter(
+                            (item) => item.removed_at === null,
+                          ).length ?? 0
+                        }
+                        contactName={rs.supplier_contacts?.name ?? null}
+                        contactWhatsapp={rs.supplier_contacts?.whatsapp ?? null}
+                        whatsappReady={whatsappReady}
+                        companyName={companyName}
+                        roundTitle={roundTitle}
+                        invitationTemplate={invitationTemplate}
+                      />
+                    </TableCell>
+                  ) : null}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </section>
     </>
   );

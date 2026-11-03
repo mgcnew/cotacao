@@ -28,6 +28,7 @@ import {
   itemCountLabel,
   renderWhatsAppTemplate,
 } from "@/features/whatsapp/message-templates";
+import { cn } from "@/lib/utils";
 
 function GenerateButton({
   hasLink,
@@ -38,7 +39,12 @@ function GenerateButton({
 }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" variant="ghost" disabled={pending || disabled}>
+    <Button
+      type="submit"
+      size="sm"
+      variant="ghost"
+      disabled={pending || disabled}
+    >
       {pending ? "Gerando…" : hasLink ? "Gerar outro link" : "Gerar link"}
     </Button>
   );
@@ -57,7 +63,11 @@ function WhatsAppSubmit({ alreadySent }: { alreadySent: boolean }) {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending}>
-      {pending ? <LoaderCircle className="animate-spin" aria-hidden /> : <MessageCircle aria-hidden />}
+      {pending ? (
+        <LoaderCircle className="animate-spin" aria-hidden />
+      ) : (
+        <MessageCircle aria-hidden />
+      )}
       {pending ? "Enviando…" : alreadySent ? "Reenviar agora" : "Enviar agora"}
     </Button>
   );
@@ -117,6 +127,7 @@ export function SendControls({
   roundTitle,
   invitationTemplate,
   showSummary = true,
+  className,
 }: {
   roundSupplierId: string;
   roundId: string;
@@ -131,7 +142,11 @@ export function SendControls({
   roundTitle: string;
   invitationTemplate: string;
   showSummary?: boolean;
+  /** No cartão do celular os botões ocupam a largura, em vez de irem à direita. */
+  className?: string;
 }) {
+  // A mesma linha aparece na tabela (desktop) e no cartão (celular).
+  const sentId = React.useId();
   const [linkState, generateAction] = useActionState<SendState, FormData>(
     generateQuotationLink,
     { error: null },
@@ -154,13 +169,14 @@ export function SendControls({
     { error: null },
   );
   const directDisabled = itemCount === 0 || !whatsappReady || !contactWhatsapp;
-  const directDisabledReason = itemCount === 0
-    ? "Escolha ao menos um grupo com produtos"
-    : !whatsappReady
-      ? "Conecte o WhatsApp da empresa em Configurações"
-      : !contactWhatsapp
-        ? "O contato escolhido não possui WhatsApp"
-        : undefined;
+  const directDisabledReason =
+    itemCount === 0
+      ? "Escolha ao menos um grupo com produtos"
+      : !whatsappReady
+        ? "Conecte o WhatsApp da empresa em Configurações"
+        : !contactWhatsapp
+          ? "O contato escolhido não possui WhatsApp"
+          : undefined;
   const displayedUrl = whatsappState.url ?? linkState.url;
   const preview = renderWhatsAppTemplate(invitationTemplate, {
     contato: contactName ?? "fornecedor",
@@ -171,7 +187,7 @@ export function SendControls({
   });
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className={cn("flex flex-col items-end gap-2", className)}>
       {showSummary ? (
         <span className="text-fg-subtle max-w-64 text-right text-xs">
           {groupSummary.length > 0 ? groupSummary.join(", ") : "Nenhum grupo"} ·{" "}
@@ -180,26 +196,37 @@ export function SendControls({
       ) : null}
       <Dialog open={whatsappOpen} onOpenChange={setWhatsappOpen}>
         <DialogTrigger asChild>
-          <Button type="button" size="sm" disabled={directDisabled} title={directDisabledReason}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={directDisabled}
+            title={directDisabledReason}
+          >
             <MessageCircle aria-hidden />
             {alreadySent ? "Reenviar no WhatsApp" : "Enviar no WhatsApp"}
           </Button>
         </DialogTrigger>
         <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>{alreadySent ? "Reenviar cotação" : "Enviar cotação"}</DialogTitle>
+            <DialogTitle>
+              {alreadySent ? "Reenviar cotação" : "Enviar cotação"}
+            </DialogTitle>
             <DialogDescription>
-              Confira a mensagem que será enviada para {contactName ?? supplierName}
+              Confira a mensagem que será enviada para{" "}
+              {contactName ?? supplierName}
               {contactWhatsapp ? ` · ${contactWhatsapp}` : ""}.
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
             <div className="bg-surface-sunken border-border rounded-xl border p-4">
-              <p className="text-fg-muted whitespace-pre-wrap text-sm">{preview}</p>
+              <p className="text-fg-muted whitespace-pre-wrap text-sm">
+                {preview}
+              </p>
             </div>
             {alreadySent ? (
               <p className="text-warning mt-3 text-xs">
-                O fornecedor já recebeu esta cotação. O reenvio criará um novo link válido.
+                O fornecedor já recebeu esta cotação. O reenvio criará um novo
+                link válido.
               </p>
             ) : null}
             <ErrorLine error={whatsappState.error} />
@@ -213,9 +240,17 @@ export function SendControls({
             ) : null}
           </DialogBody>
           <DialogFooter>
-            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancelar
+              </Button>
+            </DialogClose>
             <form action={whatsappAction}>
-              <input type="hidden" name="roundSupplierId" value={roundSupplierId} />
+              <input
+                type="hidden"
+                name="roundSupplierId"
+                value={roundSupplierId}
+              />
               <WhatsAppSubmit alreadySent={alreadySent} />
             </form>
           </DialogFooter>
@@ -224,14 +259,23 @@ export function SendControls({
 
       {whatsappState.sent ? <ErrorLine error={whatsappState.error} /> : null}
       <SuccessLine
-        message={whatsappState.sent ? `Cotação enviada para ${contactName ?? supplierName}.` : null}
+        message={
+          whatsappState.sent
+            ? `Cotação enviada para ${contactName ?? supplierName}.`
+            : null
+        }
       />
 
       <form action={generateAction}>
         <input type="hidden" name="roundSupplierId" value={roundSupplierId} />
         <input type="hidden" name="roundId" value={roundId} />
-        <span title={itemCount === 0 ? "Escolha um grupo com produtos" : undefined}>
-          <GenerateButton hasLink={Boolean(linkState.url)} disabled={itemCount === 0} />
+        <span
+          title={itemCount === 0 ? "Escolha um grupo com produtos" : undefined}
+        >
+          <GenerateButton
+            hasLink={Boolean(linkState.url)}
+            disabled={itemCount === 0}
+          />
         </span>
       </form>
 
@@ -258,19 +302,17 @@ export function SendControls({
           {/* O nome do fornecedor entra no rótulo acessível porque a tabela tem
               um destes por linha: "Marquei como enviado" repetido sete vezes
               não diz a um leitor de tela qual deles é qual. */}
-          <span className="sr-only" id={`enviado-${roundSupplierId}`}>
+          <span className="sr-only" id={sentId}>
             Marcar cotação de {supplierName} como enviada
           </span>
-          <div aria-describedby={`enviado-${roundSupplierId}`}>
+          <div aria-describedby={sentId}>
             <SentButton />
           </div>
         </form>
       )}
 
       <ErrorLine error={sentState.error} />
-      <SuccessLine
-        message={sentState.savedAt ? "Envio registrado." : null}
-      />
+      <SuccessLine message={sentState.savedAt ? "Envio registrado." : null} />
     </div>
   );
 }
