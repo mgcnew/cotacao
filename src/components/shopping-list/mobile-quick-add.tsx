@@ -30,6 +30,37 @@ import { cn } from "@/lib/utils";
 
 export type PendingQuantity = { productId: string; quantity: number };
 
+/** O que muda quando a mesma folha serve a outro destino (a rodada de compras). */
+export type QuickAddTexts = {
+  trigger: string;
+  title: string;
+  description: string;
+  /** Rótulo do produto que já está no destino: "Na lista". */
+  added: string;
+  addAction: string;
+  hint: string;
+  scanned: string;
+  updated: (count: number) => string;
+};
+
+const SHOPPING_LIST_TEXTS: QuickAddTexts = {
+  trigger: "Buscar produto para adicionar",
+  title: "Adicionar à lista",
+  description:
+    "Busque o produto pelo nome ou pelo código de barras e toque nele para colocá-lo na lista.",
+  added: "Na lista",
+  addAction: "Adicionar à lista",
+  hint: "Digite o nome do produto ou toque na câmera para bipar o código. Cada toque coloca 1 na lista.",
+  scanned: "na lista",
+  updated: (count) =>
+    count === 1
+      ? "Lista atualizada: 1 produto"
+      : `Lista atualizada: ${count} produtos`,
+};
+
+const BAR_CLASS =
+  "bg-background sticky -top-6 z-20 -mx-4 -mt-5 flex gap-2 px-4 pt-6 pb-3 sm:hidden";
+
 const MAX_RESULTS = 30;
 /** Pausa antes de mandar a quantidade: três toques em + viram uma chamada só. */
 const SAVE_DELAY_MS = 350;
@@ -134,7 +165,11 @@ export function QuantityStepper({
         type="button"
         aria-label={removes ? `Remover ${name} da lista` : `Diminuir ${name}`}
         onClick={() => onStep(-1)}
-        className={cn(stepButton, "rounded-l-lg", removes && "text-destructive")}
+        className={cn(
+          stepButton,
+          "rounded-l-lg",
+          removes && "text-destructive",
+        )}
       >
         {removes ? (
           <Trash2 className="size-4" aria-hidden />
@@ -171,11 +206,13 @@ function ProductRow({
   quantity,
   onChange,
   onStep,
+  texts,
 }: {
   product: ShoppingProduct;
   quantity: number;
   onChange: (next: number) => void;
   onStep: (delta: 1 | -1) => void;
+  texts: QuickAddTexts;
 }) {
   if (quantity <= 0) {
     return (
@@ -201,7 +238,7 @@ function ProductRow({
           >
             <Plus className="size-5" />
           </span>
-          <span className="sr-only">Adicionar à lista</span>
+          <span className="sr-only">{texts.addAction}</span>
         </button>
       </li>
     );
@@ -214,7 +251,8 @@ function ProductRow({
           {product.name}
         </p>
         <p className="text-primary text-xs">
-          Na lista{product.purchaseUnit ? ` · ${product.purchaseUnit}` : ""}
+          {texts.added}
+          {product.purchaseUnit ? ` · ${product.purchaseUnit}` : ""}
         </p>
       </div>
       <QuantityStepper
@@ -239,19 +277,36 @@ function ProductRow({
  * (`setShoppingListItemQuantity`, valor absoluto). A página só é atualizada uma
  * vez, ao fechar a folha e a câmera — refazê-la a cada toque travaria quem está
  * adicionando em sequência.
+ *
+ * `save`, `refresh` e `texts` existem para a montagem da rodada usar a mesma
+ * folha; sem eles, é a lista de compras.
  */
 export function MobileQuickAdd({
   products,
   pending,
+  save = setShoppingListItemQuantity,
+  refresh = refreshShoppingList,
+  texts = SHOPPING_LIST_TEXTS,
+  barClassName = BAR_CLASS,
 }: {
   products: ShoppingProduct[];
   pending: PendingQuantity[];
+  save?: (
+    productId: string,
+    quantity: number,
+  ) => Promise<{ error: string | null }>;
+  refresh?: () => Promise<void>;
+  texts?: QuickAddTexts;
+  barClassName?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [quantities, setQuantities] = React.useState<Record<string, number>>(
-    () => Object.fromEntries(pending.map((item) => [item.productId, item.quantity])),
+    () =>
+      Object.fromEntries(
+        pending.map((item) => [item.productId, item.quantity]),
+      ),
   );
   // Produtos mexidos desde que a folha abriu, o mais recente primeiro.
   const [touched, setTouched] = React.useState<string[]>([]);
@@ -276,8 +331,8 @@ export function MobileQuickAdd({
     if (!dirtyRef.current || sheet || camera) return;
     if (timersRef.current.size > 0 || inflightRef.current > 0) return;
     dirtyRef.current = false;
-    void refreshShoppingList();
-  }, []);
+    void refresh();
+  }, [refresh]);
 
   const write = React.useCallback((productId: string, next: number) => {
     quantitiesRef.current = { ...quantitiesRef.current, [productId]: next };
@@ -291,7 +346,7 @@ export function MobileQuickAdd({
       inflightRef.current += 1;
       let failure: string | null = null;
       try {
-        const result = await setShoppingListItemQuantity(productId, wanted);
+        const result = await save(productId, wanted);
         if (result.error) failure = result.error;
         else confirmedRef.current[productId] = wanted;
       } catch {
@@ -307,7 +362,7 @@ export function MobileQuickAdd({
       }
       settle();
     },
-    [settle, write],
+    [save, settle, write],
   );
 
   const change = React.useCallback(
@@ -350,9 +405,11 @@ export function MobileQuickAdd({
       setTouched([]);
       return;
     }
-    const count = touched.filter((id) => (quantitiesRef.current[id] ?? 0) > 0).length;
+    const count = touched.filter(
+      (id) => (quantitiesRef.current[id] ?? 0) > 0,
+    ).length;
     if (count > 0) {
-      avisar(count === 1 ? "Lista atualizada: 1 produto" : `Lista atualizada: ${count} produtos`);
+      avisar(texts.updated(count));
     }
     settle();
   }
@@ -376,14 +433,15 @@ export function MobileQuickAdd({
     change(product, next);
     return {
       ok: true,
-      label: `${product.name} · ${formatQuantity(next)}${product.purchaseUnit ? ` ${product.purchaseUnit}` : ""} na lista`,
+      label: `${product.name} · ${formatQuantity(next)}${product.purchaseUnit ? ` ${product.purchaseUnit}` : ""} ${texts.scanned}`,
     };
   }
 
   function step(product: ShoppingProduct, delta: 1 | -1) {
     const next = Math.max(
       0,
-      Math.round(((quantitiesRef.current[product.id] ?? 0) + delta) * 1000) / 1000,
+      Math.round(((quantitiesRef.current[product.id] ?? 0) + delta) * 1000) /
+        1000,
     );
     change(product, next);
     if (delta === 1) navigator.vibrate?.(30);
@@ -415,7 +473,7 @@ export function MobileQuickAdd({
   // sem o `-top-6`, a barra gruda 24px abaixo do cabeçalho e a lista passa por
   // cima dela. O `pt-6` e o `-mt-5` devolvem a posição de repouso.
   return (
-    <div className="bg-background sticky -top-6 z-20 -mx-4 -mt-5 flex gap-2 px-4 pt-6 pb-3 sm:hidden">
+    <div className={barClassName}>
       <Dialog open={open} onOpenChange={handleSheetChange}>
         <DialogTrigger asChild>
           <button
@@ -423,15 +481,14 @@ export function MobileQuickAdd({
             className="border-input bg-input-bg text-fg-muted active:bg-surface-muted flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-xl border px-3.5 text-left text-base shadow-xs"
           >
             <Search className="text-fg-subtle size-4 shrink-0" aria-hidden />
-            <span className="truncate">Buscar produto para adicionar</span>
+            <span className="truncate">{texts.trigger}</span>
           </button>
         </DialogTrigger>
         <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Adicionar à lista</DialogTitle>
+            <DialogTitle>{texts.title}</DialogTitle>
             <DialogDescription className="sr-only">
-              Busque o produto pelo nome ou pelo código de barras e toque nele
-              para colocá-lo na lista.
+              {texts.description}
             </DialogDescription>
           </DialogHeader>
 
@@ -495,6 +552,7 @@ export function MobileQuickAdd({
                       key={product.id}
                       product={product}
                       quantity={quantities[product.id] ?? 0}
+                      texts={texts}
                       onChange={(next) => change(product, next)}
                       onStep={(delta) =>
                         (quantitiesRef.current[product.id] ?? 0) === 0
@@ -521,6 +579,7 @@ export function MobileQuickAdd({
                       key={product.id}
                       product={product}
                       quantity={quantities[product.id] ?? 0}
+                      texts={texts}
                       onChange={(next) => change(product, next)}
                       onStep={(delta) => step(product, delta)}
                     />
@@ -532,10 +591,7 @@ export function MobileQuickAdd({
                 <span className="bg-surface-muted text-fg-subtle grid size-12 place-items-center rounded-2xl">
                   <ScanBarcode className="size-6" aria-hidden />
                 </span>
-                <p className="text-sm">
-                  Digite o nome do produto ou toque na câmera para bipar o
-                  código. Cada toque coloca 1 na lista.
-                </p>
+                <p className="text-sm">{texts.hint}</p>
               </div>
             )}
           </DialogBody>

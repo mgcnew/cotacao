@@ -24,6 +24,11 @@ import {
   SupplierPickerForm,
 } from "@/components/rounds/round-forms";
 import { IndicadoresDaRodada } from "@/components/rounds/round-indicators";
+import {
+  MobileRoundItems,
+  MobileRoundQuickAdd,
+  type MobileRoundItem,
+} from "@/components/rounds/mobile-round-items";
 import { RoundSteps } from "@/components/rounds/round-steps";
 import { SendControls } from "@/components/rounds/send-controls";
 import { RemoveRoundSupplierButton } from "@/components/rounds/remove-round-supplier-button";
@@ -38,7 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { listActiveProductNames } from "@/features/products/queries";
+import type { ShoppingProduct } from "@/features/shopping-list/queries";
 import type { DadosDaRodada } from "@/features/rounds/central";
 import { GRUPO_PADRAO } from "@/features/rounds/groups";
 import type {
@@ -234,7 +239,7 @@ type Grupo = { id: string; name: string; status: string };
 type Item = Awaited<ReturnType<typeof listRoundItems>>[number];
 type RoundSupplier = Awaited<ReturnType<typeof listRoundSuppliers>>[number];
 type Contatos = Awaited<ReturnType<typeof listRoundSupplierContacts>>;
-type Produto = Awaited<ReturnType<typeof listActiveProductNames>>[number];
+type Produto = ShoppingProduct;
 
 /** A rodada em preparação: a trilha de montagem. */
 function Montagem({
@@ -283,6 +288,21 @@ function Montagem({
     (groups.length === 1 && groups[0].name !== GRUPO_PADRAO);
   const grupoIntocado = !organizouGrupos;
 
+  // No celular a montagem segue a lista de compras: busca em folha, um toque
+  // põe 1, e o passo ajusta no item. Só com o grupo padrão — com grupos, cada
+  // produto pede a pergunta "em que grupo?", que o formulário já faz.
+  const montagemNoCelular =
+    podeMontar && grupoIntocado && produtosAtivos.length > 0;
+  const itensDoCelular: MobileRoundItem[] = items
+    .filter((item) => item.commercial_status === "open")
+    .map((item) => ({
+      id: item.id,
+      productId: item.product_id,
+      name: item.products?.name ?? "Produto",
+      quantity: Number(item.requested_quantity),
+      unit: item.purchase_unit?.symbol ?? "",
+    }));
+
   return (
     <>
       <RoundSteps
@@ -319,14 +339,27 @@ function Montagem({
 
                 {podeMontar && produtosAtivos.length > 0 ? (
                   <div className="mb-4 flex flex-col gap-3">
-                    <ItemForm
-                      roundId={roundId}
-                      groups={groups}
-                      products={produtosAtivos.map((p) => ({
-                        id: p.id,
-                        name: p.name,
-                      }))}
-                    />
+                    {montagemNoCelular ? (
+                      <MobileRoundQuickAdd
+                        roundId={roundId}
+                        products={produtosAtivos}
+                        items={itensDoCelular}
+                      />
+                    ) : null}
+                    <div
+                      className={
+                        montagemNoCelular ? "hidden sm:block" : undefined
+                      }
+                    >
+                      <ItemForm
+                        roundId={roundId}
+                        groups={groups}
+                        products={produtosAtivos.map((p) => ({
+                          id: p.id,
+                          name: p.name,
+                        }))}
+                      />
+                    </div>
                     {shoppingItems.length > 0 ? (
                       <ShoppingListImportForm
                         roundId={roundId}
@@ -342,41 +375,59 @@ function Montagem({
                     Nenhum produto na rodada ainda.
                   </p>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Produto</TableHead>
-                        {!grupoIntocado ? <TableHead>Grupo</TableHead> : null}
-                        <TableHead className="text-right">Quantidade</TableHead>
-                        <TableHead>Cotado por</TableHead>
-                        <TableHead>Situação</TableHead>
-                        {podeMontar ? (
-                          <TableHead className="w-0 text-right">
-                            <span className="sr-only">Ações do item</span>
-                          </TableHead>
-                        ) : null}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((item) => (
-                        <QuotationItemRow
-                          key={item.id}
-                          roundId={roundId}
-                          itemId={item.id}
-                          productName={item.products?.name ?? "Produto"}
-                          groupId={item.group_id}
-                          groupName={groupName.get(item.group_id) ?? "—"}
-                          quantity={Number(item.requested_quantity)}
-                          purchaseUnit={item.purchase_unit?.symbol ?? ""}
-                          pricingUnit={item.pricing_unit?.symbol ?? ""}
-                          commercialStatus={item.commercial_status}
-                          editable={podeMontar}
-                          groups={groups}
-                          hideGroup={grupoIntocado}
-                        />
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <>
+                    {montagemNoCelular ? (
+                      <MobileRoundItems
+                        roundId={roundId}
+                        items={itensDoCelular}
+                      />
+                    ) : null}
+                    <div
+                      className={
+                        montagemNoCelular ? "hidden sm:block" : undefined
+                      }
+                    >
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Produto</TableHead>
+                            {!grupoIntocado ? (
+                              <TableHead>Grupo</TableHead>
+                            ) : null}
+                            <TableHead className="text-right">
+                              Quantidade
+                            </TableHead>
+                            <TableHead>Cotado por</TableHead>
+                            <TableHead>Situação</TableHead>
+                            {podeMontar ? (
+                              <TableHead className="w-0 text-right">
+                                <span className="sr-only">Ações do item</span>
+                              </TableHead>
+                            ) : null}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {items.map((item) => (
+                            <QuotationItemRow
+                              key={item.id}
+                              roundId={roundId}
+                              itemId={item.id}
+                              productName={item.products?.name ?? "Produto"}
+                              groupId={item.group_id}
+                              groupName={groupName.get(item.group_id) ?? "—"}
+                              quantity={Number(item.requested_quantity)}
+                              purchaseUnit={item.purchase_unit?.symbol ?? ""}
+                              pricingUnit={item.pricing_unit?.symbol ?? ""}
+                              commercialStatus={item.commercial_status}
+                              editable={podeMontar}
+                              groups={groups}
+                              hideGroup={grupoIntocado}
+                            />
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
                 )}
 
                 {podeMontar ? (

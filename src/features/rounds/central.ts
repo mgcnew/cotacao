@@ -2,8 +2,10 @@ import "server-only";
 
 import { cache } from "react";
 
-import { listActiveProductNames } from "@/features/products/queries";
-import { listPendingShoppingItems } from "@/features/shopping-list/queries";
+import {
+  listPendingShoppingItems,
+  listShoppingProducts,
+} from "@/features/shopping-list/queries";
 import {
   getRound,
   listLatestRoundRemindersByRound,
@@ -146,9 +148,9 @@ async function montarRodada(roundId: string, escopo: EscopoDaRodada) {
   const podeMontar = podeEditar && emPreparacao;
 
   const [products, shoppingItems, contatos] = await Promise.all([
-    podeMontar
-      ? listActiveProductNames(company.companyId)
-      : Promise.resolve([]),
+    // Com unidade e códigos de barras: a montagem no celular busca e bipa o
+    // produto como a lista de compras.
+    podeMontar ? listShoppingProducts(company.companyId) : Promise.resolve([]),
     podeMontar
       ? listPendingShoppingItems(company.companyId)
       : Promise.resolve([]),

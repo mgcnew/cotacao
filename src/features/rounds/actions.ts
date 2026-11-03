@@ -982,6 +982,114 @@ async function assertRoundIsDraft(
   return null;
 }
 
+/**
+ * Fixa a quantidade de um produto na rodada em preparação (zero tira).
+ *
+ * É o que a montagem no celular chama a cada toque em + ou −, no mesmo molde de
+ * `setShoppingListItemQuantity`: valor absoluto, porque a tela manda só o
+ * último depois de uma pausa, e sem revalidar — refazer a Central a cada toque
+ * travaria quem está adicionando em sequência. A tela chama `refreshRound` ao
+ * terminar.
+ *
+ * Produto que ainda não está na rodada entra no grupo padrão, como no
+ * formulário quando a rodada tem um grupo só.
+ */
+export async function setRoundItemQuantity(
+  roundId: string,
+  productId: string,
+  quantity: number,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+  const parsed = z
+    .object({
+      roundId: z.uuid(),
+      productId: z.uuid(),
+      quantity: z.number().min(0).max(99_999),
+    })
+    .safeParse({
+      roundId,
+      productId,
+      quantity: Math.round(quantity * 1000) / 1000,
+    });
+  if (!parsed.success) return { error: "Quantidade inválida." };
+
+  const impedimento = await assertRoundIsDraft(company.companyId, roundId);
+  if (impedimento) return { error: impedimento };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: current, error: readError } = await supabase
+    .from("quotation_items")
+    .select("id")
+    .eq("company_id", company.companyId)
+    .eq("purchase_round_id", roundId)
+    .eq("product_id", productId)
+    .eq("commercial_status", "open")
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+  if (readError) {
+    return { error: `Falha ao carregar o item: ${readError.message}` };
+  }
+
+  if (parsed.data.quantity === 0) {
+    if (!current) return { error: null, savedAt: Date.now() };
+    const removal = new FormData();
+    removal.set("roundId", roundId);
+    removal.set("itemId", current.id);
+    return removeQuotationItem({ error: null }, removal);
+  }
+
+  if (current) {
+    const { error } = await supabase
+      .from("quotation_items")
+      .update({ requested_quantity: parsed.data.quantity })
+      .eq("company_id", company.companyId)
+      .eq("id", current.id)
+      .eq("commercial_status", "open");
+    if (error) return { error: describeWriteError(error) };
+    return { error: null, savedAt: Date.now() };
+  }
+
+  const grupo = await grupoPadrao(company.companyId, roundId);
+  if ("erro" in grupo) return { error: grupo.erro };
+
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select("purchase_unit_id, pricing_unit_id, comparison_unit_id")
+    .eq("company_id", company.companyId)
+    .eq("id", productId)
+    .maybeSingle();
+  if (productError || !product) {
+    return { error: "Produto não encontrado nesta empresa." };
+  }
+
+  const { data: item, error } = await supabase
+    .from("quotation_items")
+    .insert({
+      company_id: company.companyId,
+      purchase_round_id: roundId,
+      group_id: grupo.id,
+      product_id: productId,
+      requested_quantity: parsed.data.quantity,
+      purchase_unit_id: product.purchase_unit_id,
+      pricing_unit_id: product.pricing_unit_id,
+      comparison_unit_id: product.comparison_unit_id,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: describeWriteError(error) };
+
+  await linkItemToRoundSuppliers(roundId, item.id, grupo.id);
+  return { error: null, savedAt: Date.now() };
+}
+
+/** Atualiza a Central depois de uma sequência de `setRoundItemQuantity`. */
+export async function refreshRound(roundId: string) {
+  await requireActiveCompany();
+  revalidatePath(`/compras/${roundId}`);
+  revalidatePath("/compras");
+}
+
 /** Corrige quantidade e grupo de um item, enquanto a rodada é rascunho. */
 export async function updateQuotationItem(
   _prev: RoundFormState,
