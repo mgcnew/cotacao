@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   PackageCheck,
   Sparkles,
   Store,
@@ -29,6 +30,7 @@ import { situacaoDoLimite } from "@/features/rounds/purchase-limit";
 import { AindaSemRespostas, resumoDeRespostas } from "@/components/rounds/awaiting-responses";
 import { OffersPopover, type Offer } from "@/components/rounds/offers-popover";
 import { CompleteRoundForm } from "@/components/rounds/round-closing";
+import { SupplierJump } from "@/components/rounds/supplier-jump";
 import { cn } from "@/lib/utils";
 
 const MONEY = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -136,20 +138,57 @@ function decidedFor(row: Row, dados: DadosDaAlocacao) {
   }));
 }
 
+/**
+ * `pending` é o que ainda vai virar pedido (escolhas salvas e sugestões): é a
+ * base do limite de compras. `total` soma também o que já está no pedido, para
+ * o placar mostrar tudo o que o fornecedor leva na rodada.
+ */
 function bucketTotals(supplier: SupplierBucket) {
+  let confirmed = 0;
   let saved = 0;
   let suggested = 0;
   let withoutConversion = 0;
+  let confirmedWithoutConversion = 0;
   for (const { allocation } of supplier.decisions) {
-    if (allocation.estimatedPricingQuantity === null) withoutConversion += 1;
-    else saved += allocation.estimatedPricingQuantity * allocation.selectedPrice;
+    const isConfirmed = allocation.status === "confirmed";
+    if (allocation.estimatedPricingQuantity === null) {
+      if (isConfirmed) confirmedWithoutConversion += 1;
+      else withoutConversion += 1;
+      continue;
+    }
+    const value = allocation.estimatedPricingQuantity * allocation.selectedPrice;
+    if (isConfirmed) confirmed += value;
+    else saved += value;
   }
   for (const { row, winner } of supplier.recommendations) {
     if (winner.pricingFactor === null) withoutConversion += 1;
     else suggested += row.requestedQuantity * winner.pricingFactor * winner.price;
   }
-  return { saved, suggested, total: saved + suggested, withoutConversion };
+  const pending = saved + suggested;
+  return { confirmed, saved, suggested, pending, total: confirmed + pending, withoutConversion, confirmedWithoutConversion };
 }
+
+/** Quantos itens do fornecedor estão em cada situação. */
+function bucketCounts(supplier: SupplierBucket) {
+  const confirmed = supplier.decisions.filter(({ allocation }) => allocation.status === "confirmed").length;
+  return {
+    confirmed,
+    saved: supplier.decisions.length - confirmed,
+    suggested: supplier.recommendations.length,
+    total: supplier.decisions.length + supplier.recommendations.length,
+  };
+}
+
+function countsLabel(counts: ReturnType<typeof bucketCounts>) {
+  return [
+    `${counts.total} ${counts.total === 1 ? "item" : "itens"}`,
+    counts.confirmed > 0 ? `${counts.confirmed} no pedido` : null,
+    counts.saved > 0 ? `${counts.saved} ${counts.saved === 1 ? "salva" : "salvas"}` : null,
+    counts.suggested > 0 ? `${counts.suggested} ${counts.suggested === 1 ? "sugestão" : "sugestões"}` : null,
+  ].filter(Boolean).join(" · ");
+}
+
+const sectionId = (supplierId: string) => `fornecedor-${supplierId}`;
 
 /** A proposta é automática, mas só vira rascunho depois de uma ação explícita. */
 export function AlocacaoConteudo({
@@ -191,16 +230,20 @@ export function AlocacaoConteudo({
     return current;
   };
 
+  // O fornecedor leva tudo o que ganhou na rodada, inclusive itens já fechados
+  // em pedido: é o que o placar soma. Sugestões e exceções vêm só do que falta.
+  for (const row of rows) {
+    for (const allocation of allocationsByItem.get(row.itemId) ?? []) {
+      const name = supplierName.get(allocation.supplierId) ?? "Fornecedor";
+      getBucket(allocation.supplierId, name).decisions.push({ row, allocation });
+    }
+  }
+
   for (const row of workingRows) {
     const decisions = allocationsByItem.get(row.itemId) ?? [];
     const allocated = decisions.reduce((sum, decision) => sum + decision.allocatedQuantity, 0);
     const missing = row.requestedQuantity - allocated;
     const candidates = candidatesFor(row, dados);
-
-    for (const allocation of decisions) {
-      const name = supplierName.get(allocation.supplierId) ?? "Fornecedor";
-      getBucket(allocation.supplierId, name).decisions.push({ row, allocation });
-    }
 
     if (row.commercialStatus !== "open") {
       continue;
@@ -214,7 +257,11 @@ export function AlocacaoConteudo({
     } else withoutPrice.push(row);
   }
 
-  const supplierBuckets = [...buckets.values()].sort((a, b) => a.name.localeCompare(b.name));
+  // Quem leva mais dinheiro vem primeiro: é por onde a revisão começa.
+  const bucketTotal = new Map([...buckets.values()].map((bucket) => [bucket.id, bucketTotals(bucket).total]));
+  const supplierBuckets = [...buckets.values()].sort(
+    (a, b) => (bucketTotal.get(b.id) ?? 0) - (bucketTotal.get(a.id) ?? 0) || a.name.localeCompare(b.name),
+  );
   const attentionCount = partial.length + withoutPrice.length;
   const totals = supplierBuckets.reduce(
     (acc, bucket) => {
@@ -230,7 +277,7 @@ export function AlocacaoConteudo({
   const decisionTotal = totals.saved + totals.suggested;
   // Quantos itens a decidir estão pelo menos `LIMITE_ALTA` acima do último
   // pago: é o que merece um olhar antes de gerar os pedidos.
-  const acimaDoLimite = supplierBuckets.filter((bucket) => situacaoDoLimite(bucketTotals(bucket).total, dados.limites.get(bucket.id))?.tipo === "acima").length;
+  const acimaDoLimite = supplierBuckets.filter((bucket) => situacaoDoLimite(bucketTotals(bucket).pending, dados.limites.get(bucket.id))?.tipo === "acima").length;
   const acimaDoUltimo = [
     ...recommendations.map(({ row, winner }) => ({ productId: row.productId, supplierId: winner.id, price: winner.price, unit: row.pricingUnit })),
     ...supplierBuckets.flatMap((bucket) =>
@@ -452,7 +499,8 @@ export function AlocacaoConteudo({
             <CompletedRoundResult dados={dados} />
           ) : (
             <div className="mb-6 space-y-3">
-              {supplierBuckets.map((supplier) => <SupplierSection key={supplier.id} supplier={supplier} dados={dados} />)}
+              {supplierBuckets.length > 0 ? <SupplierScoreboard buckets={supplierBuckets} dados={dados} /> : null}
+              {supplierBuckets.map((supplier) => <SupplierSection key={supplier.id} supplier={supplier} dados={dados} defaultOpen={supplierBuckets.length === 1} />)}
             </div>
           )}
 
@@ -898,42 +946,139 @@ function ResolvedItems({
   );
 }
 
-function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados: DadosDaAlocacao }) {
-  const { total, withoutConversion: uncalculated } = bucketTotals(supplier);
-  const itemCount = supplier.decisions.length + supplier.recommendations.length;
+/** Tons da barra por posição no placar: quem leva mais fica com a cor cheia. */
+const SCOREBOARD_TONES = ["bg-primary", "bg-primary/70", "bg-primary/50", "bg-primary/35", "bg-primary/20"];
+const scoreboardTone = (index: number) => SCOREBOARD_TONES[Math.min(index, SCOREBOARD_TONES.length - 1)];
+
+function sharePercent(share: number) {
+  if (share <= 0) return "0%";
+  if (share < 0.01) return "<1%";
+  return `${Math.round(share * 100)}%`;
+}
+
+/**
+ * Quem leva o quê, em uma olhada: a barra divide o valor da rodada entre os
+ * fornecedores e cada linha leva à seção dele, que abre já no lugar.
+ */
+function SupplierScoreboard({ buckets, dados }: { buckets: SupplierBucket[]; dados: DadosDaAlocacao }) {
+  const lines = buckets.map((bucket) => {
+    const totals = bucketTotals(bucket);
+    return {
+      bucket,
+      totals,
+      counts: bucketCounts(bucket),
+      limit: situacaoDoLimite(totals.pending, dados.limites.get(bucket.id)),
+    };
+  });
+  const grandTotal = lines.reduce((sum, line) => sum + line.totals.total, 0);
+  const withoutConversion = lines.reduce(
+    (sum, line) => sum + line.totals.withoutConversion + line.totals.confirmedWithoutConversion,
+    0,
+  );
+
   return (
-    <section className="border-border bg-surface overflow-hidden rounded-xl border">
-      <header className="bg-surface-sunken border-border flex flex-wrap items-center gap-3 border-b px-4 py-3">
-        <span className="border-border bg-surface rounded-lg border p-2"><Store className="text-fg-muted size-4" aria-hidden /></span>
-        <div className="min-w-0 flex-1"><h3 className="text-fg font-semibold">{supplier.name}</h3><p className="text-fg-muted text-[13px]">{itemCount} {itemCount === 1 ? "item" : "itens"} · vira 1 pedido</p></div>
-        <span className="text-right">
-          <span className="text-fg block font-semibold tabular-nums">{MONEY.format(total)}</span>
-          {uncalculated > 0 ? <span className="text-warning block text-[13px]">{uncalculated} sem conversão</span> : null}
-          {(() => {
-            const situacao = situacaoDoLimite(total, dados.limites.get(supplier.id));
-            if (!situacao) return null;
-            return situacao.tipo === "acima"
-              ? <span className="text-warning block text-[13px] font-medium" title="Limite de compras do cadastro do fornecedor. É um aviso: a decisão continua sua.">acima do limite de {MONEY.format(situacao.limite)} (+{MONEY.format(situacao.excesso)})</span>
-              : <span className="text-fg-muted block text-[13px]" title="Limite de compras do cadastro do fornecedor.">{Math.round(situacao.uso * 100)}% do limite de {MONEY.format(situacao.limite)}</span>;
-          })()}
-        </span>
-      </header>
-      <ul className="divide-border divide-y">
-        {supplier.decisions.map(({ row, allocation }) => (
-          <li key={allocation.allocationId} className="flex flex-wrap items-center gap-3 px-4 py-3">
-            <ItemName row={row} quantity={allocation.allocatedQuantity} />
-            <Price price={allocation.selectedPrice} pricingQuantity={allocation.estimatedPricingQuantity} unit={row.pricingUnit} />
-            <Ofertas row={row} dados={dados} supplierId={allocation.supplierId} />
-            <VsUltimoPago dados={dados} productId={row.productId} supplierId={allocation.supplierId} price={allocation.selectedPrice} unit={row.pricingUnit} />
-            {allocation.packagingChoiceResultEstimated !== null ? (
-              <span className={allocation.packagingChoiceResultEstimated >= 0 ? "text-success text-[13px] font-medium" : "text-danger text-[13px] font-medium"}>
-                embalagem {MONEY.format(allocation.packagingChoiceResultEstimated)}
+    <section aria-labelledby="quem-leva" className="border-border bg-surface rounded-xl border p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="quem-leva" className="text-fg text-sm font-semibold">Quem leva o quê</h2>
+        <p className="text-fg-muted text-[13px] tabular-nums">
+          {buckets.length} {buckets.length === 1 ? "fornecedor" : "fornecedores"} · {MONEY.format(grandTotal)} na rodada
+        </p>
+      </div>
+      {grandTotal > 0 ? (
+        <div aria-hidden className="mt-3 flex h-2.5 gap-0.5 overflow-hidden rounded-full">
+          {lines.map(({ bucket, totals }, index) =>
+            totals.total > 0 ? (
+              <span key={bucket.id} className={cn("h-full min-w-1 basis-0", scoreboardTone(index))} style={{ flexGrow: totals.total }} />
+            ) : null,
+          )}
+        </div>
+      ) : null}
+      <ul className="mt-2">
+        {lines.map(({ bucket, totals, counts, limit }, index) => (
+          <li key={bucket.id}>
+            <SupplierJump
+              targetId={sectionId(bucket.id)}
+              className="hover:bg-surface-sunken focus-visible:ring-ring/50 -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 outline-none focus-visible:ring-3"
+            >
+              <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", scoreboardTone(index))} />
+              <span className="min-w-0 flex-1">
+                <span className="text-fg block text-sm font-medium wrap-anywhere">{bucket.name}</span>
+                <span className="text-fg-muted block text-[13px]">
+                  {countsLabel(counts)}
+                  {limit?.tipo === "acima" ? (
+                    <span className="text-warning font-medium"> · acima do limite (+{MONEY.format(limit.excesso)})</span>
+                  ) : limit?.tipo === "perto" ? (
+                    <span> · {Math.round(limit.uso * 100)}% do limite</span>
+                  ) : null}
+                </span>
               </span>
-            ) : null}
-            <Badge variant={allocation.status === "confirmed" ? "default" : "outline"}>{allocation.status === "confirmed" ? "no pedido" : "escolha salva"}</Badge>
-            {dados.podeDecidir && allocation.status === "draft" ? <form action={cancelAllocation.bind(null, allocation.allocationId, dados.round.id)}><Button type="submit" variant="ghost" aria-label={`Desfazer a escolha de ${row.productName}`} className="text-fg-muted hover:text-destructive h-11 sm:h-9">Desfazer</Button></form> : null}
+              <span className="shrink-0 text-right tabular-nums">
+                <span className="text-fg block text-sm font-semibold">{MONEY.format(totals.total)}</span>
+                <span className="text-fg-muted block text-[13px]">{sharePercent(grandTotal > 0 ? totals.total / grandTotal : 0)}</span>
+              </span>
+              <ChevronRight className="text-fg-subtle size-4 shrink-0" aria-hidden />
+            </SupplierJump>
           </li>
         ))}
+      </ul>
+      {withoutConversion > 0 ? (
+        <p className="text-warning mt-2 text-[13px]">
+          {withoutConversion} {withoutConversion === 1 ? "item sem conversão fica" : "itens sem conversão ficam"} fora dos valores.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function SupplierSection({ supplier, dados, defaultOpen }: { supplier: SupplierBucket; dados: DadosDaAlocacao; defaultOpen: boolean }) {
+  const totals = bucketTotals(supplier);
+  const counts = bucketCounts(supplier);
+  const uncalculated = totals.withoutConversion + totals.confirmedWithoutConversion;
+  const pendingCount = counts.saved + counts.suggested;
+  const situacao = situacaoDoLimite(totals.pending, dados.limites.get(supplier.id));
+  // O que ainda pede decisão em cima; o que já está no pedido fica por último.
+  const drafts = supplier.decisions.filter(({ allocation }) => allocation.status !== "confirmed");
+  const confirmed = supplier.decisions.filter(({ allocation }) => allocation.status === "confirmed");
+  const decisionItem = ({ row, allocation }: SupplierBucket["decisions"][number]) => (
+    <li key={allocation.allocationId} className="flex flex-wrap items-center gap-3 px-4 py-3">
+      <ItemName row={row} quantity={allocation.allocatedQuantity} />
+      <Price price={allocation.selectedPrice} pricingQuantity={allocation.estimatedPricingQuantity} unit={row.pricingUnit} />
+      <Ofertas row={row} dados={dados} supplierId={allocation.supplierId} />
+      <VsUltimoPago dados={dados} productId={row.productId} supplierId={allocation.supplierId} price={allocation.selectedPrice} unit={row.pricingUnit} />
+      {allocation.packagingChoiceResultEstimated !== null ? (
+        <span className={allocation.packagingChoiceResultEstimated >= 0 ? "text-success text-[13px] font-medium" : "text-danger text-[13px] font-medium"}>
+          embalagem {MONEY.format(allocation.packagingChoiceResultEstimated)}
+        </span>
+      ) : null}
+      <Badge variant={allocation.status === "confirmed" ? "default" : "outline"}>{allocation.status === "confirmed" ? "no pedido" : "escolha salva"}</Badge>
+      {dados.podeDecidir && allocation.status === "draft" ? <form action={cancelAllocation.bind(null, allocation.allocationId, dados.round.id)}><Button type="submit" variant="ghost" aria-label={`Desfazer a escolha de ${row.productName}`} className="text-fg-muted hover:text-destructive h-11 sm:h-9">Desfazer</Button></form> : null}
+    </li>
+  );
+
+  return (
+    <details id={sectionId(supplier.id)} open={defaultOpen} className="group border-border bg-surface scroll-mt-4 overflow-hidden rounded-xl border">
+      <summary className="bg-surface-sunken border-border focus-visible:ring-ring/50 flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3 outline-none group-open:border-b focus-visible:ring-3 focus-visible:ring-inset [&::-webkit-details-marker]:hidden">
+        <span className="border-border bg-surface rounded-lg border p-2"><Store className="text-fg-muted size-4" aria-hidden /></span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-fg font-semibold wrap-anywhere">{supplier.name}</h3>
+          <p className="text-fg-muted text-[13px]">
+            {countsLabel(counts)}
+            {pendingCount > 0 ? (counts.confirmed > 0 ? ` · ${MONEY.format(totals.pending)} a pedir` : " · vira 1 pedido") : ""}
+          </p>
+        </div>
+        <span className="text-right">
+          <span className="text-fg block font-semibold tabular-nums">{MONEY.format(totals.total)}</span>
+          {uncalculated > 0 ? <span className="text-warning block text-[13px]">{uncalculated} sem conversão</span> : null}
+          {!situacao ? null : situacao.tipo === "acima" ? (
+            <span className="text-warning block text-[13px] font-medium" title="Limite de compras do cadastro do fornecedor, contra o que ainda vai virar pedido. É um aviso: a decisão continua sua.">acima do limite de {MONEY.format(situacao.limite)} (+{MONEY.format(situacao.excesso)})</span>
+          ) : (
+            <span className="text-fg-muted block text-[13px]" title="Limite de compras do cadastro do fornecedor, contra o que ainda vai virar pedido.">{Math.round(situacao.uso * 100)}% do limite de {MONEY.format(situacao.limite)}</span>
+          )}
+        </span>
+        <ChevronDown className="text-fg-muted size-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      <ul className="divide-border divide-y">
+        {drafts.map(decisionItem)}
         {supplier.recommendations.map(({ row, candidates, winner }) => (
           <li key={row.itemId} className="bg-primary/[0.025] flex flex-wrap items-center gap-3 px-4 py-3">
             <ItemName row={row} quantity={row.requestedQuantity} />
@@ -944,8 +1089,9 @@ function SupplierSection({ supplier, dados }: { supplier: SupplierBucket; dados:
             {dados.podeDecidir && dados.round.status === "active" ? <AllocateForm roundId={dados.round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={row.requestedQuantity} initialSupplierId={winner.id} buttonLabel="Alterar" requestedQuantity={row.requestedQuantity} decided={decidedFor(row, dados)} /> : null}
           </li>
         ))}
+        {confirmed.map(decisionItem)}
       </ul>
-    </section>
+    </details>
   );
 }
 
