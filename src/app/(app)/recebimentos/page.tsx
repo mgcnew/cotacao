@@ -273,11 +273,36 @@ async function RecebimentosConteudo({
         className="border-border mb-6 hidden flex-wrap gap-1 border-b pb-2 sm:flex"
       >
         {[
-          { rotulo: "Atrasadas", n: lateOnes.length, href: `${filterHref("atrasadas")}#previstas`, alerta: true },
-          { rotulo: "A conferir", n: board.awaitingCheck.length, href: "#conferir", alerta: true },
-          { rotulo: "Preços a confirmar", n: pendingPrices.length, href: "#confirmar-precos", alerta: true },
-          { rotulo: "Previstas", n: board.expected.length, href: "#previstas", alerta: false },
-          { rotulo: "Conferidas", n: history.pagination.total, href: "#conferidas", alerta: false },
+          {
+            rotulo: "Atrasadas",
+            n: lateOnes.length,
+            href: `${filterHref("atrasadas")}#previstas`,
+            alerta: true,
+          },
+          {
+            rotulo: "A conferir",
+            n: board.awaitingCheck.length,
+            href: "#conferir",
+            alerta: true,
+          },
+          {
+            rotulo: "Preços a confirmar",
+            n: pendingPrices.length,
+            href: "#confirmar-precos",
+            alerta: true,
+          },
+          {
+            rotulo: "Previstas",
+            n: board.expected.length,
+            href: "#previstas",
+            alerta: false,
+          },
+          {
+            rotulo: "Conferidas",
+            n: history.pagination.total,
+            href: "#conferidas",
+            alerta: false,
+          },
         ].map((item) => (
           <Link
             key={item.rotulo}
@@ -298,7 +323,13 @@ async function RecebimentosConteudo({
         ))}
       </nav>
 
-      <section id="conferir" className="mb-8 hidden scroll-mt-20 sm:block">
+      {/* No celular a seção só aparece quando há o que conferir: a
+          conferência já se faz pelo celular, mas um aviso vazio no topo
+          empurraria as entregas do dia para baixo. */}
+      <section
+        id="conferir"
+        className={`mb-8 scroll-mt-20 ${board.awaitingCheck.length ? "" : "hidden sm:block"}`}
+      >
         <div className="mb-3">
           <h2 className="text-fg font-semibold">Aguardando conferência</h2>
           <p className="text-fg-muted text-sm">
