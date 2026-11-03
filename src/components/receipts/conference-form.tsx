@@ -1,12 +1,22 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCheck,
+  MessageSquareText,
+  Minus,
+  Plus,
+} from "lucide-react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { ErrorLine } from "@/components/layout/form-feedback";
 import { ConversionFix } from "@/components/receipts/conversion-fix";
+import {
+  BarcodeCameraDialog,
+  type BarcodeScanOutcome,
+} from "@/components/shopping-list/barcode-camera-dialog";
 import {
   NfeImportPanel,
   importedItemValues,
@@ -23,6 +33,7 @@ import {
   postDraftReceipt,
   type ReceiptActionState,
 } from "@/features/receipts/actions";
+import { barcodeMatches } from "@/features/products/barcodes";
 
 const MONEY = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -96,10 +107,35 @@ function matchLabel(
   }
 }
 
+/**
+ * Escreve num campo sem estado do formulário e avisa o `onInput` dele.
+ *
+ * Os campos da conferência são não controlados (o XML os remonta com
+ * `defaultValue`), e o total é relido do DOM. O passo e a câmera do celular
+ * mexem no MESMO campo que se digita — não há um segundo campo para o envio.
+ */
+function escreverCampo(
+  form: HTMLFormElement | null,
+  name: string,
+  value: string,
+) {
+  const field = form?.elements.namedItem(name);
+  if (!(field instanceof HTMLInputElement)) return;
+  field.value = value;
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+const STEP_BUTTON =
+  "border-border bg-surface text-fg-muted active:bg-surface-muted grid size-11 shrink-0 place-items-center rounded-md border sm:hidden";
+
 function Submit() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending}>
+    <Button
+      type="submit"
+      disabled={pending}
+      className="max-sm:h-12 max-sm:w-full max-sm:text-base"
+    >
       {pending ? "Confirmando entrega…" : "Confirmar esta entrega"}
     </Button>
   );
@@ -141,6 +177,12 @@ export function ReceiptConferenceForm({
     { error: null },
   );
   const [calculatedTotal, setCalculatedTotal] = React.useState(0);
+  /** Itens com alguma quantidade recebida — o resumo da barra do celular. */
+  const [filledCount, setFilledCount] = React.useState(0);
+  /** No celular a observação do produto fica atrás de um toque. */
+  const [notesOpen, setNotesOpen] = React.useState<Set<string>>(
+    () => new Set(),
+  );
   const [typedInvoiceTotal, setTypedInvoiceTotal] = React.useState(
     invoiceTotal ?? 0,
   );
@@ -246,9 +288,69 @@ export function ReceiptConferenceForm({
         ),
       );
       setTypedInvoiceTotal(numberFromField(data.get("invoiceTotal")));
+      setFilledCount(
+        items.filter((item) => numberFromField(data.get(`log_${item.id}`)) > 0)
+          .length,
+      );
     },
     [items],
   );
+
+  /** + e − no recebido: soma sobre o que está no campo agora. */
+  function passo(item: Item, delta: number) {
+    const field = formRef.current?.elements.namedItem(`log_${item.id}`);
+    if (!(field instanceof HTMLInputElement)) return 0;
+    const next = Math.max(
+      0,
+      Math.round((numberFromField(field.value) + delta) * 1000) / 1000,
+    );
+    escreverCampo(
+      formRef.current,
+      `log_${item.id}`,
+      next ? decimalInput(next) : "",
+    );
+    return next;
+  }
+
+  /**
+   * "Veio tudo": o pendente de cada item no recebido, para só corrigir o que
+   * chegou diferente. Não sobrescreve o que já foi digitado ou veio do XML.
+   */
+  function veioTudo() {
+    for (const item of items) {
+      const field = formRef.current?.elements.namedItem(`log_${item.id}`);
+      if (!(field instanceof HTMLInputElement) || field.value.trim()) continue;
+      escreverCampo(
+        formRef.current,
+        `log_${item.id}`,
+        decimalInput(item.pendingQuantity),
+      );
+    }
+  }
+
+  function handleScan(code: string): BarcodeScanOutcome {
+    const item = items.find(
+      (candidate) =>
+        barcodeMatches(candidate.barcodes, code) ||
+        barcodeMatches(
+          candidate.aliases.flatMap((alias) =>
+            alias.barcode ? [alias.barcode] : [],
+          ),
+          code,
+        ),
+    );
+    if (!item) {
+      return {
+        ok: false,
+        message: `O código ${code} não é de nenhum produto pendente deste pedido.`,
+      };
+    }
+    const next = passo(item, 1);
+    return {
+      ok: true,
+      label: `${item.productName} · ${QTY.format(next)} de ${QTY.format(item.pendingQuantity)} ${item.purchaseUnit}${next > item.pendingQuantity ? " — acima do pendente" : ""}`,
+    };
+  }
 
   /**
    * Relê o formulário depois que um produto foi remontado.
@@ -263,7 +365,7 @@ export function ReceiptConferenceForm({
       return;
     }
     if (formRef.current) recalculate(formRef.current);
-  }, [itemVersions, recalculate]);
+  }, [itemVersions, formVersion, recalculate]);
 
   /**
    * Passa a valer a conversão corrigida: recalcula as quantidades deste
@@ -349,13 +451,15 @@ export function ReceiptConferenceForm({
         <input type="hidden" name="receiptId" value={receiptId} />
         <input type="hidden" name="orderId" value={orderId} />
 
-        <section className="border-border bg-surface rounded-xl border p-4">
+        {/* No celular os produtos vêm antes da nota: quem confere está com a
+            mercadoria na frente, e a nota se preenche depois. */}
+        <section className="border-border bg-surface rounded-xl border p-4 max-sm:order-2">
           <h2 className="text-fg text-sm font-semibold">Documentos fiscais</h2>
           <p className="text-fg-muted mt-1 mb-4 text-sm">
             Estes dados identificam a entrega. A soma calculada usa quantidade
             de precificação × preço de cada produto.
           </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="invoiceNumber"
@@ -493,7 +597,7 @@ export function ReceiptConferenceForm({
           ) : null}
         </section>
 
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-3 max-sm:order-1">
           <div>
             <h2 className="text-fg text-sm font-semibold">
               Produtos recebidos
@@ -503,12 +607,30 @@ export function ReceiptConferenceForm({
               pendente.
             </p>
           </div>
+          {/* No celular a conferência é feita com a mercadoria na frente: ou
+              veio tudo e só se corrige a exceção, ou se bipa produto a
+              produto. */}
+          <div className="flex gap-2 sm:hidden">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 flex-1 gap-2 text-base pointer-coarse:h-12"
+              onClick={veioTudo}
+            >
+              <CheckCheck className="size-4" aria-hidden /> Veio tudo
+            </Button>
+            <BarcodeCameraDialog
+              continuous
+              onDetected={handleScan}
+              triggerClassName="size-12 rounded-xl pointer-coarse:size-12"
+            />
+          </div>
           {items.map((item) => {
             const imported = xmlImport?.items[item.id];
             return (
               <div
                 key={item.id}
-                className={`bg-surface rounded-xl border p-4 ${
+                className={`bg-surface rounded-xl border p-3 sm:p-4 ${
                   imported?.warnings.length
                     ? "border-warning"
                     : imported
@@ -541,7 +663,10 @@ export function ReceiptConferenceForm({
                         </Badge>
                       ) : null}
                     </div>
-                    <p className="text-fg-subtle text-xs">
+                    {/* Sem recebimento anterior, no celular repete o pendente. */}
+                    <p
+                      className={`text-fg-subtle text-xs ${item.receivedQuantity > 0 ? "" : "max-sm:hidden"}`}
+                    >
                       Pedido {QTY.format(item.requestedQuantity)}{" "}
                       {item.purchaseUnit}
                       {item.receivedQuantity > 0
@@ -612,13 +737,35 @@ export function ReceiptConferenceForm({
                     >
                       Recebido ({item.purchaseUnit})
                     </label>
-                    <Input
-                      id={`log_${item.id}`}
-                      name={`log_${item.id}`}
-                      inputMode="decimal"
-                      defaultValue={decimalInput(imported?.logisticQuantity)}
-                      className="h-8"
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        aria-label={`Diminuir ${item.productName}`}
+                        onClick={() => passo(item, -1)}
+                        className={STEP_BUTTON}
+                      >
+                        <Minus className="size-4" aria-hidden />
+                      </button>
+                      <Input
+                        id={`log_${item.id}`}
+                        name={`log_${item.id}`}
+                        inputMode="decimal"
+                        defaultValue={decimalInput(imported?.logisticQuantity)}
+                        placeholder={`de ${QTY.format(item.pendingQuantity)}`}
+                        className="h-8 max-sm:text-center max-sm:font-semibold max-sm:tabular-nums sm:placeholder:text-transparent"
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Aumentar ${item.productName}`}
+                        onClick={() => {
+                          passo(item, 1);
+                          navigator.vibrate?.(30);
+                        }}
+                        className={STEP_BUTTON}
+                      >
+                        <Plus className="size-4" aria-hidden />
+                      </button>
+                    </div>
                   </div>
                   {!item.sameUnit ? (
                     <div className="flex flex-col gap-1">
@@ -672,7 +819,7 @@ export function ReceiptConferenceForm({
                   </div>
                 </div>
                 {item.sameUnit ? (
-                  <p className="text-fg-subtle mt-2 text-xs">
+                  <p className="text-fg-subtle mt-2 text-xs max-sm:hidden">
                     A quantidade usada no valor é a mesma recebida, pois compra
                     e precificação estão em {item.purchaseUnit}.
                   </p>
@@ -758,20 +905,42 @@ export function ReceiptConferenceForm({
                     </div>
                   </div>
                 ) : null}
+                {notesOpen.has(item.id) ? null : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNotesOpen((current) => new Set(current).add(item.id))
+                    }
+                    className="text-primary mt-2 flex items-center gap-1.5 text-xs sm:hidden"
+                  >
+                    <MessageSquareText className="size-3" aria-hidden />
+                    Adicionar observação
+                  </button>
+                )}
                 <Input
                   name={`obs_${item.id}`}
                   maxLength={200}
                   placeholder="Observação do produto (opcional)"
-                  className="mt-3 h-8"
+                  className={`mt-3 h-8 ${notesOpen.has(item.id) ? "" : "max-sm:hidden"}`}
                 />
               </div>
             );
           })}
         </section>
 
-        <ErrorLine error={unmatchError ?? state.error} />
-        <div className="border-border bg-surface sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 shadow-lg">
-          <p className="text-fg-subtle text-xs">
+        <div className="empty:hidden max-sm:order-3">
+          <ErrorLine error={unmatchError ?? state.error} />
+        </div>
+        {/* No celular a barra cola na borda de baixo: a `main` tem 24px de
+            respiro, que o `sticky` respeitaria; o `-bottom-6` e o `-mb-6`
+            compensam, como na tela do pedido. */}
+        <div className="border-border bg-surface sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 shadow-lg max-sm:order-4 max-sm:-bottom-6 max-sm:-mx-4 max-sm:-mb-6 max-sm:gap-2 max-sm:rounded-none max-sm:border-x-0 max-sm:border-b-0 max-sm:px-4 max-sm:pt-2.5">
+          <p className="text-fg-muted text-xs tabular-nums sm:hidden">
+            {filledCount} de {items.length}{" "}
+            {items.length === 1 ? "item" : "itens"} com quantidade ·{" "}
+            {MONEY.format(calculatedTotal)}
+          </p>
+          <p className="text-fg-subtle text-xs max-sm:hidden">
             Se ainda houver saldo, o pedido ficará parcialmente recebido e
             aceitará uma nova chegada depois. Preço diferente ou excesso abre
             divergência automaticamente.
