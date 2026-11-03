@@ -13,6 +13,11 @@ import {
   type EditableItem,
 } from "@/components/orders/order-crud-forms";
 import { ManualOrderConfirmationDialog } from "@/components/orders/manual-order-confirmation-dialog";
+import {
+  MOBILE_ACTION_CLASS,
+  OrderMobileActionBar,
+  SendOrderSheet,
+} from "@/components/orders/order-mobile-actions";
 import { SendOrderControls } from "@/components/orders/send-order-controls";
 import { ArrivalDialog } from "@/components/receipts/arrival-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -105,6 +110,14 @@ function numberFromJson(value: unknown, key: string): number | null {
 function priceFromJson(value: unknown): number | null {
   return numberFromJson(value, "price");
 }
+
+/**
+ * Uma linha de item: no desktop, nome e números na mesma linha; no celular,
+ * os números embaixo do nome, que costuma ser comprido e empurrava a conta
+ * para uma quebra no meio.
+ */
+const LINHA_DE_ITEM =
+  "flex flex-col gap-0.5 text-sm sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2";
 
 /** Situações em que o pedido já saiu daqui, mas ainda pode ser revisado. */
 const REVISAVEL = [
@@ -228,14 +241,70 @@ export async function PedidoContent({ id }: { id: string }) {
     (receipt) => receipt.status !== "draft",
   );
 
+  const totalVigente = revision
+    ? (revisions.find((r) => r.id === revision.id)?.total ?? null)
+    : null;
+
+  // O próximo passo do pedido, que no celular fica preso embaixo da tela. Um
+  // só: o que destrava o pedido agora. O resto continua no corpo da página.
+  const entregaPendente = revision && pendentes.length > 0 && aguardandoEntrega;
+  const proximoPasso =
+    draft && podeEnviar && envio && !encerrado ? (
+      <SendOrderSheet
+        orderId={id}
+        revisionId={draft.id}
+        contacts={envio.contacts}
+        previewMessage={envio.previewMessage}
+        evolutionReady={envio.evolutionReady}
+        supplierName={order.suppliers.name}
+      />
+    ) : order.status === "awaiting_confirmation" && podeEnviar && revision ? (
+      <ManualOrderConfirmationDialog
+        orderId={id}
+        revisionId={revision.id}
+        orderNumber={order.order_number}
+        supplierName={order.suppliers.name}
+        triggerClassName={MOBILE_ACTION_CLASS}
+        triggerVariant="default"
+      />
+    ) : entregaPendente && chegadaPendente && podeEncerrarSaldo ? (
+      <Button asChild className={MOBILE_ACTION_CLASS}>
+        <Link href={`/recebimentos/${chegadaPendente.id}`}>
+          Abrir conferência
+        </Link>
+      </Button>
+    ) : entregaPendente && !chegadaPendente && podeReceber ? (
+      <ArrivalDialog
+        orderId={id}
+        orderNumber={order.order_number}
+        supplierName={order.suppliers.name}
+        triggerClassName={MOBILE_ACTION_CLASS}
+      />
+    ) : null;
+  const itensResumo = (draft ?? revision)?.items.length ?? 0;
+  const resumoMobile = [
+    ORDER_STATUS_LABEL[order.status] ?? order.status,
+    `${itensResumo} ${itensResumo === 1 ? "item" : "itens"}`,
+    totalVigente !== null && (!draft || draft.id === revision?.id)
+      ? MONEY.format(totalVigente)
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const content = (
     <>
       {revision ? (
         <section className="border-border bg-surface mb-6 rounded-xl border p-4">
           <div className="mb-3">
             <div>
-              <h2 className="text-fg text-sm font-semibold">
+              <h2 className="text-fg flex items-baseline justify-between gap-3 text-sm font-semibold">
                 Revisão {revision.revisionNumber}
+                {totalVigente !== null ? (
+                  <span className="tabular-nums">
+                    {MONEY.format(totalVigente)}
+                  </span>
+                ) : null}
               </h2>
               <p className="text-fg-subtle text-xs">
                 {revision.sentAt
@@ -255,12 +324,9 @@ export async function PedidoContent({ id }: { id: string }) {
             </div>
           </div>
 
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-2.5 sm:gap-1.5">
             {revision.items.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
-              >
+              <li key={item.id} className={LINHA_DE_ITEM}>
                 <span className="text-fg">{item.productName}</span>
                 <span className="text-fg-muted tabular-nums">
                   {QTY.format(item.requestedQuantity)} {item.purchaseUnit} ×{" "}
@@ -298,12 +364,9 @@ export async function PedidoContent({ id }: { id: string }) {
                 : ""}
             </p>
           </div>
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-2.5 sm:gap-1.5">
             {draft.items.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
-              >
+              <li key={item.id} className={LINHA_DE_ITEM}>
                 <span className="text-fg">{item.productName}</span>
                 <span className="text-fg-muted tabular-nums">
                   {QTY.format(item.requestedQuantity)} {item.purchaseUnit} ×{" "}
@@ -322,13 +385,16 @@ export async function PedidoContent({ id }: { id: string }) {
             />
           ) : null}
           {podeEnviar && envio ? (
-            <SendOrderControls
-              orderId={id}
-              revisionId={draft.id}
-              contacts={envio.contacts}
-              previewMessage={envio.previewMessage}
-              evolutionReady={envio.evolutionReady}
-            />
+            // No celular o envio abre pela barra de baixo, numa folha.
+            <div className="hidden sm:block">
+              <SendOrderControls
+                orderId={id}
+                revisionId={draft.id}
+                contacts={envio.contacts}
+                previewMessage={envio.previewMessage}
+                evolutionReady={envio.evolutionReady}
+              />
+            </div>
           ) : null}
         </section>
       ) : null}
@@ -354,13 +420,16 @@ export async function PedidoContent({ id }: { id: string }) {
             />
           ) : null}
           {podeEnviar && envio ? (
-            <SendOrderControls
-              orderId={id}
-              revisionId={draft.id}
-              contacts={envio.contacts}
-              previewMessage={envio.previewMessage}
-              evolutionReady={envio.evolutionReady}
-            />
+            // No celular o envio abre pela barra de baixo, numa folha.
+            <div className="hidden sm:block">
+              <SendOrderControls
+                orderId={id}
+                revisionId={draft.id}
+                contacts={envio.contacts}
+                previewMessage={envio.previewMessage}
+                evolutionReady={envio.evolutionReady}
+              />
+            </div>
           ) : null}
         </section>
       ) : null}
@@ -377,12 +446,14 @@ export async function PedidoContent({ id }: { id: string }) {
             </p>
           </div>
           {podeEnviar && revision ? (
-            <ManualOrderConfirmationDialog
-              orderId={id}
-              revisionId={revision.id}
-              orderNumber={order.order_number}
-              supplierName={order.suppliers.name}
-            />
+            <div className="hidden sm:block">
+              <ManualOrderConfirmationDialog
+                orderId={id}
+                revisionId={revision.id}
+                orderNumber={order.order_number}
+                supplierName={order.suppliers.name}
+              />
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -418,7 +489,7 @@ export async function PedidoContent({ id }: { id: string }) {
                 e valores.
               </p>
               {podeEncerrarSaldo ? (
-                <Button asChild size="sm">
+                <Button asChild size="sm" className="max-sm:hidden">
                   <Link href={`/recebimentos/${chegadaPendente.id}`}>
                     Abrir conferência
                   </Link>
@@ -434,11 +505,13 @@ export async function PedidoContent({ id }: { id: string }) {
                 efetivada após a conferência.
               </p>
               {podeReceber ? (
-                <ArrivalDialog
-                  orderId={id}
-                  orderNumber={order.order_number}
-                  supplierName={order.suppliers.name}
-                />
+                <div className="hidden sm:block">
+                  <ArrivalDialog
+                    orderId={id}
+                    orderNumber={order.order_number}
+                    supplierName={order.suppliers.name}
+                  />
+                </div>
               ) : null}
             </div>
           )}
@@ -691,6 +764,12 @@ export async function PedidoContent({ id }: { id: string }) {
       ) : null}
 
       {podeCancelar && !encerrado ? <CancelOrderForm orderId={id} /> : null}
+
+      {proximoPasso ? (
+        <OrderMobileActionBar resumo={resumoMobile}>
+          {proximoPasso}
+        </OrderMobileActionBar>
+      ) : null}
     </>
   );
 

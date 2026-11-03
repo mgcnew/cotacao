@@ -30,10 +30,13 @@ export function ArrivalDialog({
   orderId,
   orderNumber,
   supplierName,
+  triggerClassName,
 }: {
   orderId: string;
   orderNumber: number;
   supplierName: string;
+  /** Para o mesmo diálogo servir de ação principal na barra do celular. */
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [showDetails, setShowDetails] = React.useState(false);
@@ -60,7 +63,10 @@ export function ArrivalDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm" className="w-full gap-1.5 sm:w-auto">
+        <Button
+          size="sm"
+          className={cn("w-full gap-1.5 sm:w-auto", triggerClassName)}
+        >
           <PackageCheck className="size-3.5" aria-hidden /> Registrar chegada
         </Button>
       </DialogTrigger>
@@ -186,7 +192,9 @@ export function ArrivalDialog({
                     className="text-fg text-sm font-medium"
                   >
                     Observação{" "}
-                    <span className="text-fg-subtle font-normal">(opcional)</span>
+                    <span className="text-fg-subtle font-normal">
+                      (opcional)
+                    </span>
                   </label>
                   <Input
                     id={`arrival-notes-${orderId}`}

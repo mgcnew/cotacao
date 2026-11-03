@@ -23,6 +23,7 @@ import {
   confirmOrderManually,
   type OrderActionState,
 } from "@/features/orders/actions";
+import { cn } from "@/lib/utils";
 
 const CHANNELS = [
   { value: "phone", label: "Ligação telefônica" },
@@ -37,11 +38,16 @@ export function ManualOrderConfirmationDialog({
   revisionId,
   orderNumber,
   supplierName,
+  triggerClassName,
+  triggerVariant = "outline",
 }: {
   orderId: string;
   revisionId: string;
   orderNumber: number;
   supplierName: string;
+  /** Para o mesmo diálogo servir de ação principal na barra do celular. */
+  triggerClassName?: string;
+  triggerVariant?: "outline" | "default";
 }) {
   const [open, setOpen] = React.useState(false);
   const submit = React.useCallback(
@@ -59,7 +65,11 @@ export function ManualOrderConfirmationDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="gap-1.5">
+        <Button
+          size="sm"
+          variant={triggerVariant}
+          className={cn("gap-1.5", triggerClassName)}
+        >
           <PhoneCall className="size-3.5" aria-hidden />
           Confirmar manualmente
         </Button>
