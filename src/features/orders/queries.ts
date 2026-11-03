@@ -327,7 +327,8 @@ const ORDERABLE_SELECT = `
       id,
       name,
       purchase_unit:units!products_company_id_purchase_unit_id_fkey ( symbol ),
-      pricing_unit:units!products_company_id_pricing_unit_id_fkey ( symbol )
+      pricing_unit:units!products_company_id_pricing_unit_id_fkey ( symbol ),
+      product_barcodes ( code, is_active )
     `;
 
 type OrderableProductRow = {
@@ -335,6 +336,7 @@ type OrderableProductRow = {
   name: string;
   purchase_unit: { symbol: string } | null;
   pricing_unit: { symbol: string } | null;
+  product_barcodes: { code: string; is_active: boolean }[] | null;
 };
 
 function toOrderable(product: OrderableProductRow) {
@@ -343,6 +345,10 @@ function toOrderable(product: OrderableProductRow) {
     name: product.name,
     purchaseUnit: product.purchase_unit?.symbol ?? "",
     pricingUnit: product.pricing_unit?.symbol ?? "",
+    // A câmera do celular acha o produto pelo código, como na lista de compras.
+    barcodes: (product.product_barcodes ?? [])
+      .filter((barcode) => barcode.is_active)
+      .map((barcode) => barcode.code),
   };
 }
 

@@ -34,33 +34,48 @@ const MAX_RESULTS = 30;
 /** Pausa antes de mandar a quantidade: três toques em + viram uma chamada só. */
 const SAVE_DELAY_MS = 350;
 
-function formatQuantity(value: number) {
+export function formatQuantity(value: number) {
   return String(value).replace(".", ",");
 }
 
 /** Mesma leitura do formulário do desktop: "1.200,5" e "3,5" valem. */
-function parseQuantity(text: string) {
+export function parseQuantity(text: string) {
   const value = Number(text.trim().replace(/\./g, "").replace(",", "."));
   if (!Number.isFinite(value) || value < 0 || value > 99_999) return null;
   return Math.round(value * 1000) / 1000;
 }
 
-type IndexedProduct = {
-  product: ShoppingProduct;
+type Searchable = { name: string; barcodes?: string[] };
+
+export type IndexedProduct<P extends Searchable = ShoppingProduct> = {
+  product: P;
   text: string;
   codes: string[];
 };
+
+export function indexProducts<P extends Searchable>(
+  products: P[],
+): IndexedProduct<P>[] {
+  return products.map((product) => ({
+    product,
+    text: normalizeListSearch(product.name),
+    codes: (product.barcodes ?? []).map(normalizeBarcode),
+  }));
+}
 
 /**
  * Busca por todas as palavras, em qualquer ordem ("suco laranja" acha "Suco po
  * laranja tang"), e por código de barras digitado ou bipado por leitor físico.
  * Quem começa pelo que foi digitado vem antes de quem só contém.
  */
-function searchProducts(index: IndexedProduct[], query: string) {
+export function searchProducts<P extends Searchable>(
+  index: IndexedProduct<P>[],
+  query: string,
+) {
   const tokens = normalizeListSearch(query).split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return [];
   const code = normalizeBarcode(query);
-  const ranked: { product: ShoppingProduct; rank: number }[] = [];
+  const ranked: { product: P; rank: number }[] = [];
   for (const entry of index) {
     let rank: number | null = null;
     if (code.length >= 3 && entry.codes.some((own) => own.includes(code))) {
@@ -250,15 +265,7 @@ export function MobileQuickAdd({
   const dirtyRef = React.useRef(false);
   const overlayRef = React.useRef({ sheet: false, camera: false });
 
-  const index = React.useMemo<IndexedProduct[]>(
-    () =>
-      products.map((product) => ({
-        product,
-        text: normalizeListSearch(product.name),
-        codes: product.barcodes.map(normalizeBarcode),
-      })),
-    [products],
-  );
+  const index = React.useMemo(() => indexProducts(products), [products]);
   const byId = React.useMemo(
     () => new Map(products.map((product) => [product.id, product])),
     [products],

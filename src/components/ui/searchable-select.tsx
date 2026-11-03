@@ -33,7 +33,8 @@ export function SearchableSelect({
   loading = false,
 }: {
   id: string;
-  name: string;
+  /** Sem nome, o campo não vai no formulário — quem o envia é outro input. */
+  name?: string;
   options: SearchableOption[];
   placeholder?: string;
   emptyMessage?: string;

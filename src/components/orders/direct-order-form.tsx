@@ -316,7 +316,11 @@ export function DirectOrderForm({
 
   const rodape = (
     <>
-      <Submit label="Criar pedido" busy="Criando…" />
+      <Submit
+        label="Criar pedido"
+        busy="Criando…"
+        className="max-sm:w-full max-sm:text-base"
+      />
       <p className="text-fg-subtle text-xs">
         As unidades vêm do cadastro do produto. Nasce em rascunho — criar não
         envia nada ao fornecedor.

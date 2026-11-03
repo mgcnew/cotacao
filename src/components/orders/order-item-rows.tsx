@@ -6,7 +6,13 @@ import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  MobileOrderItems,
+  type MobileOrderHandlers,
+  type MobileOrderRow,
+} from "@/components/orders/mobile-order-items";
 import { useOrderableCatalog } from "@/components/orders/use-orderable-catalog";
+import { formatQuantity } from "@/components/shopping-list/mobile-quick-add";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import type {
   SupplierPurchaseSuggestion,
@@ -23,6 +29,8 @@ export type OrderableProduct = {
   name: string;
   purchaseUnit: string;
   pricingUnit: string;
+  /** Só o catálogo traz; serve à câmera do celular. */
+  barcodes?: string[];
 };
 
 /** Linha já existente no pedido, ou linha em branco esperando ser preenchida. */
@@ -40,10 +48,18 @@ export type ItemSeed = {
   notes: string;
 };
 
-export function Submit({ label, busy }: { label: string; busy: string }) {
+export function Submit({
+  label,
+  busy,
+  className,
+}: {
+  label: string;
+  busy: string;
+  className?: string;
+}) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending}>
+    <Button type="submit" size="sm" disabled={pending} className={className}>
       {pending ? busy : label}
     </Button>
   );
@@ -73,17 +89,21 @@ function numeroDoCampo(value: string) {
 function somaNoCampo(left: string, right: string) {
   const sum = numeroDoCampo(left) + numeroDoCampo(right);
   if (!Number.isFinite(sum)) return right || left;
-  return sum
-    .toFixed(6)
-    .replace(/0+$/, "")
-    .replace(/\.$/, "")
-    .replace(".", ",");
+  return sum.toFixed(6).replace(/0+$/, "").replace(/\.$/, "").replace(".", ",");
+}
+
+function preenchida(row: Row) {
+  return Boolean(row.productId || row.quantity || row.price || row.notes);
+}
+
+/** Quantidade da linha como número; vazia ou inválida conta como zero. */
+function quantidadeDaLinha(row: Row) {
+  const value = numeroDoCampo(row.quantity);
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 function mergeSuggestionRows(current: Row[], additions: Row[]) {
-  const next = current.filter(
-    (row) => row.productId || row.quantity || row.price || row.notes,
-  );
+  const next = current.filter(preenchida);
   for (const addition of additions) {
     const existingIndex = next.findIndex(
       (row) => row.productId === addition.productId,
@@ -183,7 +203,7 @@ function SupplierTemplateSuggestions({
                 return (
                   <article
                     key={item.id}
-                    className="border-border bg-surface relative grid gap-2 rounded-lg border p-3 sm:grid-cols-[auto_minmax(0,1fr)_7rem_8rem] sm:items-end"
+                    className="border-border bg-surface relative grid grid-cols-2 gap-2 rounded-lg border p-3 sm:grid-cols-[auto_minmax(0,1fr)_7rem_8rem] sm:items-end"
                   >
                     <input
                       type="checkbox"
@@ -195,9 +215,9 @@ function SupplierTemplateSuggestions({
                           selected: event.target.checked,
                         })
                       }
-                      className="absolute top-3 right-3 size-4 accent-primary sm:static sm:mb-2 sm:self-end"
+                      className="accent-primary absolute top-3 right-3 size-5 sm:static sm:mb-2 sm:size-4 sm:self-end"
                     />
-                    <div className="min-w-0 pr-7 sm:self-center sm:pr-0">
+                    <div className="col-span-2 min-w-0 pr-8 sm:col-span-1 sm:self-center sm:pr-0">
                       <p className="text-fg truncate text-sm font-medium">
                         {item.productName}
                       </p>
@@ -208,9 +228,8 @@ function SupplierTemplateSuggestions({
                       ) : item.lastPrice !== null && item.lastPurchasedAt ? (
                         <span className="text-fg-subtle flex flex-wrap items-center gap-1 text-xs">
                           <History className="size-3" aria-hidden />
-                          Último pago em {PURCHASE_DATE.format(
-                            new Date(item.lastPurchasedAt),
-                          )}
+                          Último pago em{" "}
+                          {PURCHASE_DATE.format(new Date(item.lastPurchasedAt))}
                           {item.lastPriceIsStale ? (
                             <span className="text-warning font-medium">
                               · histórico antigo
@@ -385,6 +404,76 @@ export function OrderItemRows({
     rows.flatMap((row) => (row.productId ? [row.productId] : [])),
   );
 
+  // O celular mexe nas mesmas linhas, por produto: não há duas linhas do mesmo.
+  function quantidadeDoProduto(
+    product: OrderableProduct,
+    next: (atual: number) => number,
+  ) {
+    setRows((current) => {
+      const existing = current.find((row) => row.productId === product.id);
+      const quantity = Math.max(
+        0,
+        Math.round(next(existing ? quantidadeDaLinha(existing) : 0) * 1000) /
+          1000,
+      );
+      if (!existing) {
+        if (quantity === 0) return current;
+        return [
+          ...current.filter(preenchida),
+          {
+            key: proximaChave.current++,
+            shoppingItemId: "",
+            productId: product.id,
+            productName: product.name,
+            quantity: formatQuantity(quantity),
+            price: "",
+            notes: "",
+          },
+        ];
+      }
+      if (quantity === 0) {
+        return current.filter((row) => row.key !== existing.key);
+      }
+      return current.map((row) =>
+        row.key === existing.key
+          ? { ...row, quantity: formatQuantity(quantity) }
+          : row,
+      );
+    });
+  }
+
+  function mudarLinha(key: number, patch: Partial<Row>) {
+    setRows((current) =>
+      current.map((row) => (row.key === key ? { ...row, ...patch } : row)),
+    );
+  }
+
+  const mobileHandlers: MobileOrderHandlers = {
+    onStep: (product, delta) =>
+      quantidadeDoProduto(product, (atual) => atual + delta),
+    onQuantity: (product, quantity) =>
+      quantidadeDoProduto(product, () => quantity),
+    onPrice: (key, price) => mudarLinha(key, { price }),
+    onNotes: (key, notes) => mudarLinha(key, { notes }),
+  };
+  const mobileRows: MobileOrderRow[] = rows.flatMap((row) => {
+    if (!row.productId) return [];
+    const product = unidadesDe(row);
+    return [
+      {
+        key: row.key,
+        productId: row.productId,
+        name: row.productName ?? product?.name ?? "Produto",
+        purchaseUnit: product?.purchaseUnit ?? "",
+        pricingUnit: product?.pricingUnit ?? "",
+        quantity: quantidadeDaLinha(row),
+        price: row.price,
+        notes: row.notes,
+        fromShoppingList: Boolean(row.shoppingItemId),
+      },
+    ];
+  });
+
   return (
     <div className="flex flex-col gap-3">
       {supplierTemplates.length > 0 ? (
@@ -473,10 +562,7 @@ export function OrderItemRows({
                       notes: item.notes,
                     }));
                   setRows((current) => [
-                    ...current.filter(
-                      (row) =>
-                        row.productId || row.quantity || row.price || row.notes,
-                    ),
+                    ...current.filter(preenchida),
                     ...additions,
                   ]);
                   setSelectedShopping([]);
@@ -488,174 +574,182 @@ export function OrderItemRows({
           </div>
         </details>
       ) : null}
-      {rows.map((row) => {
-        const unidades = unidadesDe(row);
-        const productFieldId = `${idPrefix}produto-${row.key}`;
-        const quantityFieldId = `${idPrefix}qtd-${row.key}`;
-        const priceFieldId = `${idPrefix}preco-${row.key}`;
-        return (
-          <div
-            key={row.key}
-            className="border-border flex flex-col gap-2 rounded-lg border p-3"
-          >
-            {row.itemId ? (
-              <input type="hidden" name="itemId" value={row.itemId} />
-            ) : (
-              // O array de itens precisa ficar alinhado com o de produtos: uma
-              // linha nova mandaria um campo a menos e desalinharia o resto.
-              <input type="hidden" name="itemId" value="" />
-            )}
-            <input
-              type="hidden"
-              name="allocationId"
-              value={row.allocationId ?? ""}
-            />
-            <input
-              type="hidden"
-              name="shoppingItemId"
-              value={row.shoppingItemId ?? ""}
-            />
+      {/* O que vai no formulário sai daqui, uma vez por linha: o desktop e o
+          celular desenham as mesmas linhas, e campos com nome nos dois
+          mandariam cada item em dobro. Os arrays precisam ficar alinhados —
+          linha nova manda `itemId` vazio, não deixa de mandar. */}
+      {rows.map((row) => (
+        <React.Fragment key={row.key}>
+          <input type="hidden" name="itemId" value={row.itemId ?? ""} />
+          <input
+            type="hidden"
+            name="allocationId"
+            value={row.allocationId ?? ""}
+          />
+          <input
+            type="hidden"
+            name="shoppingItemId"
+            value={row.shoppingItemId ?? ""}
+          />
+          <input type="hidden" name="productId" value={row.productId} />
+          <input type="hidden" name="quantity" value={row.quantity} />
+          <input type="hidden" name="price" value={row.price} />
+          <input type="hidden" name="itemNotes" value={row.notes} />
+        </React.Fragment>
+      ))}
 
-            <div className="grid gap-2 sm:grid-cols-[1fr_7rem_7rem]">
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor={productFieldId}
-                  className="text-fg-muted text-xs"
-                >
-                  Produto
-                </label>
-                {row.itemId ? (
-                  <>
-                    <input type="hidden" name="productId" value={row.productId} />
-                    <p
+      <MobileOrderItems
+        rows={mobileRows}
+        products={products}
+        catalog={catalog}
+        handlers={mobileHandlers}
+      />
+
+      <div className="hidden flex-col gap-3 sm:flex">
+        {rows.map((row) => {
+          const unidades = unidadesDe(row);
+          const productFieldId = `${idPrefix}produto-${row.key}`;
+          const quantityFieldId = `${idPrefix}qtd-${row.key}`;
+          const priceFieldId = `${idPrefix}preco-${row.key}`;
+          return (
+            <div
+              key={row.key}
+              className="border-border flex flex-col gap-2 rounded-lg border p-3"
+            >
+              <div className="grid gap-2 sm:grid-cols-[1fr_7rem_7rem]">
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor={productFieldId}
+                    className="text-fg-muted text-xs"
+                  >
+                    Produto
+                  </label>
+                  {row.itemId ? (
+                    <>
+                      <p
+                        id={productFieldId}
+                        className="text-fg flex h-8 items-center text-sm"
+                      >
+                        {row.productName}
+                      </p>
+                    </>
+                  ) : (
+                    <SearchableSelect
                       id={productFieldId}
-                      className="text-fg flex h-8 items-center text-sm"
-                    >
-                      {row.productName}
-                    </p>
-                  </>
-                ) : (
-                  <SearchableSelect
-                    id={productFieldId}
-                    name="productId"
-                    required
-                    value={row.productId}
-                    onValueChange={(productId) =>
-                      setRows((prev) =>
-                        prev.map((r) =>
-                          r.key === row.key
-                            ? { ...r, productId }
-                            : r,
+                      value={row.productId}
+                      onValueChange={(productId) =>
+                        setRows((prev) =>
+                          prev.map((r) =>
+                            r.key === row.key ? { ...r, productId } : r,
+                          ),
+                        )
+                      }
+                      options={productOptions.filter(
+                        (option) =>
+                          option.id === row.productId ||
+                          !rows.some(
+                            (other) =>
+                              other.key !== row.key &&
+                              other.productId === option.id,
+                          ),
+                      )}
+                      placeholder="Digite o nome do produto…"
+                      emptyMessage={
+                        catalog.failed
+                          ? "Não foi possível carregar os produtos. Tente de novo."
+                          : "Nenhum produto encontrado."
+                      }
+                      onOpen={catalog.load}
+                      loading={catalog.loading}
+                    />
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor={quantityFieldId}
+                    className="text-fg-muted text-xs"
+                  >
+                    Quantidade{unidades ? ` (${unidades.purchaseUnit})` : ""}
+                  </label>
+                  <Input
+                    id={quantityFieldId}
+                    inputMode="decimal"
+                    value={row.quantity}
+                    onChange={(event) =>
+                      setRows((current) =>
+                        current.map((item) =>
+                          item.key === row.key
+                            ? { ...item, quantity: event.target.value }
+                            : item,
                         ),
                       )
                     }
-                    options={productOptions.filter(
-                      (option) =>
-                        option.id === row.productId ||
-                        !rows.some(
-                          (other) =>
-                            other.key !== row.key &&
-                            other.productId === option.id,
-                        ),
-                    )}
-                    placeholder="Digite o nome do produto…"
-                    emptyMessage={
-                      catalog.failed
-                        ? "Não foi possível carregar os produtos. Tente de novo."
-                        : "Nenhum produto encontrado."
-                    }
-                    onOpen={catalog.load}
-                    loading={catalog.loading}
+                    className="h-8"
                   />
-                )}
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor={priceFieldId}
+                    className="text-fg-muted text-xs"
+                  >
+                    Preço{unidades ? ` (por ${unidades.pricingUnit})` : ""}
+                  </label>
+                  <Input
+                    id={priceFieldId}
+                    inputMode="decimal"
+                    value={row.price}
+                    onChange={(event) =>
+                      setRows((current) =>
+                        current.map((item) =>
+                          item.key === row.key
+                            ? { ...item, price: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                    className="h-8"
+                  />
+                </div>
               </div>
 
-              <div className="flex flex-col gap-1">
-                <label htmlFor={quantityFieldId} className="text-fg-muted text-xs">
-                  Quantidade{unidades ? ` (${unidades.purchaseUnit})` : ""}
-                </label>
+              <div className="flex items-center gap-2">
                 <Input
-                  id={quantityFieldId}
-                  name="quantity"
-                  required
-                  inputMode="decimal"
-                  value={row.quantity}
+                  maxLength={200}
+                  value={row.notes}
                   onChange={(event) =>
                     setRows((current) =>
                       current.map((item) =>
                         item.key === row.key
-                          ? { ...item, quantity: event.target.value }
+                          ? { ...item, notes: event.target.value }
                           : item,
                       ),
                     )
                   }
+                  placeholder="Observação do item (opcional)"
                   className="h-8"
                 />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor={priceFieldId}
-                  className="text-fg-muted text-xs"
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="text-fg-subtle shrink-0"
+                  aria-label="Remover item"
+                  disabled={rows.length === 1}
+                  onClick={() =>
+                    setRows((prev) => prev.filter((r) => r.key !== row.key))
+                  }
                 >
-                  Preço{unidades ? ` (por ${unidades.pricingUnit})` : ""}
-                </label>
-                <Input
-                  id={priceFieldId}
-                  name="price"
-                  required
-                  inputMode="decimal"
-                  value={row.price}
-                  onChange={(event) =>
-                    setRows((current) =>
-                      current.map((item) =>
-                        item.key === row.key
-                          ? { ...item, price: event.target.value }
-                          : item,
-                      ),
-                    )
-                  }
-                  className="h-8"
-                />
+                  <Trash2 className="size-3.5" aria-hidden />
+                </Button>
               </div>
             </div>
+          );
+        })}
+      </div>
 
-            <div className="flex items-center gap-2">
-              <Input
-                name="itemNotes"
-                maxLength={200}
-                value={row.notes}
-                onChange={(event) =>
-                  setRows((current) =>
-                    current.map((item) =>
-                      item.key === row.key
-                        ? { ...item, notes: event.target.value }
-                        : item,
-                    ),
-                  )
-                }
-                placeholder="Observação do item (opcional)"
-                className="h-8"
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="text-fg-subtle shrink-0"
-                aria-label="Remover item"
-                disabled={rows.length === 1}
-                onClick={() =>
-                  setRows((prev) => prev.filter((r) => r.key !== row.key))
-                }
-              >
-                <Trash2 className="size-3.5" aria-hidden />
-              </Button>
-            </div>
-          </div>
-        );
-      })}
-
-      <div>
+      <div className="hidden sm:block">
         <Button
           type="button"
           size="sm"
