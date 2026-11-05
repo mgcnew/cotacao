@@ -161,6 +161,12 @@ async function ListaDeComprasConteudo({
     (item) => origin === "all" || item.origin === origin,
   );
   const showSuggestions = origin === "all" || origin === "assistant";
+  // Só a lista, sem sugestões, cabe presa à altura da tela: as linhas rolam por
+  // dentro e a paginação fica sempre à vista. Com as sugestões acima ela é
+  // longa demais para isso, e aí a página inteira rola. Presa, a seção de
+  // sugestões (que tem `overflow-hidden`) encolhia para 2px e cortava o resto,
+  // porque item flex com overflow não-visível aceita altura mínima zero.
+  const travada = !showSuggestions;
   const suggestions = showSuggestions ? await sugestoes : [];
   const pagination = parseListPagination(params, filteredItems.length);
   const visibleItems = filteredItems.slice(pagination.start, pagination.end);
@@ -190,7 +196,12 @@ async function ListaDeComprasConteudo({
   };
 
   return (
-    <div className="w-full sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
+    <div
+      className={cn(
+        "w-full",
+        travada && "sm:flex sm:min-h-0 sm:flex-1 sm:flex-col",
+      )}
+    >
       <PageHeader
         title="Lista de compras"
         info="Registre o que está faltando agora; decida depois se vai cotar ou comprar direto."
@@ -236,7 +247,12 @@ async function ListaDeComprasConteudo({
         <PurchaseSuggestions suggestions={suggestions} canManage={canManage} />
       ) : null}
 
-      <div className="mt-4">
+      <div
+        className={cn(
+          "mt-4",
+          travada && "sm:flex sm:min-h-0 sm:flex-1 sm:flex-col",
+        )}
+      >
         {filteredItems.length === 0 && !hasVisibleSuggestions ? (
           <EmptyState
             icon={origin === "assistant" ? Sparkles : ClipboardCheck}
@@ -255,14 +271,23 @@ async function ListaDeComprasConteudo({
           />
         ) : filteredItems.length > 0 ? (
           <>
-            <div className="flex flex-col overflow-hidden sm:min-h-0 sm:flex-1 sm:rounded-xl sm:border sm:border-border sm:bg-surface sm:shadow-xs">
+            <div
+              className={cn(
+                "flex flex-col overflow-hidden sm:rounded-xl sm:border sm:border-border sm:bg-surface sm:shadow-xs",
+                travada && "sm:min-h-0 sm:flex-1",
+              )}
+            >
               <div
                 key={pagination.page}
                 data-slot="list-scroll"
                 role="region"
                 aria-label="Itens da lista de compras"
                 tabIndex={0}
-                className="sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain focus-visible:outline-none"
+                className={cn(
+                  "focus-visible:outline-none",
+                  travada &&
+                    "sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain",
+                )}
               >
                 <MobileListItems canManage={canManage} items={rows} />
                 <DesktopListItems canManage={canManage} items={rows} />

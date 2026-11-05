@@ -11,18 +11,21 @@ import {
   type BarcodeScanOutcome,
 } from "@/components/shopping-list/barcode-camera-dialog";
 import {
+  indexProducts,
   MobileQuickAdd,
   type PendingQuantity,
+  searchProducts,
 } from "@/components/shopping-list/mobile-quick-add";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { avisar } from "@/components/ui/toaster";
 import {
   addShoppingListItem,
   type ShoppingListState,
 } from "@/features/shopping-list/actions";
 import type { ShoppingProduct } from "@/features/shopping-list/queries";
 import { barcodeMatches } from "@/features/products/barcodes";
-import { normalizeListSearch } from "@/lib/list-pagination";
+import { cn } from "@/lib/utils";
 
 function findProductByBarcode(products: ShoppingProduct[], code: string) {
   return products.find((product) => barcodeMatches(product.barcodes, code));
@@ -57,44 +60,62 @@ export function ShoppingListQuickAdd({
 }) {
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState<ShoppingProduct | null>(null);
+  const [quantity, setQuantity] = React.useState("1");
+  const [active, setActive] = React.useState(0);
   const formRef = React.useRef<HTMLFormElement>(null);
+  const productRef = React.useRef<HTMLInputElement>(null);
+  const quantityRef = React.useRef<HTMLInputElement>(null);
   const submitAction = React.useCallback(
     async (previous: ShoppingListState, formData: FormData) => {
       const result = await addShoppingListItem(previous, formData);
       if (!result.error) {
+        const added = products.find(
+          (product) => product.id === formData.get("productId"),
+        );
+        if (added) {
+          avisar(
+            `${added.name} adicionado · ${String(formData.get("quantity")).trim()}${
+              added.purchaseUnit ? ` ${added.purchaseUnit}` : ""
+            }`,
+          );
+        }
         setQuery("");
         setSelected(null);
-        window.setTimeout(
-          () =>
-            formRef.current
-              ?.querySelector<HTMLInputElement>("#shopping-product")
-              ?.focus(),
-          0,
-        );
+        // Quem adiciona em sequência não quer herdar a quantidade do item
+        // anterior: 12 de um produto virando 12 do próximo é erro de verdade.
+        setQuantity("1");
+        window.setTimeout(() => productRef.current?.focus(), 0);
       }
       return result;
     },
-    [],
+    [products],
   );
   const [state, action] = useActionState<ShoppingListState, FormData>(
     submitAction,
     { error: null },
   );
 
-  const needle = normalizeListSearch(query);
-  const suggestions = query
-    ? products
-        .filter((product) =>
-          normalizeListSearch(
-            `${product.name} ${product.barcodes.join(" ")}`,
-          ).includes(needle),
-        )
-        .slice(0, 6)
-    : [];
+  const index = React.useMemo(() => indexProducts(products), [products]);
+  const inList = React.useMemo(
+    () => new Map(pending.map((item) => [item.productId, item.quantity])),
+    [pending],
+  );
+  const suggestions = React.useMemo(
+    () => (query.trim() ? searchProducts(index, query).slice(0, 8) : []),
+    [index, query],
+  );
+  const listOpen = suggestions.length > 0 && !selected;
+  const activeIndex = Math.min(active, Math.max(suggestions.length - 1, 0));
+  const selectedInList = selected ? inList.get(selected.id) : undefined;
 
+  /** Escolhe o produto e leva o foco à quantidade, já selecionada para digitar. */
   function choose(product: ShoppingProduct) {
     setSelected(product);
     setQuery(product.name);
+    window.setTimeout(() => {
+      quantityRef.current?.focus();
+      quantityRef.current?.select();
+    }, 0);
   }
 
   function handleCameraCode(code: string): BarcodeScanOutcome {
@@ -105,7 +126,8 @@ export function ShoppingListQuickAdd({
         message: `O código ${code} não está vinculado a nenhum produto cadastrado.`,
       };
     }
-    choose(product);
+    setSelected(product);
+    setQuery(product.name);
     window.setTimeout(() => formRef.current?.requestSubmit(), 0);
     return { ok: true, label: product.name };
   }
@@ -138,14 +160,25 @@ export function ShoppingListQuickAdd({
                   aria-hidden
                 />
                 <Input
+                  ref={productRef}
                   id="shopping-product"
                   autoFocus
                   autoComplete="off"
+                  role="combobox"
+                  aria-expanded={listOpen}
+                  aria-controls="shopping-product-list"
+                  aria-autocomplete="list"
+                  aria-activedescendant={
+                    listOpen
+                      ? `shopping-product-option-${activeIndex}`
+                      : undefined
+                  }
                   value={query}
                   onChange={(event) => {
                     const value = event.target.value;
                     setQuery(value);
                     setSelected(null);
+                    setActive(0);
                     const normalized = value
                       .trim()
                       .replace(/\s+/g, "")
@@ -154,12 +187,33 @@ export function ShoppingListQuickAdd({
                     if (exact) setSelected(exact);
                   }}
                   onKeyDown={(event) => {
+                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                      if (!listOpen) return;
+                      event.preventDefault();
+                      const step = event.key === "ArrowDown" ? 1 : -1;
+                      setActive(
+                        (activeIndex + step + suggestions.length) %
+                          suggestions.length,
+                      );
+                      return;
+                    }
+                    if (event.key === "Escape") {
+                      if (!query) return;
+                      event.preventDefault();
+                      setQuery("");
+                      setSelected(null);
+                      return;
+                    }
                     if (event.key !== "Enter") return;
                     event.preventDefault();
-                    const product = selected ?? suggestions[0];
-                    if (!product) return;
-                    choose(product);
-                    window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+                    // Código de barras completo (leitor físico) entra direto,
+                    // com a quantidade que está no campo. Busca por nome só
+                    // escolhe: a quantidade ainda é decisão de quem digita.
+                    if (selected) {
+                      formRef.current?.requestSubmit();
+                      return;
+                    }
+                    if (listOpen) choose(suggestions[activeIndex]);
                   }}
                   placeholder="Digite o nome ou bipe o código"
                   className="h-10 pl-8 sm:h-8"
@@ -170,22 +224,46 @@ export function ShoppingListQuickAdd({
                 triggerClassName="size-10 sm:size-7"
               />
             </div>
-            {suggestions.length > 0 && !selected ? (
-              <div className="border-border bg-surface absolute top-full z-20 mt-1 w-full overflow-hidden rounded-lg border shadow-lg">
-                {suggestions.map((product) => (
-                  <button
-                    key={product.id}
-                    type="button"
-                    onClick={() => choose(product)}
-                    className="hover:bg-surface-muted flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm sm:min-h-0"
-                  >
-                    <span>{product.name}</span>
-                    <span className="text-fg-subtle text-xs">
-                      {product.purchaseUnit}
-                    </span>
-                  </button>
-                ))}
-              </div>
+            {listOpen ? (
+              <ul
+                id="shopping-product-list"
+                role="listbox"
+                aria-label="Produtos encontrados"
+                className="border-border bg-surface absolute top-full z-20 mt-1 w-full overflow-hidden rounded-lg border shadow-lg"
+              >
+                {suggestions.map((product, position) => {
+                  const already = inList.get(product.id);
+                  return (
+                    <li
+                      key={product.id}
+                      id={`shopping-product-option-${position}`}
+                      role="option"
+                      aria-selected={position === activeIndex}
+                      // `mousedown` e não `click`: o campo perderia o foco antes
+                      // do clique e a lista fecharia por baixo do ponteiro.
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        choose(product);
+                      }}
+                      onMouseEnter={() => setActive(position)}
+                      className={cn(
+                        "flex cursor-pointer items-center justify-between gap-3 px-3 py-1.5 text-sm",
+                        position === activeIndex && "bg-surface-muted",
+                      )}
+                    >
+                      <span className="min-w-0 truncate">{product.name}</span>
+                      <span className="text-fg-subtle flex shrink-0 items-center gap-2 text-xs">
+                        {already ? (
+                          <span className="bg-primary-soft text-primary rounded-sm px-1.5">
+                            na lista · {String(already).replace(".", ",")}
+                          </span>
+                        ) : null}
+                        {product.purchaseUnit}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             ) : null}
           </div>
           <div className="flex min-w-0 flex-col gap-1.5">
@@ -196,10 +274,13 @@ export function ShoppingListQuickAdd({
               Quantidade
             </label>
             <Input
+              ref={quantityRef}
               id="shopping-quantity"
               name="quantity"
               required
-              defaultValue="1"
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value)}
+              onFocus={(event) => event.target.select()}
               inputMode="decimal"
               className="h-10 sm:h-8"
             />
@@ -224,8 +305,18 @@ export function ShoppingListQuickAdd({
         </div>
         <ErrorLine error={state.error} />
         <p className="text-fg-subtle text-xs">
-          Use o botão da câmera no celular ou bipe com um leitor físico. Ao
-          reconhecer o código, o produto entra automaticamente.
+          {selected && selectedInList !== undefined ? (
+            <>
+              <span className="text-primary font-medium">
+                {selected.name} já está na lista com{" "}
+                {String(selectedInList).replace(".", ",")}
+                {selected.purchaseUnit ? ` ${selected.purchaseUnit}` : ""}.
+              </span>{" "}
+              O que você adicionar soma a isso.
+            </>
+          ) : (
+            "↑ ↓ escolhem e Enter seleciona; Enter de novo adiciona. Um código de barras completo, pelo leitor ou pela câmera, entra direto."
+          )}
         </p>
       </form>
     </>
