@@ -80,9 +80,10 @@ export default async function PedidosPage({
           <>
             <Suspense fallback={null}>
               <ListSearch
-                placeholder="Buscar pelo nº do pedido"
+                placeholder="Buscar nº do pedido"
                 param="numero"
                 numerico
+                className="w-auto min-w-0 flex-1 sm:w-72 sm:flex-none"
               />
             </Suspense>
             <FilterDialog
@@ -109,7 +110,8 @@ export default async function PedidosPage({
             {permissions.has("commercial_divergence.view") ? (
               <Button asChild size="sm" variant="outline">
                 <Link href="/pedidos/divergencias">
-                  <Scale aria-hidden /> Divergências
+                  <Scale aria-hidden />
+                  <span className="max-sm:sr-only">Divergências</span>
                 </Link>
               </Button>
             ) : null}
@@ -119,7 +121,8 @@ export default async function PedidosPage({
               // painel, abre em página inteira. Um caminho só, dois embrulhos.
               <Button asChild size="sm" className="gap-1.5">
                 <Link href="/pedidos/novo">
-                  <Plus className="size-3.5" aria-hidden /> Novo pedido
+                  <Plus className="size-3.5" aria-hidden />
+                  <span className="max-sm:sr-only">Novo pedido</span>
                 </Link>
               </Button>
             ) : null}
@@ -354,10 +357,12 @@ function OrderResponsiveRow({
   enviarAqui,
 }: PresentedOrder) {
   return (
+    // Celular: duas colunas — o resumo à esquerda e o botão do passo à direita,
+    // na mesma linha. Da largura `lg` a grade é a das COLUNAS.
     <article
-      className={`grid min-w-0 gap-3 p-4 lg:items-center lg:py-3 ${COLUNAS}`}
+      className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 p-3.5 lg:items-center lg:gap-3 lg:py-3 ${COLUNAS}`}
     >
-      <div className="flex min-w-0 items-start justify-between gap-2">
+      <div className="col-span-2 flex min-w-0 items-start justify-between gap-2 lg:col-span-1">
         <div className="min-w-0">
           <IntentPrefetchLink
             href={`/pedidos/${order.id}`}
@@ -384,9 +389,6 @@ function OrderResponsiveRow({
           >
             {ORDER_STATUS_LABEL[order.status] ?? order.status}
           </Badge>
-          {order.isOverdue ? (
-            <Badge variant="destructive">Atrasado · {order.overdueDays}d</Badge>
-          ) : null}
         </span>
       </div>
       <p className="text-fg hidden wrap-anywhere text-sm font-medium lg:block">
@@ -423,30 +425,19 @@ function OrderResponsiveRow({
         ) : null}
       </span>
 
-      <dl className="border-border grid grid-cols-2 gap-2 border-y py-3 text-center lg:hidden">
-        <div className="border-border min-w-0 border-r px-1">
-          <dt className="text-fg-subtle text-xs">Itens</dt>
-          <dd className="text-fg mt-0.5 text-sm font-semibold tabular-nums">
-            {order.itemCount}
-          </dd>
-        </div>
-        <div className="min-w-0">
-          <dt className="text-fg-subtle text-xs">Entrega</dt>
-          <dd
-            className={
-              order.isOverdue
-                ? "text-destructive mt-0.5 text-xs font-semibold tabular-nums"
-                : "text-fg mt-0.5 text-xs font-semibold tabular-nums"
-            }
-          >
-            {order.deliveryDueDate
-              ? formatarDia(order.deliveryDueDate)
-              : "Sem prazo"}
-          </dd>
-        </div>
-      </dl>
+      <p
+        className={`min-w-0 text-xs tabular-nums lg:hidden ${order.isOverdue ? "text-destructive font-medium" : "text-fg-muted"}`}
+      >
+        {order.itemCount} {order.itemCount === 1 ? "item" : "itens"} ·{" "}
+        {order.deliveryDueDate
+          ? `Entrega ${formatarDia(order.deliveryDueDate)}`
+          : "Sem prazo"}
+        {/* O atraso mora aqui, e não num segundo selo ao lado da situação: dois
+            selos tomavam a coluna do título, que quebrava em "Pedido / #93". */}
+        {order.isOverdue ? ` · ${order.overdueDays}d de atraso` : ""}
+      </p>
 
-      <div className="[&_[data-slot=button]]:w-full lg:text-right lg:[&_[data-slot=button]]:w-auto">
+      <div className="lg:text-right">
         {enviarAqui ? (
           <SendOrderDialog
             orderId={order.id}
@@ -459,7 +450,6 @@ function OrderResponsiveRow({
           <Button
             asChild
             size="sm"
-            className="w-full"
             variant={passo.pending && podeAgir ? "default" : "outline"}
           >
             <IntentPrefetchLink href={`/pedidos/${order.id}`}>
