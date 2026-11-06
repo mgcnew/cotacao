@@ -23,11 +23,20 @@ import { normalizeBarcode } from "@/features/products/barcodes";
  */
 export function BarcodeField({
   onConflictChange,
+  initialCode = "",
+  productId,
+  otherCodes = 0,
 }: {
   /** Nome do produto que já usa o código, ou `null` quando está livre. */
   onConflictChange?: (productName: string | null) => void;
+  /** Na edição, o código que o produto já tem. */
+  initialCode?: string;
+  /** Na edição, o produto: o código dele mesmo não conta como repetido. */
+  productId?: string;
+  /** Códigos alternativos do produto, que a edição não altera. */
+  otherCodes?: number;
 }) {
-  const [code, setCode] = React.useState("");
+  const [code, setCode] = React.useState(initialCode);
   // O resultado guarda o código a que se refere: ao editar, o aviso do código
   // anterior some sozinho, sem precisar limpar estado dentro do efeito.
   const [lookup, setLookup] = React.useState<{
@@ -46,7 +55,9 @@ export function BarcodeField({
   React.useEffect(() => {
     // Editou o código: o bloqueio do código anterior não vale mais.
     conflictRef.current?.(null);
-    if (!normalizedCode) return;
+    if (!normalizedCode || normalizedCode === normalizeBarcode(initialCode)) {
+      return;
+    }
 
     const controller = new AbortController();
     // A pausa evita uma consulta por tecla; a câmera preenche de uma vez e
@@ -54,7 +65,9 @@ export function BarcodeField({
     const timeout = window.setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/produtos/codigo?code=${encodeURIComponent(normalizedCode)}`,
+          `/api/produtos/codigo?code=${encodeURIComponent(normalizedCode)}${
+            productId ? `&produto=${productId}` : ""
+          }`,
           { signal: controller.signal },
         );
         if (!response.ok) return;
@@ -71,7 +84,7 @@ export function BarcodeField({
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [normalizedCode]);
+  }, [normalizedCode, initialCode, productId]);
 
   const handleDetected = React.useCallback(
     (scanned: string): BarcodeScanOutcome => {
@@ -114,9 +127,20 @@ export function BarcodeField({
             leia o de outra embalagem para cadastrar.
           </span>
         </p>
+      ) : initialCode && normalizedCode !== normalizeBarcode(initialCode) ? (
+        <p className="text-fg-muted text-xs">
+          {normalizedCode
+            ? "Vale para as próximas leituras e notas. O que já foi recebido não muda."
+            : "Sem código, o produto deixa de ser reconhecido por leitura e por nota."}
+        </p>
       ) : (
         <p className="text-fg-subtle text-xs">
           Opcional. Pode ser lido pelo leitor, pela câmera ou digitado.
+          {otherCodes === 1
+            ? " Há mais 1 código alternativo, que não muda aqui."
+            : otherCodes > 1
+              ? ` Há mais ${otherCodes} códigos alternativos, que não mudam aqui.`
+              : ""}
         </p>
       )}
     </div>

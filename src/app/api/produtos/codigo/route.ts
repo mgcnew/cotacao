@@ -32,14 +32,17 @@ export async function GET(request: Request) {
     return Response.json({ error: "Código inválido." }, { status: 400 });
   }
 
+  // Na edição, o código do próprio produto não é conflito.
+  const own = new URL(request.url).searchParams.get("produto");
+
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("product_barcodes")
     .select("products ( name )")
     .eq("company_id", company.companyId)
-    .in("code", [...barcodeCandidates(code)])
-    .limit(1)
-    .maybeSingle();
+    .in("code", [...barcodeCandidates(code)]);
+  if (own && /^[0-9a-f-]{36}$/i.test(own)) query = query.neq("product_id", own);
+  const { data, error } = await query.limit(1).maybeSingle();
 
   if (error) {
     return Response.json(

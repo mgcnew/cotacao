@@ -243,6 +243,10 @@ export type ProductEditContext = {
     pricingUnitId: string;
     comparisonUnitId: string | null;
   };
+  /** Código de barras principal (ativo), o que a edição altera. */
+  barcode: string | null;
+  /** Códigos alternativos ativos: a edição não mexe neles, só avisa que existem. */
+  otherBarcodes: number;
   /** Valor atual por definição de atributo, já no formato que o input recebe. */
   attributeValues: Record<string, string>;
   /** Apresentação já anotada pelo comprador, quando ele soube informá-la. */
@@ -281,7 +285,7 @@ export async function getProductEditContext(
   }
   if (!product) return null;
 
-  const [values, lock, exposure, presentation] = await Promise.all([
+  const [values, lock, exposure, presentation, barcodes] = await Promise.all([
     supabase
       .from("product_attribute_values")
       .select("attribute_definition_id,value_text,value_numeric,value_boolean")
@@ -305,6 +309,12 @@ export async function getProductEditContext(
       .eq("is_conversion_factor", true)
       .eq("is_active", true)
       .maybeSingle(),
+    supabase
+      .from("product_barcodes")
+      .select("code,is_primary")
+      .eq("company_id", companyId)
+      .eq("product_id", productId)
+      .eq("is_active", true),
   ]);
 
   if (values.error) {
@@ -323,6 +333,11 @@ export async function getProductEditContext(
       `Falha ao carregar a apresentação: ${presentation.error.message}`,
     );
   }
+
+  if (barcodes.error) {
+    throw new Error(`Falha ao carregar códigos de barras: ${barcodes.error.message}`);
+  }
+  const primaryBarcode = (barcodes.data ?? []).find((row) => row.is_primary);
 
   const attributeValues: Record<string, string> = {};
   for (const row of values.data ?? []) {
@@ -352,6 +367,8 @@ export async function getProductEditContext(
       pricingUnitId: product.pricing_unit_id,
       comparisonUnitId: product.comparison_unit_id,
     },
+    barcode: primaryBarcode?.code ?? null,
+    otherBarcodes: (barcodes.data ?? []).filter((row) => !row.is_primary).length,
     attributeValues,
     presentationFactor: presentation.data
       ? (attributeValues[presentation.data.id] ?? "")

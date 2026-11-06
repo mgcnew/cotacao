@@ -10,6 +10,7 @@ import {
   useFechaModalAoConcluir,
   useModalDeRota,
 } from "@/components/layout/route-modal";
+import { BarcodeField } from "@/components/products/barcode-field";
 import { NovaCategoriaDialog } from "@/components/products/catalog-dialogs";
 import { Button } from "@/components/ui/button";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
@@ -117,8 +118,16 @@ export function ProductEditForm({
   attributes: FormAttribute[];
   inModal?: boolean;
 }) {
-  const { product, attributeValues, presentationFactor, unitsLockReason, nameExposure } =
-    context;
+  const {
+    product,
+    attributeValues,
+    presentationFactor,
+    unitsLockReason,
+    nameExposure,
+    barcode,
+    otherBarcodes,
+  } = context;
+  const [barcodeUsedBy, setBarcodeUsedBy] = React.useState<string | null>(null);
   const modal = useModalDeRota();
 
   const boundAction = React.useMemo(
@@ -199,6 +208,15 @@ export function ProductEditForm({
                 value: category.id,
                 label: category.label,
               }))}
+            />
+          </Field>
+
+          <Field label="Código de barras" htmlFor="barcode">
+            <BarcodeField
+              initialCode={barcode ?? ""}
+              productId={product.id}
+              otherCodes={otherBarcodes}
+              onConflictChange={setBarcodeUsedBy}
             />
           </Field>
 
@@ -449,7 +467,10 @@ export function ProductEditForm({
   );
 
   const salvar = (
-    <FormSubmitButton pendingLabel="Salvando…">
+    <FormSubmitButton
+      pendingLabel="Salvando…"
+      disabled={barcodeUsedBy !== null}
+    >
       Salvar alterações
     </FormSubmitButton>
   );

@@ -7,7 +7,10 @@ import {
   ATTRIBUTE_DATA_TYPE_VALUES,
   toAttributeKey,
 } from "@/features/products/attributes";
-import { normalizeBarcode } from "@/features/products/barcodes";
+import {
+  barcodeCandidates,
+  normalizeBarcode,
+} from "@/features/products/barcodes";
 import { PRODUCT_PURPOSE_VALUES } from "@/features/products/purposes";
 import {
   packagingFactorName,
@@ -842,8 +845,8 @@ export async function createProduct(
  *
  * As unidades ficam fora do schema porque não são gravadas aqui: elas passam
  * pela RPC de 0089, que reavalia a trava de 0102 sob lock. O código de barras
- * também fica de fora — tem tela própria, com leitor e vários códigos por
- * produto, e espremê-lo num campo só perderia isso.
+ * também fica de fora: mora noutra tabela e é tratado à parte
+ * (`planBarcodeChange`).
  */
 const productEditSchema = productSchema.omit({
   purchaseUnitId: true,
@@ -851,6 +854,135 @@ const productEditSchema = productSchema.omit({
   comparisonUnitId: true,
   barcode: true,
 });
+
+type BarcodeChange =
+  | { kind: "none" }
+  | { kind: "deactivate"; id: string }
+  | { kind: "rename"; id: string; code: string }
+  | { kind: "promote"; id: string; demoteId: string | null }
+  | { kind: "insert"; code: string };
+
+/**
+ * O que a edição precisa fazer com o código de barras PRINCIPAL do produto.
+ *
+ * Só o principal é editado aqui; alternativos ficam como estão. A decisão sai
+ * antes de qualquer gravação, para que um código repetido recuse a edição
+ * inteira em vez de deixar o nome já trocado.
+ *
+ * Trocar é alterar o código na MESMA linha, e não inserir outra e desativar a
+ * antiga: `unique (company_id, code)` vale também para linhas desativadas, e
+ * a linha antiga continuaria segurando o valor.
+ */
+async function planBarcodeChange(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+  productId: string,
+  rawCode: string,
+): Promise<{ error: string } | { change: BarcodeChange }> {
+  const parsed = productSchema.shape.barcode.safeParse(rawCode);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const next = parsed.data;
+
+  const { data: own, error: ownError } = await supabase
+    .from("product_barcodes")
+    .select("id,code,is_primary,is_active")
+    .eq("company_id", companyId)
+    .eq("product_id", productId);
+  if (ownError) {
+    return { error: `Falha ao ler o código de barras: ${ownError.message}` };
+  }
+  const primary = (own ?? []).find((row) => row.is_primary && row.is_active);
+
+  if ((primary?.code ?? null) === next) return { change: { kind: "none" } };
+  if (next === null) {
+    return { change: primary ? { kind: "deactivate", id: primary.id } : { kind: "none" } };
+  }
+
+  // Qualquer linha da empresa com este código — ou o equivalente UPC/EAN —,
+  // de qualquer produto e mesmo desativada.
+  const { data: taken, error: takenError } = await supabase
+    .from("product_barcodes")
+    .select("id,product_id,code,products ( name )")
+    .eq("company_id", companyId)
+    .in("code", [...barcodeCandidates(next)]);
+  if (takenError) {
+    return { error: `Falha ao verificar o código: ${takenError.message}` };
+  }
+  const elsewhere = (taken ?? []).find((row) => row.product_id !== productId);
+  if (elsewhere) {
+    return {
+      error: `Este código de barras já pertence a ${elsewhere.products?.name ?? "outro produto"}.`,
+    };
+  }
+
+  // Já é um código deste produto (alternativo ou desativado): vira o principal.
+  const mine = (taken ?? []).find((row) => row.code === next);
+  if (mine) {
+    return { change: { kind: "promote", id: mine.id, demoteId: primary?.id ?? null } };
+  }
+  return {
+    change: primary
+      ? { kind: "rename", id: primary.id, code: next }
+      : { kind: "insert", code: next },
+  };
+}
+
+async function applyBarcodeChange(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+  productId: string,
+  change: BarcodeChange,
+): Promise<string | null> {
+  const table = () => supabase.from("product_barcodes");
+  let error: { code?: string; message: string } | null = null;
+
+  if (change.kind === "deactivate") {
+    ({ error } = await table()
+      .update({ is_active: false, is_primary: false })
+      .eq("company_id", companyId)
+      .eq("id", change.id));
+  } else if (change.kind === "rename") {
+    ({ error } = await table()
+      .update({ code: change.code })
+      .eq("company_id", companyId)
+      .eq("id", change.id));
+  } else if (change.kind === "promote") {
+    // O índice de 0042 aceita um principal ativo por produto: o atual sai
+    // antes de o outro entrar.
+    if (change.demoteId && change.demoteId !== change.id) {
+      const demoted = await table()
+        .update({ is_active: false, is_primary: false })
+        .eq("company_id", companyId)
+        .eq("id", change.demoteId);
+      if (demoted.error) error = demoted.error;
+    }
+    if (!error) {
+      ({ error } = await table()
+        .update({ is_active: true, is_primary: true })
+        .eq("company_id", companyId)
+        .eq("id", change.id));
+    }
+  } else if (change.kind === "insert") {
+    // A policy de 0042 pede `product.create` para inserir: quem só edita
+    // produtos consegue trocar o código que já existe, mas não criar o
+    // primeiro.
+    ({ error } = await table().insert({
+      company_id: companyId,
+      product_id: productId,
+      code: change.code,
+      is_primary: true,
+    }));
+  }
+
+  if (!error) return null;
+  if (error.code === "23505") {
+    return "Este código de barras já pertence a outro produto.";
+  }
+  if (error.code === "42501" || error.message.includes("row-level security")) {
+    return "Seu papel não permite cadastrar um código de barras novo neste produto.";
+  }
+  return `Não foi possível salvar o código de barras: ${error.message}`;
+}
 
 export type ProductEditState = {
   error: string | null;
@@ -929,6 +1061,18 @@ export async function updateProduct(
       return { error: "Já existe um produto com este nome nesta empresa." };
     }
   }
+
+  // O código de barras só entra quando o formulário o traz, e a decisão sai
+  // aqui, antes de qualquer gravação: código repetido recusa a edição inteira.
+  const barcodePlan = formData.has("barcode")
+    ? await planBarcodeChange(
+        supabase,
+        company.companyId,
+        productId,
+        String(formData.get("barcode") ?? ""),
+      )
+    : null;
+  if (barcodePlan && "error" in barcodePlan) return { error: barcodePlan.error };
 
   // Mesma regra do cadastro: as definições vêm do banco, nunca do formulário.
   // Assim um campo forjado no HTML não vira atributo, e obrigatório continua
@@ -1115,6 +1259,18 @@ export async function updateProduct(
 
     if (valuesError) {
       return { error: `Falha ao salvar atributos: ${valuesError.message}` };
+    }
+  }
+
+  if (barcodePlan && barcodePlan.change.kind !== "none") {
+    const barcodeError = await applyBarcodeChange(
+      supabase,
+      company.companyId,
+      productId,
+      barcodePlan.change,
+    );
+    if (barcodeError) {
+      return { error: `Os demais dados foram salvos, mas ${barcodeError}` };
     }
   }
 
