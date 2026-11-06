@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, Truck } from "lucide-react";
+import { AlertTriangle, Bell, Plus, Truck } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -104,7 +104,12 @@ export default async function FornecedoresPage({
         action={
           <>
             <Suspense fallback={null}>
-              <ListSearch placeholder="Buscar nome, CNPJ ou contato" />
+              {/* No celular a busca divide a linha com o "+": eram duas linhas
+                  antes do filtro. */}
+              <ListSearch
+                placeholder="Buscar nome, CNPJ ou contato"
+                className="w-auto min-w-0 flex-1 sm:w-72 sm:flex-none"
+              />
             </Suspense>
             <Suspense fallback={null}>
               <NovoFornecedorAction />
@@ -132,7 +137,10 @@ async function NovoFornecedorAction() {
 
   return permissions.has("supplier.create") ? (
     <Button asChild size="sm">
-      <Link href="/fornecedores/novo">Novo fornecedor</Link>
+      <Link href="/fornecedores/novo">
+        <Plus className="sm:hidden" aria-hidden />
+        <span className="max-sm:sr-only">Novo fornecedor</span>
+      </Link>
     </Button>
   ) : null;
 }
@@ -332,12 +340,12 @@ async function FornecedoresContent({
                   return (
                     <TableRow
                       key={supplier.id}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 px-3 py-2.5 sm:table-row sm:p-0"
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 px-3 py-2.5 max-sm:relative max-sm:active:bg-surface-muted sm:table-row sm:p-0"
                     >
                       <TableCell className="col-start-1 block min-w-0 p-0 whitespace-normal sm:table-cell sm:p-2">
                         <IntentPrefetchLink
                           href={`/fornecedores/${supplier.id}`}
-                          className="text-fg hover:text-primary font-medium"
+                          className="text-fg hover:text-primary font-medium max-sm:after:absolute max-sm:after:inset-0"
                         >
                           {supplier.name}
                         </IntentPrefetchLink>
