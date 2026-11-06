@@ -292,6 +292,14 @@ async function ProdutosContent({
                 : []),
             ]}
           />
+          {/* Com quase dois mil itens, saber o tamanho do recorte importa — e
+              no celular o total da paginação está no fim da página, vinte
+              produtos abaixo. */}
+          <span className="text-fg-subtle text-xs tabular-nums sm:hidden">
+            {temFiltro
+              ? `${catalog.total.toLocaleString("pt-BR")} de ${catalog.catalogTotal.toLocaleString("pt-BR")}`
+              : `${catalog.catalogTotal.toLocaleString("pt-BR")} produtos`}
+          </span>
         </div>
       ) : null}
 
@@ -373,7 +381,7 @@ async function ProdutosContent({
                 {catalog.rows.map((product) => (
                   <TableRow
                     key={product.id}
-                    className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-3 py-2.5 sm:table-row sm:p-0"
+                    className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-3 py-2.5 max-sm:relative max-sm:active:bg-surface-muted sm:table-row sm:p-0"
                   >
                     {/* `whitespace-normal` também na tabela: nome comprido que
                         não quebra é o que empurrava a coluna de ações para
@@ -381,7 +389,7 @@ async function ProdutosContent({
                     <TableCell className="col-start-1 block p-0 font-medium whitespace-normal sm:table-cell sm:p-2">
                       <Link
                         href={`/produtos/historico/${product.id}`}
-                        className="hover:text-primary hover:underline"
+                        className="hover:text-primary hover:underline max-sm:after:absolute max-sm:after:inset-0"
                       >
                         {product.name}
                       </Link>
@@ -428,7 +436,7 @@ async function ProdutosContent({
                       </Badge>
                     </TableCell>
                     {podeEditar || podeExcluir ? (
-                      <TableCell className="col-start-2 row-span-2 row-start-1 block self-center justify-self-end p-0 sm:table-cell sm:p-2">
+                      <TableCell className="col-start-2 row-span-2 row-start-1 block self-center justify-self-end p-0 max-sm:relative max-sm:z-10 sm:table-cell sm:p-2">
                         <div className="flex items-center justify-end">
                           <ProductRowActions
                             productId={product.id}

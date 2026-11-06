@@ -69,7 +69,7 @@ export function DataTablePagination({
             <select
               value={pageSize}
               onChange={(event) => changeSize(event.target.value)}
-              className="border-input bg-background text-fg h-7 rounded-md border px-2 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+              className="border-input bg-background text-fg h-7 rounded-md border px-2 text-xs outline-none pointer-coarse:h-10 pointer-coarse:text-sm focus:border-ring focus:ring-2 focus:ring-ring/30"
               aria-label="Registros por página"
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
@@ -114,7 +114,7 @@ export function DataTablePagination({
                 scroll={false}
                 aria-current={number === page ? "page" : undefined}
                 className={cn(
-                  "grid size-7 place-items-center rounded-md text-xs font-medium transition-colors",
+                  "grid size-7 place-items-center rounded-md text-xs font-medium transition-colors pointer-coarse:size-10 pointer-coarse:text-sm",
                   number === page
                     ? "bg-primary-solid text-primary-solid-fg"
                     : "text-fg-muted hover:bg-surface-muted hover:text-fg",
