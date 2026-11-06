@@ -65,7 +65,7 @@ export function ThemedSelect({
         aria-required={required}
         className={cn(
           "border-input bg-transparent text-fg shadow-xs transition-colors",
-          "focus-visible:border-ring focus-visible:ring-ring/50 flex h-8 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3",
+          "focus-visible:border-ring focus-visible:ring-ring/50 flex h-8 pointer-coarse:h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3",
           "disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30 dark:disabled:bg-input/80",
           className,
         )}
@@ -122,7 +122,7 @@ function SelectItem({
     <SelectPrimitive.Item
       value={value}
       className={cn(
-        "text-fg relative flex min-h-8 cursor-pointer select-none items-center rounded-md py-1.5 pr-3 pl-8 text-sm outline-none",
+        "text-fg relative flex min-h-8 pointer-coarse:min-h-11 cursor-pointer select-none items-center rounded-md py-1.5 pr-3 pl-8 text-sm outline-none",
         "focus:bg-primary-soft data-[state=checked]:bg-primary-soft data-[state=checked]:font-medium",
       )}
     >

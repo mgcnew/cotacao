@@ -17,6 +17,7 @@ export default function NovoProdutoEmModal() {
       titulo="Novo produto"
       descricao="Cadastre o item, sua finalidade e as unidades usadas na compra e na comparação."
       impedirFechamentoAcidental
+      semTecladoAoAbrir
     >
       <Suspense
         fallback={

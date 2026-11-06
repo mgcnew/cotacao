@@ -3,9 +3,12 @@
 import JsBarcode from "jsbarcode";
 import {
   Barcode,
+  Check,
   ChevronLeft,
   ChevronRight,
   Maximize2,
+  Plus,
+  ScanBarcode,
   Search,
   Trash2,
   X,
@@ -17,15 +20,27 @@ import {
   BarcodeCameraDialog,
   type BarcodeScanOutcome,
 } from "@/components/shopping-list/barcode-camera-dialog";
+import {
+  indexProducts,
+  searchProducts,
+} from "@/components/shopping-list/mobile-quick-add";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   barcodeMatches,
   findMatchingBarcode,
   normalizeBarcode,
 } from "@/features/products/barcodes";
 import type { ShoppingProduct } from "@/features/shopping-list/queries";
-import { normalizeListSearch } from "@/lib/list-pagination";
 import { cn } from "@/lib/utils";
 
 type ScannedProduct = {
@@ -279,6 +294,265 @@ function BarcodeOverlay({
   );
 }
 
+/** Só o que o CODE 128 consegue desenhar vira etiqueta. */
+const PRINTABLE_CODE = /^[\x20-\x7e]+$/;
+
+/**
+ * Folha de busca: abre ao tocar e fica aberta enquanto se monta a pilha.
+ *
+ * O campo antigo fechava a lista a cada toque e escondia o nome por trás de
+ * `truncate`, então cada etiqueta custava buscar, tocar e buscar de novo, e
+ * nomes parecidos (sabor, tamanho) não se distinguiam. Aqui o toque marca e
+ * mantém a busca, o nome quebra em duas linhas e tocar de novo desfaz.
+ */
+function LabelSearchSheet({
+  products,
+  recent,
+  onAdd,
+  onRemove,
+  error,
+  onClearError,
+}: {
+  products: ShoppingProduct[];
+  recent: ScannedProduct[];
+  onAdd: (label: ScannedProduct) => boolean;
+  onRemove: (label: ScannedProduct) => void;
+  error: string | null;
+  onClearError: () => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [addedKeys, setAddedKeys] = React.useState<string[]>([]);
+
+  const index = React.useMemo(
+    () =>
+      indexProducts(
+        products
+          .map((product) => ({
+            ...product,
+            barcodes: product.barcodes
+              .map(normalizeBarcode)
+              .filter((code) => code && PRINTABLE_CODE.test(code)),
+          }))
+          .filter((product) => product.barcodes.length > 0),
+      ),
+    [products],
+  );
+  const results = React.useMemo(
+    () =>
+      query.trim()
+        ? searchProducts(index, query).flatMap((product) =>
+            product.barcodes.map((code) => ({
+              id: product.id,
+              name: product.name,
+              code,
+            })),
+          )
+        : [],
+    [index, query],
+  );
+  const recentKeys = new Set(recent.map(labelKey));
+  const addedNow = addedKeys
+    .map((key) => recent.find((item) => labelKey(item) === key))
+    .filter((item): item is ScannedProduct => item !== undefined);
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (next) {
+      setQuery("");
+      setAddedKeys([]);
+      onClearError();
+    }
+  }
+
+  function toggle(label: ScannedProduct) {
+    const key = labelKey(label);
+    if (recentKeys.has(key)) {
+      onRemove(label);
+      setAddedKeys((keys) => keys.filter((item) => item !== key));
+      return;
+    }
+    if (onAdd(label)) {
+      setAddedKeys((keys) => [key, ...keys.filter((item) => item !== key)]);
+    }
+  }
+
+  function rows(list: ScannedProduct[]) {
+    return (
+      <ul>
+        {list.map((item) => {
+          const marked = recentKeys.has(labelKey(item));
+          return (
+            <li
+              key={labelKey(item)}
+              className="border-border border-b last:border-b-0"
+            >
+              <button
+                type="button"
+                onClick={() => toggle(item)}
+                aria-pressed={marked}
+                className={cn(
+                  "flex min-h-16 w-full items-center gap-3 px-4 py-2 text-left",
+                  marked ? "bg-primary-soft" : "active:bg-surface-muted",
+                )}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="text-fg line-clamp-2 text-sm leading-snug font-medium">
+                    {item.name}
+                  </span>
+                  <code className="text-fg-muted block truncate text-xs">
+                    {item.code}
+                  </code>
+                </span>
+                <span
+                  aria-hidden
+                  className={cn(
+                    "grid size-10 shrink-0 place-items-center rounded-full",
+                    marked
+                      ? "bg-primary-solid text-primary-solid-fg"
+                      : "bg-primary-soft text-primary",
+                  )}
+                >
+                  {marked ? (
+                    <Check className="size-5" />
+                  ) : (
+                    <Plus className="size-5" />
+                  )}
+                </span>
+                <span className="sr-only">
+                  {marked ? "Tirar das etiquetas" : "Adicionar às etiquetas"}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="border-input bg-input-bg text-fg-muted active:bg-surface-muted flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-xl border px-3.5 text-left text-base shadow-xs"
+        >
+          <Search className="text-fg-subtle size-4 shrink-0" aria-hidden />
+          <span className="truncate">Buscar produto</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle>Adicionar etiquetas</DialogTitle>
+          <DialogDescription className="sr-only">
+            Busque pelo nome ou pelo código e toque nos produtos para guardar
+            as etiquetas neste aparelho.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="border-border shrink-0 border-b px-4 py-3">
+          <div className="relative">
+            <Search
+              className="text-fg-subtle pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2"
+              aria-hidden
+            />
+            <input
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                onClearError();
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                // Atalho de quem digita ou usa leitor físico: adiciona o
+                // primeiro resultado e limpa, pronto para o próximo.
+                const first = results[0];
+                if (!first) return;
+                if (!recentKeys.has(labelKey(first))) toggle(first);
+                setQuery("");
+              }}
+              role="searchbox"
+              aria-label="Buscar produto"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              enterKeyHint="done"
+              placeholder="Nome ou código de barras"
+              className="border-input bg-input-bg text-fg placeholder:text-fg-subtle focus:border-ring focus:ring-ring/30 h-12 w-full rounded-xl border pr-11 pl-10 text-base outline-none focus:ring-3"
+            />
+            {query ? (
+              <button
+                type="button"
+                aria-label="Limpar busca"
+                onClick={() => setQuery("")}
+                className="text-fg-subtle active:text-fg absolute top-1/2 right-0.5 grid size-11 -translate-y-1/2 place-items-center"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {error ? (
+          <p
+            role="alert"
+            className="bg-destructive-soft text-destructive shrink-0 px-4 py-2 text-sm"
+          >
+            {error}
+          </p>
+        ) : null}
+
+        <DialogBody className="p-0">
+          {query.trim() ? (
+            results.length > 0 ? (
+              <>
+                <p className="text-fg-subtle px-4 pt-3 pb-1 text-xs">
+                  Toque para adicionar. Toque de novo para tirar.
+                </p>
+                {rows(results)}
+              </>
+            ) : (
+              <p className="text-fg-muted px-4 py-10 text-center text-sm">
+                Nenhum produto com código de barras para “{query.trim()}”.
+                Confira a grafia ou tente parte do nome.
+              </p>
+            )
+          ) : addedNow.length > 0 ? (
+            <section aria-label="Adicionadas agora">
+              <h3 className="text-fg-muted px-4 pt-3 pb-1 text-xs font-medium">
+                Adicionadas agora ({addedNow.length})
+              </h3>
+              {rows(addedNow)}
+            </section>
+          ) : (
+            <div className="text-fg-muted flex flex-col items-center gap-3 px-8 py-12 text-center">
+              <span className="bg-surface-muted text-fg-subtle grid size-12 place-items-center rounded-2xl">
+                <ScanBarcode className="size-6" aria-hidden />
+              </span>
+              <p className="text-sm">
+                Digite parte do nome ou o código. A busca fica aberta: toque em
+                quantos produtos quiser e conclua no fim.
+              </p>
+            </div>
+          )}
+        </DialogBody>
+
+        <DialogFooter className="pb-[calc(0.625rem+env(safe-area-inset-bottom))]">
+          <Button
+            type="button"
+            size="lg"
+            className="h-12 w-full text-base"
+            onClick={() => handleOpenChange(false)}
+          >
+            {addedNow.length > 0 ? `Concluir (${addedNow.length})` : "Fechar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function MobileBarcodeDisplay({
   companyId,
   products,
@@ -291,41 +565,15 @@ export function MobileBarcodeDisplay({
     products,
   );
   const [currentKey, setCurrentKey] = React.useState<string | null>(null);
-  const [query, setQuery] = React.useState("");
   const [entryError, setEntryError] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState(false);
-  const inputRef = React.useRef<HTMLInputElement>(null);
   const current =
     recent.find((item) => labelKey(item) === currentKey) ?? recent[0] ?? null;
   const position = current
     ? recent.findIndex((item) => labelKey(item) === labelKey(current))
     : -1;
 
-  const availableLabels = React.useMemo(
-    () =>
-      products.flatMap((product) =>
-        product.barcodes
-          .map(normalizeBarcode)
-          .filter((code) => code && /^[\x20-\x7e]+$/.test(code))
-          .map((code) => ({ id: product.id, name: product.name, code })),
-      ),
-    [products],
-  );
-  const needle = normalizeListSearch(query.trim());
-  const exactCode = query
-    ? availableLabels.find(
-        (item) => normalizeBarcode(item.code) === normalizeBarcode(query),
-      )
-    : null;
-  const suggestions = needle
-    ? availableLabels
-        .filter((item) =>
-          normalizeListSearch(`${item.name} ${item.code}`).includes(needle),
-        )
-        .slice(0, 8)
-    : [];
-
-  function addLabel(scanned: ScannedProduct, refocus = false) {
+  function addLabel(scanned: ScannedProduct) {
     const next = [
       scanned,
       ...recent.filter((item) => labelKey(item) !== labelKey(scanned)),
@@ -337,9 +585,7 @@ export function MobileBarcodeDisplay({
       return false;
     }
     setCurrentKey(labelKey(scanned));
-    setQuery("");
     setEntryError(null);
-    if (refocus) window.setTimeout(() => inputRef.current?.focus(), 0);
     return true;
   }
 
@@ -362,7 +608,7 @@ export function MobileBarcodeDisplay({
         message: `O código ${code} não pertence a nenhum produto cadastrado.`,
       };
     }
-    if (!/^[\x20-\x7e]+$/.test(registeredCode)) {
+    if (!PRINTABLE_CODE.test(registeredCode)) {
       return {
         ok: false,
         message:
@@ -380,15 +626,6 @@ export function MobileBarcodeDisplay({
           ok: false,
           message: "Não foi possível guardar esta etiqueta no aparelho.",
         };
-  }
-
-  function addFromInput() {
-    const selected = exactCode ?? suggestions[0];
-    if (!selected) {
-      setEntryError("Nenhum produto cadastrado foi encontrado.");
-      return;
-    }
-    addLabel(selected, true);
   }
 
   function step(direction: -1 | 1) {
@@ -500,50 +737,14 @@ export function MobileBarcodeDisplay({
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-3">
         <section>
           <div className="flex items-start gap-2">
-            <div className="relative min-w-0 flex-1">
-              <Search
-                className="text-fg-subtle pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
-                aria-hidden
-              />
-              <Input
-                ref={inputRef}
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setEntryError(null);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
-                  event.preventDefault();
-                  addFromInput();
-                }}
-                autoComplete="off"
-                inputMode="search"
-                enterKeyHint="search"
-                placeholder="Produto ou código de barras"
-                aria-label="Buscar produto ou informar código de barras"
-                className="pl-9"
-              />
-              {suggestions.length > 0 ? (
-                <div className="border-border bg-surface absolute top-full z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border p-1 shadow-lg">
-                  {suggestions.map((item) => (
-                    <button
-                      key={labelKey(item)}
-                      type="button"
-                      onClick={() => addLabel(item, true)}
-                      className="hover:bg-surface-muted active:bg-surface-muted flex min-h-12 w-full min-w-0 items-center justify-between gap-3 rounded-md px-2.5 py-2 text-left"
-                    >
-                      <span className="min-w-0 truncate text-sm font-medium">
-                        {item.name}
-                      </span>
-                      <code className="text-fg-muted shrink-0 text-xs">
-                        {item.code}
-                      </code>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <LabelSearchSheet
+              products={products}
+              recent={recent}
+              onAdd={addLabel}
+              onRemove={removeCode}
+              error={entryError}
+              onClearError={() => setEntryError(null)}
+            />
             {/* Contínuo: aqui a pessoa monta uma pilha de etiquetas de uma vez,
                 e reabrir a câmera a cada item custava mais que a leitura. */}
             <BarcodeCameraDialog
@@ -551,6 +752,7 @@ export function MobileBarcodeDisplay({
               continuous
               successVibrationMs={35}
               triggerLabel="Câmera"
+              triggerClassName="h-12 rounded-xl pointer-coarse:h-12"
             />
           </div>
           {entryError ? (
@@ -558,10 +760,6 @@ export function MobileBarcodeDisplay({
               {entryError}
             </p>
           ) : null}
-          <p className="text-fg-subtle mt-2 text-xs">
-            Com leitor físico, basta bipar: o Enter adiciona e deixa o campo
-            pronto para o próximo.
-          </p>
         </section>
 
         {recent.length > 0 ? (
@@ -602,7 +800,7 @@ export function MobileBarcodeDisplay({
                       className="active:bg-surface-muted flex min-h-12 min-w-0 flex-1 items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 text-left"
                     >
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">
+                        <span className="line-clamp-2 text-sm leading-snug font-medium">
                           {item.name}
                         </span>
                         <code className="text-fg-muted text-xs">{item.code}</code>

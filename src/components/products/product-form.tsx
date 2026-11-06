@@ -5,6 +5,7 @@ import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { BarcodeField } from "@/components/products/barcode-field";
 import {
   NovaCategoriaDialog,
   NovaUnidadeDialog,
@@ -53,7 +54,7 @@ type Props = {
 };
 
 const selectClass =
-  "border-input bg-transparent text-fg shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full cursor-pointer rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30 dark:disabled:bg-input/80 [&>option]:bg-popover [&>option]:text-popover-foreground";
+  "border-input bg-transparent text-fg shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 h-8 pointer-coarse:h-11 w-full cursor-pointer rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30 dark:disabled:bg-input/80 [&>option]:bg-popover [&>option]:text-popover-foreground";
 
 function Field({
   label,
@@ -160,10 +161,14 @@ export function derivePackagingFactor({
   };
 }
 
-function SubmitButton() {
+function SubmitButton({ blocked }: { blocked: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending}>
+    <Button
+      type="submit"
+      disabled={pending || blocked}
+      className="max-sm:w-full"
+    >
       {pending ? "Salvando…" : "Cadastrar produto"}
     </Button>
   );
@@ -196,6 +201,16 @@ export function ProductForm({
   const [purchaseUnitId, setPurchaseUnitId] = React.useState("");
   const [pricingUnitId, setPricingUnitId] = React.useState("");
   const [comparisonUnitId, setComparisonUnitId] = React.useState("");
+  const [barcodeUsedBy, setBarcodeUsedBy] = React.useState<string | null>(null);
+  const nameRef = React.useRef<HTMLInputElement>(null);
+
+  // Foco automático só onde há teclado físico: no celular ele abriria o
+  // teclado virtual na hora e cobriria metade do formulário antes de a pessoa
+  // ver o que há para preencher. Em modal, o Radix já foca o primeiro campo —
+  // quem impede isso no toque é o `RouteModal`.
+  React.useEffect(() => {
+    if (window.matchMedia("(pointer: fine)").matches) nameRef.current?.focus();
+  }, []);
 
   const fator = derivePackagingFactor({
     purpose,
@@ -220,8 +235,8 @@ export function ProductForm({
             <Input
               id="name"
               name="name"
+              ref={nameRef}
               required
-              autoFocus
               maxLength={120}
               defaultValue={initialName}
               placeholder="Coxa e sobrecoxa congelada"
@@ -244,6 +259,10 @@ export function ProductForm({
                 label: category.label,
               }))}
             />
+          </Field>
+
+          <Field label="Código de barras" htmlFor="barcode">
+            <BarcodeField onConflictChange={setBarcodeUsedBy} />
           </Field>
 
           <Field label="Finalidade" htmlFor="purpose">
@@ -433,19 +452,6 @@ export function ProductForm({
         >
           <Input id="description" name="description" maxLength={500} />
         </Field>
-        <Field
-          label="Código de barras"
-          htmlFor="barcode"
-          hint="Opcional. Pode ser lido pelo leitor ou digitado."
-        >
-          <Input
-            id="barcode"
-            name="barcode"
-            maxLength={64}
-            autoComplete="off"
-            placeholder="Bipe ou digite o código"
-          />
-        </Field>
       </section>
 
       {state.error ? (
@@ -475,7 +481,7 @@ export function ProductForm({
       <form key={state.savedAt} action={formAction} className="contents">
         <DialogBody className="flex flex-col gap-6">{conteudo}</DialogBody>
         <DialogFooter className="justify-end">
-          <SubmitButton />
+          <SubmitButton blocked={barcodeUsedBy !== null} />
         </DialogFooter>
       </form>
     );
@@ -488,8 +494,12 @@ export function ProductForm({
       className="flex flex-col gap-6"
     >
       {conteudo}
-      <div className="flex justify-end">
-        <SubmitButton />
+      {/* No celular o botão acompanha a rolagem: o formulário tem mais de uma
+          tela, e o fim dele ficava longe de quem acabou de bipar o código.
+          `-bottom-6`/`-mb-6`/`-mx-4` anulam o respiro da `main`, que o
+          `sticky` respeitaria deixando uma faixa vazia embaixo. */}
+      <div className="border-border flex justify-end max-sm:bg-surface max-sm:sticky max-sm:-bottom-6 max-sm:z-20 max-sm:-mx-4 max-sm:-mb-6 max-sm:border-t max-sm:px-4 max-sm:pt-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-sm:shadow-[0_-8px_20px_-16px_rgba(0,0,0,.45)]">
+        <SubmitButton blocked={barcodeUsedBy !== null} />
       </div>
     </form>
   );

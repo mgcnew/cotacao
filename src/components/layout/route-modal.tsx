@@ -84,6 +84,7 @@ export function RouteModal({
   size = "lg",
   alturaEstavel = false,
   impedirFechamentoAcidental = false,
+  semTecladoAoAbrir = false,
   children,
 }: {
   /** Pode ser um `<Suspense>`: o modal abre antes de o nome chegar. */
@@ -96,6 +97,14 @@ export function RouteModal({
   alturaEstavel?: boolean;
   /** Impede que Esc ou um clique fora descartem um formulário em andamento. */
   impedirFechamentoAcidental?: boolean;
+  /**
+   * Em tela de toque, não leva o foco ao primeiro campo ao abrir.
+   *
+   * O Radix foca o primeiro campo por conta própria, e no celular isso abre o
+   * teclado virtual antes de a pessoa ver o formulário. Com mouse, o foco
+   * inicial continua valendo.
+   */
+  semTecladoAoAbrir?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -147,6 +156,19 @@ export function RouteModal({
           size={size}
           alturaEstavel={alturaEstavel}
           impedirFechamentoAcidental={impedirFechamentoAcidental}
+          onOpenAutoFocus={
+            semTecladoAoAbrir
+              ? (evento) => {
+                  if (!window.matchMedia("(pointer: coarse)").matches) return;
+                  evento.preventDefault();
+                  // O foco fica na própria caixa: o Esc e o foco preso
+                  // seguem funcionando sem nenhum campo ativo.
+                  (evento.currentTarget as HTMLElement | null)?.focus({
+                    preventScroll: true,
+                  });
+                }
+              : undefined
+          }
           // `animationend` sobe do conteúdo do modal também — só a animação
           // da própria caixa encerra a navegação.
           onAnimationEnd={(evento) => {
