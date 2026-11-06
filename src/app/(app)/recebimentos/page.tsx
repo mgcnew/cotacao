@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
+import { ListSegments } from "@/components/layout/list-segments";
 import { PageHeader } from "@/components/layout/page-header";
 import { ArrivalDialog } from "@/components/receipts/arrival-dialog";
 import { ConfirmPricesForm } from "@/components/receipts/confirm-prices-form";
@@ -161,10 +162,6 @@ async function RecebimentosConteudo({
             </Link>
             <div className="mt-1 sm:hidden">
               <Badge variant={deliveryTone}>{deliveryLabel}</Badge>
-              <p className="text-fg-muted mt-1.5 text-xs">
-                {pendingItems.length}{" "}
-                {pendingItems.length === 1 ? "produto" : "produtos"}
-              </p>
             </div>
             <p className="text-fg-muted mt-1 hidden items-center gap-2 text-sm sm:flex">
               {row.deliveryDueDate
@@ -241,8 +238,39 @@ async function RecebimentosConteudo({
     );
   }
 
+  // Atalhos de seção do celular: só entram os que têm o que mostrar, porque a
+  // seção vazia some da tela e o atalho levaria a lugar nenhum.
+  const atalhosCelular = [
+    board.awaitingCheck.length
+      ? {
+          rotulo: "A conferir",
+          n: board.awaitingCheck.length,
+          href: "#conferir",
+          alerta: true,
+        }
+      : null,
+    {
+      rotulo: "Previstas",
+      n: board.expected.length,
+      href: "#previstas",
+      alerta: false,
+    },
+    pendingPrices.length
+      ? {
+          rotulo: "Preços",
+          n: pendingPrices.length,
+          href: "#confirmar-precos",
+          alerta: true,
+        }
+      : null,
+  ].filter((item) => item !== null);
+
   return (
-    <div className="w-full">
+    // Coluna com `order`: no celular a pessoa abre a página para registrar
+    // chegadas, e "Preços a confirmar" (uma lista de cartões fechados que passa
+    // de 1.000 px) empurrava as entregas para depois de três telas. Do `sm` em
+    // diante vale a ordem do documento, como sempre foi.
+    <div className="flex w-full flex-col">
       <PageHeader
         title="Recebimentos"
         description={
@@ -323,12 +351,36 @@ async function RecebimentosConteudo({
         ))}
       </nav>
 
+      <nav
+        aria-label="Seções"
+        className="mb-5 grid grid-flow-col auto-cols-fr gap-2 sm:hidden"
+      >
+        {atalhosCelular.map((item) => (
+          <Link
+            key={item.rotulo}
+            href={item.href}
+            className="border-border bg-surface text-fg active:bg-surface-muted flex h-11 items-center justify-center gap-1.5 rounded-lg border px-2 text-sm font-medium"
+          >
+            {item.rotulo}
+            <span
+              className={
+                item.alerta
+                  ? "bg-warning-soft text-warning rounded-sm px-1.5 text-xs tabular-nums"
+                  : "bg-surface-muted text-fg-subtle rounded-sm px-1.5 text-xs tabular-nums"
+              }
+            >
+              {item.n}
+            </span>
+          </Link>
+        ))}
+      </nav>
+
       {/* No celular a seção só aparece quando há o que conferir: a
           conferência já se faz pelo celular, mas um aviso vazio no topo
           empurraria as entregas do dia para baixo. */}
       <section
         id="conferir"
-        className={`mb-8 scroll-mt-20 ${board.awaitingCheck.length ? "" : "hidden sm:block"}`}
+        className={`order-1 mb-8 scroll-mt-20 sm:order-none ${board.awaitingCheck.length ? "" : "hidden sm:block"}`}
       >
         <div className="mb-3">
           <h2 className="text-fg font-semibold">Aguardando conferência</h2>
@@ -420,7 +472,10 @@ async function RecebimentosConteudo({
       </section>
 
       {pendingPrices.length ? (
-        <section id="confirmar-precos" className="mb-8 scroll-mt-20">
+        <section
+          id="confirmar-precos"
+          className="order-3 mb-8 scroll-mt-20 sm:order-none"
+        >
           <div className="mb-3 flex items-start gap-3">
             <span className="bg-surface-sunken border-border rounded-lg border p-2">
               <BadgeDollarSign className="text-fg-muted size-4" aria-hidden />
@@ -469,7 +524,10 @@ async function RecebimentosConteudo({
         </section>
       ) : null}
 
-      <section id="previstas" className="mb-8 scroll-mt-20">
+      <section
+        id="previstas"
+        className="order-2 mb-8 scroll-mt-20 sm:order-none"
+      >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-fg font-semibold">Entregas previstas</h2>
@@ -483,38 +541,59 @@ async function RecebimentosConteudo({
             {expected.length}
           </Badge>
         </div>
+        <ListSegments
+          basePath="/recebimentos"
+          param="filtro"
+          atual={filter === "todas" ? null : filter}
+          segmentos={[
+            { valor: null, rotulo: "Todas", contagem: expected.length },
+            {
+              valor: "atrasadas",
+              rotulo: "Atrasadas",
+              contagem: lateOnes.length,
+            },
+            { valor: "hoje", rotulo: "Hoje", contagem: dueToday.length },
+            {
+              valor: "proximas",
+              rotulo: "Próximas",
+              contagem: upcoming.length,
+            },
+          ]}
+          params={params}
+          apenasMenuNoCelular
+        />
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Link
             href={filterHref("todas")}
             aria-current={filter === "todas" ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${filter === "todas" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
+            className={`max-sm:hidden rounded-full border px-3 py-1 text-xs font-medium ${filter === "todas" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
           >
             Todas ({expected.length})
           </Link>
           <Link
             href={filterHref("atrasadas")}
             aria-current={filter === "atrasadas" ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${filter === "atrasadas" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
+            className={`max-sm:hidden rounded-full border px-3 py-1 text-xs font-medium ${filter === "atrasadas" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
           >
             Atrasadas ({lateOnes.length})
           </Link>
           <Link
             href={filterHref("hoje")}
             aria-current={filter === "hoje" ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${filter === "hoje" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
+            className={`max-sm:hidden rounded-full border px-3 py-1 text-xs font-medium ${filter === "hoje" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
           >
             Hoje ({dueToday.length})
           </Link>
           <Link
             href={filterHref("proximas")}
             aria-current={filter === "proximas" ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${filter === "proximas" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
+            className={`max-sm:hidden rounded-full border px-3 py-1 text-xs font-medium ${filter === "proximas" ? "border-primary-solid bg-primary-solid text-primary-solid-fg" : "border-border text-fg-muted hover:text-fg"}`}
           >
             Próximas ({upcoming.length})
           </Link>
           <Link
             href={filterHref(filter, !groupBySupplier)}
-            className="text-primary ml-auto text-xs font-medium underline underline-offset-2"
+            className="text-primary ml-auto text-xs font-medium underline underline-offset-2 max-sm:py-1.5"
           >
             {groupBySupplier ? "Ver em lista" : "Agrupar por fornecedor"}
           </Link>

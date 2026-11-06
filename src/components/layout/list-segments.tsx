@@ -41,6 +41,7 @@ export function ListSegments({
   atual,
   segmentos,
   params,
+  apenasMenuNoCelular = false,
 }: {
   basePath: string;
   param: string;
@@ -48,6 +49,13 @@ export function ListSegments({
   segmentos: Segmento[];
   /** O recorte da página, para as abas preservarem busca e datas. */
   params: Record<string, string | string[] | undefined>;
+  /**
+   * Menu só abaixo de `sm` e nada de abas de `lg` em diante.
+   *
+   * Para o recorte que no desktop já tem outro desenho (os filtros em pílula
+   * de Recebimentos) e só precisa deixar de empilhar no celular.
+   */
+  apenasMenuNoCelular?: boolean;
 }) {
   function href(valor: string | null) {
     const busca = new URLSearchParams();
@@ -66,7 +74,13 @@ export function ListSegments({
 
   return (
     <>
-      <nav aria-label="Situação" className="mb-4 shrink-0 lg:hidden">
+      <nav
+        aria-label="Situação"
+        className={cn(
+          "mb-4 shrink-0",
+          apenasMenuNoCelular ? "sm:hidden" : "lg:hidden",
+        )}
+      >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -117,41 +131,43 @@ export function ListSegments({
         </DropdownMenu>
       </nav>
 
-      <nav
-        aria-label="Situação"
-        className="border-border mb-4 hidden shrink-0 gap-1 overflow-x-auto border-b lg:flex"
-      >
-        {segmentos.map((segmento) => {
-          const ativo = segmento.valor === atual;
-          return (
-            <Link
-              key={segmento.valor ?? "todas"}
-              href={href(segmento.valor)}
-              scroll={false}
-              aria-current={ativo ? "page" : undefined}
-              className={cn(
-                "-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors",
-                "pointer-coarse:py-3",
-                ativo
-                  ? "border-primary text-fg font-medium"
-                  : "text-fg-muted hover:text-fg border-transparent",
-              )}
-            >
-              {segmento.rotulo}
-              <span
+      {apenasMenuNoCelular ? null : (
+        <nav
+          aria-label="Situação"
+          className="border-border mb-4 hidden shrink-0 gap-1 overflow-x-auto border-b lg:flex"
+        >
+          {segmentos.map((segmento) => {
+            const ativo = segmento.valor === atual;
+            return (
+              <Link
+                key={segmento.valor ?? "todas"}
+                href={href(segmento.valor)}
+                scroll={false}
+                aria-current={ativo ? "page" : undefined}
                 className={cn(
-                  "rounded-sm px-1.5 text-xs tabular-nums",
+                  "-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors",
+                  "pointer-coarse:py-3",
                   ativo
-                    ? "bg-primary-soft text-primary"
-                    : "bg-surface-muted text-fg-subtle",
+                    ? "border-primary text-fg font-medium"
+                    : "text-fg-muted hover:text-fg border-transparent",
                 )}
               >
-                {segmento.contagem}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
+                {segmento.rotulo}
+                <span
+                  className={cn(
+                    "rounded-sm px-1.5 text-xs tabular-nums",
+                    ativo
+                      ? "bg-primary-soft text-primary"
+                      : "bg-surface-muted text-fg-subtle",
+                  )}
+                >
+                  {segmento.contagem}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </>
   );
 }

@@ -266,13 +266,13 @@ export function ConfirmPricesForm({
         })}
       </ul>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="flex flex-col gap-1">
           <label
             htmlFor={`nf-${receipt.receiptId}`}
             className="text-fg-muted text-xs"
           >
-            Número da nota (opcional)
+            Nº da nota (opcional)
           </label>
           <Input
             id={`nf-${receipt.receiptId}`}
@@ -295,7 +295,7 @@ export function ConfirmPricesForm({
             className="h-8"
           />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="col-span-2 flex flex-col gap-1 sm:col-span-1">
           <label
             htmlFor={`nt-${receipt.receiptId}`}
             className="text-fg-muted text-xs"
@@ -323,7 +323,12 @@ export function ConfirmPricesForm({
             : "O que ficar em branco continua pendente."}
         </p>
         {canConfirm ? (
-          <Button type="submit" size="sm" disabled={pending || filled === 0}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={pending || filled === 0}
+            className="max-sm:w-full"
+          >
             {pending ? "Confirmando…" : "Confirmar preços"}
           </Button>
         ) : (
