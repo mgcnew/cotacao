@@ -69,7 +69,12 @@ export default async function ComprasPage({
         action={
           <>
             <Suspense fallback={null}>
-              <ListSearch placeholder="Buscar rodada pelo título" />
+              {/* No celular a busca divide a linha com as ações: eram três
+                  linhas antes da primeira rodada. */}
+              <ListSearch
+                placeholder="Buscar rodada pelo título"
+                className="w-auto min-w-0 flex-1 sm:w-72 sm:flex-none"
+              />
             </Suspense>
             <FilterDialog
               basePath="/compras"
@@ -84,7 +89,7 @@ export default async function ComprasPage({
             >
               <RoundFilterFields filters={filters} />
             </FilterDialog>
-            {podeCriar ? <NewRoundDialog /> : null}
+            {podeCriar ? <NewRoundDialog compacto /> : null}
           </>
         }
       />

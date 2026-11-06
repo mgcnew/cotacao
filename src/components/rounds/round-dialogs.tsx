@@ -40,9 +40,12 @@ import { createRound, type RoundFormState } from "@/features/rounds/actions";
  */
 export function NewRoundDialog({
   rotulo = "Nova rodada",
+  compacto = false,
 }: {
   /** O estado vazio convida com outras palavras que o botão do cabeçalho. */
   rotulo?: string;
+  /** No celular vira só o "+": o cabeçalho divide a linha com a busca. */
+  compacto?: boolean;
 }) {
   const [state, formAction] = useActionState<RoundFormState, FormData>(
     createRound,
@@ -63,7 +66,10 @@ export function NewRoundDialog({
     >
       <DialogTrigger asChild>
         <Button size="sm" className="gap-1.5">
-          <Plus className="size-3.5" aria-hidden /> {rotulo}
+          <Plus className="size-3.5" aria-hidden />{" "}
+          <span className={compacto ? "max-sm:sr-only" : undefined}>
+            {rotulo}
+          </span>
         </Button>
       </DialogTrigger>
 

@@ -294,7 +294,7 @@ export function RoundMobileCard({
   }
 
   return (
-    <article className="border-border bg-surface rounded-xl border p-4 shadow-xs">
+    <article className="border-border bg-surface rounded-xl border p-3.5 shadow-xs">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="flex min-w-0 items-start gap-1">
@@ -317,47 +317,45 @@ export function RoundMobileCard({
               </Button>
             ) : null}
           </span>
-          <p className="text-fg-subtle mt-1 text-xs">Criada {round.criadaEm}</p>
+          <p className="text-fg-subtle mt-0.5 text-xs">
+            Criada {round.criadaEm} · {round.totalItems}{" "}
+            {round.totalItems === 1 ? "produto" : "produtos"}
+          </p>
         </div>
         <Badge className="shrink-0" variant={roundStatusTone(round.status)}>
           {ROUND_STATUS_LABEL[round.status] ?? round.status}
         </Badge>
       </div>
 
-      <dl className="border-border mt-3 grid grid-cols-3 gap-2 border-y py-3 text-center">
-        <div>
-          <dt className="text-fg-subtle text-xs">Produtos</dt>
-          <dd className="text-fg mt-0.5 font-medium tabular-nums">
-            {round.totalItems}
-          </dd>
-        </div>
-        <div className="border-border border-x px-1">
-          <dt className="text-fg-subtle text-xs">Retorno / fim</dt>
-          <dd className="text-fg mt-0.5 font-medium tabular-nums">
-            {round.suppliersResponded}/{round.totalSuppliers}
-            <span className="text-fg-subtle ml-1 text-xs font-normal">
-              · {round.suppliersFinalized} fim
-            </span>
-          </dd>
-        </div>
-        <div>
-          <dt className="text-fg-subtle text-xs">Pedidos</dt>
-          <dd className="text-fg mt-0.5 font-medium tabular-nums">
-            {round.ordersCreated}
-          </dd>
-        </div>
-      </dl>
+      {/* Os três números do cartão antigo viram uma linha: eram 70px de grade
+          para dizer o que cabe em uma frase. Com próximo passo a cumprir, o
+          botão ganha a largura toda embaixo; sem ele, "Abrir" divide a linha
+          com o resumo em vez de ocupar uma só para si. */}
+      <div className="mt-2.5 flex items-center justify-between gap-3">
+        <p className="text-fg-muted min-w-0 text-xs tabular-nums">
+          {round.totalSuppliers > 0
+            ? `Retorno ${round.suppliersResponded}/${round.totalSuppliers} · ${round.suppliersFinalized} fim`
+            : "Sem fornecedores"}
+          {" · "}
+          {round.ordersCreated}{" "}
+          {round.ordersCreated === 1 ? "pedido" : "pedidos"}
+        </p>
+        {passo.pending && podeAgir ? null : (
+          <Button asChild size="sm" variant="outline" className="shrink-0">
+            <IntentPrefetchLink href={`/compras/${round.id}${passo.path}`}>
+              {podeAgir ? passo.label : "Abrir rodada"}
+            </IntentPrefetchLink>
+          </Button>
+        )}
+      </div>
 
-      <Button
-        asChild
-        size="sm"
-        className="mt-3 w-full"
-        variant={passo.pending && podeAgir ? "default" : "outline"}
-      >
-        <IntentPrefetchLink href={`/compras/${round.id}${passo.path}`}>
-          {podeAgir ? passo.label : "Abrir rodada"}
-        </IntentPrefetchLink>
-      </Button>
+      {passo.pending && podeAgir ? (
+        <Button asChild size="sm" className="mt-2.5 w-full">
+          <IntentPrefetchLink href={`/compras/${round.id}${passo.path}`}>
+            {passo.label}
+          </IntentPrefetchLink>
+        </Button>
+      ) : null}
     </article>
   );
 }
