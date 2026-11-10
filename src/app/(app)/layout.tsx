@@ -12,6 +12,10 @@ import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { OperationalLiveUpdates } from "@/components/layout/operational-live-updates";
 import { PwaInstallButton } from "@/components/layout/pwa-install-button";
 import {
+  AccentToggle,
+  ThemeModeToggle,
+} from "@/components/layout/theme-toggle";
+import {
   NotificationSlot,
   NotificationSlotFallback,
 } from "@/components/layout/notification-slot";
@@ -72,9 +76,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Trilha à esquerda, busca no centro, sino e conta à direita — as
-            duas pontas com `flex-1` para o gatilho da busca ficar no meio. Tema,
-            instalar e Sair moram no menu da conta: são raros, e o Sair solto
-            ao lado do sino convidava ao clique sem querer. */}
+            duas pontas com `flex-1` para o gatilho da busca ficar no meio. O
+            alternador de tema fica logo depois do sino. Instalar e Sair moram
+            no menu da conta: são raros, e o Sair solto ao lado do sino
+            convidava ao clique sem querer. */}
         <header
           data-slot="app-header"
           className="border-border bg-surface flex h-14 shrink-0 items-center gap-3 border-b px-4 sm:px-6"
@@ -88,6 +93,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <Suspense fallback={<NotificationSlotFallback />}>
               <NotificationSlot companyId={activeCompany.companyId} />
             </Suspense>
+            <ThemeModeToggle />
+            <AccentToggle />
             <CompanySwitcher
               companies={memberships}
               activeCompanyId={activeCompany.companyId}
