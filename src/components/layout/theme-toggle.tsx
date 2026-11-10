@@ -60,7 +60,10 @@ export function ThemeModeToggle() {
     () => false,
   );
 
-  const atual = MODOS.find((m) => m.value === theme) ?? MODOS[2];
+  // Antes da hidratação o tema ainda não é conhecido no cliente: mostra o
+  // padrão, igual ao servidor, para não divergir do HTML renderizado.
+  const atual =
+    (mounted && MODOS.find((m) => m.value === theme)) || MODOS[2];
   const proximo = MODOS[(MODOS.indexOf(atual) + 1) % MODOS.length];
   const label = `Tema: ${atual.label}. Trocar para ${proximo.label}`;
   const Icon = atual.icon;

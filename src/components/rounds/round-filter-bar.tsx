@@ -1,12 +1,10 @@
-import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import {
   SITUACOES_COMPOSTAS,
   type RoundFilters,
 } from "@/features/rounds/filters";
 import { ROUND_STATUS_LABEL } from "@/features/rounds/status";
-
-const selectClass =
-  "border-input bg-surface text-fg focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3";
 
 /**
  * Os campos do recorte da lista de rodadas.
@@ -15,6 +13,9 @@ const selectClass =
  * `FilterDialog`, que é quem sabe para onde levar. Assim estes campos
  * continuam sendo componente de servidor — eles não têm estado nenhum, e o
  * navegador não precisa recebê-los como JavaScript.
+ *
+ * Situação e datas usam os controles do sistema, não os nativos do navegador:
+ * o calendário e a lista do navegador ignoram o tema escolhido no app.
  */
 export function RoundFilterFields({ filters }: { filters: RoundFilters }) {
   return (
@@ -23,36 +24,35 @@ export function RoundFilterFields({ filters }: { filters: RoundFilters }) {
         <label htmlFor="situacao" className="text-fg-muted text-xs">
           Situação
         </label>
-        <select
+        <ThemedSelect
           id="situacao"
           name="situacao"
           defaultValue={filters.situacao ?? ""}
-          className={selectClass}
-        >
-          <option value="">Todas</option>
-          {Object.entries(SITUACOES_COMPOSTAS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-          {Object.entries(ROUND_STATUS_LABEL).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+          placeholder="Todas"
+          emptyOptionLabel="Todas"
+          options={[
+            ...Object.entries(SITUACOES_COMPOSTAS).map(([value, label]) => ({
+              value,
+              label,
+            })),
+            ...Object.entries(ROUND_STATUS_LABEL).map(([value, label]) => ({
+              value,
+              label,
+            })),
+          ]}
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="de" className="text-fg-muted text-xs">
           Criadas de
         </label>
-        <Input
+        <DateTimePicker
           id="de"
           name="de"
-          type="date"
           defaultValue={filters.de ?? ""}
-          className="h-8"
+          placeholder="Escolher data inicial"
+          dateOnly
         />
       </div>
 
@@ -60,12 +60,12 @@ export function RoundFilterFields({ filters }: { filters: RoundFilters }) {
         <label htmlFor="ate" className="text-fg-muted text-xs">
           Até
         </label>
-        <Input
+        <DateTimePicker
           id="ate"
           name="ate"
-          type="date"
           defaultValue={filters.ate ?? ""}
-          className="h-8"
+          placeholder="Escolher data final"
+          dateOnly
         />
       </div>
     </div>
