@@ -3579,6 +3579,147 @@ export type Database = {
           },
         ];
       };
+      stock_count_entries: {
+        Row: {
+          company_id: string;
+          counted_by: string | null;
+          created_at: string;
+          id: string;
+          location: string | null;
+          quantity: number;
+          stock_count_id: string;
+          stock_count_item_id: string;
+        };
+        Insert: {
+          company_id: string;
+          counted_by?: string | null;
+          created_at?: string;
+          id?: string;
+          location?: string | null;
+          quantity: number;
+          stock_count_id: string;
+          stock_count_item_id: string;
+        };
+        Update: {
+          company_id?: string;
+          counted_by?: string | null;
+          created_at?: string;
+          id?: string;
+          location?: string | null;
+          quantity?: number;
+          stock_count_id?: string;
+          stock_count_item_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "stock_count_entries_company_id_stock_count_id_fkey";
+            columns: ["company_id", "stock_count_id"];
+            isOneToOne: false;
+            referencedRelation: "stock_counts";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "stock_count_entries_company_id_stock_count_item_id_fkey";
+            columns: ["company_id", "stock_count_item_id"];
+            isOneToOne: false;
+            referencedRelation: "stock_count_items";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
+      stock_count_items: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          id: string;
+          product_id: string;
+          stock_count_id: string;
+          unit_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          id?: string;
+          product_id: string;
+          stock_count_id: string;
+          unit_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          id?: string;
+          product_id?: string;
+          stock_count_id?: string;
+          unit_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "stock_count_items_company_id_product_id_fkey";
+            columns: ["company_id", "product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "stock_count_items_company_id_stock_count_id_fkey";
+            columns: ["company_id", "stock_count_id"];
+            isOneToOne: false;
+            referencedRelation: "stock_counts";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "stock_count_items_company_id_unit_id_fkey";
+            columns: ["company_id", "unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
+      stock_counts: {
+        Row: {
+          closed_at: string | null;
+          company_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          name: string | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          closed_at?: string | null;
+          company_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          closed_at?: string | null;
+          company_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "stock_counts_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       supplier_categories: {
         Row: {
           category_id: string;

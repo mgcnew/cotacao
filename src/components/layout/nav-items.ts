@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  ClipboardCheck,
   ClipboardList,
   ListChecks,
   LayoutGrid,
@@ -70,6 +71,12 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/produtos",
         label: "Produtos",
         icon: Package,
+        permission: "product.view",
+      },
+      {
+        href: "/contagens",
+        label: "Contagem de estoque",
+        icon: ClipboardCheck,
         permission: "product.view",
       },
       {
