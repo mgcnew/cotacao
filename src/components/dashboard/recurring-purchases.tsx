@@ -180,8 +180,8 @@ export function RecurringPurchases({
             Próximas compras recorrentes
           </h2>
           <p className="text-fg-muted mt-0.5 text-xs">
-            O lembrete desaparece quando um pedido ou uma cotação deste
-            fornecedor é preparado.
+            O lembrete some assim que você montar um pedido ou uma cotação para
+            esse fornecedor.
           </p>
         </div>
         <span className="bg-primary-soft text-primary rounded-full px-2.5 py-1 text-xs font-semibold">

@@ -274,11 +274,11 @@ async function PrioridadesConteudo({
         <div className="border-border bg-surface rounded-2xl border p-6 shadow-xs">
           <ShoppingCart className="text-primary size-7" aria-hidden />
           <h2 className="text-fg mt-5 text-base font-semibold">
-            Sua operação começa aqui
+            Aqui vai aparecer o seu dia
           </h2>
           <p className="text-fg-muted mt-2 text-sm leading-relaxed">
-            Depois da primeira cotação, este espaço passa a mostrar respostas,
-            pedidos, atrasos e economia automaticamente.
+            Depois da primeira cotação, é aqui que você vê quem respondeu, os
+            pedidos a caminho, o que atrasou e quanto economizou.
           </p>
         </div>
       </section>
@@ -389,8 +389,8 @@ async function ResultadoDoMes({
         <div className="flex items-center gap-3 px-5 py-6">
           <WalletCards className="text-fg-subtle size-5" aria-hidden />
           <p className="text-fg-muted text-sm">
-            Os resultados aparecem ao concluir uma cotação ou conferir a
-            primeira entrada de mercadoria do mês.
+            Ainda não há números deste mês. Eles aparecem quando você concluir
+            uma cotação ou conferir a primeira mercadoria que chegar.
           </p>
         </div>
       ) : (
@@ -471,12 +471,13 @@ async function ResultadoDoMes({
               Como ler estes números
             </summary>
             <p className="text-fg-muted mt-2 text-sm leading-relaxed">
-              Economia é quanto o preço final ficou abaixo da proposta inicial;
-              se for negativa, o preço terminou acima. A previsão considera as
-              cotações encerradas no mês, e o realizado só o que já chegou.
-              Pedidos diretos entram no valor conferido, mas não geram economia
-              contra cotação. A escolha de embalagens vale só para produtos com
-              finalidade Embalagem.
+              Economia é quanto o preço final ficou abaixo da primeira proposta
+              do fornecedor. Se aparecer negativa, o preço fechou acima. A
+              previsão conta as cotações encerradas no mês, e o realizado conta
+              só o que já chegou. Pedido direto entra no valor conferido, mas
+              não tem proposta para comparar, então não gera economia. A
+              escolha de embalagens só vale para produtos com finalidade
+              Embalagem.
             </p>
           </details>
         </div>
@@ -520,14 +521,14 @@ function FraseDoMes({
         ) : (
           <>As compras já recebidas fecharam no valor da proposta inicial</>
         )}
+        .
         {previsto !== 0 && financial.cotacoesConcluidas > 0 ? (
           <span className="text-fg-muted">
             {" "}
-            — as negociações previam {previsto > 0 ? "" : "−"}
-            {MONEY.format(Math.abs(previsto))}
+            Na negociação, a previsão era de {previsto > 0 ? "" : "−"}
+            {MONEY.format(Math.abs(previsto))}.
           </span>
         ) : null}
-        .
       </>
     );
   }
@@ -549,9 +550,10 @@ function FraseDoMes({
       ) : (
         <>As negociações concluídas não preveem diferença de preço</>
       )}
+      .
       <span className="text-fg-muted">
         {" "}
-        — o resultado real aparece conforme a mercadoria for conferida.
+        O valor real aparece conforme a mercadoria chegar e for conferida.
       </span>
     </>
   );
@@ -571,7 +573,7 @@ async function AtividadeConteudo({ companyId }: { companyId: string }) {
           Movimentações recentes
         </h2>
         <p className="text-fg-muted mt-0.5 text-xs">
-          O histórico mais recente da operação e dos fornecedores.
+          O que você, sua equipe e os fornecedores fizeram por último.
         </p>
       </header>
       <ActivityFeed entries={activity} />

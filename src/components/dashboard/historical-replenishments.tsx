@@ -40,7 +40,9 @@ export function HistoricalReplenishments({
             Reposição para revisar
           </h2>
           <p className="text-fg-muted mt-0.5 text-xs">
-            Produtos recorrentes que ainda não estão cobertos nesta semana.
+            Produtos que você costuma comprar e que ainda faltam nesta semana,
+            já descontado o que chegou, está pedido, em cotação ou na lista de
+            compras.
           </p>
         </div>
         <Button asChild size="sm" variant="outline">

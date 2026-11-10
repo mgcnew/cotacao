@@ -123,8 +123,8 @@ export function DetectedPurchasePatterns({
             Rotinas que o sistema percebeu
           </h2>
           <p className="text-fg-muted mt-0.5 text-xs">
-            O histórico indica um dia e uma frequência consistentes, mas você
-            decide se quer o lembrete.
+            Pelo histórico, você compra desses fornecedores sempre no mesmo dia
+            e com a mesma frequência. Se quiser, isso vira um lembrete.
           </p>
         </div>
         <span className="bg-warning-soft text-warning rounded-full px-2.5 py-1 text-xs font-semibold">

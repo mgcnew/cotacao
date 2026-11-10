@@ -26,10 +26,10 @@ export function SectionError({ nome }: { nome: string }) {
       <AlertCircle className="text-warning size-5 shrink-0" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="text-fg text-sm font-medium">
-          Não foi possível carregar {nome}.
+          Não deu para carregar {nome} agora.
         </p>
         <p className="text-fg-muted text-xs">
-          O resto da tela continua funcionando.
+          O resto da tela está funcionando normalmente.
         </p>
       </div>
       <Button

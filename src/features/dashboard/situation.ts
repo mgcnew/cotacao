@@ -79,7 +79,7 @@ export async function getFirstSteps(
   if (permissions.has("product.view")) {
     passos.push({
       label: "Cadastrar produtos",
-      hint: "O item da cotação grava as unidades do cadastro do produto.",
+      hint: "A cotação usa as unidades que você definir em cada produto.",
       href: "/produtos",
       done: s.produtosAtivos > 0,
     });
@@ -88,7 +88,7 @@ export async function getFirstSteps(
   if (permissions.has("supplier.view")) {
     passos.push({
       label: "Cadastrar fornecedores",
-      hint: "Com contato de WhatsApp, é para lá que a cotação vai.",
+      hint: "Coloque o WhatsApp de cada um: é por lá que a cotação chega.",
       href: "/fornecedores",
       done: s.fornecedoresAtivos > 0,
     });
@@ -97,7 +97,7 @@ export async function getFirstSteps(
   if (permissions.has("purchase_round.create")) {
     passos.push({
       label: "Abrir a primeira rodada de compras",
-      hint: "Reúne os produtos, convida os fornecedores e compara os preços.",
+      hint: "Você escolhe os produtos, chama os fornecedores e compara os preços lado a lado.",
       href: "/compras/nova",
       done: s.rodadasTotal > 0,
     });
@@ -106,7 +106,7 @@ export async function getFirstSteps(
   if (permissions.has("order.create")) {
     passos.push({
       label: "Ou lançar um pedido direto",
-      hint: "Para a compra que já foi fechada por telefone, sem cotar.",
+      hint: "Para quando você já fechou a compra por telefone e não precisa cotar.",
       href: "/pedidos/novo",
       done: false,
     });

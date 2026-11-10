@@ -23,8 +23,8 @@ export function FirstSteps({ steps }: { steps: FirstStep[] }) {
     <div className="border-border bg-surface rounded-xl border p-5">
       <h2 className="text-fg text-sm font-semibold">Comece por aqui</h2>
       <p className="text-fg-muted mt-1 mb-4 text-sm">
-        Ainda não há compras para acompanhar. Estes são os passos até a primeira
-        cotação.
+        Você ainda não tem compras para acompanhar. Siga nesta ordem até a
+        primeira cotação.
       </p>
 
       <ol className="flex flex-col gap-1">

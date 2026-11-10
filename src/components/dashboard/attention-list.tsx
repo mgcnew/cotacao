@@ -28,9 +28,10 @@ export function AttentionList({
           <CheckCircle2 className="size-5" aria-hidden />
         </span>
         <div className="text-sm">
-          <p className="text-fg font-medium">Nada pedindo atenção agora</p>
+          <p className="text-fg font-medium">Tudo em dia por enquanto</p>
           <p className="text-fg-muted">
-            Sem atrasos, divergências ou processos parados.
+            Nenhum pedido atrasado, nenhuma divergência aberta e nenhuma
+            compra parada esperando você.
           </p>
         </div>
       </div>

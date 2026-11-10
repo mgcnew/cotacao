@@ -76,8 +76,8 @@ export async function getAttentionItems(
         ),
         hint:
           s.pedidosAtrasados === 1
-            ? `Prazo vencido há ${plural(s.atrasoPiorDias, "dia", "dias")}.`
-            : `O mais antigo está vencido há ${plural(s.atrasoPiorDias, "dia", "dias")}.`,
+            ? `Era para ter chegado há ${plural(s.atrasoPiorDias, "dia", "dias")}.`
+            : `O mais antigo era para ter chegado há ${plural(s.atrasoPiorDias, "dia", "dias")}.`,
         count: s.pedidosAtrasados,
         severity: "high",
         href: destino(
@@ -95,7 +95,7 @@ export async function getAttentionItems(
         title:
           plural(s.entregasHoje, "entrega prevista", "entregas previstas") +
           " para hoje",
-        hint: "Dar entrada assim que a mercadoria chegar.",
+        hint: "Quando a mercadoria chegar, é só dar entrada no recebimento.",
         count: s.entregasHoje,
         severity: "normal",
         href: destino(
@@ -115,7 +115,10 @@ export async function getAttentionItems(
           "pedido em rascunho",
           "pedidos em rascunho",
         ),
-        hint: "Gerado, mas ainda não enviado ao fornecedor.",
+        hint:
+          s.pedidosRascunho === 1
+            ? "Já está montado, só falta mandar para o fornecedor."
+            : "Já estão montados, só falta mandar para os fornecedores.",
         count: s.pedidosRascunho,
         severity: "normal",
         href: destino(
@@ -136,7 +139,7 @@ export async function getAttentionItems(
             "revisão aguardando",
             "revisões aguardando",
           ) + " envio",
-        hint: "O fornecedor ainda está com a versão anterior do pedido.",
+        hint: "Você alterou o pedido, e o fornecedor ainda está com a versão antiga.",
         count: s.revisoesPendentes,
         severity: "high",
         href: destino(
@@ -152,7 +155,7 @@ export async function getAttentionItems(
       itens.push({
         key: "falhas-de-envio",
         title: plural(s.falhasEnvio, "envio que falhou", "envios que falharam"),
-        hint: `Nos últimos ${DIAS_DE_FALHA} dias, sem reenvio bem-sucedido, abertura ou resposta posterior.`,
+        hint: `Falharam nos últimos ${DIAS_DE_FALHA} dias e não foram reenviados. O fornecedor também não abriu nem respondeu depois.`,
         count: s.falhasEnvio,
         severity: "high",
         href: "/pedidos?situacao=abertos",
@@ -170,7 +173,7 @@ export async function getAttentionItems(
       title:
         plural(s.divergenciasComerciais, "divergência", "divergências") +
         " de recebimento a tratar",
-      hint: "Preço ou quantidade diferente do pedido, pendente ou em contestação.",
+      hint: "Chegou com preço ou quantidade diferente do pedido, e isso ainda não foi resolvido.",
       count: s.divergenciasComerciais,
       severity: "high",
       href: destino(
@@ -193,7 +196,7 @@ export async function getAttentionItems(
           "divergência apontada",
           "divergências apontadas",
         ) + " pelo fornecedor",
-      hint: "Enquanto não for resolvida, o pedido não avança para entrega.",
+      hint: "O pedido fica parado, sem ir para entrega, até você responder.",
       count: s.divergenciasFornecedor,
       severity: "high",
       href: destino(
@@ -256,7 +259,7 @@ function pendenciasDeRodada(s: DashboardSnapshot): AttentionItem[] {
       title:
         plural(prontas.length, "rodada pronta", "rodadas prontas") +
         " para fechar",
-      hint: "Todos responderam e nenhum pedido foi gerado ainda.",
+      hint: "Todo mundo já respondeu. Falta decidir de quem comprar e gerar os pedidos.",
       count: prontas.length,
       severity: "high",
       href:
@@ -277,7 +280,7 @@ function pendenciasDeRodada(s: DashboardSnapshot): AttentionItem[] {
       title:
         plural(s.itensSemAlocacao, "item sem decisão", "itens sem decisão") +
         " de compra",
-      hint: "Já há resposta de fornecedor, mas ninguém escolheu de quem comprar.",
+      hint: "Os fornecedores já mandaram preço, falta escolher de quem comprar.",
       count: s.itensSemAlocacao,
       severity: "normal",
       href:
