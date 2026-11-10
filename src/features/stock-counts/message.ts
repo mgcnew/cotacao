@@ -27,6 +27,31 @@ export function itemTotal(entries: { quantity: number }[]) {
   return Math.round(entries.reduce((sum, e) => sum + e.quantity, 0) * 1000) / 1000;
 }
 
+/**
+ * A ordem da lista, na tela e no link: marcados para recontar no topo, depois
+ * os contados por último — quem reconta acha logo o que acabou de mexer.
+ */
+export function sortCountItems<
+  T extends {
+    name: string;
+    needsRecount: boolean;
+    entries: { createdAt: string }[];
+  },
+>(items: T[]) {
+  const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
+  const lastCounted = (item: T) =>
+    item.entries.reduce(
+      (last, entry) => (entry.createdAt > last ? entry.createdAt : last),
+      "",
+    );
+  return [...items].sort(
+    (a, b) =>
+      Number(b.needsRecount) - Number(a.needsRecount) ||
+      (a.needsRecount ? 0 : lastCounted(b).localeCompare(lastCounted(a))) ||
+      collator.compare(a.name, b.name),
+  );
+}
+
 /** "Geladeira 7 + Estoque 24": lançamentos do mesmo local somam num só. */
 export function describeLocations(
   entries: { quantity: number; location: string | null }[],
@@ -47,11 +72,14 @@ export function buildCountMessage({
   dateLabel,
   author,
   items,
+  link,
 }: {
   title: string;
   dateLabel: string;
   author: string | null;
   items: CountMessageItem[];
+  /** Link público da lista, para quem confere abrir com os locais e a ordem. */
+  link?: string | null;
 }) {
   const counted = items.filter((item) => item.entries.length > 0);
   const byCategory = new Map<string, CountMessageItem[]>();
@@ -84,5 +112,6 @@ export function buildCountMessage({
     sections.join("\n\n"),
     "",
     counted.length === 1 ? "1 produto contado" : `${counted.length} produtos contados`,
+    ...(link ? ["", `Lista completa: ${link}`] : []),
   ].join("\n");
 }

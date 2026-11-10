@@ -3632,6 +3632,7 @@ export type Database = {
           company_id: string;
           created_at: string;
           id: string;
+          needs_recount: boolean;
           product_id: string;
           stock_count_id: string;
           unit_id: string;
@@ -3641,6 +3642,7 @@ export type Database = {
           company_id: string;
           created_at?: string;
           id?: string;
+          needs_recount?: boolean;
           product_id: string;
           stock_count_id: string;
           unit_id: string;
@@ -3650,6 +3652,7 @@ export type Database = {
           company_id?: string;
           created_at?: string;
           id?: string;
+          needs_recount?: boolean;
           product_id?: string;
           stock_count_id?: string;
           unit_id?: string;
@@ -3687,6 +3690,7 @@ export type Database = {
           created_by: string | null;
           id: string;
           name: string | null;
+          public_token: string;
           status: string;
           updated_at: string;
         };
@@ -3697,6 +3701,7 @@ export type Database = {
           created_by?: string | null;
           id?: string;
           name?: string | null;
+          public_token?: string;
           status?: string;
           updated_at?: string;
         };
@@ -3707,6 +3712,7 @@ export type Database = {
           created_by?: string | null;
           id?: string;
           name?: string | null;
+          public_token?: string;
           status?: string;
           updated_at?: string;
         };
@@ -5364,6 +5370,7 @@ export type Database = {
         Args: { p_token: string };
         Returns: Json;
       };
+      rpc_public_get_stock_count: { Args: { p_token: string }; Returns: Json };
       rpc_public_get_quotation: { Args: { p_token: string }; Returns: Json };
       rpc_public_get_quotation_conversion_context: {
         Args: { p_token: string };

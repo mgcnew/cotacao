@@ -39,6 +39,7 @@ const PUBLIC_PREFIXES = [
   "/o/",
   "/n/",
   "/r/",
+  "/c/",
   "/api/evolution/",
 ];
 

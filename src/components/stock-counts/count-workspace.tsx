@@ -4,10 +4,14 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Flag,
+  Link2,
   Lock,
   LockOpen,
   MoreVertical,
   Pencil,
+  RefreshCw,
+  RotateCcw,
   ScanBarcode,
   Search,
   Send,
@@ -53,6 +57,9 @@ import {
   deleteStockCount,
   removeCountItem,
   renameStockCount,
+  restartCountItem,
+  rotateStockCountLink,
+  setCountItemRecount,
   setCountItemUnit,
   setStockCountStatus,
 } from "@/features/stock-counts/actions";
@@ -61,6 +68,7 @@ import {
   describeLocations,
   formatCountQuantity,
   itemTotal,
+  sortCountItems,
 } from "@/features/stock-counts/message";
 import type {
   CountItem,
@@ -80,6 +88,8 @@ type CountInfo = {
   dateLabel: string;
   author: string | null;
   status: "open" | "closed";
+  /** Link público, só leitura, que vai no fim da mensagem. */
+  publicUrl: string;
 };
 
 type Target = { product: CountProduct } | null;
@@ -132,10 +142,7 @@ export function CountWorkspace({
     return [...new Set([...used, ...LOCAIS_PADRAO])];
   }, [items]);
 
-  const sorted = React.useMemo(() => {
-    const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
-    return [...items].sort((a, b) => collator.compare(a.name, b.name));
-  }, [items]);
+  const sorted = React.useMemo(() => sortCountItems(items), [items]);
 
   function openProduct(product: CountProduct) {
     setTarget({ product });
@@ -159,7 +166,7 @@ export function CountWorkspace({
       if (existing) {
         return current.map((item) =>
           item === existing
-            ? { ...item, entries: [...item.entries, entry] }
+            ? { ...item, needsRecount: false, entries: [...item.entries, entry] }
             : item,
         );
       }
@@ -170,6 +177,7 @@ export function CountWorkspace({
           name: product.name,
           category: product.category,
           unitId,
+          needsRecount: false,
           entries: [entry],
         },
       ];
@@ -197,7 +205,10 @@ export function CountWorkspace({
       current.flatMap((item) => {
         if (item.productId !== productId) return [item];
         const entries = item.entries.filter((entry) => entry.id !== entryId);
-        return entries.length > 0 ? [{ ...item, entries }] : [];
+        // Marcado para recontar fica na lista mesmo sem lançamento.
+        return entries.length > 0 || item.needsRecount
+          ? [{ ...item, entries }]
+          : [];
       }),
     );
   }
@@ -230,6 +241,41 @@ export function CountWorkspace({
       });
   }
 
+  function toggleRecount(item: CountItem) {
+    const before = items;
+    const needsRecount = !item.needsRecount;
+    setItems((current) =>
+      current.map((other) =>
+        other.productId === item.productId ? { ...other, needsRecount } : other,
+      ),
+    );
+    void setCountItemRecount(count.id, item.productId, needsRecount)
+      .catch(() => ({ error: "Sem conexão. A marcação não mudou." }))
+      .then((result) => {
+        if (!result.error) return;
+        setItems(before);
+        avisar(result.error);
+      });
+  }
+
+  function restartItem(item: CountItem) {
+    const before = items;
+    setItems((current) =>
+      current.map((other) =>
+        other.productId === item.productId
+          ? { ...other, needsRecount: true, entries: [] }
+          : other,
+      ),
+    );
+    void restartCountItem(count.id, item.productId)
+      .catch(() => ({ error: "Sem conexão. Os lançamentos continuam." }))
+      .then((result) => {
+        if (!result.error) return;
+        setItems(before);
+        avisar(result.error);
+      });
+  }
+
   function removeItem(item: CountItem) {
     const before = items;
     setItems((current) =>
@@ -255,10 +301,13 @@ export function CountWorkspace({
       unit: symbol(item.unitId),
       entries: item.entries,
     })),
+    link: count.publicUrl,
   });
 
+  const counted = items.filter((item) => item.entries.length > 0).length;
   const totalLabel =
-    items.length === 1 ? "1 produto contado" : `${items.length} produtos contados`;
+    counted === 1 ? "1 produto contado" : `${counted} produtos contados`;
+  const toRecount = items.filter((item) => item.needsRecount).length;
 
   return (
     <div className="w-full pb-4">
@@ -270,6 +319,12 @@ export function CountWorkspace({
             <span>{count.dateLabel}</span>
             <span aria-hidden>·</span>
             <span>{totalLabel}</span>
+            {toRecount > 0 ? (
+              <span className="bg-warning-soft text-warning inline-flex items-center gap-1 rounded-sm px-1.5 text-xs font-medium">
+                <Flag className="size-3" aria-hidden />
+                {toRecount === 1 ? "1 para recontar" : `${toRecount} para recontar`}
+              </span>
+            ) : null}
             {count.status === "closed" ? (
               <span className="bg-surface-muted text-fg-muted inline-flex items-center gap-1 rounded-sm px-1.5 text-xs">
                 <Lock className="size-3" aria-hidden /> Finalizada
@@ -360,6 +415,8 @@ export function CountWorkspace({
           onDeleteEntry={deleteEntry}
           onChangeUnit={changeUnit}
           onRemoveItem={removeItem}
+          onToggleRecount={toggleRecount}
+          onRestartItem={restartItem}
         />
       ) : null}
     </div>
@@ -375,25 +432,45 @@ function ItemRow({
   unit: string;
   onOpen?: () => void;
 }) {
+  const waiting = item.entries.length === 0;
   const content = (
     <>
       <span className="min-w-0 flex-1">
+        {item.needsRecount ? (
+          <span className="text-warning mb-0.5 flex items-center gap-1 text-[11px] font-semibold tracking-wide uppercase">
+            <Flag className="size-3" aria-hidden /> Recontar
+          </span>
+        ) : null}
         <span className="text-fg line-clamp-2 text-sm leading-snug font-semibold">
           {item.name}
         </span>
         <span className="text-fg-subtle mt-0.5 block truncate text-xs">
-          {describeLocations(item.entries).join(" + ")}
+          {waiting
+            ? "Lançamentos zerados, aguardando a recontagem"
+            : describeLocations(item.entries).join(" + ")}
         </span>
       </span>
       <span className="text-fg shrink-0 text-right text-base font-semibold tabular-nums">
-        {formatCountQuantity(itemTotal(item.entries))}
-        <span className="text-fg-muted ml-1 text-xs font-normal">{unit}</span>
+        {waiting ? (
+          <span className="text-fg-subtle">—</span>
+        ) : (
+          <>
+            {formatCountQuantity(itemTotal(item.entries))}
+            <span className="text-fg-muted ml-1 text-xs font-normal">{unit}</span>
+          </>
+        )}
       </span>
     </>
   );
 
   return (
-    <li className="border-border border-b last:border-b-0">
+    <li
+      className={cn(
+        "border-border border-b last:border-b-0",
+        item.needsRecount &&
+          "bg-warning-soft/60 shadow-[inset_3px_0_0_var(--color-warning)]",
+      )}
+    >
       {onOpen ? (
         <button
           type="button"
@@ -511,6 +588,8 @@ function CountSheet({
   onDeleteEntry,
   onChangeUnit,
   onRemoveItem,
+  onToggleRecount,
+  onRestartItem,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -528,6 +607,8 @@ function CountSheet({
   onDeleteEntry: (item: CountItem, entryId: string) => void;
   onChangeUnit: (item: CountItem, unitId: string) => void;
   onRemoveItem: (item: CountItem) => void;
+  onToggleRecount: (item: CountItem) => void;
+  onRestartItem: (item: CountItem) => void;
 }) {
   const [query, setQuery] = React.useState("");
 
@@ -559,6 +640,8 @@ function CountSheet({
             onDeleteEntry={onDeleteEntry}
             onChangeUnit={onChangeUnit}
             onRemoveItem={onRemoveItem}
+            onToggleRecount={onToggleRecount}
+            onRestartItem={onRestartItem}
           />
         ) : (
           <>
@@ -695,7 +778,11 @@ function SearchView({
                           {product.category}
                         </span>
                       </span>
-                      {item ? (
+                      {item?.needsRecount ? (
+                        <span className="bg-warning-soft text-warning shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold">
+                          Recontar
+                        </span>
+                      ) : item ? (
                         <span className="bg-primary-soft text-primary shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums">
                           {formatCountQuantity(itemTotal(item.entries))}{" "}
                           {symbol(item.unitId)}
@@ -741,6 +828,8 @@ function EntryView({
   onDeleteEntry,
   onChangeUnit,
   onRemoveItem,
+  onToggleRecount,
+  onRestartItem,
 }: {
   product: CountProduct;
   item: CountItem | undefined;
@@ -755,6 +844,8 @@ function EntryView({
   onDeleteEntry: (item: CountItem, entryId: string) => void;
   onChangeUnit: (item: CountItem, unitId: string) => void;
   onRemoveItem: (item: CountItem) => void;
+  onToggleRecount: (item: CountItem) => void;
+  onRestartItem: (item: CountItem) => void;
 }) {
   // Produto novo: a unidade é escolha local até o primeiro lançamento. Já
   // contado: a unidade é do item e trocar vale para todos os lançamentos.
@@ -793,9 +884,11 @@ function EntryView({
               {product.name}
             </DialogTitle>
             <DialogDescription>
-              {item
-                ? `Contado até agora: ${formatCountQuantity(total)} ${unit}`
-                : "Ainda não contado nesta contagem"}
+              {!item
+                ? "Ainda não contado nesta contagem"
+                : item.entries.length === 0
+                  ? "Recontando: lance o número novo"
+                  : `Contado até agora: ${formatCountQuantity(total)} ${unit}`}
             </DialogDescription>
           </div>
         </div>
@@ -803,6 +896,14 @@ function EntryView({
 
       <form onSubmit={submit} className="contents">
         <DialogBody className="flex flex-col gap-5">
+          {item?.needsRecount ? (
+            <RecountPanel
+              item={item}
+              onRestart={() => onRestartItem(item)}
+              onUnmark={() => onToggleRecount(item)}
+            />
+          ) : null}
+
           <div className="flex flex-col gap-2">
             <span className="text-fg-muted text-xs font-medium">Onde</span>
             <div className="flex flex-wrap gap-2">
@@ -894,14 +995,14 @@ function EntryView({
                 />
               </div>
             </div>
-            {item && valid ? (
+            {item && item.entries.length > 0 && valid ? (
               <p className="text-fg-muted text-xs">
                 Novo total: {formatCountQuantity(total + quantity)} {unit}
               </p>
             ) : null}
           </div>
 
-          {item ? (
+          {item && item.entries.length > 0 ? (
             <section aria-label="Lançamentos" className="flex flex-col gap-2">
               <h3 className="text-fg-muted text-xs font-medium">
                 Lançamentos ({item.entries.length})
@@ -929,15 +1030,30 @@ function EntryView({
                   </li>
                 ))}
               </ul>
+            </section>
+          ) : null}
+
+          {item ? (
+            <div className="flex flex-wrap items-center justify-between gap-x-4">
+              {!item.needsRecount ? (
+                <button
+                  type="button"
+                  onClick={() => onToggleRecount(item)}
+                  className="text-warning flex items-center gap-1.5 py-2 text-xs font-medium"
+                >
+                  <Flag className="size-3.5" aria-hidden /> Marcar para
+                  recontar
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => onRemoveItem(item)}
-                className="text-destructive flex items-center gap-1.5 self-start py-2 text-xs"
+                className="text-destructive flex items-center gap-1.5 py-2 text-xs"
               >
                 <Trash2 className="size-3.5" aria-hidden /> Tirar produto da
                 contagem
               </button>
-            </section>
+            </div>
           ) : null}
         </DialogBody>
 
@@ -974,15 +1090,76 @@ function EntryView({
   );
 }
 
+/**
+ * O aviso do produto marcado. Com lançamentos, oferece zerar antes de contar
+ * de novo — somar a recontagem ao número antigo dobraria o produto.
+ */
+function RecountPanel({
+  item,
+  onRestart,
+  onUnmark,
+}: {
+  item: CountItem;
+  onRestart: () => void;
+  onUnmark: () => void;
+}) {
+  const [confirming, setConfirming] = React.useState(false);
+  const entries = item.entries.length;
+
+  return (
+    <div className="border-warning/40 bg-warning-soft flex flex-col gap-3 rounded-xl border p-3.5">
+      <p className="text-fg flex items-start gap-2 text-sm">
+        <Flag className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
+        <span>
+          {entries > 0
+            ? "Marcado para recontar. Zere os lançamentos antigos e conte de novo."
+            : "Lançamentos zerados. O próximo número tira a marcação."}
+        </span>
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {entries > 0 ? (
+          confirming ? (
+            <Button
+              type="button"
+              variant="destructive"
+              className="h-11 flex-1 sm:h-9"
+              onClick={onRestart}
+            >
+              <RotateCcw aria-hidden /> Apagar{" "}
+              {entries === 1 ? "1 lançamento" : `${entries} lançamentos`}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              className="h-11 flex-1 sm:h-9"
+              onClick={() => setConfirming(true)}
+            >
+              <RotateCcw aria-hidden /> Recontar do zero
+            </Button>
+          )
+        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 sm:h-9"
+          onClick={onUnmark}
+        >
+          Desmarcar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** Abre o WhatsApp com o texto pronto; o contato a pessoa escolhe lá. */
 function whatsappHref(message: string) {
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
 
-async function copy(message: string) {
+async function copy(message: string, done = "Texto da contagem copiado") {
   try {
     await navigator.clipboard.writeText(message);
-    avisar("Texto da contagem copiado");
+    avisar(done);
   } catch {
     avisar("Não foi possível copiar neste navegador");
   }
@@ -1048,6 +1225,7 @@ function CountMenu({
   const [pending, startTransition] = React.useTransition();
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
+  const [rotating, setRotating] = React.useState(false);
 
   return (
     <>
@@ -1072,10 +1250,18 @@ function CountMenu({
           <DropdownMenuItem onSelect={() => void copy(message)}>
             <Copy aria-hidden /> Copiar texto
           </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => void copy(count.publicUrl, "Link da lista copiado")}
+          >
+            <Link2 aria-hidden /> Copiar link da lista
+          </DropdownMenuItem>
           {canManage ? (
             <>
               <DropdownMenuItem onSelect={() => setRenaming(true)}>
                 <Pencil aria-hidden /> Renomear
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setRotating(true)}>
+                <RefreshCw aria-hidden /> Trocar link da lista
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() =>
@@ -1121,6 +1307,11 @@ function CountMenu({
             count={count}
             open={deleting}
             onOpenChange={setDeleting}
+          />
+          <RotateLinkDialog
+            count={count}
+            open={rotating}
+            onOpenChange={setRotating}
           />
         </>
       ) : null}
@@ -1243,6 +1434,53 @@ function DeleteDialog({
             }
           >
             <Trash2 aria-hidden /> {pending ? "Excluindo…" : "Excluir"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Trocar o link é para quando ele foi parar onde não devia. */
+function RotateLinkDialog({
+  count,
+  open,
+  onOpenChange,
+}: {
+  count: CountInfo;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [pending, startTransition] = React.useTransition();
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="sm">
+        <DialogHeader>
+          <DialogTitle>Trocar link da lista?</DialogTitle>
+          <DialogDescription>
+            O link que já foi enviado para de abrir na hora. As próximas
+            mensagens saem com o novo.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            disabled={pending}
+            className="h-11 w-full sm:h-9 sm:w-auto"
+            onClick={() =>
+              startTransition(async () => {
+                const result = await rotateStockCountLink(count.id);
+                if (result.error) {
+                  avisar(result.error);
+                  return;
+                }
+                avisar("Link trocado. O anterior não abre mais.");
+                onOpenChange(false);
+              })
+            }
+          >
+            <RefreshCw aria-hidden /> {pending ? "Trocando…" : "Trocar link"}
           </Button>
         </DialogFooter>
       </DialogContent>

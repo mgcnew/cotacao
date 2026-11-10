@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { CountWorkspace } from "@/components/stock-counts/count-workspace";
+import { stockCountPublicUrl } from "@/features/stock-counts/public";
 import {
   getStockCount,
   listCountProducts,
@@ -57,6 +58,7 @@ export default async function ContagemPage({
         dateLabel: dia,
         author: count.author,
         status: count.status,
+        publicUrl: stockCountPublicUrl(count.publicToken),
       }}
       initialItems={count.items}
       products={products}

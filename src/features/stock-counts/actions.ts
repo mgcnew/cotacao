@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -151,7 +152,7 @@ export async function addCountEntry(input: {
   const findItem = () =>
     supabase
       .from("stock_count_items")
-      .select("id")
+      .select("id, needs_recount")
       .eq("company_id", company.companyId)
       .eq("stock_count_id", countId)
       .eq("product_id", productId)
@@ -167,7 +168,7 @@ export async function addCountEntry(input: {
         product_id: productId,
         unit_id: unitId,
       })
-      .select("id")
+      .select("id, needs_recount")
       .single();
     // Duas pessoas lançando o mesmo produto ao mesmo tempo: quem perdeu a
     // corrida pelo item usa o da outra.
@@ -187,6 +188,15 @@ export async function addCountEntry(input: {
     location,
   });
   if (error) return { error: lancamentoRecusado(error.message) };
+
+  // Recontado: o primeiro número novo tira o produto do destaque.
+  if (item.needs_recount) {
+    await supabase
+      .from("stock_count_items")
+      .update({ needs_recount: false })
+      .eq("company_id", company.companyId)
+      .eq("id", item.id);
+  }
   return { error: null };
 }
 
@@ -197,7 +207,10 @@ function lancamentoRecusado(message: string) {
     : `Não foi possível lançar: ${message}`;
 }
 
-/** Apaga o lançamento; o último a sair leva o produto junto. */
+/**
+ * Apaga o lançamento; o último a sair leva o produto junto — menos quando ele
+ * está marcado para recontar, que precisa continuar na lista esperando.
+ */
 export async function deleteCountEntry(
   countId: string,
   entryId: string,
@@ -225,7 +238,8 @@ export async function deleteCountEntry(
       .from("stock_count_items")
       .delete()
       .eq("company_id", company.companyId)
-      .eq("id", removed.stock_count_item_id);
+      .eq("id", removed.stock_count_item_id)
+      .eq("needs_recount", false);
   }
   return { error: null };
 }
@@ -264,5 +278,77 @@ export async function removeCountItem(
     .eq("stock_count_id", countId)
     .eq("product_id", productId);
   if (error) return { error: `Não foi possível remover: ${error.message}` };
+  return { error: null };
+}
+
+/** Liga ou desliga o "recontar" do produto. */
+export async function setCountItemRecount(
+  countId: string,
+  productId: string,
+  needsRecount: boolean,
+): Promise<StockCountResult> {
+  const company = await requireCounter();
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("stock_count_items")
+    .update({ needs_recount: needsRecount })
+    .eq("company_id", company.companyId)
+    .eq("stock_count_id", countId)
+    .eq("product_id", productId)
+    .select("id");
+  if (error) return { error: `Não foi possível marcar: ${error.message}` };
+  if (!data?.length) {
+    return { error: "A contagem foi finalizada. Reabra para marcar." };
+  }
+  return { error: null };
+}
+
+/**
+ * Recontar do zero: apaga os lançamentos do produto e o deixa marcado, na
+ * lista, esperando o número novo — sem isso 31 + recontagem de 30 virava 61.
+ */
+export async function restartCountItem(
+  countId: string,
+  productId: string,
+): Promise<StockCountResult> {
+  const company = await requireCounter();
+  const supabase = await createServerSupabaseClient();
+  const { data: item, error } = await supabase
+    .from("stock_count_items")
+    .update({ needs_recount: true })
+    .eq("company_id", company.companyId)
+    .eq("stock_count_id", countId)
+    .eq("product_id", productId)
+    .select("id")
+    .maybeSingle();
+  if (error) return { error: `Não foi possível zerar: ${error.message}` };
+  if (!item) return { error: "A contagem foi finalizada. Reabra para recontar." };
+
+  const { error: deleteError } = await supabase
+    .from("stock_count_entries")
+    .delete()
+    .eq("company_id", company.companyId)
+    .eq("stock_count_item_id", item.id);
+  if (deleteError) {
+    return { error: `Não foi possível zerar: ${deleteError.message}` };
+  }
+  return { error: null };
+}
+
+/** Troca o link público: o anterior para de abrir na hora. */
+export async function rotateStockCountLink(
+  countId: string,
+): Promise<StockCountResult> {
+  const company = await requireCounter();
+  const token = randomBytes(24).toString("hex");
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("stock_counts")
+    .update({ public_token: token })
+    .eq("company_id", company.companyId)
+    .eq("id", countId);
+  if (error) return { error: `Não foi possível trocar o link: ${error.message}` };
+
+  revalidatePath(`/contagens/${countId}`);
   return { error: null };
 }

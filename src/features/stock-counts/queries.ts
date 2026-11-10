@@ -23,6 +23,8 @@ export type CountItem = {
   name: string;
   category: string;
   unitId: string;
+  /** Marcado para recontar: sobe para o topo em destaque até a recontagem. */
+  needsRecount: boolean;
   entries: CountEntry[];
 };
 
@@ -147,7 +149,7 @@ export async function getStockCount(companyId: string, id: string) {
   const supabase = await createServerSupabaseClient();
   const { data: count, error } = await supabase
     .from("stock_counts")
-    .select("id, name, status, created_at, closed_at, created_by")
+    .select("id, name, status, created_at, closed_at, created_by, public_token")
     .eq("company_id", companyId)
     .eq("id", id)
     .maybeSingle();
@@ -162,6 +164,7 @@ export async function getStockCount(companyId: string, id: string) {
         `
         product_id,
         unit_id,
+        needs_recount,
         products!inner ( name, category:categories ( name ) ),
         stock_count_entries ( id, quantity, location, created_at )
       `,
@@ -188,12 +191,14 @@ export async function getStockCount(companyId: string, id: string) {
     createdAt: count.created_at,
     closedAt: count.closed_at,
     author: author.data?.full_name ?? null,
+    publicToken: count.public_token,
     items: (items.data ?? []).map(
       (item): CountItem => ({
         productId: item.product_id,
         name: item.products.name,
         category: item.products.category?.name ?? "Sem categoria",
         unitId: item.unit_id,
+        needsRecount: item.needs_recount,
         entries: (item.stock_count_entries ?? [])
           .map((entry) => ({
             id: entry.id,
