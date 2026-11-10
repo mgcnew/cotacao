@@ -226,8 +226,13 @@ export async function getReceiptConference(
   );
 
   const productIds = revision?.items.map((item) => item.productId) ?? [];
-  const [companyResult, barcodeResult, aliasResult, unitRuleResult] =
-    await Promise.all([
+  const [
+    companyResult,
+    barcodeResult,
+    aliasResult,
+    unitRuleResult,
+    pastReceiptResult,
+  ] = await Promise.all([
       supabase
         .from("companies")
         .select("document_number")
@@ -257,6 +262,26 @@ export async function getReceiptConference(
             .eq("supplier_id", order.suppliers.id)
             .in("product_id", productIds)
         : Promise.resolve({ data: [], error: null }),
+      // Quantas peças vieram por embalagem nos últimos recebimentos: sugere o
+      // "24 un por pct" quando o pedido não trouxe estimativa.
+      productIds.length
+        ? supabase
+            .from("receipt_items")
+            .select(
+              `
+              logistic_quantity_received,
+              pricing_quantity_received,
+              order_revision_items!inner ( product_id, purchase_unit_id, pricing_unit_id ),
+              receipts!inner ( status )
+            `,
+            )
+            .eq("company_id", companyId)
+            .eq("receipts.status", "posted")
+            .in("order_revision_items.product_id", productIds)
+            .gt("logistic_quantity_received", 0)
+            .order("created_at", { ascending: false })
+            .limit(500)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
   if (companyResult.error) {
@@ -277,6 +302,26 @@ export async function getReceiptConference(
   if (unitRuleResult.error) {
     throw new Error(
       `Falha ao carregar conversões aprendidas da NF-e: ${unitRuleResult.error.message}`,
+    );
+  }
+
+  // Falha aqui só tira a sugestão; a conferência continua.
+  if (pastReceiptResult.error) {
+    console.error(
+      "[receipts] último recebimento por embalagem:",
+      pastReceiptResult.error.message,
+    );
+  }
+  /** Peças por embalagem do recebimento mais recente, por produto e unidades. */
+  const lastPerPackage = new Map<string, number>();
+  for (const row of pastReceiptResult.data ?? []) {
+    const orderItem = row.order_revision_items;
+    const key = `${orderItem.product_id}:${orderItem.purchase_unit_id}:${orderItem.pricing_unit_id}`;
+    if (lastPerPackage.has(key)) continue;
+    lastPerPackage.set(
+      key,
+      Number(row.pricing_quantity_received) /
+        Number(row.logistic_quantity_received),
     );
   }
 
@@ -331,6 +376,10 @@ export async function getReceiptConference(
             ...item,
             barcodes: barcodesByProduct.get(item.productId) ?? [],
             aliases: aliasesByProduct.get(item.productId) ?? [],
+            lastPricingPerPackage:
+              lastPerPackage.get(
+                `${item.productId}:${item.purchaseUnitId}:${item.pricingUnitId}`,
+              ) ?? null,
             unitRules: (unitRuleResult.data ?? [])
               .filter(
                 (rule) =>

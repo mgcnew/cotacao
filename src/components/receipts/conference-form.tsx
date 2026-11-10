@@ -50,6 +50,12 @@ type Item = {
   agreedPrice: number;
   purchaseUnit: string;
   pricingUnit: string;
+  /** Tipo da unidade de precificação; "count" é contado em peças. */
+  pricingUnitKind: string;
+  /** Quanto o pedido previa na unidade de precificação, para o pedido todo. */
+  estimatedPricingQuantity: number | null;
+  /** Peças por embalagem no último recebimento deste produto. */
+  lastPricingPerPackage: number | null;
   sameUnit: boolean;
   barcodes: string[];
   aliases: {
@@ -84,6 +90,45 @@ function decimalInput(value: number | null | undefined, digitsAfter = 6) {
     .replace(/0+$/, "")
     .replace(/\.$/, "")
     .replace(".", ",");
+}
+
+/**
+ * Preço por peça e compra em embalagem (3 pct de 24 un): quem confere digita
+ * as peças de UMA embalagem e o total sai da multiplicação. Peso não entra:
+ * cada peça pesa diferente e o total só existe na balança.
+ */
+function porEmbalagem(item: Item) {
+  return !item.sameUnit && item.pricingUnitKind === "count";
+}
+
+/**
+ * Peças por embalagem já preenchidas: pela nota, se veio; senão pelo que o
+ * pedido previa; senão pelo último recebimento. Só número inteiro — "23,333 un por pct" é sinal de que a
+ * previsão não fecha por embalagem, e aí é melhor o campo vazio.
+ */
+function pecasPorEmbalagemSugeridas(
+  item: Item,
+  imported: NfeImportPayload["items"][string] | undefined,
+) {
+  const candidatos = [
+    imported?.logisticQuantity && imported.pricingQuantity
+      ? imported.pricingQuantity / imported.logisticQuantity
+      : null,
+    item.estimatedPricingQuantity && item.requestedQuantity > 0
+      ? item.estimatedPricingQuantity / item.requestedQuantity
+      : null,
+    item.lastPricingPerPackage,
+  ];
+  for (const candidato of candidatos) {
+    if (candidato === null) continue;
+    const arredondado = Math.round(candidato * 1000) / 1000;
+    if (arredondado > 0 && Number.isInteger(arredondado)) return arredondado;
+  }
+  return null;
+}
+
+function multiplicar(a: number, b: number) {
+  return Math.round(a * b * 1000) / 1000;
 }
 
 function signedMoney(value: number) {
@@ -213,6 +258,14 @@ export function ReceiptConferenceForm({
     Record<string, number>
   >({});
   const formRef = React.useRef<HTMLFormElement>(null);
+  /** Produtos em que a pessoa preferiu digitar o total de peças à mão. */
+  const [totalDigitado, setTotalDigitado] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  /** Recebido e peças por embalagem de cada produto, para mostrar a conta. */
+  const [embalagens, setEmbalagens] = React.useState<
+    Record<string, { recebido: number; porEmbalagem: number }>
+  >({});
 
   /**
    * Devolve a linha da nota à lista dos não reconhecidos e apaga o que o
@@ -275,6 +328,26 @@ export function ReceiptConferenceForm({
 
   const recalculate = React.useCallback(
     (form: HTMLFormElement) => {
+      // O total de peças vai num campo oculto, recalculado aqui a cada toque:
+      // o envio e a soma abaixo continuam lendo `prec_` como sempre.
+      const antes = new FormData(form);
+      const contas: Record<string, { recebido: number; porEmbalagem: number }> =
+        {};
+      for (const item of items) {
+        if (!porEmbalagem(item) || totalDigitado.has(item.id)) continue;
+        const recebido = numberFromField(antes.get(`log_${item.id}`));
+        const porEmb = numberFromField(antes.get(`emb_${item.id}`));
+        contas[item.id] = { recebido, porEmbalagem: porEmb };
+        const oculto = form.elements.namedItem(`prec_${item.id}`);
+        if (oculto instanceof HTMLInputElement) {
+          oculto.value =
+            recebido > 0 && porEmb > 0
+              ? decimalInput(multiplicar(recebido, porEmb))
+              : "";
+        }
+      }
+      setEmbalagens(contas);
+
       const data = new FormData(form);
       setCalculatedTotal(
         items.reduce(
@@ -293,7 +366,7 @@ export function ReceiptConferenceForm({
           .length,
       );
     },
-    [items],
+    [items, totalDigitado],
   );
 
   /** + e − no recebido: soma sobre o que está no campo agora. */
@@ -767,7 +840,16 @@ export function ReceiptConferenceForm({
                       </button>
                     </div>
                   </div>
-                  {!item.sameUnit ? (
+                  {porEmbalagem(item) && !totalDigitado.has(item.id) ? (
+                    <PecasPorEmbalagem
+                      item={item}
+                      imported={imported}
+                      conta={embalagens[item.id]}
+                      onDigitarTotal={() =>
+                        setTotalDigitado((atual) => new Set(atual).add(item.id))
+                      }
+                    />
+                  ) : !item.sameUnit ? (
                     <div className="flex flex-col gap-1">
                       <label
                         htmlFor={`prec_${item.id}`}
@@ -779,9 +861,35 @@ export function ReceiptConferenceForm({
                         id={`prec_${item.id}`}
                         name={`prec_${item.id}`}
                         inputMode="decimal"
-                        defaultValue={decimalInput(imported?.pricingQuantity)}
+                        defaultValue={
+                          totalDigitado.has(item.id)
+                            ? decimalInput(
+                                embalagens[item.id]
+                                  ? multiplicar(
+                                      embalagens[item.id].recebido,
+                                      embalagens[item.id].porEmbalagem,
+                                    )
+                                  : imported?.pricingQuantity,
+                              )
+                            : decimalInput(imported?.pricingQuantity)
+                        }
                         className="h-8"
                       />
+                      {porEmbalagem(item) ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTotalDigitado((atual) => {
+                              const proximo = new Set(atual);
+                              proximo.delete(item.id);
+                              return proximo;
+                            })
+                          }
+                          className="text-primary self-start text-xs font-medium"
+                        >
+                          Calcular por {item.purchaseUnit}
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                   <div className="grid grid-cols-[auto_1fr] items-center gap-x-1.5 gap-y-1">
@@ -948,6 +1056,77 @@ export function ReceiptConferenceForm({
           <Submit />
         </div>
       </form>
+    </div>
+  );
+}
+
+/**
+ * "Quantas peças vêm em cada embalagem", com a conta à vista logo abaixo.
+ *
+ * O total de peças vai num campo oculto `prec_`, que o formulário recalcula a
+ * cada toque — para o servidor, nada muda. "Digitar o total" volta ao campo
+ * antigo, para a caixa que veio incompleta.
+ */
+function PecasPorEmbalagem({
+  item,
+  imported,
+  conta,
+  onDigitarTotal,
+}: {
+  item: Item;
+  imported: NfeImportPayload["items"][string] | undefined;
+  conta: { recebido: number; porEmbalagem: number } | undefined;
+  onDigitarTotal: () => void;
+}) {
+  const sugerido = pecasPorEmbalagemSugeridas(item, imported);
+  const recebidoInicial = imported?.logisticQuantity ?? 0;
+  const { recebido, porEmbalagem: porEmb } = conta ?? {
+    recebido: recebidoInicial,
+    porEmbalagem: sugerido ?? 0,
+  };
+  const total = recebido > 0 && porEmb > 0 ? multiplicar(recebido, porEmb) : 0;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={`emb_${item.id}`} className="text-fg-muted text-xs">
+        Quantidade por {item.purchaseUnit} ({item.pricingUnit})
+      </label>
+      <Input
+        id={`emb_${item.id}`}
+        name={`emb_${item.id}`}
+        inputMode="decimal"
+        defaultValue={decimalInput(sugerido)}
+        placeholder={`${item.pricingUnit} em cada ${item.purchaseUnit}`}
+        className="h-8"
+      />
+      {/* Controlado: em campo oculto o React regrava o valor a cada render, e
+          um `defaultValue` apagaria a conta feita no `recalculate`. */}
+      <input
+        type="hidden"
+        name={`prec_${item.id}`}
+        value={total > 0 ? decimalInput(total) : ""}
+      />
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs">
+        <span className="text-fg-muted tabular-nums" aria-live="polite">
+          {total > 0 ? (
+            <>
+              Total: {QTY.format(recebido)} × {QTY.format(porEmb)} ={" "}
+              <strong className="text-fg">
+                {QTY.format(total)} {item.pricingUnit}
+              </strong>
+            </>
+          ) : (
+            `Total em ${item.pricingUnit} sai do recebido vezes esta quantidade`
+          )}
+        </span>
+        <button
+          type="button"
+          onClick={onDigitarTotal}
+          className="text-primary font-medium"
+        >
+          Digitar o total
+        </button>
+      </div>
     </div>
   );
 }

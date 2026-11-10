@@ -561,9 +561,9 @@ const REVISION_SELECT = `
   confirmation_notes,
   order_revision_items (
     id, product_id, purchase_allocation_id, product_name_snapshot,
-    requested_quantity, agreed_price, notes,
+    requested_quantity, agreed_price, notes, estimated_pricing_quantity,
     purchase_unit:units!order_revision_items_company_id_purchase_unit_id_fkey ( id, symbol ),
-    pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( id, symbol ),
+    pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( id, symbol, kind ),
     receipt_items ( logistic_quantity_received, pricing_quantity_received, practiced_price )
   )
 `;
@@ -586,8 +586,9 @@ type RevisionRow = {
     requested_quantity: number;
     agreed_price: number;
     notes: string | null;
+    estimated_pricing_quantity: number | null;
     purchase_unit: { id: string; symbol: string } | null;
-    pricing_unit: { id: string; symbol: string } | null;
+    pricing_unit: { id: string; symbol: string; kind: string } | null;
     receipt_items: { logistic_quantity_received: number }[] | null;
   }[];
 };
@@ -621,6 +622,12 @@ function mapRevision(data: RevisionRow) {
         pricingUnit: item.pricing_unit?.symbol ?? "",
         purchaseUnitId: item.purchase_unit?.id ?? "",
         pricingUnitId: item.pricing_unit?.id ?? "",
+        /** "count" é contado em peças: dá para multiplicar por embalagem. */
+        pricingUnitKind: item.pricing_unit?.kind ?? "other",
+        estimatedPricingQuantity:
+          item.estimated_pricing_quantity === null
+            ? null
+            : Number(item.estimated_pricing_quantity),
         sameUnit:
           Boolean(item.purchase_unit?.id) &&
           item.purchase_unit?.id === item.pricing_unit?.id,
