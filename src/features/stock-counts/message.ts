@@ -67,15 +67,13 @@ export function buildCountMessage({
     .map(([category, list]) => {
       const lines = list
         .sort((a, b) => collator.compare(a.name, b.name))
-        .map((item) => {
-          const locations = describeLocations(item.entries);
-          // Um local só, sem nome, não acrescenta nada ao total.
-          const detail =
-            locations.length === 1 && locations[0].startsWith("Sem local")
-              ? ""
-              : ` (${locations.join(" + ")})`;
-          return `• ${item.name} — *${QTY.format(itemTotal(item.entries))} ${item.unit}*${detail}`;
-        });
+        // Só o total, em negrito e depois do nome. Os locais ficam na tela:
+        // na conferência, "Geladeira 7 + Estoque 24" ao lado do 31 era mais
+        // um número para ler errado.
+        .map(
+          (item) =>
+            `• ${item.name}: *${QTY.format(itemTotal(item.entries))} ${item.unit}*`,
+        );
       return [`*${category}*`, ...lines].join("\n");
     });
 
