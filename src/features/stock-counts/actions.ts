@@ -115,8 +115,8 @@ const entrySchema = z.object({
   unitId: z.uuid(),
   quantity: z
     .number()
-    .refine((value) => Number.isFinite(value) && value > 0 && value <= 999_999, {
-      error: "Quantidade deve ser maior que zero.",
+    .refine((value) => Number.isFinite(value) && value >= 0 && value <= 999_999, {
+      error: "Quantidade inválida.",
     }),
   location: z
     .string()

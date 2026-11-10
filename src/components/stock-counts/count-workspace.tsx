@@ -764,8 +764,9 @@ function EntryView({
   const [otherLocation, setOtherLocation] = React.useState(
     location !== "" && !locations.includes(location),
   );
-  const quantity = parseQuantity(text);
-  const valid = quantity !== null && quantity > 0;
+  // Campo vazio não é zero: o zero se lança digitando 0 ou pelo "Zerado".
+  const quantity = text.trim() ? parseQuantity(text) : null;
+  const valid = quantity !== null;
   const total = item ? itemTotal(item.entries) : 0;
   const unit = symbol(unitId);
 
@@ -940,17 +941,32 @@ function EntryView({
           ) : null}
         </DialogBody>
 
-        <DialogFooter className="pb-[calc(0.625rem+env(safe-area-inset-bottom))]">
+        <DialogFooter className="flex-nowrap pb-[calc(0.625rem+env(safe-area-inset-bottom))]">
+          {/* "Procurei e não tem": um toque, sem digitar. O produto entra na
+              conferência com 0 em vez de ficar de fora, o que não diria se
+              foi contado ou esquecido. */}
+          <Button
+            type="button"
+            size="lg"
+            variant="outline"
+            disabled={!unitId}
+            onClick={() => onAdd(unitId, 0)}
+            className="h-12 shrink-0 text-base"
+          >
+            Zerado
+          </Button>
           <Button
             type="submit"
             size="lg"
             disabled={!valid || !unitId}
-            className="h-12 w-full text-base"
+            className="h-12 min-w-0 flex-1 text-base"
           >
             <Check aria-hidden />
-            {valid
-              ? `Lançar ${formatCountQuantity(quantity)} ${unit}${location.trim() ? ` em ${location.trim()}` : ""}`
-              : "Lançar"}
+            <span className="truncate">
+              {valid
+                ? `Lançar ${formatCountQuantity(quantity)} ${unit}${location.trim() ? ` em ${location.trim()}` : ""}`
+                : "Lançar"}
+            </span>
           </Button>
         </DialogFooter>
       </form>
