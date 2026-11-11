@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Inter } from "next/font/google";
 
+import { Movimento } from "@/components/motion/movimento";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { PwaServiceWorker } from "@/components/providers/pwa-service-worker";
 import { publicEnv } from "@/lib/env";
@@ -55,7 +56,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <PwaServiceWorker />
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <Movimento>{children}</Movimento>
+        </ThemeProvider>
       </body>
     </html>
   );

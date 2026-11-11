@@ -3,6 +3,7 @@
 import { MessageSquareText, Sparkles, UserRound } from "lucide-react";
 import * as React from "react";
 
+import { ItemAnimado } from "@/components/motion/movimento";
 import { QuantityStepper } from "@/components/shopping-list/mobile-quick-add";
 import { Button } from "@/components/ui/button";
 import {
@@ -167,10 +168,10 @@ function ItemRow({
     timerRef.current = window.setTimeout(() => void save(), SAVE_DELAY_MS);
   }
 
-  if (gone) return null;
-
+  // A chave da linha muda junto com quantidade e observação (ver
+  // `MobileListItems`), então não há entrada: só a saída ao remover.
   return (
-    <li className="border-border border-b px-4 py-3 last:border-b-0">
+    <ItemAnimado entrada={false} fechado={gone} className="border-border border-b last:border-b-0" conteudoClassName="px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-fg line-clamp-2 text-sm leading-snug font-semibold">
@@ -237,7 +238,7 @@ function ItemRow({
           {error}
         </p>
       ) : null}
-    </li>
+    </ItemAnimado>
   );
 }
 

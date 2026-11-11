@@ -1,9 +1,11 @@
 "use client";
 
 import { History, ListChecks, Plus, Sparkles, Trash2 } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import * as React from "react";
 import { useFormStatus } from "react-dom";
 
+import { ItemAnimado } from "@/components/motion/movimento";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -605,17 +607,18 @@ export function OrderItemRows({
         handlers={mobileHandlers}
       />
 
-      <div className="hidden flex-col gap-3 sm:flex">
+      {/* O espaço entre as linhas é `pb-3` de cada uma, não `gap`: assim ele
+          fecha junto quando a linha sai. */}
+      <div className="hidden flex-col -mb-3 sm:flex">
+        <AnimatePresence initial={false}>
         {rows.map((row) => {
           const unidades = unidadesDe(row);
           const productFieldId = `${idPrefix}produto-${row.key}`;
           const quantityFieldId = `${idPrefix}qtd-${row.key}`;
           const priceFieldId = `${idPrefix}preco-${row.key}`;
           return (
-            <div
-              key={row.key}
-              className="border-border flex flex-col gap-2 rounded-lg border p-3"
-            >
+            <ItemAnimado key={row.key} como="div" conteudoClassName="pb-3">
+            <div className="border-border flex flex-col gap-2 rounded-lg border p-3">
               <div className="grid gap-2 sm:grid-cols-[1fr_7rem_7rem]">
                 <div className="flex flex-col gap-1">
                   <label
@@ -745,8 +748,10 @@ export function OrderItemRows({
                 </Button>
               </div>
             </div>
+            </ItemAnimado>
           );
         })}
+        </AnimatePresence>
       </div>
 
       <div className="hidden sm:block">

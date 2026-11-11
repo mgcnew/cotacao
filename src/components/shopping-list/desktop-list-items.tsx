@@ -1,8 +1,10 @@
 "use client";
 
 import { Check, Loader2, Sparkles, Trash2, UserRound } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import * as React from "react";
 
+import { ItemAnimado } from "@/components/motion/movimento";
 import type { MobileListItem } from "@/components/shopping-list/mobile-list-items";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,14 +87,12 @@ function ItemRow({ item }: { item: MobileListItem }) {
     }
   }
 
-  if (gone) return null;
-
   const commitOnEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") event.currentTarget.blur();
   };
 
   return (
-    <li className="border-border hover:bg-surface-muted/40 border-b py-2 last:border-b-0">
+    <ItemAnimado fechado={gone} className="border-border hover:bg-surface-muted/40 border-b last:border-b-0" conteudoClassName="py-2">
       <div className={COLUMNS}>
         <div className="min-w-0">
           <p className="text-fg truncate text-sm font-medium">{item.name}</p>
@@ -163,7 +163,7 @@ function ItemRow({ item }: { item: MobileListItem }) {
           {error}
         </p>
       ) : null}
-    </li>
+    </ItemAnimado>
   );
 }
 
@@ -196,6 +196,7 @@ export function DesktopListItems({
         <span />
       </div>
       <ul>
+        <AnimatePresence initial={false}>
         {items.map((item) =>
           canManage ? (
             <ItemRow key={item.id} item={item} />
@@ -213,6 +214,7 @@ export function DesktopListItems({
             </li>
           ),
         )}
+        </AnimatePresence>
       </ul>
     </div>
   );

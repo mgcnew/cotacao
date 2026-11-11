@@ -18,10 +18,12 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import * as React from "react";
 
 import { CrumbTitle } from "@/components/layout/app-breadcrumb";
 import { PageHeader } from "@/components/layout/page-header";
+import { ItemAnimado } from "@/components/motion/movimento";
 import {
   BarcodeCameraDialog,
   type BarcodeScanOutcome,
@@ -361,6 +363,7 @@ export function CountWorkspace({
           aria-label="Produtos contados"
           className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs"
         >
+          <AnimatePresence initial={false}>
           {sorted.map((item) => (
             <ItemRow
               key={item.productId}
@@ -379,6 +382,7 @@ export function CountWorkspace({
               }
             />
           ))}
+          </AnimatePresence>
         </ul>
       )}
 
@@ -464,7 +468,7 @@ function ItemRow({
   );
 
   return (
-    <li
+    <ItemAnimado
       className={cn(
         "border-border border-b last:border-b-0",
         item.needsRecount &&
@@ -484,7 +488,7 @@ function ItemRow({
           {content}
         </div>
       )}
-    </li>
+    </ItemAnimado>
   );
 }
 
@@ -1008,10 +1012,12 @@ function EntryView({
                 Lançamentos ({item.entries.length})
               </h3>
               <ul className="border-border overflow-hidden rounded-xl border">
+                <AnimatePresence initial={false}>
                 {item.entries.map((entry) => (
-                  <li
+                  <ItemAnimado
                     key={entry.id}
-                    className="border-border flex items-center gap-3 border-b py-1 pr-1 pl-4 last:border-b-0"
+                    className="border-border border-b last:border-b-0"
+                    conteudoClassName="flex items-center gap-3 py-1 pr-1 pl-4"
                   >
                     <span className="text-fg-muted min-w-0 flex-1 truncate text-sm">
                       {entry.location ?? "Sem local"}
@@ -1027,8 +1033,9 @@ function EntryView({
                     >
                       <X className="size-4" aria-hidden />
                     </button>
-                  </li>
+                  </ItemAnimado>
                 ))}
+                </AnimatePresence>
               </ul>
             </section>
           ) : null}

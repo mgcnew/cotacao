@@ -1,8 +1,10 @@
 "use client";
 
 import { MessageSquareText, Plus, ScanBarcode, Search, X } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import * as React from "react";
 
+import { ItemAnimado } from "@/components/motion/movimento";
 import type { OrderableProduct } from "@/components/orders/order-item-rows";
 import {
   BarcodeCameraDialog,
@@ -128,7 +130,7 @@ function ItemRow({
   const priceId = `pedido-preco-${row.key}`;
 
   return (
-    <li className="border-border border-b px-4 py-3 last:border-b-0">
+    <ItemAnimado className="border-border border-b last:border-b-0" conteudoClassName="px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-fg line-clamp-2 text-sm leading-snug font-semibold">
@@ -203,7 +205,7 @@ function ItemRow({
         onOpenChange={setNotesOpen}
         onSave={(notes) => handlers.onNotes(row.key, notes)}
       />
-    </li>
+    </ItemAnimado>
   );
 }
 
@@ -546,6 +548,7 @@ export function MobileOrderItems({
             ) : null}
           </div>
           <ul className="border-border bg-surface overflow-hidden rounded-xl border shadow-xs">
+            <AnimatePresence initial={false}>
             {rows.map((row) => (
               <ItemRow
                 key={row.key}
@@ -561,6 +564,7 @@ export function MobileOrderItems({
                 handlers={handlers}
               />
             ))}
+            </AnimatePresence>
           </ul>
         </section>
       ) : (
