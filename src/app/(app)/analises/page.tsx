@@ -1,8 +1,19 @@
-import { BarChart3, PackageCheck, ReceiptText, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  BarChart3,
+  Info,
+  PackageCheck,
+  ReceiptText,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { FilterBar } from "@/components/analytics/filter-bar";
+import {
+  FilterBar,
+  formatDay,
+  periodPresets,
+} from "@/components/analytics/filter-bar";
 import { Metric } from "@/components/layout/metric";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip } from "@/components/ui/tooltip";
 import { getCompany } from "@/features/company/queries";
 import {
   getFilterOptions,
@@ -107,18 +119,39 @@ export default async function AnalisesPage({
   const invalidPeriod = Boolean(
     filters.de && filters.ate && filters.de > filters.ate,
   );
+  const preset = periodPresets(today).find(
+    (item) => item.de === filters.de && item.ate === filters.ate,
+  );
+  // A descrição diz o recorte que está valendo, que é o que muda; a explicação
+  // fixa da página fica no (i).
+  const nomeDoAtalho = preset?.label.endsWith("dias")
+    ? `Últimos ${preset.label}`
+    : preset?.label;
+  const periodo = preset?.de
+    ? `${nomeDoAtalho}, de ${formatDay(preset.de)} a ${formatDay(today)}`
+    : filters.de && filters.ate
+      ? `De ${formatDay(filters.de)} a ${formatDay(filters.ate)}`
+      : filters.de
+        ? `Desde ${formatDay(filters.de)}`
+        : filters.ate
+          ? `Até ${formatDay(filters.ate)}`
+          : "Todo o período";
 
   return (
     <div className="w-full">
       <PageHeader
         title="Análises"
-        description="Investigue compras, resultados, preços e fornecedores usando o mesmo recorte de dados."
+        description={periodo}
+        info="Compras recebidas, resultado da negociação, desempenho dos fornecedores e aferição de preços, todos no mesmo recorte."
       />
 
       <FilterBar filters={filters} options={options} today={today} />
 
       {invalidPeriod ? (
-        <div className="border-destructive/35 bg-destructive-soft text-destructive mb-6 rounded-xl border px-4 py-3 text-sm">
+        <div
+          role="alert"
+          className="border-destructive/35 bg-destructive-soft text-destructive mb-6 rounded-xl border px-4 py-3 text-sm"
+        >
           A data inicial está depois da data final. Ajuste o período para obter
           resultados.
         </div>
@@ -130,7 +163,7 @@ export default async function AnalisesPage({
         <SectionHeading
           id="received-summary"
           title="Compras efetivamente recebidas"
-          description="Inclui pedidos originados de cotação e pedidos diretos no período selecionado."
+          description="Pedidos de rodada e pedidos diretos que chegaram no período."
         />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric
@@ -160,7 +193,8 @@ export default async function AnalisesPage({
         <SectionHeading
           id="financial-results"
           title="Resultado financeiro dos itens cotados"
-          description="Compara proposta inicial, preço combinado no pedido e preço conferido na nota. A escolha de embalagens aparece separada e não altera os demais resultados."
+          description="Do preço cotado ao preço que a nota cobrou."
+          info="Compara proposta inicial, preço combinado no pedido e preço conferido na nota. A escolha de embalagens aparece separada e não altera os demais resultados."
         />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <Metric
@@ -235,18 +269,18 @@ export default async function AnalisesPage({
         </div>
       </section>
 
-      <section className="border-border bg-surface mb-6 overflow-hidden rounded-2xl border shadow-xs">
-        <header className="border-border border-b px-4 py-4 sm:px-5">
-          <h2 className="text-fg text-sm font-semibold">
-            Desempenho dos fornecedores
-          </h2>
-          <p className="text-fg-muted mt-0.5 text-xs">
-            A disputa é contada por item cotado, que é como o fornecedor
-            concorre: vitória considera apenas os itens decididos entre ganhou e
-            não ganhou. Já a entrega conta pedidos recebidos por inteiro,
-            inclusive os feitos sem cotação, pela data em que a mercadoria
-            chegou.
-          </p>
+      <section
+        aria-labelledby="supplier-performance"
+        className="border-border bg-surface mb-6 overflow-hidden rounded-xl border"
+      >
+        <header className="border-border border-b px-4 py-3">
+          <SectionHeading
+            id="supplier-performance"
+            title="Desempenho dos fornecedores"
+            description="Disputa por item cotado e entrega por pedido recebido."
+            info="A disputa é contada por item cotado, que é como o fornecedor concorre: vitória considera apenas os itens decididos entre ganhou e não ganhou. Já a entrega conta pedidos recebidos por inteiro, inclusive os feitos sem cotação, pela data em que a mercadoria chegou."
+            className="mb-0"
+          />
         </header>
 
         {performance.lifetimeFallback ? (
@@ -281,8 +315,9 @@ export default async function AnalisesPage({
                     <TableHead>Fornecedor</TableHead>
                     <TableHead className="text-right">Itens cotados</TableHead>
                     <TableHead className="text-right">Respostas</TableHead>
-                    <TableHead className="text-right">Itens ganhos</TableHead>
-                    <TableHead className="text-right">Itens perdidos</TableHead>
+                    <TableHead className="text-right">
+                      Ganhos / perdidos
+                    </TableHead>
                     <TableHead className="text-right">Vitória</TableHead>
                     <TableHead className="text-right">
                       Pedidos concluídos
@@ -320,10 +355,11 @@ export default async function AnalisesPage({
                           {supplier.unavailable} não fornece
                         </p>
                       </TableCell>
-                      <TableCell className="text-success text-right font-medium tabular-nums">
-                        {supplier.wins}
-                      </TableCell>
                       <TableCell className="text-right tabular-nums">
+                        <span className="text-success font-medium">
+                          {supplier.wins}
+                        </span>
+                        <span className="text-fg-subtle"> / </span>
                         {supplier.losses}
                       </TableCell>
                       <TableCell className="text-right">
@@ -358,7 +394,7 @@ export default async function AnalisesPage({
                           </p>
                         ) : null}
                       </TableCell>
-                      <TableCell className="text-fg-subtle text-xs">
+                      <TableCell className="text-fg-subtle text-xs whitespace-nowrap tabular-nums">
                         {formatDate(supplier.lastRoundAt, timezone)}
                       </TableCell>
                     </TableRow>
@@ -428,19 +464,20 @@ export default async function AnalisesPage({
         )}
       </section>
 
-      <section className="border-border bg-surface overflow-hidden rounded-2xl border shadow-xs">
-        <header className="border-border flex flex-wrap items-start justify-between gap-3 border-b px-4 py-4 sm:px-5">
-          <div>
-            <h2 className="text-fg text-sm font-semibold">
-              Aferição por produto recebido
-            </h2>
-            <p className="text-fg-muted mt-0.5 text-xs">
-              Cada linha explica quanto o preço evoluiu do cotado até a nota.
-            </p>
-          </div>
-          <Badge variant="outline">
-            {priceData.total} {priceData.total === 1 ? "registro" : "registros"}
-          </Badge>
+      <section
+        aria-labelledby="price-history"
+        className="border-border bg-surface overflow-hidden rounded-xl border"
+      >
+        <header className="border-border flex flex-wrap items-start justify-between gap-x-4 gap-y-1 border-b px-4 py-3">
+          <SectionHeading
+            id="price-history"
+            title="Aferição por produto recebido"
+            description="Quanto o preço andou do cotado até a nota, item a item."
+            className="mb-0"
+          />
+          <p className="text-fg-muted text-xs tabular-nums sm:pt-0.5">
+            {priceData.total} {priceData.total === 1 ? "item" : "itens"}
+          </p>
         </header>
 
         {priceData.rows.length === 0 ? (
@@ -501,19 +538,42 @@ export default async function AnalisesPage({
   );
 }
 
+/**
+ * Título de bloco com uma frase curta. A regra completa de cada número fica no
+ * (i), como no cabeçalho da página: ajuda no primeiro dia e não ocupa espaço
+ * nos outros.
+ */
 function SectionHeading({
   id,
   title,
   description,
+  info,
+  className = "mb-3",
 }: {
   id: string;
   title: string;
   description: string;
+  info?: string;
+  className?: string;
 }) {
   return (
-    <div className="mb-3">
-      <h2 id={id} className="text-fg text-sm font-semibold">
+    <div className={className}>
+      <h2
+        id={id}
+        className="text-fg flex items-center gap-1 text-sm font-semibold"
+      >
         {title}
+        {info ? (
+          <Tooltip content={info} side="bottom">
+            <button
+              type="button"
+              aria-label={info}
+              className="text-fg-subtle hover:text-fg-muted grid size-6 place-items-center rounded-sm"
+            >
+              <Info className="size-3.5" aria-hidden />
+            </button>
+          </Tooltip>
+        ) : null}
       </h2>
       <p className="text-fg-muted mt-0.5 text-xs">{description}</p>
     </div>
@@ -561,12 +621,17 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+/** Economia em verde suave, acréscimo em vermelho suave: estado nunca é sólido. */
 function ResultBadge({ value }: { value: number | null }) {
   if (value === null) return <Badge variant="secondary">Sem referência</Badge>;
   return (
     <Badge
-      variant={value < 0 ? "destructive" : value > 0 ? "default" : "secondary"}
-      className={value > 0 ? "bg-success text-white" : undefined}
+      variant={value < 0 ? "destructive" : "secondary"}
+      className={
+        value > 0
+          ? "border-success/25 bg-success-soft text-success tabular-nums"
+          : "tabular-nums"
+      }
     >
       {MONEY.format(value)}
     </Badge>
@@ -603,7 +668,7 @@ function PriceTableRow({ row, timezone }: { row: PriceRow; timezone: string }) {
         {MONEY.format(row.divergence)}
       </TableCell>
       <TableCell className="text-fg-subtle text-xs">
-        <p>{formatDate(row.receivedAt, timezone)}</p>
+        <p className="tabular-nums">{formatDate(row.receivedAt, timezone)}</p>
         {row.orderId ? (
           <Link
             href={`/pedidos/${row.orderId}`}

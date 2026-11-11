@@ -1,22 +1,12 @@
-import { CalendarRange, Filter, Search, X } from "lucide-react";
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { FilterDialog } from "@/components/layout/filter-dialog";
+import { FilterChips, type FiltroAtivo } from "@/components/layout/list-toolbar";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import type { AnalyticsFilters } from "@/features/analytics/filters";
+import { cn } from "@/lib/utils";
 
 type Opcao = { id: string; name: string };
 
@@ -35,6 +25,9 @@ const QUOTATION_OPTIONS = [
   { value: "closed_without_purchase", label: "Encerrado sem compra" },
   { value: "in_progress", label: "Em andamento" },
 ];
+
+/** A tabela de preços pagina por conta própria; todo recorte novo volta ao começo. */
+const PAGINA = "pagina_precos";
 
 function paramsFromFilters(filters: AnalyticsFilters) {
   const params = new URLSearchParams();
@@ -71,6 +64,28 @@ function daysBefore(date: string, days: number) {
   return current.toISOString().slice(0, 10);
 }
 
+export function formatDay(date: string) {
+  return date.split("-").reverse().join("/");
+}
+
+export function periodPresets(today: string) {
+  return [
+    { label: "Tudo", de: null, ate: null },
+    { label: "Este mês", de: `${today.slice(0, 7)}-01`, ate: today },
+    { label: "30 dias", de: daysBefore(today, 29), ate: today },
+    { label: "90 dias", de: daysBefore(today, 89), ate: today },
+    { label: "Este ano", de: `${today.slice(0, 4)}-01-01`, ate: today },
+  ];
+}
+
+/**
+ * O recorte da Central de Análises: o período à vista e o resto no modal.
+ *
+ * O período é o filtro que se troca toda hora, então os atalhos saíram de
+ * dentro do modal para a barra. Lá dentro eles navegavam na hora e jogavam
+ * fora o que já tinha sido preenchido nos outros campos. A data exata, os
+ * cadastros e os resultados continuam no modal, que é o mesmo das listas.
+ */
 export function FilterBar({
   filters,
   options,
@@ -84,238 +99,175 @@ export function FilterBar({
   };
   today: string;
 }) {
-  const active = [
-    filters.de
-      ? {
-          key: "de",
-          label: `Desde ${filters.de.split("-").reverse().join("/")}`,
-        }
-      : null,
-    filters.ate
-      ? {
-          key: "ate",
-          label: `Até ${filters.ate.split("-").reverse().join("/")}`,
-        }
+  const presets = periodPresets(today);
+  const presetAtivo = presets.find(
+    (preset) => preset.de === filters.de && preset.ate === filters.ate,
+  );
+
+  const periodo =
+    filters.de && filters.ate
+      ? `${formatDay(filters.de)} a ${formatDay(filters.ate)}`
+      : filters.de
+        ? `desde ${formatDay(filters.de)}`
+        : filters.ate
+          ? `até ${formatDay(filters.ate)}`
+          : null;
+  const nome = (lista: Opcao[], id: string | null) =>
+    lista.find((item) => item.id === id)?.name ?? "removido";
+
+  // Cada etiqueta leva junto a página da tabela, para o × não cair numa página
+  // que deixou de existir no recorte maior.
+  const ativos: FiltroAtivo[] = [
+    periodo && !presetAtivo
+      ? { rotulo: `Período: ${periodo}`, chaves: ["de", "ate", PAGINA] }
       : null,
     filters.categoriaId
       ? {
-          key: "categoria",
-          label: `Categoria: ${options.categorias.find((item) => item.id === filters.categoriaId)?.name ?? "selecionada"}`,
+          rotulo: `Categoria: ${nome(options.categorias, filters.categoriaId)}`,
+          chaves: ["categoria", PAGINA],
         }
       : null,
     filters.produtoId
       ? {
-          key: "produto",
-          label: `Produto: ${options.produtos.find((item) => item.id === filters.produtoId)?.name ?? "selecionado"}`,
+          rotulo: `Produto: ${nome(options.produtos, filters.produtoId)}`,
+          chaves: ["produto", PAGINA],
         }
       : null,
     filters.fornecedorId
       ? {
-          key: "fornecedor",
-          label: `Fornecedor: ${options.fornecedores.find((item) => item.id === filters.fornecedorId)?.name ?? "selecionado"}`,
+          rotulo: `Fornecedor: ${nome(options.fornecedores, filters.fornecedorId)}`,
+          chaves: ["fornecedor", PAGINA],
         }
       : null,
     filters.resultadoFinanceiro
       ? {
-          key: "resultado_financeiro",
-          label:
+          rotulo:
             FINANCIAL_OPTIONS.find(
               (item) => item.value === filters.resultadoFinanceiro,
             )?.label ?? "Resultado financeiro",
+          chaves: ["resultado_financeiro", PAGINA],
         }
       : null,
     filters.resultadoCotacao
       ? {
-          key: "resultado_cotacao",
-          label:
+          rotulo: `Cotação: ${
             QUOTATION_OPTIONS.find(
               (item) => item.value === filters.resultadoCotacao,
-            )?.label ?? "Resultado da cotação",
+            )?.label ?? "resultado"
+          }`,
+          chaves: ["resultado_cotacao", PAGINA],
         }
       : null,
-  ].filter((item): item is { key: string; label: string } => item !== null);
-
-  const presets = [
-    { label: "Este mês", de: `${today.slice(0, 7)}-01`, ate: today },
-    { label: "30 dias", de: daysBefore(today, 29), ate: today },
-    { label: "90 dias", de: daysBefore(today, 89), ate: today },
-    { label: "Este ano", de: `${today.slice(0, 4)}-01-01`, ate: today },
-  ];
+  ].filter((item): item is FiltroAtivo => item !== null);
 
   return (
     <section className="mb-6">
       <div className="flex flex-wrap items-center gap-2">
-        <Dialog key={paramsFromFilters(filters).toString()}>
-          <DialogTrigger asChild>
-            <Button type="button" variant="outline">
-              <Filter aria-hidden /> Filtros
-              {active.length ? (
-                <span className="bg-primary-solid text-primary-solid-fg ml-1 grid min-w-5 place-items-center rounded-full px-1.5 text-xs leading-5">
-                  {active.length}
-                </span>
-              ) : null}
-            </Button>
-          </DialogTrigger>
+        <nav
+          aria-label="Período"
+          className="border-border bg-surface-sunken grid w-full grid-cols-5 gap-0.5 rounded-md border p-0.5 sm:inline-flex sm:w-auto"
+        >
+          {presets.map((preset) => {
+            const ativo = preset === presetAtivo;
+            return (
+              <Link
+                key={preset.label}
+                href={hrefChanging(filters, { de: preset.de, ate: preset.ate })}
+                scroll={false}
+                aria-current={ativo ? "true" : undefined}
+                className={cn(
+                  "text-fg-muted hover:text-fg focus-visible:ring-ring/50 flex h-7 items-center justify-center rounded-[5px] px-2.5 text-xs whitespace-nowrap transition-colors outline-none focus-visible:ring-3 pointer-coarse:h-10 sm:text-sm",
+                  ativo && "bg-surface text-fg font-medium shadow-xs",
+                )}
+              >
+                {preset.label}
+              </Link>
+            );
+          })}
+        </nav>
 
-          <DialogContent size="lg">
-            <form method="get" className="contents">
-              <DialogHeader>
-                <DialogTitle>Filtros de aferição</DialogTitle>
-                <DialogDescription>
-                  Cruze período, produto, fornecedor e resultados para
-                  investigar os indicadores da página.
-                </DialogDescription>
-              </DialogHeader>
-
-              <DialogBody className="flex flex-col gap-5">
-                <section>
-                  <p className="text-fg-muted mb-2 flex items-center gap-1.5 text-xs font-medium">
-                    <CalendarRange className="size-3.5" aria-hidden /> Períodos
-                    rápidos
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {presets.map((preset) => (
-                      <Link
-                        key={preset.label}
-                        href={hrefChanging(filters, {
-                          de: preset.de,
-                          ate: preset.ate,
-                        })}
-                        className="border-border bg-surface-sunken text-fg-muted hover:border-ring hover:text-fg rounded-lg border px-2.5 py-1.5 text-xs transition-colors"
-                      >
-                        {preset.label}
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                  <Field label="De" htmlFor="de">
-                    <Input
-                      id="de"
-                      name="de"
-                      type="date"
-                      defaultValue={filters.de ?? ""}
-                      className="h-8"
-                    />
-                  </Field>
-                  <Field label="Até" htmlFor="ate">
-                    <Input
-                      id="ate"
-                      name="ate"
-                      type="date"
-                      defaultValue={filters.ate ?? ""}
-                      className="h-8"
-                    />
-                  </Field>
-                  <Field label="Categoria" htmlFor="categoria">
-                    <SearchableSelect
-                      id="categoria"
-                      name="categoria"
-                      options={options.categorias}
-                      defaultValue={filters.categoriaId ?? ""}
-                      placeholder="Buscar categoria…"
-                    />
-                  </Field>
-                  <Field label="Produto" htmlFor="produto">
-                    <SearchableSelect
-                      id="produto"
-                      name="produto"
-                      options={options.produtos}
-                      defaultValue={filters.produtoId ?? ""}
-                      placeholder="Buscar produto…"
-                    />
-                  </Field>
-                  <Field label="Fornecedor" htmlFor="fornecedor">
-                    <SearchableSelect
-                      id="fornecedor"
-                      name="fornecedor"
-                      options={options.fornecedores}
-                      defaultValue={filters.fornecedorId ?? ""}
-                      placeholder="Buscar fornecedor…"
-                    />
-                  </Field>
-                </div>
-
-                <div className="bg-surface-sunken grid gap-3 rounded-xl p-3 sm:grid-cols-2">
-                  <Field
-                    label="Resultado financeiro"
-                    htmlFor="resultado-financeiro"
-                  >
-                    <ThemedSelect
-                      id="resultado-financeiro"
-                      name="resultado_financeiro"
-                      options={FINANCIAL_OPTIONS}
-                      defaultValue={filters.resultadoFinanceiro ?? ""}
-                      emptyOptionLabel="Todos os resultados"
-                    />
-                  </Field>
-                  <Field
-                    label="Resultado da cotação"
-                    htmlFor="resultado-cotacao"
-                  >
-                    <ThemedSelect
-                      id="resultado-cotacao"
-                      name="resultado_cotacao"
-                      options={QUOTATION_OPTIONS}
-                      defaultValue={filters.resultadoCotacao ?? ""}
-                      emptyOptionLabel="Todos os resultados"
-                    />
-                  </Field>
-                  <p className="text-fg-subtle text-xs leading-relaxed sm:col-span-2">
-                    Resultado financeiro afeta os cards e o detalhamento de
-                    preços. Resultado da cotação afeta a análise de
-                    fornecedores.
-                  </p>
-                </div>
-
-                <p className="text-fg-subtle flex items-start gap-1.5 text-xs">
-                  <Search className="mt-0.5 size-3.5 shrink-0" aria-hidden /> O
-                  período usa a chegada nos valores e a criação da rodada nos
-                  indicadores de fornecedores. O recorte permanece no endereço e
-                  pode ser salvo ou compartilhado.
-                </p>
-              </DialogBody>
-
-              <DialogFooter className="justify-between">
-                <Button asChild size="sm" variant="ghost">
-                  <Link href="/analises">Limpar tudo</Link>
-                </Button>
-                <div className="flex items-center gap-2">
-                  <DialogClose asChild>
-                    <Button type="button" size="sm" variant="outline">
-                      Cancelar
-                    </Button>
-                  </DialogClose>
-                  <Button type="submit" size="sm">
-                    Aplicar filtros
-                  </Button>
-                </div>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {active.length === 0 ? (
-          <p className="text-fg-subtle text-xs">Nenhum filtro aplicado.</p>
-        ) : null}
+        <FilterDialog
+          basePath="/analises"
+          ativos={ativos.length}
+          paginaParam={PAGINA}
+          ajuda={
+            <>
+              O período usa a chegada da mercadoria nos valores e a criação da
+              rodada nos indicadores de fornecedores. Resultado financeiro
+              recorta os números e a aferição de preços; resultado da cotação
+              recorta o desempenho dos fornecedores.
+            </>
+          }
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="De" htmlFor="de">
+              <DateTimePicker
+                id="de"
+                name="de"
+                defaultValue={filters.de ?? ""}
+                placeholder="Data inicial"
+                dateOnly
+              />
+            </Field>
+            <Field label="Até" htmlFor="ate">
+              <DateTimePicker
+                id="ate"
+                name="ate"
+                defaultValue={filters.ate ?? ""}
+                placeholder="Data final"
+                dateOnly
+              />
+            </Field>
+            <Field label="Categoria" htmlFor="categoria">
+              <SearchableSelect
+                id="categoria"
+                name="categoria"
+                options={options.categorias}
+                defaultValue={filters.categoriaId ?? ""}
+                placeholder="Buscar categoria…"
+              />
+            </Field>
+            <Field label="Produto" htmlFor="produto">
+              <SearchableSelect
+                id="produto"
+                name="produto"
+                options={options.produtos}
+                defaultValue={filters.produtoId ?? ""}
+                placeholder="Buscar produto…"
+              />
+            </Field>
+            <Field label="Fornecedor" htmlFor="fornecedor">
+              <SearchableSelect
+                id="fornecedor"
+                name="fornecedor"
+                options={options.fornecedores}
+                defaultValue={filters.fornecedorId ?? ""}
+                placeholder="Buscar fornecedor…"
+              />
+            </Field>
+            <Field label="Resultado financeiro" htmlFor="resultado-financeiro">
+              <ThemedSelect
+                id="resultado-financeiro"
+                name="resultado_financeiro"
+                options={FINANCIAL_OPTIONS}
+                defaultValue={filters.resultadoFinanceiro ?? ""}
+                emptyOptionLabel="Todos os resultados"
+              />
+            </Field>
+            <Field label="Resultado da cotação" htmlFor="resultado-cotacao">
+              <ThemedSelect
+                id="resultado-cotacao"
+                name="resultado_cotacao"
+                options={QUOTATION_OPTIONS}
+                defaultValue={filters.resultadoCotacao ?? ""}
+                emptyOptionLabel="Todos os resultados"
+              />
+            </Field>
+          </div>
+        </FilterDialog>
       </div>
 
-      {active.length ? (
-        <div className="mt-3 flex flex-wrap gap-2" aria-label="Filtros ativos">
-          {active.map((item) => (
-            <Link
-              key={item.key}
-              href={hrefChanging(filters, { [item.key]: null })}
-              className="border-border bg-surface text-fg-muted hover:border-destructive/50 hover:text-destructive inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors"
-              title={`Remover ${item.label}`}
-            >
-              <span className="truncate">{item.label}</span>
-              <X className="size-3 shrink-0" aria-hidden />
-            </Link>
-          ))}
-        </div>
-      ) : null}
+      <FilterChips filtros={ativos} className="mt-3 mb-0" />
     </section>
   );
 }
@@ -331,7 +283,7 @@ function Field({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-fg-muted text-xs font-medium">
+      <label htmlFor={htmlFor} className="text-fg-muted text-xs">
         {label}
       </label>
       {children}

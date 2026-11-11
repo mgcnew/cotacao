@@ -46,6 +46,7 @@ export function FilterDialog({
   basePath,
   ativos,
   ajuda,
+  paginaParam = "pagina",
   children,
 }: {
   /** Para onde "Limpar" leva, e a base do endereço aplicado. */
@@ -54,6 +55,8 @@ export function FilterDialog({
   ativos: number;
   /** A frase que explica as situações compostas da lista. */
   ajuda?: React.ReactNode;
+  /** O parâmetro da página da lista, que volta à primeira ao filtrar. */
+  paginaParam?: string;
   /** Os campos, renderizados no servidor. */
   children: React.ReactNode;
 }) {
@@ -68,7 +71,7 @@ export function FilterDialog({
     // Parte do recorte que não é deste modal (a busca da barra) continua
     // valendo; trocar o filtro volta à primeira página.
     const busca = new URLSearchParams(atual);
-    busca.delete("pagina");
+    busca.delete(paginaParam);
     for (const [chave, valor] of dados.entries()) {
       // Campo em branco não vira parâmetro: "?situacao=&de=" polui o endereço
       // e faz um recorte vazio parecer um recorte.
