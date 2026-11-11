@@ -7,6 +7,7 @@ import { useActionState } from "react";
 
 import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Dialog,
   DialogBody,
@@ -18,7 +19,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   receiveOrderAsOrdered,
   type ReceiptActionState,
@@ -99,13 +99,15 @@ export function QuickReceiveDialog({
                 >
                   Dia em que chegou
                 </label>
-                <Input
+                <DateTimePicker
                   id={`quick-day-${orderId}`}
                   name="receivedDay"
-                  type="date"
                   defaultValue={defaultDay}
                   max={maxDay}
                   required
+                  dateOnly
+                  placeholder="Escolher o dia"
+                  className="pointer-coarse:h-11"
                 />
                 <p className="text-fg-subtle text-xs">
                   Já vem com a data prevista. Corrija se a entrega atrasou: é

@@ -7,6 +7,7 @@ import { useFormStatus } from "react-dom";
 import { useFechaAoSalvar } from "@/components/layout/fecha-ao-salvar";
 import { ErrorLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Dialog,
   DialogBody,
@@ -194,11 +195,13 @@ export function SupplierNoticeDialog({
                 <label htmlFor={`${prefix}dueDate`} className="text-fg text-sm font-medium">
                   Validade <span className="text-fg-subtle">(opcional)</span>
                 </label>
-                <Input
+                <DateTimePicker
                   id={`${prefix}dueDate`}
                   name="dueDate"
-                  type="date"
                   defaultValue={values?.dueDate ?? notice?.dueDate ?? ""}
+                  dateOnly
+                  placeholder="Sem validade"
+                  className="pointer-coarse:h-11"
                 />
               </div>
             </div>

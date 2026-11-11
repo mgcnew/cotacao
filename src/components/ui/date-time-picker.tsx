@@ -66,6 +66,11 @@ function daysForMonth(month: Date) {
   );
 }
 
+/** `yyyy-mm-dd` no fuso local, o formato do `<input type="date">`. */
+function isoDay(day: Date) {
+  return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+}
+
 function withDate(current: Date | null, day: Date) {
   const now = current ?? new Date();
   return new Date(
@@ -96,6 +101,9 @@ export function DateTimePicker({
   placeholder = "Escolher data e hora",
   defaultValue = "",
   dateOnly = false,
+  max,
+  required = false,
+  className,
 }: {
   id: string;
   name: string;
@@ -103,6 +111,15 @@ export function DateTimePicker({
   placeholder?: string;
   defaultValue?: string;
   dateOnly?: boolean;
+  /** Último dia aceito (`yyyy-mm-dd`), como o `max` do campo nativo. */
+  max?: string;
+  /**
+   * Sem "Limpar": o campo oculto não participa da validação do navegador, e
+   * quem pede data obrigatória já vem com uma escolhida.
+   */
+  required?: boolean;
+  /** Altura do gatilho, para acompanhar os campos vizinhos do formulário. */
+  className?: string;
 }) {
   const initialDate = defaultValue
     ? new Date(dateOnly ? `${defaultValue}T12:00:00` : defaultValue)
@@ -116,6 +133,7 @@ export function DateTimePicker({
   });
   const days = daysForMonth(visibleMonth);
   const today = new Date();
+  const afterMax = (day: Date) => max !== undefined && isoDay(day) > max;
 
   function chooseDay(day: Date) {
     setSelected((current) => withDate(current, day));
@@ -141,7 +159,7 @@ export function DateTimePicker({
 
   const selectedValue = selected
     ? dateOnly
-      ? `${selected.getFullYear()}-${String(selected.getMonth() + 1).padStart(2, "0")}-${String(selected.getDate()).padStart(2, "0")}`
+      ? isoDay(selected)
       : selected.toISOString()
     : "";
 
@@ -156,6 +174,7 @@ export function DateTimePicker({
           className={cn(
             "h-8 w-full justify-start px-2.5 font-normal",
             !selected && "text-fg-subtle",
+            className,
           )}
         >
           <CalendarDays className="size-4" aria-hidden />
@@ -191,7 +210,8 @@ export function DateTimePicker({
             >
               <ChevronLeft aria-hidden />
             </Button>
-            <strong className="text-sm font-semibold capitalize">
+            {/* Só a primeira letra: `capitalize` faria "Novembro De 2026". */}
+            <strong className="text-sm font-semibold first-letter:uppercase">
               {MONTH.format(visibleMonth)}
             </strong>
             <Button
@@ -230,9 +250,10 @@ export function DateTimePicker({
                   type="button"
                   aria-label={FULL_DATE.format(day)}
                   aria-pressed={chosen}
+                  disabled={afterMax(day)}
                   onClick={() => chooseDay(day)}
                   className={cn(
-                    "focus-visible:border-ring focus-visible:ring-ring/50 grid size-8 place-items-center rounded-lg border border-transparent text-xs outline-none transition-colors focus-visible:ring-3",
+                    "focus-visible:border-ring focus-visible:ring-ring/50 grid size-8 place-items-center rounded-lg border border-transparent text-xs outline-none transition-colors focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-35",
                     outside
                       ? "text-fg-subtle/55 hover:bg-surface-muted"
                       : "text-fg hover:bg-surface-muted",
@@ -273,20 +294,25 @@ export function DateTimePicker({
           ) : null}
 
           <div className="border-border mt-3 flex items-center justify-between border-t pt-3">
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={!selected}
-              onClick={() => setSelected(null)}
-            >
-              Limpar
-            </Button>
+            {required ? (
+              <span />
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={!selected}
+                onClick={() => setSelected(null)}
+              >
+                Limpar
+              </Button>
+            )}
             <div className="flex items-center gap-1">
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
+                disabled={afterMax(today)}
                 onClick={chooseNow}
               >
                 {dateOnly ? "Hoje" : "Agora"}

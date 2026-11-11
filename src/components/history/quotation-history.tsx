@@ -8,6 +8,7 @@ import { Metric } from "@/components/layout/metric";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Table,
   TableBody,
@@ -162,24 +163,30 @@ export function QuotationHistory({
       >
         <input type="hidden" name="por_pagina" value={filters.pageSize} />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
-            De
-            <input
-              type="date"
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="historico-de" className="text-fg-muted text-xs">
+              De
+            </label>
+            <DateTimePicker
+              id="historico-de"
               name="de"
               defaultValue={filters.from ?? ""}
-              className={selectClass}
+              dateOnly
+              placeholder="Data inicial"
             />
-          </label>
-          <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
-            Até
-            <input
-              type="date"
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="historico-ate" className="text-fg-muted text-xs">
+              Até
+            </label>
+            <DateTimePicker
+              id="historico-ate"
               name="ate"
               defaultValue={filters.to ?? ""}
-              className={selectClass}
+              dateOnly
+              placeholder="Data final"
             />
-          </label>
+          </div>
           <label className="text-fg-muted flex flex-col gap-1.5 text-xs">
             {relatedLabel}
             <select

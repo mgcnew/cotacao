@@ -15,6 +15,7 @@ import { useFormStatus } from "react-dom";
 
 import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ThemedSelect } from "@/components/ui/themed-select";
@@ -166,12 +167,13 @@ function ScheduleForm({
           >
             Data-base do ciclo
           </label>
-          <Input
+          <DateTimePicker
             id={`${prefix}-anchor`}
             name="anchorDate"
-            type="date"
             required
+            dateOnly
             defaultValue={schedule?.anchorDate ?? today}
+            className="pointer-coarse:h-11"
           />
         </div>
 

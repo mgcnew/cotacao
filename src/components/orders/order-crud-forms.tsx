@@ -13,6 +13,7 @@ import {
   type OrderableProduct,
 } from "@/components/orders/order-item-rows";
 import { Button } from "@/components/ui/button";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Input } from "@/components/ui/input";
 import {
   cancelOrder,
@@ -50,12 +51,12 @@ function DeliveryField({ defaultValue }: { defaultValue: string | null }) {
       <label htmlFor="deliveryDueDate" className="text-fg-muted text-xs">
         Entrega prevista <span className="text-fg-subtle">(opcional)</span>
       </label>
-      <Input
+      <DateTimePicker
         id="deliveryDueDate"
         name="deliveryDueDate"
-        type="date"
         defaultValue={defaultValue ?? ""}
-        className="h-8"
+        dateOnly
+        placeholder="Sem data"
       />
     </div>
   );
