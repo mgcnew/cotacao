@@ -5,6 +5,7 @@ import {
   Check,
   ChevronsUpDown,
   LogOut,
+  Monitor,
   Moon,
   Settings2,
   Sun,
@@ -14,10 +15,30 @@ import * as React from "react";
 
 import { CompanyAvatar } from "@/components/company/company-avatar";
 import { CompanyProfileDialog } from "@/components/company/company-profile-dialog";
+import {
+  ACCENTS,
+  type Accent,
+  useAccent,
+} from "@/components/providers/theme-provider";
 import { Button } from "@/components/ui/button";
 import { setActiveCompany, signOut } from "@/lib/auth/actions";
 import type { CompanyMembership } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
+
+const TEMAS = [
+  { value: "light", label: "Claro", icon: Sun },
+  { value: "dark", label: "Escuro", icon: Moon },
+  { value: "system", label: "Sistema", icon: Monitor },
+] as const;
+
+const NOMES_DAS_CORES: Record<Accent, string> = {
+  indigo: "Índigo",
+  blue: "Azul",
+  purple: "Roxo",
+  green: "Verde",
+  orange: "Laranja",
+  red: "Vermelho",
+};
 
 type Props = {
   companies: CompanyMembership[];
@@ -34,8 +55,9 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
     companies.find((company) => company.companyId === activeCompanyId) ??
     companies[0];
   const canManage = active.permissions.includes("role.manage");
-  const { resolvedTheme, setTheme } = useTheme();
-  const escuro = resolvedTheme === "dark";
+  // O menu só abre depois da hidratação, então aqui o tema já é o do cliente.
+  const { theme, setTheme } = useTheme();
+  const { accent, setAccent } = useAccent();
 
   React.useEffect(() => {
     if (!open) return;
@@ -164,25 +186,70 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
               )}
             </div>
 
-            {/* Preferências e saída: raras, por isso dentro do menu e não
-                soltas no cabeçalho. */}
-            <div className="border-border mt-1 border-t pt-1">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setOpen(false);
-                  setTheme(escuro ? "light" : "dark");
-                }}
-                className="text-fg-muted hover:bg-surface-muted hover:text-fg flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors"
-              >
-                {escuro ? (
-                  <Sun className="size-4" aria-hidden />
-                ) : (
-                  <Moon className="size-4" aria-hidden />
-                )}
-                {escuro ? "Usar tema claro" : "Usar tema escuro"}
-              </button>
+            {/* Aparência e saída: raras, por isso dentro do menu e não soltas
+                no cabeçalho. Trocar tema ou cor não fecha o menu: a pessoa vê
+                o resultado na hora e pode experimentar outra. */}
+            <div className="border-border mt-1 flex flex-col gap-2.5 border-t px-2.5 pt-2.5 pb-2">
+              <div className="flex flex-col gap-1.5">
+                <span id="menu-tema" className="text-fg-subtle text-xs font-medium">
+                  Tema
+                </span>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="menu-tema"
+                  className="border-border bg-surface-sunken grid grid-cols-3 gap-0.5 rounded-md border p-0.5"
+                >
+                  {TEMAS.map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={theme === value}
+                      onClick={() => setTheme(value)}
+                      className={cn(
+                        "text-fg-muted hover:text-fg flex h-7 items-center justify-center gap-1.5 rounded-[5px] text-xs transition-colors",
+                        theme === value &&
+                          "bg-surface text-fg font-medium shadow-xs",
+                      )}
+                    >
+                      <Icon className="size-3.5" aria-hidden />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span id="menu-cor" className="text-fg-subtle text-xs font-medium">
+                  Cor de destaque
+                </span>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="menu-cor"
+                  className="flex gap-2 px-0.5 py-0.5"
+                >
+                  {ACCENTS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={accent === value}
+                      aria-label={NOMES_DAS_CORES[value]}
+                      title={NOMES_DAS_CORES[value]}
+                      onClick={() => setAccent(value)}
+                      data-accent={value}
+                      className={cn(
+                        "bg-primary size-5 rounded-full transition-[box-shadow] duration-(--dur) ease-(--ease)",
+                        accent === value
+                          ? "ring-primary ring-offset-surface-elevated ring-2 ring-offset-2"
+                          : "hover:ring-border-strong hover:ring-offset-surface-elevated hover:ring-2 hover:ring-offset-2",
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="border-border border-t pt-1">
               <form action={signOut}>
                 <button
                   type="submit"

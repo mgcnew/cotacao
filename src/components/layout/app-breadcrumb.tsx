@@ -145,9 +145,9 @@ export function AppBreadcrumb({ className }: { className?: string }) {
   const ultimo = titulo ?? nomes.at(-1) ?? null;
   const meio = titulo ? nomes : nomes.slice(0, -1);
 
-  // No celular a trilha repetia o título que a página já mostra logo abaixo,
-  // e sobram uns 60px ao lado dos ícones. Ali a tela principal mostra só o
-  // símbolo da marca, e a de detalhe só a seta de volta para a lista.
+  // No celular a trilha repetia o título que a página já mostra logo abaixo e
+  // disputava espaço com os ícones. Ali a tela principal mostra só o símbolo
+  // da marca, e a de detalhe só a seta de volta para a lista.
   return (
     <div className={cn("min-w-0", className)}>
       {ultimo ? (
