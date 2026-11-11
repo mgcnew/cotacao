@@ -1,10 +1,12 @@
 "use client";
 
 import { ClipboardCheck, PackageSearch, Send, UsersRound } from "lucide-react";
+import { LayoutGroup, m } from "motion/react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
+import { EASE } from "@/components/motion/movimento";
 
 import { cn } from "@/lib/utils";
 
@@ -53,6 +55,9 @@ export function RoundModalNav({
   const [clique, setClique] = useState<{ key: string; de: string } | null>(
     null,
   );
+  // O modal e a página podem estar montados juntos: cada faixa anima a própria
+  // linha, sem uma puxar a da outra.
+  const grupo = useId();
   if (pathname.endsWith("/relatorio")) return null;
   const inDecision =
     pathname.endsWith("/comparacao") || pathname.endsWith("/alocacao");
@@ -72,7 +77,7 @@ export function RoundModalNav({
    * continuava o mesmo, e a pessoa clicava de novo.
    *
    * O clique guarda o destino e de onde saiu. Enquanto a navegação não sai de
-   * `de`, o destino vale como ativo e uma barra fina corre sob a faixa. Quando
+   * `de`, o destino vale como ativo e a linha dele pulsa. Quando
    * `current` muda, `de` deixa de bater e o estado se desfaz sozinho — sem
    * efeito, sem limpeza manual, e sem ficar preso se a pessoa voltar atrás.
    */
@@ -85,6 +90,7 @@ export function RoundModalNav({
       aria-label="Áreas da rodada"
       aria-busy={aguardando !== null}
     >
+      <LayoutGroup id={grupo}>
       <div className="grid w-full grid-cols-4 sm:flex sm:min-w-max sm:gap-1">
         {tabs.map(({ key, label, mobileLabel, icon: Icon }) => {
           const href =
@@ -119,34 +125,50 @@ export function RoundModalNav({
                 // No celular o ícone fica em cima do nome: quatro nomes lado a
                 // lado em ~85px cada cortavam "Respostas" em "Respost…".
                 "text-fg-muted hover:text-fg relative flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 text-xs font-medium transition-colors sm:h-11 sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm",
-                active &&
-                  "text-fg after:bg-primary after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full",
+                active && "text-fg",
               )}
             >
               <Icon className="size-4 sm:size-3.5" aria-hidden />
               <span className="sm:hidden">{mobileLabel}</span>
               <span className="hidden sm:inline">{label}</span>
+              {active ? <LinhaDaAba aguardando={aguardando !== null} /> : null}
             </IntentPrefetchLink>
           );
         })}
       </div>
+      </LayoutGroup>
 
       {aguardando ? (
-        <>
-          {/* Uma barra de largura fixa sob a faixa: só a posição muda, então
-              nada empurra o conteúdo. Com movimento reduzido o CSS global a
-              deixa parada, e ela continua dizendo "carregando". */}
-          <span
-            aria-hidden
-            className="bg-surface-muted pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden"
-          >
-            <span className="bg-primary-solid block h-full w-1/3 [animation:om-progress_1.1s_var(--ease)_infinite]" />
-          </span>
-          <span role="status" className="sr-only">
-            Carregando…
-          </span>
-        </>
+        <span role="status" className="sr-only">
+          Carregando…
+        </span>
       ) : null}
     </nav>
+  );
+}
+
+/**
+ * A linha sob a aba ativa. É uma só, que desliza de uma aba para a outra
+ * (`layoutId`), em vez de sumir numa e surgir na outra. Antes, enquanto a
+ * navegação não terminava, uma segunda barra corria por baixo da faixa inteira
+ * e as duas disputavam a mesma linha; agora a espera é a própria linha
+ * pulsando no destino.
+ *
+ * A largura acompanha o espaçamento da aba (`px-3` no desktop), para a linha
+ * ter o tamanho do rótulo e não da área de toque.
+ */
+function LinhaDaAba({ aguardando }: { aguardando: boolean }) {
+  return (
+    <m.span
+      aria-hidden
+      layoutId="linha-da-aba"
+      transition={{ duration: 0.25, ease: EASE }}
+      animate={
+        aguardando
+          ? { opacity: [1, 0.4, 1], transition: { duration: 1.1, ease: EASE, repeat: Infinity } }
+          : { opacity: 1 }
+      }
+      className="bg-primary pointer-events-none absolute inset-x-2 bottom-0 h-0.5 rounded-full sm:inset-x-3"
+    />
   );
 }
