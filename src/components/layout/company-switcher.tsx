@@ -9,6 +9,8 @@ import {
   Moon,
   Settings2,
   Sun,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import * as React from "react";
@@ -23,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { setActiveCompany, signOut } from "@/lib/auth/actions";
 import type { CompanyMembership } from "@/lib/auth/dal";
+import { definirSom, useSomLigado } from "@/lib/notification-sound";
 import { cn } from "@/lib/utils";
 
 const TEMAS = [
@@ -58,6 +61,7 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
   // O menu só abre depois da hidratação, então aqui o tema já é o do cliente.
   const { theme, setTheme } = useTheme();
   const { accent, setAccent } = useAccent();
+  const somLigado = useSomLigado();
 
   React.useEffect(() => {
     if (!open) return;
@@ -186,7 +190,7 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
               )}
             </div>
 
-            {/* Aparência e saída: raras, por isso dentro do menu e não soltas
+            {/* Aparência, som e saída: raras, por isso dentro do menu e não soltas
                 no cabeçalho. Trocar tema ou cor não fecha o menu: a pessoa vê
                 o resultado na hora e pode experimentar outra. */}
             <div className="border-border mt-1 flex flex-col gap-2.5 border-t px-2.5 pt-2.5 pb-2">
@@ -247,6 +251,36 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
                   ))}
                 </div>
               </div>
+              {/* Ligar toca o aviso uma vez: a pessoa ouve como é e o clique
+                  já libera o áudio no navegador. */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={somLigado}
+                onClick={() => definirSom(!somLigado)}
+                className="text-fg-muted hover:text-fg -mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-left text-xs transition-colors pointer-coarse:min-h-11"
+              >
+                {somLigado ? (
+                  <Volume2 className="size-3.5" aria-hidden />
+                ) : (
+                  <VolumeX className="size-3.5" aria-hidden />
+                )}
+                <span className="flex-1">Som das notificações</span>
+                <span
+                  aria-hidden
+                  className={cn(
+                    "relative h-4 w-7 shrink-0 rounded-full transition-colors duration-(--dur) ease-(--ease)",
+                    somLigado ? "bg-primary-solid" : "bg-border-strong",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "bg-surface absolute top-0.5 left-0.5 size-3 rounded-full shadow-xs transition-transform duration-(--dur) ease-(--ease)",
+                      somLigado && "translate-x-3",
+                    )}
+                  />
+                </span>
+              </button>
             </div>
 
             <div className="border-border border-t pt-1">

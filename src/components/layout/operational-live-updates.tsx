@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
+import { prepararSom, tocarAviso } from "@/lib/notification-sound";
 import { loadBrowserClient, whenIdle } from "@/lib/supabase/realtime";
 
 const SUPPLIER_RESPONSE_EVENTS = new Set([
@@ -18,6 +19,9 @@ const SUPPLIER_RESPONSE_EVENTS = new Set([
  * As RPCs emitem `domain_events` somente depois de persistirem toda a resposta,
  * então um único evento basta para recarregar página, modais e notificações sem
  * provocar uma sequência de refreshes para cada item da cotação.
+ *
+ * São os mesmos eventos que viram notificação no sino, então é aqui também
+ * que o aviso sonoro toca.
  */
 export function OperationalLiveUpdates({ companyId }: { companyId: string }) {
   const router = useRouter();
@@ -26,6 +30,7 @@ export function OperationalLiveUpdates({ companyId }: { companyId: string }) {
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
+    const pararDePreparar = prepararSom();
 
     // Depois que a tela abriu: o cliente do Supabase é pesado e este aviso não
     // tem pressa. Ver `lib/supabase/realtime.ts`.
@@ -49,6 +54,7 @@ export function OperationalLiveUpdates({ companyId }: { companyId: string }) {
                 return;
               }
 
+              tocarAviso(String(payload.new.id));
               if (timer.current) clearTimeout(timer.current);
               timer.current = setTimeout(() => router.refresh(), 250);
             },
@@ -61,6 +67,7 @@ export function OperationalLiveUpdates({ companyId }: { companyId: string }) {
     return () => {
       cancelled = true;
       cancelIdle();
+      pararDePreparar();
       if (timer.current) clearTimeout(timer.current);
       unsubscribe?.();
     };
