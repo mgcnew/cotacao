@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import * as React from "react";
 
+import { CotaProMark } from "@/components/brand/cotapro-logo";
 import { FOOTER_NAV, NAV_GROUPS } from "@/components/layout/nav-items";
 import { cn } from "@/lib/utils";
 
@@ -126,7 +127,13 @@ export function AppBreadcrumb({ className }: { className?: string }) {
   const secao = secaoDe(pathname);
   // Sem seção conhecida, o espaço continua ocupado: é ele que mantém a busca
   // no centro do cabeçalho.
-  if (!secao) return <div className={className} />;
+  if (!secao) {
+    return (
+      <div className={className}>
+        <Marca />
+      </div>
+    );
+  }
 
   const resto = pathname
     .slice(secao.href.length)
@@ -138,41 +145,62 @@ export function AppBreadcrumb({ className }: { className?: string }) {
   const ultimo = titulo ?? nomes.at(-1) ?? null;
   const meio = titulo ? nomes : nomes.slice(0, -1);
 
+  // No celular a trilha repetia o título que a página já mostra logo abaixo,
+  // e sobram uns 60px ao lado dos ícones. Ali a tela principal mostra só o
+  // símbolo da marca, e a de detalhe só a seta de volta para a lista.
   return (
-    <nav aria-label="Você está em" className={cn("min-w-0", className)}>
-      <ol className="flex min-w-0 items-center gap-1.5 text-sm">
-        <li className="shrink-0">
+    <div className={cn("min-w-0", className)}>
+      {ultimo ? (
+        <ListLink
+          href={secao.href}
+          aria-label={`Voltar para ${secao.label}`}
+          className="text-fg-muted hover:text-fg hover:bg-surface-muted -ml-2 grid size-10 place-items-center rounded-md sm:hidden"
+        >
+          <ChevronLeft className="size-5" aria-hidden />
+        </ListLink>
+      ) : (
+        <Marca />
+      )}
+      <nav aria-label="Você está em" className="hidden min-w-0 sm:block">
+        <ol className="flex min-w-0 items-center gap-1.5 text-sm">
+          <li className="shrink-0">
+            {ultimo ? (
+              <ListLink
+                href={secao.href}
+                className="text-fg-muted hover:text-fg rounded-sm transition-colors"
+              >
+                {secao.label}
+              </ListLink>
+            ) : (
+              <span aria-current="page" className="text-fg font-semibold">
+                {secao.label}
+              </span>
+            )}
+          </li>
+          {meio.map((nome) => (
+            <Passo key={nome}>
+              <span className="text-fg-muted">{nome}</span>
+            </Passo>
+          ))}
           {ultimo ? (
-            <ListLink
-              href={secao.href}
-              className="text-fg-muted hover:text-fg rounded-sm transition-colors"
-            >
-              {secao.label}
-            </ListLink>
-          ) : (
-            <span aria-current="page" className="text-fg font-semibold">
-              {secao.label}
-            </span>
-          )}
-        </li>
-        {meio.map((nome) => (
-          <Passo key={nome}>
-            <span className="text-fg-muted">{nome}</span>
-          </Passo>
-        ))}
-        {ultimo ? (
-          <Passo>
-            <span
-              aria-current="page"
-              className="text-fg block truncate font-semibold"
-            >
-              {ultimo}
-            </span>
-          </Passo>
-        ) : null}
-      </ol>
-    </nav>
+            <Passo>
+              <span
+                aria-current="page"
+                className="text-fg block truncate font-semibold"
+              >
+                {ultimo}
+              </span>
+            </Passo>
+          ) : null}
+        </ol>
+      </nav>
+    </div>
   );
+}
+
+/** O símbolo no lugar da trilha, só no celular: no desktop a barra lateral já o mostra. */
+function Marca() {
+  return <CotaProMark className="size-7 sm:hidden" />;
 }
 
 function Passo({ children }: { children: React.ReactNode }) {
