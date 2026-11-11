@@ -340,7 +340,7 @@ export async function rotateStockCountLink(
   countId: string,
 ): Promise<StockCountResult> {
   const company = await requireCounter();
-  const token = randomBytes(24).toString("hex");
+  const token = randomBytes(16).toString("base64url");
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase
     .from("stock_counts")

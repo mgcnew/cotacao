@@ -70,7 +70,7 @@ export async function createNegotiationReference(
     return { error: "Escolha ao menos um produto para negociar." };
   }
 
-  const token = randomBytes(32).toString("base64url");
+  const token = randomBytes(16).toString("base64url");
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(
     Date.now() + validityDays * 24 * 60 * 60 * 1000,

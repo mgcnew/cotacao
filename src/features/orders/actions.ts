@@ -509,7 +509,7 @@ async function issueOrderLink(
     };
   }
 
-  const rawToken = randomBytes(32).toString("base64url");
+  const rawToken = randomBytes(16).toString("base64url");
   // 30 dias: prazo folgado para o fornecedor responder, curto o bastante para
   // um link vazado não valer para sempre.
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);

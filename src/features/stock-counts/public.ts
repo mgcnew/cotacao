@@ -32,7 +32,8 @@ export function stockCountPublicUrl(token: string) {
 export async function getPublicStockCount(
   token: string,
 ): Promise<PublicStockCount | null> {
-  if (!/^[0-9a-f]{48}$/.test(token)) return null;
+  // 48 em hexadecimal são os links de antes da migration 0126; os novos têm 22.
+  if (!/^(?:[0-9a-f]{48}|[A-Za-z0-9_-]{22})$/.test(token)) return null;
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.rpc("rpc_public_get_stock_count", {
     p_token: token,

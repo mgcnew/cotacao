@@ -42,9 +42,9 @@ export type ReminderState = {
   savedAt?: number;
 };
 
-/** Token bruto: 32 bytes de aleatoriedade criptográfica, em base64url. */
+/** Token bruto: 16 bytes (128 bits) em base64url, 22 caracteres no link. */
 function newRawToken(): string {
-  return randomBytes(32).toString("base64url");
+  return randomBytes(16).toString("base64url");
 }
 
 function sha256Hex(value: string): string {
