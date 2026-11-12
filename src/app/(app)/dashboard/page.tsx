@@ -8,7 +8,10 @@ import {
 import Link from "next/link";
 import { cache, Suspense } from "react";
 
-import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import {
+  ActivityFeed,
+  ActivityLegend,
+} from "@/components/dashboard/activity-feed";
 import { FinancialJourneyMetric } from "@/components/dashboard/financial-journey-metric";
 import { FirstSteps } from "@/components/dashboard/first-steps";
 import { SectionError } from "@/components/dashboard/section-error";
@@ -575,6 +578,7 @@ async function AtividadeConteudo({ companyId }: { companyId: string }) {
         <p className="text-fg-muted mt-0.5 text-xs">
           O que você, sua equipe e os fornecedores fizeram por último.
         </p>
+        <ActivityLegend className="mt-2.5" />
       </header>
       <ActivityFeed entries={activity} />
     </section>

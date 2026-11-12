@@ -22,7 +22,61 @@ export type ActivityEntry = {
   href: string | null;
   /** Fornecedor agindo do lado de fora merece destaque na leitura. */
   bySupplier: boolean;
+  /** Cor da bolinha: o tipo de notícia, lido antes do texto. */
+  tone: ActivityTone;
 };
+
+/**
+ * - `success`: algo se concluiu (confirmado, recebido, resolvido);
+ * - `danger`: algo foi desfeito (cancelado, retirado);
+ * - `warning`: algo pede um olhar (divergência, saldo encerrado);
+ * - `supplier`: o fornecedor agiu do lado de fora;
+ * - `info`: o processo andou (enviado, criado, revisado);
+ * - `neutral`: o resto (cadastro, ajustes).
+ */
+export type ActivityTone =
+  | "success"
+  | "danger"
+  | "warning"
+  | "supplier"
+  | "info"
+  | "neutral";
+
+const EVENT_TONE: Record<string, ActivityTone> = {
+  "quotation.sent": "info",
+  "quotation.response_submitted": "supplier",
+  "quotation.response_corrected": "info",
+  "quotation.manual_response_recorded": "info",
+  "negotiation.created": "info",
+  "purchase.allocations_confirmed": "success",
+  "order.created": "info",
+  "order.draft_updated": "info",
+  "order.revision_created": "info",
+  "order.sent": "info",
+  "order.confirmed": "success",
+  "order.confirmed_manually": "success",
+  "order.cancelled": "danger",
+  "order.divergence_created": "warning",
+  "order.divergence_resolved": "success",
+  "order.balance_closed": "warning",
+  "commercial_divergence.detected": "warning",
+  "commercial_divergence.status_changed": "success",
+  "receipt.posted": "success",
+  "receipt.arrived": "success",
+  "purchase_round.activated": "info",
+  "purchase_round.completed": "success",
+  "purchase_round.cancelled": "danger",
+  "purchase_round_group.closed": "success",
+  "purchase_round_group.cancelled": "danger",
+  "round_supplier.added": "info",
+  "round_supplier.reactivated": "info",
+  "round_supplier.groups_updated": "info",
+  "round_supplier.removed": "danger",
+};
+
+function toneFor(eventType: string, bySupplier: boolean): ActivityTone {
+  return EVENT_TONE[eventType] ?? (bySupplier ? "supplier" : "neutral");
+}
 
 /**
  * O que cada evento significa em português.
@@ -350,6 +404,7 @@ export async function listRecentActivity(
         roundSupplier?.roundId ?? null,
       ),
       bySupplier: e.actor_type === "supplier",
+      tone: toneFor(e.event_type, e.actor_type === "supplier"),
     };
   });
 }
