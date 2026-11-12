@@ -9,6 +9,39 @@ import { roundMoney } from "@/lib/money";
 
 export type CorrectionState = { error: string | null; savedAt?: number };
 
+/**
+ * "Cada cx deste fornecedor tem ___ un" (0131), lido do formulário. `null`
+ * quando o campo não veio — item sem forma de compra, ou sem preço.
+ */
+function lerQuantidadeDaForma(
+  formData: FormData,
+): number | null | { error: string } {
+  const bruto = String(formData.get("formBasePerUnit") ?? "").trim();
+  if (!bruto) return null;
+  const valor = Number(bruto.replace(/\./g, "").replace(",", "."));
+  if (!Number.isFinite(valor) || valor <= 0) {
+    return { error: "A quantidade em cada embalagem deve ser maior que zero." };
+  }
+  return valor;
+}
+
+async function gravarQuantidadeDaForma(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+  responseItemId: string,
+  valor: number | null,
+): Promise<string | null> {
+  if (valor === null) return null;
+  const { error } = await supabase.rpc("rpc_set_response_item_form_quantity", {
+    p_company_id: companyId,
+    p_quotation_response_item_id: responseItemId,
+    p_base_per_unit: valor,
+  });
+  return error
+    ? `O preço foi salvo, mas a quantidade da embalagem não: ${error.message}`
+    : null;
+}
+
 const schema = z
   .object({
     responseItemId: z.uuid({ error: "Item de resposta inválido" }),
@@ -108,6 +141,11 @@ export async function correctResponseItem(
     }
   }
 
+  const quantidadeDaForma = fornece ? lerQuantidadeDaForma(formData) : null;
+  if (quantidadeDaForma !== null && typeof quantidadeDaForma === "object") {
+    return quantidadeDaForma;
+  }
+
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase.rpc(
     "rpc_correct_quotation_item_with_conversion",
@@ -136,6 +174,14 @@ export async function correctResponseItem(
     }
     return { error: `Não foi possível corrigir: ${error.message}` };
   }
+
+  const erroDaForma = await gravarQuantidadeDaForma(
+    supabase,
+    company.companyId,
+    parsed.data.responseItemId,
+    quantidadeDaForma,
+  );
+  if (erroDaForma) return { error: erroDaForma };
 
   // Indisponível cancela a alocação em rascunho que apontava para ele.
   revalidatePath(`/compras/${parsed.data.roundId}/comparacao`);
@@ -195,8 +241,13 @@ export async function recordManualQuotationItem(
     return { error: "A apresentação deve ser maior que zero." };
   }
 
+  const quantidadeDaForma = doesNotSupply ? null : lerQuantidadeDaForma(formData);
+  if (quantidadeDaForma !== null && typeof quantidadeDaForma === "object") {
+    return quantidadeDaForma;
+  }
+
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc(
+  const { data: responseItemId, error } = await supabase.rpc(
     "rpc_record_manual_quotation_item_with_conversion",
     {
       p_company_id: company.companyId,
@@ -224,6 +275,16 @@ export async function recordManualQuotationItem(
       };
     }
     return { error: `Não foi possível lançar: ${error.message}` };
+  }
+
+  if (responseItemId) {
+    const erroDaForma = await gravarQuantidadeDaForma(
+      supabase,
+      company.companyId,
+      responseItemId,
+      quantidadeDaForma,
+    );
+    if (erroDaForma) return { error: erroDaForma };
   }
 
   revalidatePath(`/compras/${roundId}/comparacao`);

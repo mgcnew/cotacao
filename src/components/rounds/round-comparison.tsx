@@ -621,6 +621,14 @@ function SupplierOffer({
         conversionRequired={row.conversionRequired}
         pricingUnitInfo={row.pricingUnitInfo}
         comparisonUnitInfo={row.comparisonUnitInfo}
+        forma={
+          row.formDefaultFactor !== null
+            ? {
+                atual: cell.conversionFactor ?? row.formDefaultFactor,
+                base: row.comparisonUnit ?? "",
+              }
+            : null
+        }
       />
     ) : null;
 
@@ -646,7 +654,7 @@ function SupplierOffer({
 
   if (cell.responseItemId === null) {
     const link = row.supplierQuotationItemBySupplier.get(supplier.id);
-    return <div><Badge variant="destructive">aguardando preço</Badge>{dados.podeLancar && link ? <ManualPriceForm supplierQuotationItemId={link} roundId={dados.round.id} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} comparisonUnit={row.comparisonUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} conversionRequired={row.conversionRequired} pricingUnitInfo={row.pricingUnitInfo} comparisonUnitInfo={row.comparisonUnitInfo} /> : null}</div>;
+    return <div><Badge variant="destructive">aguardando preço</Badge>{dados.podeLancar && link ? <ManualPriceForm supplierQuotationItemId={link} roundId={dados.round.id} supplierName={supplier.suppliers.name} productName={row.productName} pricingUnit={row.pricingUnit} comparisonUnit={row.comparisonUnit} conversionDefinitionId={row.conversionDefinitionId} conversionName={row.conversionName} conversionUnit={row.conversionUnit} conversionRequired={row.conversionRequired} pricingUnitInfo={row.pricingUnitInfo} comparisonUnitInfo={row.comparisonUnitInfo}  forma={row.formDefaultFactor !== null ? { padrao: row.formDefaultFactor, base: row.comparisonUnit ?? "" } : null} /> : null}</div>;
   }
 
   if (cell.currentPrice === null) return <Badge variant="destructive">resposta sem preço</Badge>;
@@ -661,6 +669,7 @@ function SupplierOffer({
         {cell.correctionCount > 0 ? <Badge variant="outline">corrigido</Badge> : null}
       </div>
       {cell.negotiated && cell.quotedPrice !== null ? <p className="text-fg-muted text-[13px] line-through tabular-nums">Original: R$ {MONEY.format(cell.quotedPrice)}</p> : null}
+      {row.formDefaultFactor !== null && cell.conversionFactor !== null && Math.abs(cell.conversionFactor - row.formDefaultFactor) > 1e-9 ? <p className="text-warning text-[13px] font-medium">{row.pricingUnit} deste fornecedor com {QTY.format(cell.conversionFactor)} {row.comparisonUnit} (o pedido previa {QTY.format(row.formDefaultFactor)})</p> : null}
       {cell.normalizedPrice !== null ? <p className={cn("text-[13px] tabular-nums", row.bestNormalized !== null && cell.normalizedPrice === row.bestNormalized ? "text-success font-medium" : "text-fg-muted")}>= {formatUnitPrice(cell.normalizedPrice)} / {row.comparisonUnit}</p> : null}
       {cell.attributes.length > 0 ? <p className="text-fg-muted mt-1 text-[13px]">{cell.attributes.map((attribute) => `${attribute.name}: ${attribute.value}`).join(" · ")}</p> : null}
       {cell.notes ? <p className="text-fg-muted mt-1 text-[13px]">{cell.notes}</p> : null}

@@ -63,6 +63,7 @@ export function ManualPriceForm({
   conversionRequired,
   pricingUnitInfo = null,
   comparisonUnitInfo = null,
+  forma = null,
 }: {
   supplierQuotationItemId: string;
   roundId: string;
@@ -76,6 +77,8 @@ export function ManualPriceForm({
   conversionRequired: boolean;
   pricingUnitInfo?: UnitInfo;
   comparisonUnitInfo?: UnitInfo;
+  /** Item noutra forma de compra: o padrão "1 cx = 12 un" (0131). */
+  forma?: { padrao: number; base: string } | null;
 }) {
   const [state, formAction] = useActionState<CorrectionState, FormData>(
     recordManualQuotationItem,
@@ -233,6 +236,14 @@ export function ManualPriceForm({
             placeholder={`por ${pricingUnit}`}
             className="h-11 w-36 text-base"
           />
+          {forma && !naoFornece ? (
+            <QuantidadeDaForma
+              id={`forma-${supplierQuotationItemId}`}
+              unidade={pricingUnit}
+              base={forma.base}
+              valorInicial={forma.padrao}
+            />
+          ) : null}
         </>
       )}
 
@@ -276,5 +287,43 @@ export function ManualPriceForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+const QTD_FORMA = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+
+/**
+ * "Cada cx tem ___ un" na mão do comprador: quem lança ou corrige o preço pelo
+ * fornecedor também diz quanto vem na caixa dele (0131). Começa no padrão do
+ * pedido, ou no que o fornecedor já informou.
+ */
+export function QuantidadeDaForma({
+  id,
+  unidade,
+  base,
+  valorInicial,
+}: {
+  id: string;
+  unidade: string;
+  base: string;
+  valorInicial: number;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-fg block text-sm font-medium" htmlFor={id}>
+        Cada {unidade} deste fornecedor tem
+      </label>
+      <div className="flex items-center gap-1.5">
+        <Input
+          id={id}
+          name="formBasePerUnit"
+          inputMode="decimal"
+          required
+          defaultValue={QTD_FORMA.format(valorInicial)}
+          className="h-11 w-24 text-base"
+        />
+        <span className="text-fg-muted text-[13px]">{base}</span>
+      </div>
+    </div>
   );
 }

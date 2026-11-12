@@ -51,7 +51,12 @@ export type PublicQuotationItem = {
    * equivalem a `base_quantity` da unidade de comparação. Ausente antes da
    * migration, nula na forma padrão.
    */
-  purchase_form?: { unit_quantity: number; base_quantity: number } | null;
+  purchase_form?: {
+    unit_quantity: number;
+    base_quantity: number;
+    /** O que este fornecedor já respondeu que vem na forma dele (0131). */
+    supplier_base_per_unit?: number | null;
+  } | null;
   notes: string | null;
   already_answered: boolean;
   last_supplier_price: number | null;

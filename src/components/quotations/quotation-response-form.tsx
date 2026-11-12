@@ -232,6 +232,21 @@ function ItemCard({
     initialDraft?.status ?? "",
   );
   const [price, setPrice] = React.useState(initialDraft?.price ?? "");
+  // Item numa forma de compra (0131): o padrão do pedido vem preenchido, e o
+  // fornecedor só mexe se a embalagem dele tiver outra quantidade.
+  const forma = item.purchase_form ?? null;
+  const formaPadrao = forma
+    ? Number(forma.base_quantity) / Number(forma.unit_quantity)
+    : null;
+  const [formaQtd, setFormaQtd] = React.useState(() =>
+    formaPadrao === null
+      ? ""
+      : QTY.format(
+          forma?.supplier_base_per_unit
+            ? Number(forma.supplier_base_per_unit)
+            : formaPadrao,
+        ),
+  );
   const [obs, setObs] = React.useState(initialDraft?.obs ?? "");
   const [obsOpen, setObsOpen] = React.useState(Boolean(initialDraft?.obs));
   const [commaTyped, setCommaTyped] = React.useState(false);
@@ -637,6 +652,21 @@ function ItemCard({
                   : "Digite só os números: 450 vira R$ 4,50."}
             </p>
           </div>
+        ) : null}
+
+        {priced && forma && formaPadrao !== null && item.comparison_unit ? (
+          <FormaDoFornecedor
+            id={id}
+            unidade={item.purchase_unit.symbol}
+            base={item.comparison_unit.symbol}
+            padrao={formaPadrao}
+            valor={formaQtd}
+            onChange={(valor) => {
+              dirtyRef.current = true;
+              setFormaQtd(valor);
+            }}
+            preco={validPrice ? numericPrice : null}
+          />
         ) : null}
 
         {suspiciousPrice && historicalPrice !== null ? (
@@ -1494,5 +1524,65 @@ export function QuotationResponseForm({
         </DialogContent>
       </Dialog>
     </form>
+  );
+}
+
+/**
+ * "Quantas un vêm na sua cx?" — a equivalência do pedido é um padrão, e a
+ * caixa de cada fornecedor pode ter outra quantidade. O número vai junto da
+ * resposta e é com ele que o comprador compara (0131).
+ */
+function FormaDoFornecedor({
+  id,
+  unidade,
+  base,
+  padrao,
+  valor,
+  onChange,
+  preco,
+}: {
+  id: string;
+  unidade: string;
+  base: string;
+  padrao: number;
+  valor: string;
+  onChange: (valor: string) => void;
+  preco: number | null;
+}) {
+  const quantidade = Number(valor.trim().replace(/\./g, "").replace(",", "."));
+  const valida = Number.isFinite(quantidade) && quantidade > 0;
+  const diferente = valida && Math.abs(quantidade - padrao) > 1e-9;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={`forma_${id}`} className="text-fg text-sm font-medium">
+        Quantas {base} vêm em cada {unidade}?
+      </label>
+      <div className="flex items-center gap-2">
+        <Input
+          id={`forma_${id}`}
+          name={`forma_${id}`}
+          inputMode="decimal"
+          autoComplete="off"
+          value={valor}
+          aria-invalid={!valida || undefined}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-12 w-28 text-lg tabular-nums"
+        />
+        <span className="text-fg text-sm">{base}</span>
+      </div>
+      <p
+        className={cn("text-[13px]", diferente ? "text-warning font-medium" : "text-fg-muted")}
+        role={diferente ? "status" : undefined}
+      >
+        {!valida
+          ? `Informe quantas ${base} vêm em cada ${unidade}.`
+          : diferente
+            ? `O pedido considerava ${QTY.format(padrao)} ${base}. Vamos usar ${QTY.format(quantidade)}.`
+            : `O pedido considera ${QTY.format(padrao)} ${base}. Se a sua ${unidade} tem outra quantidade, corrija aqui.`}
+        {valida && preco !== null
+          ? ` Sai a R$ ${formatUnitPrice(preco / quantidade)} por ${base}.`
+          : ""}
+      </p>
+    </div>
   );
 }

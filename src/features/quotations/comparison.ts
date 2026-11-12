@@ -71,6 +71,8 @@ export type ComparisonRow = {
   bestComparablePrice: number | null;
   /** Nome do atributo que converte, quando a categoria define um. */
   conversionName: string | null;
+  /** Padrão "1 cx = 12 un" do item em forma de compra (0128); nulo fora dela. */
+  formDefaultFactor: number | null;
   conversionDefinitionId: string | null;
   conversionRequired: boolean;
   conversionUnit: string | null;
@@ -178,7 +180,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       ? supabase
           .from("quotation_response_items")
           .select(
-            "id, supplier_quotation_item_id, quoted_price, is_available, does_not_supply, notes",
+            "id, supplier_quotation_item_id, quoted_price, is_available, does_not_supply, notes, form_base_per_unit",
           )
           .eq("company_id", companyId)
           .in("supplier_quotation_item_id", linkIds)
@@ -377,7 +379,14 @@ export async function getRoundComparison(companyId: string, roundId: string) {
 
       if (!response.does_not_supply && current !== null) precos.push(current);
 
-      const factor = formFactor ?? factorByResponse.get(response.id);
+      // Na forma de compra vale o que o fornecedor disse que vem na dele
+      // (0131); sem resposta, o padrão do item.
+      const factor =
+        formFactor !== null
+          ? response.form_base_per_unit
+            ? Number(response.form_base_per_unit)
+            : formFactor
+          : factorByResponse.get(response.id);
       conversionName =
         conversionName ?? conversionNameByResponse.get(response.id) ?? null;
       const normalized =
@@ -457,6 +466,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
           : null
         : bestPrice,
       conversionName,
+      formDefaultFactor: formFactor,
       conversionDefinitionId: conversionDefinition?.id ?? null,
       conversionRequired: conversionDefinition?.is_required ?? false,
       conversionUnit: conversionDefinition?.units?.symbol ?? null,

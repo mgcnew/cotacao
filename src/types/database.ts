@@ -2709,6 +2709,7 @@ export type Database = {
           company_id: string;
           created_at: string;
           does_not_supply: boolean;
+          form_base_per_unit: number | null;
           id: string;
           is_available: boolean | null;
           notes: string | null;
@@ -2721,6 +2722,7 @@ export type Database = {
           company_id: string;
           created_at?: string;
           does_not_supply?: boolean;
+          form_base_per_unit?: number | null;
           id?: string;
           is_available?: boolean | null;
           notes?: string | null;
@@ -2733,6 +2735,7 @@ export type Database = {
           company_id?: string;
           created_at?: string;
           does_not_supply?: boolean;
+          form_base_per_unit?: number | null;
           id?: string;
           is_available?: boolean | null;
           notes?: string | null;
@@ -5357,6 +5360,14 @@ export type Database = {
           p_company_id: string;
           p_receipt_id: string;
           p_totals: Json | null;
+        };
+        Returns: undefined;
+      };
+      rpc_set_response_item_form_quantity: {
+        Args: {
+          p_base_per_unit: number;
+          p_company_id: string;
+          p_quotation_response_item_id: string;
         };
         Returns: undefined;
       };

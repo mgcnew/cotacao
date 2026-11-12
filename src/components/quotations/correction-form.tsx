@@ -19,6 +19,7 @@ import {
   correctResponseItem,
   type CorrectionState,
 } from "@/features/quotations/correction";
+import { QuantidadeDaForma } from "@/components/quotations/manual-price-form";
 import { cn } from "@/lib/utils";
 
 type Situacao = "sim" | "sem_estoque" | "nao";
@@ -87,6 +88,7 @@ export function CorrectionForm({
   conversionRequired = false,
   pricingUnitInfo = null,
   comparisonUnitInfo = null,
+  forma = null,
 }: {
   responseItemId: string;
   roundId: string;
@@ -103,6 +105,8 @@ export function CorrectionForm({
   conversionRequired?: boolean;
   pricingUnitInfo?: { name: string | null; symbol: string } | null;
   comparisonUnitInfo?: { name: string | null; symbol: string } | null;
+  /** Item noutra forma de compra: o que vale hoje para este fornecedor (0131). */
+  forma?: { atual: number; base: string } | null;
 }) {
   // Embalagem: as mesmas perguntas do link do fornecedor e do lançamento —
   // "Preço de 1 bobina" e "Cada bobina tem ___ metros".
@@ -230,6 +234,15 @@ export function CorrectionForm({
             />
           </div>
         </div>
+      ) : null}
+
+      {fornece && forma ? (
+        <QuantidadeDaForma
+          id={`corr-forma-${responseItemId}`}
+          unidade={pricingUnit}
+          base={forma.base}
+          valorInicial={forma.atual}
+        />
       ) : null}
 
       {fornece && conversionDefinitionId && conversionName ? (

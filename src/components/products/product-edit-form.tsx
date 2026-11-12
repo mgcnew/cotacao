@@ -375,7 +375,7 @@ export function ProductEditForm({
       {purchaseForms && purpose !== "packaging" ? (
         <Secao
           titulo="Outras formas de compra"
-          descricao={`Quando o mesmo produto também vem em caixa, display ou fardo. A unidade de compra acima continua sendo a forma padrão; aqui você diz quanto cada outra forma contém em ${unitSymbol(baseUnitId)}, e é nessa base que os preços se comparam.`}
+          descricao={`Quando o mesmo produto também vem em caixa, display ou fardo. A unidade de compra acima continua sendo a forma padrão; aqui você diz quanto cada outra forma contém em ${unitSymbol(baseUnitId)}, e é nessa base que os preços se comparam. É o padrão: na cotação, cada fornecedor confirma ou corrige quanto vem na embalagem dele.`}
         >
           <PurchaseFormsField
             initial={purchaseForms}

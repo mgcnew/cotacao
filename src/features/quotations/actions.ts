@@ -24,6 +24,8 @@ type ResponseItem = {
   does_not_supply?: string;
   notes?: string;
   attributes?: ResponseAttribute[];
+  /** Quanto da unidade-base vem em 1 da forma deste fornecedor (0131). */
+  form_base_per_unit?: string;
 };
 
 /** "12,50" → "12.50". O fornecedor digita como fala. */
@@ -123,8 +125,24 @@ export async function submitQuotation(
       }
     }
 
+    // Só existe no item em outra forma de compra ("cada cx com ___ un"), e só
+    // conta quando há preço: sem preço não há o que dividir.
+    const rawForm = String(formData.get(`forma_${id}`) ?? "").trim();
+    const formBasePerUnit =
+      rawForm && !doesNotSupply && !unavailable ? toNumericString(rawForm) : undefined;
+    if (
+      formBasePerUnit !== undefined &&
+      !(Number(formBasePerUnit) > 0)
+    ) {
+      const productName = String(formData.get(`nome_${id}`) ?? "este item");
+      return {
+        error: `Informe quanto vem em cada embalagem de "${productName}", com um número maior que zero.`,
+      };
+    }
+
     items.push({
       supplier_quotation_item_id: id,
+      form_base_per_unit: formBasePerUnit,
       does_not_supply: doesNotSupply ? "true" : "false",
       quoted_price: doesNotSupply || unavailable ? undefined : price,
       is_available: doesNotSupply ? undefined : unavailable ? "false" : "true",
