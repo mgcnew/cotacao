@@ -55,12 +55,14 @@ export async function ProductEditContent({
     context.product.purchaseUnitId,
     context.product.pricingUnitId,
     context.product.comparisonUnitId,
+    ...(context.purchaseForms ?? []).map((forma) => forma.unitId),
   ]);
   const units = rawUnits
     .filter((unit) => unit.is_active || emUso.has(unit.id))
     .map((unit) => ({
       id: unit.id,
       label: `${unit.name} (${unit.symbol})${unit.is_active ? "" : " — inativa"}`,
+      symbol: unit.symbol,
     }));
 
   const form = (

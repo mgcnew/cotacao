@@ -12,6 +12,7 @@ import {
 } from "@/components/layout/route-modal";
 import { BarcodeField } from "@/components/products/barcode-field";
 import { NovaCategoriaDialog } from "@/components/products/catalog-dialogs";
+import { PurchaseFormsField } from "@/components/products/purchase-forms-field";
 import { Button } from "@/components/ui/button";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { FormSubmitButton } from "@/components/ui/form-submit-button";
@@ -30,6 +31,7 @@ import type { ProductEditContext } from "@/features/products/queries";
 import type { FormAttribute } from "@/components/products/product-form";
 
 type Option = { id: string; label: string };
+type UnitOption = Option & { symbol: string };
 
 const INITIAL_STATE: ProductEditState = { error: null };
 
@@ -114,7 +116,7 @@ export function ProductEditForm({
 }: {
   context: ProductEditContext;
   categories: Option[];
-  units: Option[];
+  units: UnitOption[];
   attributes: FormAttribute[];
   inModal?: boolean;
 }) {
@@ -123,6 +125,7 @@ export function ProductEditForm({
     attributeValues,
     presentationFactor,
     unitsLockReason,
+    purchaseForms,
     nameExposure,
     barcode,
     otherBarcodes,
@@ -172,6 +175,13 @@ export function ProductEditForm({
   }));
   const unitLabel = (id: string | null) =>
     units.find((unit) => unit.id === id)?.label ?? "—";
+  const unitSymbol = (id: string | null) =>
+    units.find((unit) => unit.id === id)?.symbol ?? "unidade-base";
+
+  // A régua das outras formas de compra: comparação, ou precificação sem ela.
+  const baseUnitId = unitsLockReason
+    ? (product.comparisonUnitId ?? product.pricingUnitId)
+    : comparisonUnitId || pricingUnitId;
 
   const supplierCount = nameExposure.reduce(
     (total, round) => total + round.suppliers,
@@ -358,6 +368,21 @@ export function ProductEditForm({
               <span className="text-fg text-sm">{fator.conteudo}</span>
             </div>
           </Field>
+        </Secao>
+      ) : null}
+
+      {purchaseForms ? (
+        <Secao
+          titulo="Outras formas de compra"
+          descricao={`Quando o mesmo produto também vem em caixa, display ou fardo. A unidade de compra acima continua sendo a forma padrão; aqui você diz quanto cada outra forma contém em ${unitSymbol(baseUnitId)}, e é nessa base que os preços se comparam.`}
+        >
+          <PurchaseFormsField
+            initial={purchaseForms}
+            units={units}
+            baseUnitId={baseUnitId}
+            savedBaseUnitId={product.comparisonUnitId ?? product.pricingUnitId}
+            purchaseUnitId={unitsLockReason ? product.purchaseUnitId : purchaseUnitId}
+          />
         </Secao>
       ) : null}
 

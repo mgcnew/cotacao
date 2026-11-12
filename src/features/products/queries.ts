@@ -253,6 +253,14 @@ export type ProductEditContext = {
   presentationFactor: string;
   /** Motivo do bloqueio das unidades (0102), ou null se ainda dá para corrigir. */
   unitsLockReason: string | null;
+  /**
+   * Outras formas de comprar o produto ("1 cx = 12 un"), além da unidade de
+   * compra. `null` quando a migration 0127 ainda não chegou ao banco: a seção
+   * some em vez de oferecer algo que não teria onde gravar.
+   */
+  purchaseForms:
+    | { unitId: string; unitQuantity: string; baseQuantity: string }[]
+    | null;
   /** Rodadas abertas já enviadas onde o nome atual está na tela do fornecedor. */
   nameExposure: { id: string; title: string; suppliers: number }[];
 };
@@ -285,7 +293,7 @@ export async function getProductEditContext(
   }
   if (!product) return null;
 
-  const [values, lock, exposure, presentation, barcodes] = await Promise.all([
+  const [values, lock, exposure, presentation, barcodes, forms] = await Promise.all([
     supabase
       .from("product_attribute_values")
       .select("attribute_definition_id,value_text,value_numeric,value_boolean")
@@ -315,6 +323,12 @@ export async function getProductEditContext(
       .eq("company_id", companyId)
       .eq("product_id", productId)
       .eq("is_active", true),
+    supabase
+      .from("product_purchase_forms")
+      .select("unit_id,unit_quantity,base_quantity")
+      .eq("company_id", companyId)
+      .eq("product_id", productId)
+      .order("created_at"),
   ]);
 
   if (values.error) {
@@ -338,6 +352,12 @@ export async function getProductEditContext(
     throw new Error(`Falha ao carregar códigos de barras: ${barcodes.error.message}`);
   }
   const primaryBarcode = (barcodes.data ?? []).find((row) => row.is_primary);
+
+  // Tabela ausente (0127 não aplicada) não derruba a edição: só esconde a seção.
+  if (forms.error && forms.error.code !== "PGRST205" && forms.error.code !== "42P01") {
+    throw new Error(`Falha ao carregar formas de compra: ${forms.error.message}`);
+  }
+  const decimal = (value: number) => String(Number(value)).replace(".", ",");
 
   const attributeValues: Record<string, string> = {};
   for (const row of values.data ?? []) {
@@ -374,6 +394,13 @@ export async function getProductEditContext(
       ? (attributeValues[presentation.data.id] ?? "")
       : "",
     unitsLockReason: lock.data,
+    purchaseForms: forms.error
+      ? null
+      : (forms.data ?? []).map((row) => ({
+          unitId: row.unit_id,
+          unitQuantity: decimal(row.unit_quantity),
+          baseQuantity: decimal(row.base_quantity),
+        })),
     nameExposure: (exposure.data ??
       []) as ProductEditContext["nameExposure"],
   };

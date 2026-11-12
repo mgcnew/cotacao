@@ -1694,6 +1694,67 @@ export type Database = {
           },
         ];
       };
+      product_purchase_forms: {
+        Row: {
+          base_quantity: number;
+          base_unit_id: string;
+          company_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          product_id: string;
+          unit_id: string;
+          unit_quantity: number;
+          updated_at: string;
+        };
+        Insert: {
+          base_quantity: number;
+          base_unit_id: string;
+          company_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          product_id: string;
+          unit_id: string;
+          unit_quantity?: number;
+          updated_at?: string;
+        };
+        Update: {
+          base_quantity?: number;
+          base_unit_id?: string;
+          company_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          product_id?: string;
+          unit_id?: string;
+          unit_quantity?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "product_purchase_forms_company_id_product_id_fkey";
+            columns: ["company_id", "product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "product_purchase_forms_company_id_unit_id_fkey";
+            columns: ["company_id", "unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["company_id", "id"];
+          },
+          {
+            foreignKeyName: "product_purchase_forms_company_id_base_unit_id_fkey";
+            columns: ["company_id", "base_unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["company_id", "id"];
+          },
+        ];
+      };
       product_import_batches: {
         Row: {
           company_id: string;
@@ -5277,6 +5338,14 @@ export type Database = {
           p_totals: Json | null;
         };
         Returns: undefined;
+      };
+      rpc_sync_product_purchase_forms: {
+        Args: {
+          p_company_id: string;
+          p_forms: Json;
+          p_product_id: string;
+        };
+        Returns: Json;
       };
       rpc_update_unused_product_units: {
         Args: {

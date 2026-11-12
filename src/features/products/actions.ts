@@ -1003,6 +1003,57 @@ export type ProductEditState = {
  * que estava preenchido sob a antiga não faz sentido sob a nova. Por isso os
  * valores órfãos são apagados no mesmo passo em que os novos entram.
  */
+/**
+ * Lê as formas de compra do campo oculto da edição.
+ *
+ * Linha totalmente em branco é descartada (a pessoa clicou em "Adicionar" e
+ * desistiu); linha começada e incompleta recusa o salvamento, em vez de
+ * gravar uma equivalência pela metade.
+ */
+function parsePurchaseForms(
+  raw: string,
+):
+  | { list: { unitId: string; unitQuantity: number; baseQuantity: number }[] }
+  | { error: string } {
+  let rows: unknown;
+  try {
+    rows = JSON.parse(raw);
+  } catch {
+    return { error: "Formas de compra inválidas. Recarregue a página." };
+  }
+  if (!Array.isArray(rows)) {
+    return { error: "Formas de compra inválidas. Recarregue a página." };
+  }
+
+  const numero = (value: unknown) => {
+    const text = String(value ?? "").trim();
+    if (!text) return null;
+    const parsed = Number(text.replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : Number.NaN;
+  };
+
+  const list: { unitId: string; unitQuantity: number; baseQuantity: number }[] =
+    [];
+  for (const row of rows as Record<string, unknown>[]) {
+    const unitId = String(row?.unitId ?? "").trim();
+    const unitQuantity = numero(row?.unitQuantity);
+    const baseQuantity = numero(row?.baseQuantity);
+    if (!unitId && baseQuantity === null) continue;
+    if (!unitId) return { error: "Escolha a unidade de cada forma de compra." };
+    if (
+      baseQuantity === null ||
+      !(baseQuantity > 0) ||
+      !((unitQuantity ?? 1) > 0)
+    ) {
+      return {
+        error: "Informe quanto cada forma de compra contém, com um número maior que zero.",
+      };
+    }
+    list.push({ unitId, unitQuantity: unitQuantity ?? 1, baseQuantity });
+  }
+  return { list };
+}
+
 export async function updateProduct(
   productId: string,
   _prev: ProductEditState,
@@ -1206,6 +1257,23 @@ export async function updateProduct(
       };
     }
     return { error: describeWriteError(updateError, "um produto") };
+  }
+
+  // As formas de compra só vêm quando a seção apareceu (0127 aplicada). Vão
+  // depois das unidades porque a equivalência é escrita na unidade-base que o
+  // produto tem agora — e a RPC a lê sob lock.
+  if (formData.has("purchaseForms")) {
+    const forms = parsePurchaseForms(String(formData.get("purchaseForms")));
+    if ("error" in forms) return { error: forms.error };
+    const { error: formsError } = await supabase.rpc(
+      "rpc_sync_product_purchase_forms",
+      {
+        p_company_id: company.companyId,
+        p_product_id: productId,
+        p_forms: forms.list,
+      },
+    );
+    if (formsError) return { error: formsError.message };
   }
 
   const fator = await syncPackagingFactor(
