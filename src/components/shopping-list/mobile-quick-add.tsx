@@ -28,7 +28,45 @@ import { barcodeMatches, normalizeBarcode } from "@/features/products/barcodes";
 import { normalizeListSearch } from "@/lib/list-pagination";
 import { cn } from "@/lib/utils";
 
-export type PendingQuantity = { productId: string; quantity: number };
+export type PendingQuantity = {
+  productId: string;
+  /** Forma de compra da linha ("cx"); nula ou ausente na padrão. */
+  purchaseFormId?: string | null;
+  quantity: number;
+};
+
+/**
+ * Uma linha da busca: o produto na forma padrão, ou numa das outras formas
+ * ("cx (12 un)"). Cada forma é uma linha da lista ou da rodada, com o seu
+ * próprio + e −; a chave junta produto e forma.
+ */
+type Entry = ShoppingProduct & {
+  key: string;
+  productId: string;
+  formId: string | null;
+};
+
+function entryKey(productId: string, formId: string | null | undefined) {
+  return formId ? `${productId}:${formId}` : productId;
+}
+
+/**
+ * As formas vêm logo depois do produto, e sem códigos de barras: a busca por
+ * nome mostra as duas, e o bipe cai na padrão, que é a que o código identifica.
+ */
+function quickAddEntries(products: ShoppingProduct[]): Entry[] {
+  return products.flatMap((product) => [
+    { ...product, key: product.id, productId: product.id, formId: null },
+    ...product.forms.map((form) => ({
+      ...product,
+      key: entryKey(product.id, form.id),
+      productId: product.id,
+      formId: form.id,
+      purchaseUnit: form.label,
+      barcodes: [],
+    })),
+  ]);
+}
 
 /** O que muda quando a mesma folha serve a outro destino (a rodada de compras). */
 export type QuickAddTexts = {
@@ -294,6 +332,7 @@ export function MobileQuickAdd({
   save?: (
     productId: string,
     quantity: number,
+    purchaseFormId: string | null,
   ) => Promise<{ error: string | null }>;
   refresh?: () => Promise<void>;
   texts?: QuickAddTexts;
@@ -305,10 +344,14 @@ export function MobileQuickAdd({
   const [quantities, setQuantities] = React.useState<Record<string, number>>(
     () =>
       Object.fromEntries(
-        pending.map((item) => [item.productId, item.quantity]),
+        pending.map((item) => [
+          entryKey(item.productId, item.purchaseFormId),
+          item.quantity,
+        ]),
       ),
   );
-  // Produtos mexidos desde que a folha abriu, o mais recente primeiro.
+  // Linhas (produto e forma) mexidas desde que a folha abriu, a mais recente
+  // primeiro.
   const [touched, setTouched] = React.useState<string[]>([]);
 
   // O que vale na hora (para somar sobre o valor de agora, não o do último
@@ -320,10 +363,11 @@ export function MobileQuickAdd({
   const dirtyRef = React.useRef(false);
   const overlayRef = React.useRef({ sheet: false, camera: false });
 
-  const index = React.useMemo(() => indexProducts(products), [products]);
-  const byId = React.useMemo(
-    () => new Map(products.map((product) => [product.id, product])),
-    [products],
+  const entries = React.useMemo(() => quickAddEntries(products), [products]);
+  const index = React.useMemo(() => indexProducts(entries), [entries]);
+  const byKey = React.useMemo(
+    () => new Map(entries.map((entry) => [entry.key, entry])),
+    [entries],
   );
 
   const settle = React.useCallback(() => {
@@ -334,29 +378,31 @@ export function MobileQuickAdd({
     void refresh();
   }, [refresh]);
 
-  const write = React.useCallback((productId: string, next: number) => {
-    quantitiesRef.current = { ...quantitiesRef.current, [productId]: next };
+  const write = React.useCallback((key: string, next: number) => {
+    quantitiesRef.current = { ...quantitiesRef.current, [key]: next };
     setQuantities(quantitiesRef.current);
   }, []);
 
   const push = React.useCallback(
-    async (productId: string) => {
-      timersRef.current.delete(productId);
-      const wanted = quantitiesRef.current[productId] ?? 0;
+    async (key: string) => {
+      timersRef.current.delete(key);
+      const wanted = quantitiesRef.current[key] ?? 0;
+      // A chave é "produto" ou "produto:forma" — ids sem dois-pontos.
+      const [productId, formId = null] = key.split(":");
       inflightRef.current += 1;
       let failure: string | null = null;
       try {
-        const result = await save(productId, wanted);
+        const result = await save(productId, wanted, formId);
         if (result.error) failure = result.error;
-        else confirmedRef.current[productId] = wanted;
+        else confirmedRef.current[key] = wanted;
       } catch {
         failure = "Sem conexão com o servidor. A quantidade não foi salva.";
       }
       inflightRef.current -= 1;
       if (failure) {
         // Um toque mais novo já está a caminho e vale mais que o desfazer.
-        if (!timersRef.current.has(productId)) {
-          write(productId, confirmedRef.current[productId] ?? 0);
+        if (!timersRef.current.has(key)) {
+          write(key, confirmedRef.current[key] ?? 0);
         }
         setError(failure);
       }
@@ -366,20 +412,20 @@ export function MobileQuickAdd({
   );
 
   const change = React.useCallback(
-    (product: ShoppingProduct, next: number) => {
-      write(product.id, next);
+    (entry: Entry, next: number) => {
+      write(entry.key, next);
       setTouched((current) => [
-        product.id,
-        ...current.filter((id) => id !== product.id),
+        entry.key,
+        ...current.filter((key) => key !== entry.key),
       ]);
       setError(null);
       dirtyRef.current = true;
       const timers = timersRef.current;
-      const waiting = timers.get(product.id);
+      const waiting = timers.get(entry.key);
       if (waiting !== undefined) window.clearTimeout(waiting);
       timers.set(
-        product.id,
-        window.setTimeout(() => void push(product.id), SAVE_DELAY_MS),
+        entry.key,
+        window.setTimeout(() => void push(entry.key), SAVE_DELAY_MS),
       );
     },
     [push, write],
@@ -389,9 +435,9 @@ export function MobileQuickAdd({
   React.useEffect(() => {
     const timers = timersRef.current;
     return () => {
-      for (const [productId, timer] of timers) {
+      for (const [key, timer] of timers) {
         window.clearTimeout(timer);
-        void push(productId);
+        void push(key);
       }
     };
   }, [push]);
@@ -406,7 +452,7 @@ export function MobileQuickAdd({
       return;
     }
     const count = touched.filter(
-      (id) => (quantitiesRef.current[id] ?? 0) > 0,
+      (key) => (quantitiesRef.current[key] ?? 0) > 0,
     ).length;
     if (count > 0) {
       avisar(texts.updated(count));
@@ -420,16 +466,18 @@ export function MobileQuickAdd({
   }
 
   function handleScan(code: string): BarcodeScanOutcome {
-    const product = products.find((candidate) =>
+    const found = products.find((candidate) =>
       barcodeMatches(candidate.barcodes, code),
     );
+    // O código é do produto: soma na forma padrão.
+    const product = found ? byKey.get(found.id) : undefined;
     if (!product) {
       return {
         ok: false,
         message: `O código ${code} não está vinculado a nenhum produto cadastrado.`,
       };
     }
-    const next = (quantitiesRef.current[product.id] ?? 0) + 1;
+    const next = (quantitiesRef.current[product.key] ?? 0) + 1;
     change(product, next);
     return {
       ok: true,
@@ -437,10 +485,10 @@ export function MobileQuickAdd({
     };
   }
 
-  function step(product: ShoppingProduct, delta: 1 | -1) {
+  function step(product: Entry, delta: 1 | -1) {
     const next = Math.max(
       0,
-      Math.round(((quantitiesRef.current[product.id] ?? 0) + delta) * 1000) /
+      Math.round(((quantitiesRef.current[product.key] ?? 0) + delta) * 1000) /
         1000,
     );
     change(product, next);
@@ -448,15 +496,15 @@ export function MobileQuickAdd({
   }
 
   const results = searchProducts(index, query);
-  const added = touched.flatMap((id) => {
-    const product = byId.get(id);
-    return product && (quantities[id] ?? 0) > 0 ? [product] : [];
+  const added = touched.flatMap((key) => {
+    const product = byKey.get(key);
+    return product && (quantities[key] ?? 0) > 0 ? [product] : [];
   });
 
   // A busca fica: "tang" costuma render mais de um sabor, e limpar a cada toque
   // obrigaria a digitar de novo. O item já aparece ali com os botões de
   // quantidade; quem quer outro produto limpa no X.
-  function addFromResult(product: ShoppingProduct) {
+  function addFromResult(product: Entry) {
     step(product, 1);
   }
 
@@ -549,13 +597,13 @@ export function MobileQuickAdd({
                 <ul aria-label="Produtos encontrados">
                   {results.map((product) => (
                     <ProductRow
-                      key={product.id}
+                      key={product.key}
                       product={product}
-                      quantity={quantities[product.id] ?? 0}
+                      quantity={quantities[product.key] ?? 0}
                       texts={texts}
                       onChange={(next) => change(product, next)}
                       onStep={(delta) =>
-                        (quantitiesRef.current[product.id] ?? 0) === 0
+                        (quantitiesRef.current[product.key] ?? 0) === 0
                           ? addFromResult(product)
                           : step(product, delta)
                       }
@@ -576,9 +624,9 @@ export function MobileQuickAdd({
                 <ul>
                   {added.map((product) => (
                     <ProductRow
-                      key={product.id}
+                      key={product.key}
                       product={product}
-                      quantity={quantities[product.id] ?? 0}
+                      quantity={quantities[product.key] ?? 0}
                       texts={texts}
                       onChange={(next) => change(product, next)}
                       onStep={(delta) => step(product, delta)}

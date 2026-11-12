@@ -3,6 +3,7 @@ import "server-only";
 import { formatCnpj } from "@/features/company/cnpj";
 import type { OrderFilters } from "@/features/orders/filters";
 import type { OrderMessageContext } from "@/features/orders/message";
+import { listPurchaseFormsByProduct } from "@/features/products/purchase-forms";
 import { listPendingShoppingItems } from "@/features/shopping-list/queries";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -368,6 +369,7 @@ export async function listOrderEditableProducts(companyId: string) {
   const supabase = await createServerSupabaseClient();
   const PAGE = 1000;
   const PARALLEL = 3;
+  const formsPromise = listPurchaseFormsByProduct(companyId);
 
   const fetchPage = async (start: number) => {
     const page = await supabase
@@ -396,7 +398,17 @@ export async function listOrderEditableProducts(companyId: string) {
     start += PARALLEL * PAGE;
   }
 
-  return data.map(toOrderable);
+  // As outras formas de compra ("cx (12 un)") só vêm com o catálogo: é nele
+  // que se escolhe o produto de uma linha nova.
+  const forms = await formsPromise;
+  return data.map((product) => ({
+    ...toOrderable(product),
+    forms: (forms.get(product.id) ?? []).map(({ id, unit, label }) => ({
+      id,
+      unit,
+      label,
+    })),
+  }));
 }
 
 /**

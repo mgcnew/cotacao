@@ -306,7 +306,7 @@ function Montagem({
       name: item.products?.name ?? "Produto",
       quantity: Number(item.requested_quantity),
       unit: item.purchase_unit?.symbol ?? "",
-      inOtherForm: item.purchase_form_id !== null,
+      purchaseFormId: item.purchase_form_id,
     }));
 
   return (

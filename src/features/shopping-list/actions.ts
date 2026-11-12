@@ -172,6 +172,8 @@ const setQuantitySchema = z.object({
 export async function setShoppingListItemQuantity(
   productId: string,
   quantity: number,
+  /** Forma de compra ("cx"); nula é a unidade de compra do produto. */
+  purchaseFormId: string | null = null,
 ): Promise<ShoppingListState> {
   const company = await requireManage();
   const parsed = setQuantitySchema.safeParse({
@@ -179,6 +181,9 @@ export async function setShoppingListItemQuantity(
     quantity: Math.round(quantity * 1000) / 1000,
   });
   if (!parsed.success) return { error: "Quantidade inválida." };
+  if (purchaseFormId !== null && !z.uuid().safeParse(purchaseFormId).success) {
+    return { error: "Forma de compra inválida." };
+  }
 
   const supabase = await createServerSupabaseClient();
 
@@ -196,7 +201,7 @@ export async function setShoppingListItemQuantity(
       .eq("company_id", company.companyId)
       .eq("shopping_list_id", list.id)
       .eq("product_id", parsed.data.productId)
-      .is("purchase_form_id", null)
+      .filter("purchase_form_id", purchaseFormId ? "eq" : "is", purchaseFormId)
       .eq("status", "pending");
     if (error) return { error: `Não foi possível remover: ${error.message}` };
     return { error: null, savedAt: Date.now() };
@@ -220,7 +225,7 @@ export async function setShoppingListItemQuantity(
     .eq("company_id", company.companyId)
     .eq("shopping_list_id", listId)
     .eq("product_id", parsed.data.productId)
-    .is("purchase_form_id", null)
+    .filter("purchase_form_id", purchaseFormId ? "eq" : "is", purchaseFormId)
     .eq("status", "pending")
     .maybeSingle();
 
@@ -234,7 +239,9 @@ export async function setShoppingListItemQuantity(
         company_id: company.companyId,
         shopping_list_id: listId,
         product_id: parsed.data.productId,
+        // Com forma, o gatilho da 0128 troca pela unidade dela.
         purchase_unit_id: product.purchase_unit_id,
+        purchase_form_id: purchaseFormId,
         requested_quantity: parsed.data.quantity,
         origin: "manual",
         added_by: user.id,

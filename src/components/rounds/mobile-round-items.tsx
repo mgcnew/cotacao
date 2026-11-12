@@ -38,8 +38,8 @@ export type MobileRoundItem = {
   name: string;
   quantity: number;
   unit: string;
-  /** Item noutra forma de compra ("cx"): fica fora da soma da folha. */
-  inOtherForm: boolean;
+  /** Forma de compra do item ("cx"); nula na unidade de compra do produto. */
+  purchaseFormId: string | null;
 };
 
 /**
@@ -57,8 +57,8 @@ export function MobileRoundQuickAdd({
   items: MobileRoundItem[];
 }) {
   const save = React.useCallback(
-    (productId: string, quantity: number) =>
-      setRoundItemQuantity(roundId, productId, quantity),
+    (productId: string, quantity: number, purchaseFormId: string | null) =>
+      setRoundItemQuantity(roundId, productId, quantity, purchaseFormId),
     [roundId],
   );
   const refresh = React.useCallback(() => refreshRound(roundId), [roundId]);
@@ -66,12 +66,11 @@ export function MobileRoundQuickAdd({
   return (
     <MobileQuickAdd
       products={products}
-      pending={items
-        .filter((item) => !item.inOtherForm)
-        .map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-        }))}
+      pending={items.map((item) => ({
+        productId: item.productId,
+        purchaseFormId: item.purchaseFormId,
+        quantity: item.quantity,
+      }))}
       save={save}
       refresh={refresh}
       texts={ROUND_TEXTS}

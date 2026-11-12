@@ -42,21 +42,41 @@ export type MobileOrderRow = {
   price: string;
   notes: string;
   fromShoppingList: boolean;
-  /** Linha noutra forma de compra ("cx"): a busca soma só na padrão. */
-  inOtherForm: boolean;
+  /** Forma de compra da linha ("cx"); nula na unidade de compra do produto. */
+  purchaseFormId: string | null;
 };
+
+/** Forma de compra escolhida na busca; nula é a unidade de compra. */
+export type OrderForm = { id: string; unit: string } | null;
+
+/**
+ * Uma linha da busca: o produto na forma padrão ou numa das outras ("cx (12
+ * un)"), cada uma com o seu + e −. As formas vêm sem código de barras: o bipe
+ * cai na padrão, que é a que o código identifica.
+ */
+type Entry = OrderableProduct & { key: string; form: OrderForm };
+
+function entryKey(productId: string, formId: string | null | undefined) {
+  return formId ? `${productId}:${formId}` : productId;
+}
 
 export type MobileOrderHandlers = {
   /**
-   * Soma (ou tira) um do produto; sem linha, cria uma com 1. Com `rowKey`,
-   * mexe naquela linha — a de outra forma de compra ("cx") não é a do produto.
+   * Soma (ou tira) um do produto na forma dada; sem linha, cria uma com 1.
+   * Com `rowKey`, mexe naquela linha.
    */
-  onStep: (product: OrderableProduct, delta: 1 | -1, rowKey?: number) => void;
+  onStep: (
+    product: OrderableProduct,
+    delta: 1 | -1,
+    rowKey?: number,
+    form?: OrderForm,
+  ) => void;
   /** Quantidade digitada; zero remove a linha, e sem linha cria uma. */
   onQuantity: (
     product: OrderableProduct,
     quantity: number,
     rowKey?: number,
+    form?: OrderForm,
   ) => void;
   onPrice: (key: number, price: string) => void;
   onNotes: (key: number, notes: string) => void;
@@ -304,13 +324,26 @@ function AddSheet({
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
 
-  const index = React.useMemo(() => indexProducts(products), [products]);
+  const entries = React.useMemo<Entry[]>(
+    () =>
+      products.flatMap((product) => [
+        { ...product, key: product.id, form: null },
+        ...(product.forms ?? []).map((form) => ({
+          ...product,
+          key: entryKey(product.id, form.id),
+          purchaseUnit: form.label,
+          pricingUnit: form.unit,
+          barcodes: [],
+          form: { id: form.id, unit: form.unit },
+        })),
+      ]),
+    [products],
+  );
+  const index = React.useMemo(() => indexProducts(entries), [entries]);
   const quantityOf = React.useMemo(
     () =>
       new Map(
-        rows
-          .filter((row) => !row.inOtherForm)
-          .map((row) => [row.productId, row]),
+        rows.map((row) => [entryKey(row.productId, row.purchaseFormId), row]),
       ),
     [rows],
   );
@@ -328,6 +361,7 @@ function AddSheet({
           : `O código ${code} não está vinculado a nenhum produto cadastrado.`,
       };
     }
+    // O código é do produto: soma na forma padrão.
     const next = (quantityOf.get(product.id)?.quantity ?? 0) + 1;
     handlers.onStep(product, 1);
     return {
@@ -336,8 +370,8 @@ function AddSheet({
     };
   }
 
-  function step(product: OrderableProduct, delta: 1 | -1) {
-    handlers.onStep(product, delta);
+  function step(entry: Entry, delta: 1 | -1) {
+    handlers.onStep(entry, delta, quantityOf.get(entry.key)?.key, entry.form);
     if (delta === 1) navigator.vibrate?.(30);
   }
 
@@ -434,13 +468,20 @@ function AddSheet({
             {query.trim() ? (
               results.length > 0 ? (
                 <ul aria-label="Produtos encontrados">
-                  {results.map((product) => (
+                  {results.map((entry) => (
                     <ResultRow
-                      key={product.id}
-                      product={product}
-                      quantity={quantityOf.get(product.id)?.quantity ?? 0}
-                      onStep={(delta) => step(product, delta)}
-                      onQuantity={(next) => handlers.onQuantity(product, next)}
+                      key={entry.key}
+                      product={entry}
+                      quantity={quantityOf.get(entry.key)?.quantity ?? 0}
+                      onStep={(delta) => step(entry, delta)}
+                      onQuantity={(next) =>
+                        handlers.onQuantity(
+                          entry,
+                          next,
+                          quantityOf.get(entry.key)?.key,
+                          entry.form,
+                        )
+                      }
                     />
                   ))}
                 </ul>
@@ -462,14 +503,18 @@ function AddSheet({
                       purchaseUnit: row.purchaseUnit,
                       pricingUnit: row.pricingUnit,
                     };
+                    // Pela linha: a "2 cx" não é a do produto na padrão.
                     return (
                       <ResultRow
                         key={row.key}
                         product={product}
                         quantity={row.quantity}
-                        onStep={(delta) => step(product, delta)}
+                        onStep={(delta) => {
+                          handlers.onStep(product, delta, row.key);
+                          if (delta === 1) navigator.vibrate?.(30);
+                        }}
                         onQuantity={(next) =>
-                          handlers.onQuantity(product, next)
+                          handlers.onQuantity(product, next, row.key)
                         }
                       />
                     );

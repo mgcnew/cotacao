@@ -1003,6 +1003,8 @@ export async function setRoundItemQuantity(
   roundId: string,
   productId: string,
   quantity: number,
+  /** Forma de compra ("cx"); nula é a unidade de compra do produto. */
+  purchaseFormId: string | null = null,
 ): Promise<RoundFormState> {
   const company = await requireActiveCompany();
   const parsed = z
@@ -1010,11 +1012,13 @@ export async function setRoundItemQuantity(
       roundId: z.uuid(),
       productId: z.uuid(),
       quantity: z.number().min(0).max(99_999),
+      purchaseFormId: z.uuid().nullable(),
     })
     .safeParse({
       roundId,
       productId,
       quantity: Math.round(quantity * 1000) / 1000,
+      purchaseFormId,
     });
   if (!parsed.success) return { error: "Quantidade inválida." };
 
@@ -1028,8 +1032,8 @@ export async function setRoundItemQuantity(
     .eq("company_id", company.companyId)
     .eq("purchase_round_id", roundId)
     .eq("product_id", productId)
-    // O + e − do celular é da forma padrão; "2 cx" é outro item.
-    .is("purchase_form_id", null)
+    // "2 cx" e "5 un" do mesmo produto são itens diferentes.
+    .filter("purchase_form_id", purchaseFormId ? "eq" : "is", purchaseFormId)
     .eq("commercial_status", "open")
     .order("created_at")
     .limit(1)
@@ -1081,6 +1085,8 @@ export async function setRoundItemQuantity(
       purchase_unit_id: product.purchase_unit_id,
       pricing_unit_id: product.pricing_unit_id,
       comparison_unit_id: product.comparison_unit_id,
+      // Com forma, o gatilho da 0128 troca as três pelas da forma.
+      purchase_form_id: purchaseFormId,
     })
     .select("id")
     .single();

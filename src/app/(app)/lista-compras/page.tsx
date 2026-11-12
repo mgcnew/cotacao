@@ -219,13 +219,11 @@ async function ListaDeComprasConteudo({
         >
           <AdicionarRapido
             companyId={company.companyId}
-            // O + e − da folha de adicionar mexe só na forma padrão.
-            pending={data.items
-              .filter((item) => item.purchase_form_id === null)
-              .map((item) => ({
-                productId: item.product_id,
-                quantity: Number(item.requested_quantity),
-              }))}
+            pending={data.items.map((item) => ({
+              productId: item.product_id,
+              purchaseFormId: item.purchase_form_id,
+              quantity: Number(item.requested_quantity),
+            }))}
           />
         </Suspense>
       ) : null}

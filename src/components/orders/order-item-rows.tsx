@@ -12,10 +12,13 @@ import {
   MobileOrderItems,
   type MobileOrderHandlers,
   type MobileOrderRow,
+  type OrderForm,
 } from "@/components/orders/mobile-order-items";
 import { useOrderableCatalog } from "@/components/orders/use-orderable-catalog";
 import { formatQuantity } from "@/components/shopping-list/mobile-quick-add";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ThemedSelect } from "@/components/ui/themed-select";
+import { cn } from "@/lib/utils";
 import type {
   SupplierPurchaseSuggestion,
   SupplierPurchaseTemplate,
@@ -33,6 +36,8 @@ export type OrderableProduct = {
   pricingUnit: string;
   /** Só o catálogo traz; serve à câmera do celular. */
   barcodes?: string[];
+  /** Outras formas de compra ("cx (12 un)"); também só no catálogo. */
+  forms?: { id: string; unit: string; label: string }[];
 };
 
 /** Linha já existente no pedido, ou linha em branco esperando ser preenchida. */
@@ -409,6 +414,15 @@ export function OrderItemRows({
     [products],
   );
 
+  // As formas só vêm com o catálogo, que é carregado ao escolher o produto.
+  const formsById = React.useMemo(
+    () =>
+      new Map(
+        catalog.products.map((product) => [product.id, product.forms ?? []]),
+      ),
+    [catalog.products],
+  );
+
   // Linha noutra forma compra e é cotada na unidade da forma ("cx").
   const unidadesDe = (row: Row) => {
     const product = products.find((p) => p.id === row.productId);
@@ -421,20 +435,22 @@ export function OrderItemRows({
     ),
   );
 
-  // O celular mexe nas mesmas linhas, por produto: não há duas linhas do mesmo.
+  // O celular mexe nas mesmas linhas, por produto e forma: "2 cx" e "5 un"
+  // do mesmo produto são linhas diferentes.
   function quantidadeDoProduto(
     product: OrderableProduct,
     next: (atual: number) => number,
     rowKey?: number,
+    form: OrderForm = null,
   ) {
     setRows((current) => {
-      // Pela linha quando ela existe; pelo produto só na forma padrão — "2 cx"
-      // é outra linha, que o + e − da busca não alcança.
       const existing =
         rowKey !== undefined
           ? current.find((row) => row.key === rowKey)
           : current.find(
-              (row) => row.productId === product.id && !row.purchaseFormId,
+              (row) =>
+                row.productId === product.id &&
+                (row.purchaseFormId ?? null) === (form?.id ?? null),
             );
       const quantity = Math.max(
         0,
@@ -453,6 +469,8 @@ export function OrderItemRows({
             quantity: formatQuantity(quantity),
             price: "",
             notes: "",
+            purchaseFormId: form?.id ?? null,
+            formUnit: form?.unit ?? null,
           },
         ];
       }
@@ -474,10 +492,10 @@ export function OrderItemRows({
   }
 
   const mobileHandlers: MobileOrderHandlers = {
-    onStep: (product, delta, rowKey) =>
-      quantidadeDoProduto(product, (atual) => atual + delta, rowKey),
-    onQuantity: (product, quantity, rowKey) =>
-      quantidadeDoProduto(product, () => quantity, rowKey),
+    onStep: (product, delta, rowKey, form) =>
+      quantidadeDoProduto(product, (atual) => atual + delta, rowKey, form),
+    onQuantity: (product, quantity, rowKey, form) =>
+      quantidadeDoProduto(product, () => quantity, rowKey, form),
     onPrice: (key, price) => mudarLinha(key, { price }),
     onNotes: (key, notes) => mudarLinha(key, { notes }),
   };
@@ -495,7 +513,7 @@ export function OrderItemRows({
         price: row.price,
         notes: row.notes,
         fromShoppingList: Boolean(row.shoppingItemId),
-        inOtherForm: Boolean(row.purchaseFormId),
+        purchaseFormId: row.purchaseFormId ?? null,
       },
     ];
   });
@@ -648,10 +666,34 @@ export function OrderItemRows({
           const productFieldId = `${idPrefix}produto-${row.key}`;
           const quantityFieldId = `${idPrefix}qtd-${row.key}`;
           const priceFieldId = `${idPrefix}preco-${row.key}`;
+          // Só a linha nova escolhe a forma: a que já existe, ou que veio da
+          // lista, já tem a sua.
+          const formas =
+            row.itemId || row.shoppingItemId
+              ? []
+              : (formsById.get(row.productId) ?? []);
+          const formasUsadas = new Set(
+            rows
+              .filter(
+                (other) =>
+                  other.key !== row.key && other.productId === row.productId,
+              )
+              .map((other) => other.purchaseFormId ?? ""),
+          );
+          const unidadePadrao = products.find(
+            (product) => product.id === row.productId,
+          )?.purchaseUnit;
           return (
             <ItemAnimado key={row.key} como="div" conteudoClassName="pb-3">
             <div className="border-border flex flex-col gap-2 rounded-lg border p-3">
-              <div className="grid gap-2 sm:grid-cols-[1fr_7rem_7rem]">
+              <div
+                className={cn(
+                  "grid gap-2",
+                  formas.length > 0
+                    ? "sm:grid-cols-[1fr_9rem_7rem_7rem]"
+                    : "sm:grid-cols-[1fr_7rem_7rem]",
+                )}
+              >
                 <div className="flex flex-col gap-1">
                   <label
                     htmlFor={productFieldId}
@@ -687,9 +729,11 @@ export function OrderItemRows({
                           ),
                         )
                       }
+                      // Repetir o produto só faz sentido noutra forma ("cx").
                       options={productOptions.filter(
                         (option) =>
                           option.id === row.productId ||
+                          (formsById.get(option.id)?.length ?? 0) > 0 ||
                           !rows.some(
                             (other) =>
                               other.key !== row.key &&
@@ -708,6 +752,43 @@ export function OrderItemRows({
                     />
                   )}
                 </div>
+
+                {formas.length > 0 ? (
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor={`${idPrefix}forma-${row.key}`}
+                      className="text-fg-muted text-xs"
+                    >
+                      Forma
+                    </label>
+                    <ThemedSelect
+                      id={`${idPrefix}forma-${row.key}`}
+                      ariaLabel="Forma de compra"
+                      value={row.purchaseFormId ?? ""}
+                      onValueChange={(formId) => {
+                        const forma = formas.find((f) => f.id === formId);
+                        mudarLinha(row.key, {
+                          purchaseFormId: forma?.id ?? null,
+                          formUnit: forma?.unit ?? null,
+                        });
+                      }}
+                      // O Radix não aceita item de valor vazio: a forma padrão
+                      // entra como a opção "vazia" do ThemedSelect.
+                      placeholder={`${unidadePadrao ?? ""} (padrão)`}
+                      emptyOptionLabel={`${unidadePadrao ?? ""} (padrão)`}
+                      options={formas
+                        .filter(
+                          (forma) =>
+                            forma.id === row.purchaseFormId ||
+                            !formasUsadas.has(forma.id),
+                        )
+                        .map((forma) => ({
+                          value: forma.id,
+                          label: forma.label,
+                        }))}
+                    />
+                  </div>
+                ) : null}
 
                 <div className="flex flex-col gap-1">
                   <label

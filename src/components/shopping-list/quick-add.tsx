@@ -104,7 +104,12 @@ export function ShoppingListQuickAdd({
 
   const index = React.useMemo(() => indexProducts(products), [products]);
   const inList = React.useMemo(
-    () => new Map(pending.map((item) => [item.productId, item.quantity])),
+    () =>
+      new Map(
+        pending
+          .filter((item) => !item.purchaseFormId)
+          .map((item) => [item.productId, item.quantity]),
+      ),
     [pending],
   );
   const suggestions = React.useMemo(
@@ -113,7 +118,7 @@ export function ShoppingListQuickAdd({
   );
   const listOpen = suggestions.length > 0 && !selected;
   const activeIndex = Math.min(active, Math.max(suggestions.length - 1, 0));
-  // `pending` só tem a forma padrão; em outra forma a soma não se aplica.
+  // A soma mostrada é a da forma padrão; em outra forma ela não se aplica.
   const selectedInList =
     selected && !formId ? inList.get(selected.id) : undefined;
   const forms = selected?.forms ?? [];
@@ -146,7 +151,12 @@ export function ShoppingListQuickAdd({
   return (
     <>
       <MobileQuickAdd
-        key={pending.map((item) => `${item.productId}:${item.quantity}`).join("|")}
+        key={pending
+          .map(
+            (item) =>
+              `${item.productId}:${item.purchaseFormId ?? ""}:${item.quantity}`,
+          )
+          .join("|")}
         products={products}
         pending={pending}
       />
