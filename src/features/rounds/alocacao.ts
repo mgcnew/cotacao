@@ -10,7 +10,9 @@ import {
   carregarRodadaBasica,
   contarGruposAbertos,
 } from "@/features/rounds/central";
+import { listPurchaseFormsByProduct } from "@/features/products/purchase-forms";
 import {
+  expandirPorFormas,
   IDADE_MAXIMA_DIAS,
   type UltimosPagosPorProduto,
 } from "@/features/rounds/last-paid";
@@ -57,14 +59,20 @@ async function listarUltimosPagos(
   if (productIds.length === 0) return pagos;
   const supabase = await createServerSupabaseClient();
   const desde = new Date(Date.now() - IDADE_MAXIMA_DIAS * 86_400_000);
-  const { data, error } = await supabase
-    .from("v_latest_supplier_product_price")
-    .select(
-      "supplier_id, product_id, practiced_price, pricing_unit_symbol, occurred_at",
-    )
-    .eq("company_id", companyId)
-    .in("product_id", productIds)
-    .gte("occurred_at", desde.toISOString());
+  const [{ data, error }, formas] = await Promise.all([
+    supabase
+      .from("v_latest_supplier_product_price")
+      .select(
+        "supplier_id, product_id, practiced_price, pricing_unit_symbol, occurred_at",
+      )
+      .eq("company_id", companyId)
+      .in("product_id", productIds)
+      .gte("occurred_at", desde.toISOString()),
+    // As formas só ampliam a comparação; sem elas, segue só na mesma unidade.
+    listPurchaseFormsByProduct(companyId).catch(
+      () => new Map<string, never[]>(),
+    ),
+  ]);
   if (error || !data) return pagos;
   for (const row of data) {
     if (
@@ -84,7 +92,7 @@ async function listarUltimosPagos(
     });
     pagos.set(row.product_id, lista);
   }
-  return pagos;
+  return expandirPorFormas(pagos, formas);
 }
 
 /**

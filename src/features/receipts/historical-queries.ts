@@ -2,6 +2,7 @@ import "server-only";
 
 import type { PriceHistoryPoint } from "@/components/history/price-history-chart";
 import type { HistoryFilters } from "@/features/history/queries";
+import { listPurchaseFormsByProduct } from "@/features/products/purchase-forms";
 import {
   EMPTY_HISTORICAL_FILTERS,
   HISTORICAL_STATUS_LABEL,
@@ -764,7 +765,7 @@ export async function listPurchasePriceHistory(
   if ("productId" in scope) {
     chartQuery = supabase
       .from("v_purchase_price_history")
-      .select("occurred_at, supplier_name, practiced_price")
+      .select("occurred_at, supplier_name, practiced_price, pricing_unit_symbol")
       .eq("company_id", companyId)
       .eq("product_id", scope.productId)
       .order("occurred_at", { ascending: true })
@@ -784,10 +785,15 @@ export async function listPurchasePriceHistory(
     .eq(scopeColumn, scopeId)
     .limit(1000);
 
-  const [rowsResult, chartResult, optionRows] = await Promise.all([
+  const [rowsResult, chartResult, optionRows, formas] = await Promise.all([
     rowsQuery,
     chartQuery ?? Promise.resolve({ data: [], error: null }),
     optionsQuery,
+    "productId" in scope
+      ? listPurchaseFormsByProduct(companyId).then(
+          (porProduto) => porProduto.get(scope.productId) ?? [],
+        )
+      : Promise.resolve([]),
   ]);
   if (rowsResult.error) {
     throw new Error(
@@ -823,17 +829,24 @@ export async function listPurchasePriceHistory(
     throw new Error(
       `Falha ao montar evolução de compras: ${chartResult.error.message}`,
     );
+  // Caixa a R$ 40 e unidade a R$ 3,50 na mesma linha fariam o gráfico saltar
+  // à toa: o que foi pago numa forma de compra (0127) entra por unidade-base.
   const pricePoints: PriceHistoryPoint[] = (chartResult.data ?? []).flatMap(
-    (row) =>
-      row.occurred_at && row.supplier_name && row.practiced_price !== null
-        ? [
-            {
-              date: row.occurred_at,
-              supplier: row.supplier_name,
-              price: Number(row.practiced_price),
-            },
-          ]
-        : [],
+    (row) => {
+      if (!row.occurred_at || !row.supplier_name || row.practiced_price === null)
+        return [];
+      const forma =
+        "pricing_unit_symbol" in row
+          ? formas.find((f) => f.unit === row.pricing_unit_symbol)
+          : undefined;
+      return [
+        {
+          date: row.occurred_at,
+          supplier: row.supplier_name,
+          price: Number(row.practiced_price) / (forma?.perUnit ?? 1),
+        },
+      ];
+    },
   );
   if (optionRows.error) {
     throw new Error(
