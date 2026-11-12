@@ -475,6 +475,17 @@ function ItemCard({
                 {QTY.format(Number(item.requested_quantity))}{" "}
                 {item.purchase_unit.symbol}
               </strong>
+              {item.purchase_form && item.comparison_unit ? (
+                <>
+                  {" "}
+                  · cada {item.purchase_unit.symbol} com{" "}
+                  {QTY.format(
+                    Number(item.purchase_form.base_quantity) /
+                      Number(item.purchase_form.unit_quantity),
+                  )}{" "}
+                  {item.comparison_unit.symbol}
+                </>
+              ) : null}
             </p>
             {item.notes ? (
               <p className="text-fg-muted mt-1 text-sm">{item.notes}</p>

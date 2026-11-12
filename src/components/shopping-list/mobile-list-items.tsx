@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import {
   refreshShoppingList,
   removeShoppingListItem,
-  setShoppingListItemQuantity,
+  setShoppingListLineQuantity,
   updateShoppingListItem,
 } from "@/features/shopping-list/actions";
 import { cn } from "@/lib/utils";
@@ -32,8 +32,13 @@ export type MobileListItem = {
   createdLabel: string;
   quantity: number;
   unit: string;
+  /** Forma de compra da linha ("1 cx = 12 un"); nula na forma padrão. */
+  form: { perUnit: number; baseUnit: string } | null;
   notes: string;
 };
+
+const EQUIVALENTE = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+const formatEquivalent = (value: number) => EQUIVALENTE.format(value);
 
 /** Pausa antes de salvar: três toques em + viram uma chamada só. */
 const SAVE_DELAY_MS = 350;
@@ -109,7 +114,7 @@ function ItemRow({
     const wanted = quantityRef.current;
     let failure: string | null = null;
     try {
-      const result = await setShoppingListItemQuantity(item.productId, wanted);
+      const result = await setShoppingListLineQuantity(item.id, wanted);
       if (result.error) failure = result.error;
       else confirmedRef.current = wanted;
     } catch {
@@ -125,7 +130,7 @@ function ItemRow({
     }
     // A Central e a lista dependem do número: atualiza quando a pausa acaba.
     if (timerRef.current === null) await refreshShoppingList();
-  }, [item.productId]);
+  }, [item.id]);
 
   // Sair da tela dentro da pausa não pode perder o último toque.
   React.useEffect(() => {
@@ -191,6 +196,9 @@ function ItemRow({
             )}
             <span className="truncate">
               {item.unit ? `${item.unit} · ` : ""}
+              {item.form
+                ? `${formatEquivalent(quantity * item.form.perUnit)} ${item.form.baseUnit} · `
+                : ""}
               {item.createdLabel}
             </span>
           </p>

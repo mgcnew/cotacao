@@ -2,6 +2,8 @@ import "server-only";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+const FORM_QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+
 /**
  * Matriz de comparação de uma rodada: itens nas linhas, fornecedores nas
  * colunas.
@@ -15,7 +17,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * "preço cotado" contra "último preço negociado", que é a informação que o
  * comprador precisa ver.
  */
-
 export type ComparisonCell = {
   responseItemId: string | null;
   quotedPrice: number | null;
@@ -92,6 +93,9 @@ export async function getRoundComparison(companyId: string, roundId: string) {
         pricing_unit_id,
         comparison_unit_id,
         product_id,
+        purchase_form_id,
+        form_unit_quantity,
+        form_base_quantity,
         products!inner ( name, category_id, purpose ),
         purchase_unit:units!quotation_items_company_id_purchase_unit_id_fkey ( name, symbol ),
         pricing_unit:units!quotation_items_company_id_pricing_unit_id_fkey ( name, symbol ),
@@ -291,13 +295,24 @@ export async function getRoundComparison(companyId: string, roundId: string) {
     const linkBySupplier = new Map<string, string>();
     const precos: number[] = [];
     const normalizados: number[] = [];
+    // Item noutra forma de compra (0128): a equivalência veio gravada no item
+    // ("1 cx = 12 un"), e é ela que leva o preço para a base. O fator do
+    // produto ou da categoria fala da forma padrão e não vale aqui.
+    const formFactor =
+      item.purchase_form_id &&
+      item.form_unit_quantity &&
+      item.form_base_quantity
+        ? Number(item.form_base_quantity) / Number(item.form_unit_quantity)
+        : null;
     const conversionDefinition =
-      (conversionDefinitions ?? []).find(
-        (definition) => definition.product_id === item.product_id,
-      ) ??
-      (conversionDefinitions ?? []).find(
-        (definition) => definition.category_id === item.products.category_id,
-      );
+      formFactor !== null
+        ? undefined
+        : ((conversionDefinitions ?? []).find(
+            (definition) => definition.product_id === item.product_id,
+          ) ??
+          (conversionDefinitions ?? []).find(
+            (definition) => definition.category_id === item.products.category_id,
+          ));
     // Cadastro legado de embalagem: compra em pacote, "precificação" ficou
     // como unidade interna e a comparação vazia. O preço informado, porém, é
     // o pacote inteiro. Reconhecer essa forma evita multiplicar preço × itens
@@ -308,11 +323,15 @@ export async function getRoundComparison(companyId: string, roundId: string) {
       item.comparison_unit_id === null &&
       conversionDefinition?.unit_id === item.pricing_unit_id;
     const requiresPresentationComparison =
-      Boolean(conversionDefinition) &&
-      (legacyPackagingPresentation ||
-        (item.comparison_unit_id !== null &&
-          item.pricing_unit_id !== item.comparison_unit_id));
-    let conversionName: string | null = conversionDefinition?.name ?? null;
+      formFactor !== null ||
+      (Boolean(conversionDefinition) &&
+        (legacyPackagingPresentation ||
+          (item.comparison_unit_id !== null &&
+            item.pricing_unit_id !== item.comparison_unit_id)));
+    let conversionName: string | null =
+      formFactor !== null
+        ? `1 ${item.pricing_unit?.symbol ?? ""} = ${FORM_QTY.format(formFactor)} ${item.comparison_unit?.symbol ?? ""}`
+        : (conversionDefinition?.name ?? null);
 
     for (const rs of roundSuppliers) {
       const link = (links ?? []).find(
@@ -358,7 +377,7 @@ export async function getRoundComparison(companyId: string, roundId: string) {
 
       if (!response.does_not_supply && current !== null) precos.push(current);
 
-      const factor = factorByResponse.get(response.id);
+      const factor = formFactor ?? factorByResponse.get(response.id);
       conversionName =
         conversionName ?? conversionNameByResponse.get(response.id) ?? null;
       const normalized =

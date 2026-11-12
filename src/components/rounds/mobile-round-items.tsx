@@ -7,7 +7,11 @@ import {
   QuantityStepper,
   type QuickAddTexts,
 } from "@/components/shopping-list/mobile-quick-add";
-import { refreshRound, setRoundItemQuantity } from "@/features/rounds/actions";
+import {
+  refreshRound,
+  setRoundItemQuantity,
+  setRoundLineQuantity,
+} from "@/features/rounds/actions";
 import type { ShoppingProduct } from "@/features/shopping-list/queries";
 
 /** Pausa antes de salvar: três toques em + viram uma chamada só. */
@@ -34,6 +38,8 @@ export type MobileRoundItem = {
   name: string;
   quantity: number;
   unit: string;
+  /** Item noutra forma de compra ("cx"): fica fora da soma da folha. */
+  inOtherForm: boolean;
 };
 
 /**
@@ -60,10 +66,12 @@ export function MobileRoundQuickAdd({
   return (
     <MobileQuickAdd
       products={products}
-      pending={items.map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-      }))}
+      pending={items
+        .filter((item) => !item.inOtherForm)
+        .map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        }))}
       save={save}
       refresh={refresh}
       texts={ROUND_TEXTS}
@@ -91,11 +99,7 @@ function ItemRow({
     const wanted = quantityRef.current;
     let failure: string | null = null;
     try {
-      const result = await setRoundItemQuantity(
-        roundId,
-        item.productId,
-        wanted,
-      );
+      const result = await setRoundLineQuantity(roundId, item.id, wanted);
       if (result.error) failure = result.error;
       else confirmedRef.current = wanted;
     } catch {
@@ -111,7 +115,7 @@ function ItemRow({
       return;
     }
     if (timerRef.current === null) await refreshRound(roundId);
-  }, [roundId, item.productId]);
+  }, [roundId, item.id]);
 
   // Sair da tela dentro da pausa não pode perder o último toque.
   React.useEffect(() => {

@@ -2519,11 +2519,14 @@ export type Database = {
           created_at: string;
           estimated_conversion_rate: number | null;
           estimated_pricing_quantity: number | null;
+          form_base_quantity: number | null;
+          form_unit_quantity: number | null;
           group_id: string;
           id: string;
           notes: string | null;
           pricing_unit_id: string;
           product_id: string;
+          purchase_form_id: string | null;
           purchase_round_id: string;
           purchase_unit_id: string;
           requested_quantity: number;
@@ -2536,11 +2539,14 @@ export type Database = {
           created_at?: string;
           estimated_conversion_rate?: number | null;
           estimated_pricing_quantity?: number | null;
+          form_base_quantity?: number | null;
+          form_unit_quantity?: number | null;
           group_id: string;
           id?: string;
           notes?: string | null;
           pricing_unit_id: string;
           product_id: string;
+          purchase_form_id?: string | null;
           purchase_round_id: string;
           purchase_unit_id: string;
           requested_quantity: number;
@@ -2553,11 +2559,14 @@ export type Database = {
           created_at?: string;
           estimated_conversion_rate?: number | null;
           estimated_pricing_quantity?: number | null;
+          form_base_quantity?: number | null;
+          form_unit_quantity?: number | null;
           group_id?: string;
           id?: string;
           notes?: string | null;
           pricing_unit_id?: string;
           product_id?: string;
+          purchase_form_id?: string | null;
           purchase_round_id?: string;
           purchase_unit_id?: string;
           requested_quantity?: number;
@@ -3538,6 +3547,7 @@ export type Database = {
           notes: string | null;
           origin: string;
           product_id: string;
+          purchase_form_id: string | null;
           purchase_unit_id: string;
           requested_quantity: number;
           shopping_list_id: string;
@@ -3555,6 +3565,7 @@ export type Database = {
           notes?: string | null;
           origin?: string;
           product_id: string;
+          purchase_form_id?: string | null;
           purchase_unit_id: string;
           requested_quantity: number;
           shopping_list_id: string;
@@ -3572,6 +3583,7 @@ export type Database = {
           notes?: string | null;
           origin?: string;
           product_id?: string;
+          purchase_form_id?: string | null;
           purchase_unit_id?: string;
           requested_quantity?: number;
           shopping_list_id?: string;

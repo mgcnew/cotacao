@@ -108,7 +108,12 @@ function ItemRow({ item }: { item: MobileListItem }) {
                 <span className="sr-only">Inserido por você, </span>
               </>
             )}
-            <span className="truncate">{item.createdLabel}</span>
+            <span className="truncate">
+              {item.form
+                ? `${formatQuantity(Math.round(item.quantity * item.form.perUnit * 1000) / 1000)} ${item.form.baseUnit} · `
+                : ""}
+              {item.createdLabel}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-1.5">

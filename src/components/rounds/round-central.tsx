@@ -306,6 +306,7 @@ function Montagem({
       name: item.products?.name ?? "Produto",
       quantity: Number(item.requested_quantity),
       unit: item.purchase_unit?.symbol ?? "",
+      inOtherForm: item.purchase_form_id !== null,
     }));
 
   return (
@@ -362,6 +363,8 @@ function Montagem({
                         products={produtosAtivos.map((p) => ({
                           id: p.id,
                           name: p.name,
+                          purchaseUnit: p.purchaseUnit,
+                          forms: p.forms,
                         }))}
                       />
                     </div>
@@ -423,6 +426,16 @@ function Montagem({
                               quantity={Number(item.requested_quantity)}
                               purchaseUnit={item.purchase_unit?.symbol ?? ""}
                               pricingUnit={item.pricing_unit?.symbol ?? ""}
+                              formNote={
+                                item.purchase_form_id &&
+                                item.form_unit_quantity &&
+                                item.form_base_quantity
+                                  ? `1 ${item.purchase_unit?.symbol ?? ""} = ${QTD.format(
+                                      Number(item.form_base_quantity) /
+                                        Number(item.form_unit_quantity),
+                                    )} ${item.comparison_unit?.symbol ?? ""}`
+                                  : null
+                              }
                               commercialStatus={item.commercial_status}
                               editable={podeMontar}
                               groups={groups}

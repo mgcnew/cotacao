@@ -11,6 +11,7 @@ import type { PendingQuantity } from "@/components/shopping-list/mobile-quick-ad
 import { ShoppingListQuickAdd } from "@/components/shopping-list/quick-add";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { listPurchaseFormsByProduct } from "@/features/products/purchase-forms";
 import {
   getOpenShoppingList,
   listShoppingProducts,
@@ -134,10 +135,11 @@ async function ListaDeComprasConteudo({
   // depois: a lista não espera por uma consulta que ela não desenha.
   const sugestoes = listPurchaseSuggestions(company.companyId);
   const sugestoesParaContagem = sugestoes.catch(() => null);
-  const [data, permissions, params] = await Promise.all([
+  const [data, permissions, params, forms] = await Promise.all([
     getOpenShoppingList(company.companyId),
     getPermissions(company.companyId),
     searchParams,
+    listPurchaseFormsByProduct(company.companyId),
   ]);
   const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
@@ -178,6 +180,10 @@ async function ListaDeComprasConteudo({
     createdLabel: dateTimeFormatter.format(new Date(item.created_at)),
     quantity: Number(item.requested_quantity),
     unit: item.purchase_unit?.symbol ?? "un",
+    form:
+      forms
+        .get(item.product_id)
+        ?.find((form) => form.id === item.purchase_form_id) ?? null,
     notes: item.notes ?? "",
   }));
   const hasVisibleSuggestions = showSuggestions && suggestions.length > 0;
@@ -213,10 +219,13 @@ async function ListaDeComprasConteudo({
         >
           <AdicionarRapido
             companyId={company.companyId}
-            pending={data.items.map((item) => ({
-              productId: item.product_id,
-              quantity: Number(item.requested_quantity),
-            }))}
+            // O + e − da folha de adicionar mexe só na forma padrão.
+            pending={data.items
+              .filter((item) => item.purchase_form_id === null)
+              .map((item) => ({
+                productId: item.product_id,
+                quantity: Number(item.requested_quantity),
+              }))}
           />
         </Suspense>
       ) : null}

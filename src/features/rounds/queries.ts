@@ -126,9 +126,13 @@ export async function listRoundItems(companyId: string, roundId: string) {
       requested_quantity,
       commercial_status,
       notes,
+      purchase_form_id,
+      form_unit_quantity,
+      form_base_quantity,
       products!inner ( name ),
       purchase_unit:units!quotation_items_company_id_purchase_unit_id_fkey ( symbol ),
-      pricing_unit:units!quotation_items_company_id_pricing_unit_id_fkey ( symbol )
+      pricing_unit:units!quotation_items_company_id_pricing_unit_id_fkey ( symbol ),
+      comparison_unit:units!quotation_items_company_id_comparison_unit_id_fkey ( symbol )
     `,
     )
     .eq("company_id", companyId)

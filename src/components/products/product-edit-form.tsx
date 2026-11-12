@@ -371,7 +371,8 @@ export function ProductEditForm({
         </Secao>
       ) : null}
 
-      {purchaseForms ? (
+      {/* Embalagem já compara pela quantidade que o fornecedor informa. */}
+      {purchaseForms && purpose !== "packaging" ? (
         <Secao
           titulo="Outras formas de compra"
           descricao={`Quando o mesmo produto também vem em caixa, display ou fardo. A unidade de compra acima continua sendo a forma padrão; aqui você diz quanto cada outra forma contém em ${unitSymbol(baseUnitId)}, e é nessa base que os preços se comparam.`}

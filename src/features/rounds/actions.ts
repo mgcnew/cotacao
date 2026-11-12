@@ -403,12 +403,15 @@ export async function addQuotationItem(
         .refine((v) => Number.isFinite(v) && v > 0, {
           error: "Quantidade deve ser maior que zero",
         }),
+      // Vazio é a forma padrão do produto.
+      purchaseFormId: z.union([z.uuid(), z.literal("")]),
     })
     .safeParse({
       roundId: formData.get("roundId"),
       groupId: formData.get("groupId") ?? "",
       productId: formData.get("productId"),
       quantity: formData.get("quantity"),
+      purchaseFormId: formData.get("purchaseFormId") ?? "",
     });
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -444,9 +447,11 @@ export async function addQuotationItem(
       group_id: groupId,
       product_id: parsed.data.productId,
       requested_quantity: parsed.data.quantity,
+      // Com forma, o gatilho da 0128 troca as três pelas da forma.
       purchase_unit_id: product.purchase_unit_id,
       pricing_unit_id: product.pricing_unit_id,
       comparison_unit_id: product.comparison_unit_id,
+      purchase_form_id: parsed.data.purchaseFormId || null,
     })
     .select("id")
     .single();
@@ -1023,6 +1028,8 @@ export async function setRoundItemQuantity(
     .eq("company_id", company.companyId)
     .eq("purchase_round_id", roundId)
     .eq("product_id", productId)
+    // O + e − do celular é da forma padrão; "2 cx" é outro item.
+    .is("purchase_form_id", null)
     .eq("commercial_status", "open")
     .order("created_at")
     .limit(1)
@@ -1080,6 +1087,51 @@ export async function setRoundItemQuantity(
   if (error) return { error: describeWriteError(error) };
 
   await linkItemToRoundSuppliers(roundId, item.id, grupo.id);
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * O + e − de um item já na rodada, pela linha e não pelo produto: "2 cx" e
+ * "5 un" do mesmo produto são itens diferentes. Zero tira o item.
+ */
+export async function setRoundLineQuantity(
+  roundId: string,
+  itemId: string,
+  quantity: number,
+): Promise<RoundFormState> {
+  const company = await requireActiveCompany();
+  const parsed = z
+    .object({
+      roundId: z.uuid(),
+      itemId: z.uuid(),
+      quantity: z.number().min(0).max(99_999),
+    })
+    .safeParse({
+      roundId,
+      itemId,
+      quantity: Math.round(quantity * 1000) / 1000,
+    });
+  if (!parsed.success) return { error: "Quantidade inválida." };
+
+  if (parsed.data.quantity === 0) {
+    const removal = new FormData();
+    removal.set("roundId", roundId);
+    removal.set("itemId", itemId);
+    return removeQuotationItem({ error: null }, removal);
+  }
+
+  const impedimento = await assertRoundIsDraft(company.companyId, roundId);
+  if (impedimento) return { error: impedimento };
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("quotation_items")
+    .update({ requested_quantity: parsed.data.quantity })
+    .eq("company_id", company.companyId)
+    .eq("id", parsed.data.itemId)
+    .eq("purchase_round_id", parsed.data.roundId)
+    .eq("commercial_status", "open");
+  if (error) return { error: describeWriteError(error) };
   return { error: null, savedAt: Date.now() };
 }
 

@@ -151,6 +151,7 @@ export function QuotationItemRow({
   quantity,
   purchaseUnit,
   pricingUnit,
+  formNote = null,
   commercialStatus,
   editable,
   groups,
@@ -164,6 +165,8 @@ export function QuotationItemRow({
   quantity: number;
   purchaseUnit: string;
   pricingUnit: string;
+  /** "1 cx = 12 un" quando o item está noutra forma de compra. */
+  formNote?: string | null;
   /** Situação comercial vinda do banco — a coluna "Situação" é ela. */
   commercialStatus: string;
   editable: boolean;
@@ -200,6 +203,11 @@ export function QuotationItemRow({
       <TableRow className={encerrado ? "opacity-60" : undefined}>
         <TableCell className={`font-medium ${riscado ? "line-through" : ""}`}>
           {productName}
+          {formNote ? (
+            <span className="text-fg-subtle block text-xs font-normal">
+              {formNote}
+            </span>
+          ) : null}
         </TableCell>
         {hideGroup ? null : (
           <TableCell className="text-fg-muted">{groupName}</TableCell>

@@ -46,6 +46,12 @@ export type PublicQuotationItem = {
   purchase_unit: PublicUnit;
   pricing_unit: PublicUnit;
   comparison_unit: PublicUnit | null;
+  /**
+   * Forma de compra do item (0128): `unit_quantity` da unidade de compra
+   * equivalem a `base_quantity` da unidade de comparação. Ausente antes da
+   * migration, nula na forma padrão.
+   */
+  purchase_form?: { unit_quantity: number; base_quantity: number } | null;
   notes: string | null;
   already_answered: boolean;
   last_supplier_price: number | null;
@@ -134,17 +140,24 @@ export async function getPublicQuotation(
         ...item,
         last_supplier_price: priceContext?.last_supplier_price ?? null,
         last_supplier_price_at: priceContext?.last_supplier_price_at ?? null,
-        attributes: item.attributes.map((attribute) => {
-          const context = contextByItemAndAttribute.get(
-            `${item.supplier_quotation_item_id}:${attribute.attribute_definition_id}`,
-          );
-          return {
-            ...attribute,
-            is_conversion_factor: Boolean(context),
-            suggested_value_numeric: context?.suggested_value_numeric ?? null,
-            suggested_confirmed_at: context?.suggested_confirmed_at ?? null,
-          };
-        }),
+        attributes: item.attributes
+          .map((attribute) => {
+            const context = contextByItemAndAttribute.get(
+              `${item.supplier_quotation_item_id}:${attribute.attribute_definition_id}`,
+            );
+            return {
+              ...attribute,
+              is_conversion_factor: Boolean(context),
+              suggested_value_numeric: context?.suggested_value_numeric ?? null,
+              suggested_confirmed_at: context?.suggested_confirmed_at ?? null,
+            };
+          })
+          // Com forma de compra a equivalência já vem no item; o fator de
+          // embalagem fala da forma padrão e só confundiria o fornecedor.
+          .filter(
+            (attribute) =>
+              !(item.purchase_form && attribute.is_conversion_factor),
+          ),
       };
     }),
   };

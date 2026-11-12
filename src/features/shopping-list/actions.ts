@@ -75,6 +75,8 @@ const itemSchema = z.object({
       error: "Quantidade deve ser maior que zero.",
     }),
   notes: z.string().trim().max(300, "Observação muito longa.").optional(),
+  // Vazio é a forma padrão do produto (a unidade de compra dele).
+  purchaseFormId: z.union([z.uuid(), z.literal("")]).optional(),
 });
 
 export async function addShoppingListItem(
@@ -87,8 +89,10 @@ export async function addShoppingListItem(
     productId: formData.get("productId"),
     quantity: formData.get("quantity"),
     notes: formData.get("notes"),
+    purchaseFormId: formData.get("purchaseFormId") ?? "",
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const purchaseFormId = parsed.data.purchaseFormId || null;
 
   const supabase = await createServerSupabaseClient();
   const { data: product, error: productError } = await supabase
@@ -102,14 +106,19 @@ export async function addShoppingListItem(
   }
 
   const listId = await getOrCreateOpenList(company.companyId, user.id);
-  const { data: current } = await supabase
+  // Soma só com o que já está na lista na mesma forma: "2 cx" e "5 un" do
+  // mesmo produto são linhas diferentes.
+  let currentQuery = supabase
     .from("shopping_list_items")
     .select("id, requested_quantity")
     .eq("company_id", company.companyId)
     .eq("shopping_list_id", listId)
     .eq("product_id", parsed.data.productId)
-    .eq("status", "pending")
-    .maybeSingle();
+    .eq("status", "pending");
+  currentQuery = purchaseFormId
+    ? currentQuery.eq("purchase_form_id", purchaseFormId)
+    : currentQuery.is("purchase_form_id", null);
+  const { data: current } = await currentQuery.maybeSingle();
 
   const write = current
     ? await supabase
@@ -125,7 +134,9 @@ export async function addShoppingListItem(
         company_id: company.companyId,
         shopping_list_id: listId,
         product_id: parsed.data.productId,
+        // Com forma, o gatilho da 0128 troca pela unidade dela.
         purchase_unit_id: product.purchase_unit_id,
+        purchase_form_id: purchaseFormId,
         requested_quantity: parsed.data.quantity,
         notes: parsed.data.notes || null,
         origin: "manual",
@@ -146,6 +157,9 @@ const setQuantitySchema = z.object({
 
 /**
  * Fixa a quantidade pedida de um produto na lista aberta (zero tira da lista).
+ *
+ * Mexe só na forma padrão do produto. "2 cx" adicionado pela tela larga é
+ * outra linha, e o + e − do celular não a alcançam.
  *
  * É o que a folha de adicionar do celular chama a cada toque em + ou −. Valor
  * absoluto, e não "somar 1", porque a tela manda só o último valor depois de
@@ -182,6 +196,7 @@ export async function setShoppingListItemQuantity(
       .eq("company_id", company.companyId)
       .eq("shopping_list_id", list.id)
       .eq("product_id", parsed.data.productId)
+      .is("purchase_form_id", null)
       .eq("status", "pending");
     if (error) return { error: `Não foi possível remover: ${error.message}` };
     return { error: null, savedAt: Date.now() };
@@ -205,6 +220,7 @@ export async function setShoppingListItemQuantity(
     .eq("company_id", company.companyId)
     .eq("shopping_list_id", listId)
     .eq("product_id", parsed.data.productId)
+    .is("purchase_form_id", null)
     .eq("status", "pending")
     .maybeSingle();
 
@@ -226,6 +242,36 @@ export async function setShoppingListItemQuantity(
   if (write.error) {
     return { error: `Não foi possível salvar: ${write.error.message}` };
   }
+  return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * Mesma ideia de `setShoppingListItemQuantity`, mas pela linha, e não pelo
+ * produto: a linha "2 cx" e a linha "5 un" do mesmo produto são coisas
+ * diferentes, e o + e − de cada uma só pode mexer nela.
+ */
+export async function setShoppingListLineQuantity(
+  itemId: string,
+  quantity: number,
+): Promise<ShoppingListState> {
+  const company = await requireManage();
+  const parsed = z
+    .object({ itemId: z.uuid(), quantity: z.number().min(0).max(99_999) })
+    .safeParse({ itemId, quantity: Math.round(quantity * 1000) / 1000 });
+  if (!parsed.success) return { error: "Quantidade inválida." };
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("shopping_list_items")
+    .update(
+      parsed.data.quantity === 0
+        ? { status: "removed" }
+        : { requested_quantity: parsed.data.quantity },
+    )
+    .eq("company_id", company.companyId)
+    .eq("id", parsed.data.itemId)
+    .eq("status", "pending");
+  if (error) return { error: `Não foi possível salvar: ${error.message}` };
   return { error: null, savedAt: Date.now() };
 }
 

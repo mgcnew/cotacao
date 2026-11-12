@@ -18,6 +18,7 @@ import {
 } from "@/components/shopping-list/mobile-quick-add";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { avisar } from "@/components/ui/toaster";
 import {
   addShoppingListItem,
@@ -61,6 +62,8 @@ export function ShoppingListQuickAdd({
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState<ShoppingProduct | null>(null);
   const [quantity, setQuantity] = React.useState("1");
+  // Vazio é a forma padrão (a unidade de compra do produto).
+  const [formId, setFormId] = React.useState("");
   const [active, setActive] = React.useState(0);
   const formRef = React.useRef<HTMLFormElement>(null);
   const productRef = React.useRef<HTMLInputElement>(null);
@@ -73,14 +76,18 @@ export function ShoppingListQuickAdd({
           (product) => product.id === formData.get("productId"),
         );
         if (added) {
+          const unidade =
+            added.forms.find((form) => form.id === formData.get("purchaseFormId"))
+              ?.unit ?? added.purchaseUnit;
           avisar(
             `${added.name} adicionado · ${String(formData.get("quantity")).trim()}${
-              added.purchaseUnit ? ` ${added.purchaseUnit}` : ""
+              unidade ? ` ${unidade}` : ""
             }`,
           );
         }
         setQuery("");
         setSelected(null);
+        setFormId("");
         // Quem adiciona em sequência não quer herdar a quantidade do item
         // anterior: 12 de um produto virando 12 do próximo é erro de verdade.
         setQuantity("1");
@@ -106,11 +113,15 @@ export function ShoppingListQuickAdd({
   );
   const listOpen = suggestions.length > 0 && !selected;
   const activeIndex = Math.min(active, Math.max(suggestions.length - 1, 0));
-  const selectedInList = selected ? inList.get(selected.id) : undefined;
+  // `pending` só tem a forma padrão; em outra forma a soma não se aplica.
+  const selectedInList =
+    selected && !formId ? inList.get(selected.id) : undefined;
+  const forms = selected?.forms ?? [];
 
   /** Escolhe o produto e leva o foco à quantidade, já selecionada para digitar. */
   function choose(product: ShoppingProduct) {
     setSelected(product);
+    setFormId("");
     setQuery(product.name);
     window.setTimeout(() => {
       quantityRef.current?.focus();
@@ -145,7 +156,8 @@ export function ShoppingListQuickAdd({
         className="border-border bg-surface relative hidden flex-col gap-3 rounded-xl border p-4 sm:flex"
       >
         <input type="hidden" name="productId" value={selected?.id ?? ""} />
-        <div className="grid grid-cols-[minmax(6.5rem,0.38fr)_minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(10rem,0.7fr)_auto] sm:items-end">
+        <input type="hidden" name="purchaseFormId" value={formId} />
+        <div className="grid grid-cols-[minmax(6.5rem,0.38fr)_minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(10rem,0.7fr)_auto] sm:items-end">
           <div className="relative col-span-2 flex min-w-0 flex-col gap-1.5 sm:col-span-1">
             <label
               htmlFor="shopping-product"
@@ -273,17 +285,36 @@ export function ShoppingListQuickAdd({
             >
               Quantidade
             </label>
-            <Input
-              ref={quantityRef}
-              id="shopping-quantity"
-              name="quantity"
-              required
-              value={quantity}
-              onChange={(event) => setQuantity(event.target.value)}
-              onFocus={(event) => event.target.select()}
-              inputMode="decimal"
-              className="h-10 sm:h-8"
-            />
+            <div className="flex gap-2">
+              <Input
+                ref={quantityRef}
+                id="shopping-quantity"
+                name="quantity"
+                required
+                value={quantity}
+                onChange={(event) => setQuantity(event.target.value)}
+                onFocus={(event) => event.target.select()}
+                inputMode="decimal"
+                className={cn("h-10 sm:h-8", forms.length > 0 ? "w-20" : "w-28")}
+              />
+              {forms.length > 0 && selected ? (
+                <ThemedSelect
+                  id="shopping-form"
+                  ariaLabel="Forma de compra"
+                  value={formId}
+                  onValueChange={setFormId}
+                  // O Radix não aceita item de valor vazio: a forma padrão
+                  // entra como a opção "vazia" do ThemedSelect.
+                  placeholder={`${selected.purchaseUnit} (padrão)`}
+                  emptyOptionLabel={`${selected.purchaseUnit} (padrão)`}
+                  options={forms.map((form) => ({
+                    value: form.id,
+                    label: form.label,
+                  }))}
+                  className="w-36"
+                />
+              ) : null}
+            </div>
           </div>
           <div className="flex min-w-0 flex-col gap-1.5">
             <label

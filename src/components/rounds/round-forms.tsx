@@ -10,6 +10,7 @@ import { ErrorLine } from "@/components/layout/form-feedback";
 import { useFechaModalAoConcluir } from "@/components/layout/route-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@/lib/utils";
 import {
@@ -215,13 +216,29 @@ export function ItemForm({
 }: {
   roundId: string;
   groups: Option[];
-  products: Option[];
+  products: (Option & {
+    purchaseUnit: string;
+    /** Outras formas de compra ("cx (12 un)"); vazio é só a padrão. */
+    forms: { id: string; label: string }[];
+  })[];
 }) {
   const [state, formAction] = useActionState<RoundFormState, FormData>(
     addQuotationItem,
     { error: null },
   );
   const quantityRef = React.useRef<HTMLInputElement>(null);
+  const [productId, setProductId] = React.useState("");
+  const [formId, setFormId] = React.useState("");
+  // O formulário é remontado a cada item salvo (`key`), mas a escolha mora
+  // aqui fora: zera junto, senão a forma do item anterior ficaria na tela.
+  const [salvoEm, setSalvoEm] = React.useState(state.savedAt);
+  if (state.savedAt !== salvoEm) {
+    setSalvoEm(state.savedAt);
+    setProductId("");
+    setFormId("");
+  }
+  const produto = products.find((p) => p.id === productId);
+  const forms = produto?.forms ?? [];
 
   const perguntarGrupo = groups.length > 1;
 
@@ -240,8 +257,8 @@ export function ItemForm({
         className={cn(
           "grid gap-3",
           perguntarGrupo
-            ? "sm:grid-cols-[minmax(0,22rem)_minmax(0,16rem)_8rem]"
-            : "sm:grid-cols-[minmax(0,28rem)_8rem]",
+            ? "sm:grid-cols-[minmax(0,22rem)_minmax(0,16rem)_8rem_10rem]"
+            : "sm:grid-cols-[minmax(0,28rem)_8rem_10rem]",
         )}
       >
         <div className="flex flex-col gap-1.5">
@@ -256,6 +273,10 @@ export function ItemForm({
             emptyMessage="Nenhum produto encontrado."
             required
             focusKey={state.savedAt}
+            onValueChange={(value) => {
+              setProductId(value);
+              setFormId("");
+            }}
             onOptionSelected={() => quantityRef.current?.focus()}
           />
         </div>
@@ -294,6 +315,25 @@ export function ItemForm({
             placeholder="100"
           />
         </div>
+
+        {produto && forms.length > 0 ? (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="purchaseFormId" className="text-fg text-sm font-medium">
+              Forma
+            </label>
+            <ThemedSelect
+              id="purchaseFormId"
+              name="purchaseFormId"
+              value={formId}
+              onValueChange={setFormId}
+              // O Radix não aceita item de valor vazio: a forma padrão entra
+              // como a opção "vazia" do ThemedSelect.
+              placeholder={`${produto.purchaseUnit} (padrão)`}
+              emptyOptionLabel={`${produto.purchaseUnit} (padrão)`}
+              options={forms.map((form) => ({ value: form.id, label: form.label }))}
+            />
+          </div>
+        ) : null}
       </div>
 
       <ErrorLine error={state.error} />

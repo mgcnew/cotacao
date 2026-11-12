@@ -1,5 +1,10 @@
 import "server-only";
 
+import {
+  baseEquivalent,
+  listPurchaseFormsByProduct,
+  type PurchaseFormOption,
+} from "@/features/products/purchase-forms";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type ShoppingProduct = {
@@ -7,6 +12,8 @@ export type ShoppingProduct = {
   name: string;
   purchaseUnit: string;
   barcodes: string[];
+  /** Outras formas de compra além da unidade de compra (0127). */
+  forms: PurchaseFormOption[];
 };
 
 /**
@@ -23,6 +30,7 @@ export async function listShoppingProducts(
 ): Promise<ShoppingProduct[]> {
   const supabase = await createServerSupabaseClient();
   const data = [];
+  const formsPromise = listPurchaseFormsByProduct(companyId);
 
   for (let start = 0; ; start += 1000) {
     const page = await supabase
@@ -48,10 +56,12 @@ export async function listShoppingProducts(
     if ((page.data?.length ?? 0) < 1000) break;
   }
 
+  const forms = await formsPromise;
   return data.map((product) => ({
     id: product.id,
     name: product.name,
     purchaseUnit: product.purchase_unit?.symbol ?? "",
+    forms: forms.get(product.id) ?? [],
     barcodes: (product.product_barcodes ?? [])
       .filter((barcode) => barcode.is_active)
       .map((barcode) => barcode.code),
@@ -76,6 +86,7 @@ export async function getOpenShoppingList(companyId: string) {
       `
       id,
       product_id,
+      purchase_form_id,
       requested_quantity,
       notes,
       origin,
@@ -97,12 +108,24 @@ export async function getOpenShoppingList(companyId: string) {
 }
 
 export async function listPendingShoppingItems(companyId: string) {
-  return (await getOpenShoppingList(companyId)).items.map((item) => ({
+  const [{ items }, forms] = await Promise.all([
+    getOpenShoppingList(companyId),
+    listPurchaseFormsByProduct(companyId),
+  ]);
+  return items.map((item) => ({
     id: item.id,
     productId: item.product_id,
     productName: item.products.name,
     quantity: String(item.requested_quantity).replace(".", ","),
     purchaseUnit: item.purchase_unit?.symbol ?? "",
+    purchaseFormId: item.purchase_form_id,
+    /** "24 un" quando o item está numa forma; nulo na forma padrão. */
+    baseEquivalent: baseEquivalent(
+      Number(item.requested_quantity),
+      forms
+        .get(item.product_id)
+        ?.find((form) => form.id === item.purchase_form_id),
+    ),
     notes: item.notes ?? "",
     origin: item.origin,
     isActive: item.products.is_active,
