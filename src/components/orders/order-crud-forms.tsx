@@ -30,6 +30,9 @@ export type EditableItem = {
   requestedQuantity: number;
   agreedPrice: number;
   notes: string | null;
+  /** Forma de compra do item ("cx"), que a edição precisa devolver intacta. */
+  purchaseFormId: string | null;
+  formUnit: string | null;
 };
 
 /** Item do banco vira linha de formulário, com os números já em pt-BR. */
@@ -42,6 +45,8 @@ function paraSeeds(items: EditableItem[], manterId: boolean): ItemSeed[] {
     quantity: paraCampo(item.requestedQuantity, 3).replace(/,?0+$/, ""),
     price: paraCampo(item.agreedPrice),
     notes: item.notes ?? "",
+    purchaseFormId: item.purchaseFormId,
+    formUnit: item.formUnit,
   }));
 }
 

@@ -70,6 +70,8 @@ type Item = {
     mode: "fixed_factor" | "manual_quantity";
     factor: number | null;
   }[];
+  /** "1 cx = 12 un", quando o pedido está noutra forma de compra (0129). */
+  form?: { perUnit: number; baseUnit: string } | null;
 };
 
 function numberFromField(value: FormDataEntryValue | null) {

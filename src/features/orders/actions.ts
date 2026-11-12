@@ -56,6 +56,8 @@ type ItemRow = {
   productId: string;
   allocationId: string;
   shoppingItemId: string;
+  /** Forma de compra da linha ("cx"), vazia na forma padrão do produto. */
+  purchaseFormId: string;
   quantity: string;
   price: string;
   notes: string;
@@ -75,6 +77,8 @@ type OrderItemPayload = {
   purchase_unit_id: string;
   pricing_unit_id: string;
   comparison_unit_id: string | null;
+  /** O gatilho da 0129 também a deduz da unidade; mandar é só ser explícito. */
+  purchase_form_id: string | null;
   agreed_price: string;
   notes: string | null;
 };
@@ -91,6 +95,7 @@ function readItemRows(formData: FormData): ItemRow[] {
   const productIds = formData.getAll("productId").map(String);
   const allocationIds = formData.getAll("allocationId").map(String);
   const shoppingItemIds = formData.getAll("shoppingItemId").map(String);
+  const purchaseFormIds = formData.getAll("purchaseFormId").map(String);
   const quantities = formData.getAll("quantity").map(String);
   const prices = formData.getAll("price").map(String);
   const notes = formData.getAll("itemNotes").map(String);
@@ -102,6 +107,7 @@ function readItemRows(formData: FormData): ItemRow[] {
         productId: productId.trim(),
         allocationId: (allocationIds[index] ?? "").trim(),
         shoppingItemId: (shoppingItemIds[index] ?? "").trim(),
+        purchaseFormId: (purchaseFormIds[index] ?? "").trim(),
         quantity: toDecimal(quantities[index]),
         price: toMoneyDecimal(prices[index]),
         notes: (notes[index] ?? "").trim(),
@@ -114,8 +120,8 @@ function readItemRows(formData: FormData): ItemRow[] {
 /**
  * Traduz as linhas da tela no payload das RPCs de pedido.
  *
- * As unidades NUNCA vêm do formulário: são lidas aqui, do cadastro do produto,
- * com o client do usuário — ou seja, passando pela RLS. Se viessem do cliente,
+ * As unidades NUNCA vêm do formulário: são lidas aqui, do cadastro do produto
+ * (ou da forma de compra da linha, 0129), com o client do usuário — ou seja, passando pela RLS. Se viessem do cliente,
  * um id de unidade de outra empresa chegaria à RPC, e quem recusaria seria a
  * FK composta, com mensagem de banco em vez de mensagem de gente.
  *
@@ -133,16 +139,19 @@ async function buildOrderItems(
     return { ok: false, error: "Adicione ao menos um item ao pedido." };
   }
 
-  const seenProductIds = new Set<string>();
+  // "2 cx" e "5 un" do mesmo produto são linhas legítimas; repetido é o mesmo
+  // produto na mesma forma.
+  const seenProductForms = new Set<string>();
   for (const row of rows) {
-    if (row.productId && seenProductIds.has(row.productId)) {
+    const chave = `${row.productId}:${row.purchaseFormId}`;
+    if (row.productId && seenProductForms.has(chave)) {
       return {
         ok: false,
         error:
           "O mesmo produto aparece mais de uma vez. Mantenha uma única linha e some as quantidades.",
       };
     }
-    if (row.productId) seenProductIds.add(row.productId);
+    if (row.productId) seenProductForms.add(chave);
   }
 
   const supabase = await createServerSupabaseClient();
@@ -165,6 +174,28 @@ async function buildOrderItems(
   }
 
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
+
+  // Unidades da forma também vêm do banco, pela mesma razão das do produto.
+  const formIds = [...new Set(rows.map((row) => row.purchaseFormId).filter(Boolean))];
+  const forms = new Map<
+    string,
+    { product_id: string; unit_id: string; base_unit_id: string }
+  >();
+  if (formIds.length > 0) {
+    const { data: formRows, error: formsError } = await supabase
+      .from("product_purchase_forms")
+      .select("id, product_id, unit_id, base_unit_id")
+      .eq("company_id", companyId)
+      .in("id", formIds);
+    if (formsError) {
+      return {
+        ok: false,
+        error: `Falha ao carregar as formas de compra: ${formsError.message}`,
+      };
+    }
+    for (const form of formRows ?? []) forms.set(form.id, form);
+  }
+
   const items: OrderItemPayload[] = [];
 
   for (const row of rows) {
@@ -192,6 +223,14 @@ async function buildOrderItems(
       };
     }
 
+    const form = row.purchaseFormId ? forms.get(row.purchaseFormId) : undefined;
+    if (row.purchaseFormId && (!form || form.product_id !== product.id)) {
+      return {
+        ok: false,
+        error: `A forma de compra de "${product.name}" não existe mais. Recarregue a página.`,
+      };
+    }
+
     items.push({
       // Item existente é atualizado no lugar, e é isso que preserva o vínculo
       // com a alocação que o originou. Item novo vem sem id.
@@ -201,9 +240,11 @@ async function buildOrderItems(
         : {}),
       product_id: product.id,
       requested_quantity: row.quantity,
-      purchase_unit_id: product.purchase_unit_id,
-      pricing_unit_id: product.pricing_unit_id,
-      comparison_unit_id: product.comparison_unit_id,
+      // Noutra forma, compra e preço na forma e comparação na base (0129).
+      purchase_unit_id: form ? form.unit_id : product.purchase_unit_id,
+      pricing_unit_id: form ? form.unit_id : product.pricing_unit_id,
+      comparison_unit_id: form ? form.base_unit_id : product.comparison_unit_id,
+      purchase_form_id: form ? row.purchaseFormId : null,
       agreed_price: row.price,
       notes: row.notes || null,
     });

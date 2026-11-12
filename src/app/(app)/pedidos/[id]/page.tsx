@@ -135,6 +135,8 @@ function paraEdicao(revision: OrderRevision): EditableItem[] {
     requestedQuantity: item.requestedQuantity,
     agreedPrice: item.agreedPrice,
     notes: item.notes,
+    purchaseFormId: item.purchaseFormId,
+    formUnit: item.purchaseFormId ? item.purchaseUnit : null,
   }));
 }
 

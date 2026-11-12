@@ -562,8 +562,10 @@ const REVISION_SELECT = `
   order_revision_items (
     id, product_id, purchase_allocation_id, product_name_snapshot,
     requested_quantity, agreed_price, notes, estimated_pricing_quantity,
+    purchase_form_id, form_unit_quantity, form_base_quantity,
     purchase_unit:units!order_revision_items_company_id_purchase_unit_id_fkey ( id, symbol ),
     pricing_unit:units!order_revision_items_company_id_pricing_unit_id_fkey ( id, symbol, kind ),
+    comparison_unit:units!order_revision_items_company_id_comparison_unit_id_fkey ( symbol ),
     receipt_items ( logistic_quantity_received, pricing_quantity_received, practiced_price )
   )
 `;
@@ -587,8 +589,12 @@ type RevisionRow = {
     agreed_price: number;
     notes: string | null;
     estimated_pricing_quantity: number | null;
+    purchase_form_id: string | null;
+    form_unit_quantity: number | null;
+    form_base_quantity: number | null;
     purchase_unit: { id: string; symbol: string } | null;
     pricing_unit: { id: string; symbol: string; kind: string } | null;
+    comparison_unit: { symbol: string } | null;
     receipt_items: { logistic_quantity_received: number }[] | null;
   }[];
 };
@@ -618,6 +624,19 @@ function mapRevision(data: RevisionRow) {
         requestedQuantity: Number(item.requested_quantity),
         agreedPrice: Number(item.agreed_price),
         notes: item.notes,
+        purchaseFormId: item.purchase_form_id,
+        /** "1 cx = 12 un": quanto de base vale 1 da forma (0129). */
+        form:
+          item.purchase_form_id &&
+          item.form_unit_quantity &&
+          item.form_base_quantity
+            ? {
+                perUnit:
+                  Number(item.form_base_quantity) /
+                  Number(item.form_unit_quantity),
+                baseUnit: item.comparison_unit?.symbol ?? "",
+              }
+            : null,
         purchaseUnit: item.purchase_unit?.symbol ?? "",
         pricingUnit: item.pricing_unit?.symbol ?? "",
         purchaseUnitId: item.purchase_unit?.id ?? "",

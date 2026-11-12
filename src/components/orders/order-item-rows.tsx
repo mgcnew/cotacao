@@ -48,6 +48,13 @@ export type ItemSeed = {
   quantity: string;
   price: string;
   notes: string;
+  /**
+   * Forma de compra da linha (0129), quando não é a padrão do produto. A
+   * unidade dela ("cx") substitui as do produto na tela; a action relê a
+   * forma no banco e não confia nesta sigla.
+   */
+  purchaseFormId?: string | null;
+  formUnit?: string | null;
 };
 
 export function Submit({
@@ -108,7 +115,7 @@ function mergeSuggestionRows(current: Row[], additions: Row[]) {
   const next = current.filter(preenchida);
   for (const addition of additions) {
     const existingIndex = next.findIndex(
-      (row) => row.productId === addition.productId,
+      (row) => row.productId === addition.productId && !row.purchaseFormId,
     );
     if (existingIndex < 0) {
       next.push(addition);
@@ -371,6 +378,7 @@ export function OrderItemRows({
     productName: string;
     quantity: string;
     purchaseUnit: string;
+    purchaseFormId?: string | null;
     notes: string;
     isActive: boolean;
   }[];
@@ -401,18 +409,33 @@ export function OrderItemRows({
     [products],
   );
 
-  const unidadesDe = (row: Row) => products.find((p) => p.id === row.productId);
+  // Linha noutra forma compra e é cotada na unidade da forma ("cx").
+  const unidadesDe = (row: Row) => {
+    const product = products.find((p) => p.id === row.productId);
+    if (!product || !row.purchaseFormId || !row.formUnit) return product;
+    return { ...product, purchaseUnit: row.formUnit, pricingUnit: row.formUnit };
+  };
   const addedProductIds = new Set(
-    rows.flatMap((row) => (row.productId ? [row.productId] : [])),
+    rows.flatMap((row) =>
+      row.productId && !row.purchaseFormId ? [row.productId] : [],
+    ),
   );
 
   // O celular mexe nas mesmas linhas, por produto: não há duas linhas do mesmo.
   function quantidadeDoProduto(
     product: OrderableProduct,
     next: (atual: number) => number,
+    rowKey?: number,
   ) {
     setRows((current) => {
-      const existing = current.find((row) => row.productId === product.id);
+      // Pela linha quando ela existe; pelo produto só na forma padrão — "2 cx"
+      // é outra linha, que o + e − da busca não alcança.
+      const existing =
+        rowKey !== undefined
+          ? current.find((row) => row.key === rowKey)
+          : current.find(
+              (row) => row.productId === product.id && !row.purchaseFormId,
+            );
       const quantity = Math.max(
         0,
         Math.round(next(existing ? quantidadeDaLinha(existing) : 0) * 1000) /
@@ -451,10 +474,10 @@ export function OrderItemRows({
   }
 
   const mobileHandlers: MobileOrderHandlers = {
-    onStep: (product, delta) =>
-      quantidadeDoProduto(product, (atual) => atual + delta),
-    onQuantity: (product, quantity) =>
-      quantidadeDoProduto(product, () => quantity),
+    onStep: (product, delta, rowKey) =>
+      quantidadeDoProduto(product, (atual) => atual + delta, rowKey),
+    onQuantity: (product, quantity, rowKey) =>
+      quantidadeDoProduto(product, () => quantity, rowKey),
     onPrice: (key, price) => mudarLinha(key, { price }),
     onNotes: (key, notes) => mudarLinha(key, { notes }),
   };
@@ -472,6 +495,7 @@ export function OrderItemRows({
         price: row.price,
         notes: row.notes,
         fromShoppingList: Boolean(row.shoppingItemId),
+        inOtherForm: Boolean(row.purchaseFormId),
       },
     ];
   });
@@ -562,6 +586,9 @@ export function OrderItemRows({
                       quantity: item.quantity,
                       price: "",
                       notes: item.notes,
+                      // Da lista, a unidade já é a da forma ("cx").
+                      purchaseFormId: item.purchaseFormId ?? null,
+                      formUnit: item.purchaseFormId ? item.purchaseUnit : null,
                     }));
                   setRows((current) => [
                     ...current.filter(preenchida),
@@ -594,6 +621,11 @@ export function OrderItemRows({
             value={row.shoppingItemId ?? ""}
           />
           <input type="hidden" name="productId" value={row.productId} />
+          <input
+            type="hidden"
+            name="purchaseFormId"
+            value={row.purchaseFormId ?? ""}
+          />
           <input type="hidden" name="quantity" value={row.quantity} />
           <input type="hidden" name="price" value={row.price} />
           <input type="hidden" name="itemNotes" value={row.notes} />
@@ -643,7 +675,15 @@ export function OrderItemRows({
                       onValueChange={(productId) =>
                         setRows((prev) =>
                           prev.map((r) =>
-                            r.key === row.key ? { ...r, productId } : r,
+                            r.key === row.key
+                              ? // A forma é do produto: trocou, volta à padrão.
+                                {
+                                  ...r,
+                                  productId,
+                                  purchaseFormId: null,
+                                  formUnit: null,
+                                }
+                              : r,
                           ),
                         )
                       }
@@ -653,7 +693,8 @@ export function OrderItemRows({
                           !rows.some(
                             (other) =>
                               other.key !== row.key &&
-                              other.productId === option.id,
+                              other.productId === option.id &&
+                              !other.purchaseFormId,
                           ),
                       )}
                       placeholder="Digite o nome do produto…"

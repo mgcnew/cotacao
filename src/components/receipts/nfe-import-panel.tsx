@@ -117,6 +117,8 @@ export type NfeOrderItemForImport = {
     barcode: string | null;
   }[];
   unitRules: NfeUnitRule[];
+  /** Forma de compra do item ("1 cx = 12 un"), quando o pedido não está na padrão. */
+  form?: { perUnit: number; baseUnit: string } | null;
 };
 
 export type NfeUnitRule = {
@@ -177,6 +179,32 @@ type ConversionDraft = {
   entry: FixedConversionEntry;
   entryValue: string;
 };
+
+const FORM_QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 6 });
+
+/**
+ * Como a conversão começa preenchida. Item pedido numa forma de compra já sabe
+ * a resposta quando a nota vem na unidade-base: o pedido diz "1 cx = 12 un", e
+ * a nota em UN pede exatamente isso. Fora desse caso, campo vazio como antes.
+ */
+function conversaoInicial(
+  orderItem: NfeOrderItemForImport,
+  xmlUnit: string,
+  targetUnit: string,
+): Pick<ConversionDraft, "entry" | "entryValue"> {
+  const form = orderItem.form;
+  if (
+    form &&
+    normalizedNfeUnit(targetUnit) === normalizedNfeUnit(orderItem.purchaseUnit) &&
+    normalizedNfeUnit(xmlUnit) === normalizedNfeUnit(form.baseUnit)
+  ) {
+    return { entry: "target_to_source", entryValue: FORM_QTY.format(form.perUnit) };
+  }
+  return {
+    entry: preferredFixedConversionEntry(xmlUnit, targetUnit),
+    entryValue: "",
+  };
+}
 
 const FISCAL_TOTAL_KEYS = [
   "products",
@@ -601,13 +629,13 @@ export function NfeImportPanel({
     const draft = conversionDrafts[key] ?? {
       xmlUnit: availableUnits[0] ?? "",
       mode: "fixed_factor",
-      entry: preferredFixedConversionEntry(
+      ...conversaoInicial(
+        orderItem,
         availableUnits[0] ?? "",
         targetKind === "purchase"
           ? orderItem.purchaseUnit
           : orderItem.pricingUnit,
       ),
-      entryValue: "",
     };
     const targetUnit =
       targetKind === "purchase"
@@ -669,8 +697,7 @@ export function NfeImportPanel({
     const fallback: ConversionDraft = {
       xmlUnit: units[0] ?? "",
       mode: "fixed_factor",
-      entry: preferredFixedConversionEntry(units[0] ?? "", targetUnit),
-      entryValue: "",
+      ...conversaoInicial(orderItem, units[0] ?? "", targetUnit),
     };
     const draft = conversionDrafts[key] ?? fallback;
     const sourceTotal = totalForXmlUnit(imported.xmlItems, draft.xmlUnit);
@@ -716,8 +743,7 @@ export function NfeImportPanel({
                   [key]: {
                     ...draft,
                     xmlUnit,
-                    entry: preferredFixedConversionEntry(xmlUnit, targetUnit),
-                    entryValue: "",
+                    ...conversaoInicial(orderItem, xmlUnit, targetUnit),
                   },
                 }))
               }

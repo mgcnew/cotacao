@@ -42,13 +42,22 @@ export type MobileOrderRow = {
   price: string;
   notes: string;
   fromShoppingList: boolean;
+  /** Linha noutra forma de compra ("cx"): a busca soma só na padrão. */
+  inOtherForm: boolean;
 };
 
 export type MobileOrderHandlers = {
-  /** Soma (ou tira) um do produto; sem linha, cria uma com 1. */
-  onStep: (product: OrderableProduct, delta: 1 | -1) => void;
+  /**
+   * Soma (ou tira) um do produto; sem linha, cria uma com 1. Com `rowKey`,
+   * mexe naquela linha — a de outra forma de compra ("cx") não é a do produto.
+   */
+  onStep: (product: OrderableProduct, delta: 1 | -1, rowKey?: number) => void;
   /** Quantidade digitada; zero remove a linha, e sem linha cria uma. */
-  onQuantity: (product: OrderableProduct, quantity: number) => void;
+  onQuantity: (
+    product: OrderableProduct,
+    quantity: number,
+    rowKey?: number,
+  ) => void;
   onPrice: (key: number, price: string) => void;
   onNotes: (key: number, notes: string) => void;
 };
@@ -144,8 +153,8 @@ function ItemRow({
         <QuantityStepper
           name={row.name}
           value={row.quantity}
-          onChange={(next) => handlers.onQuantity(product, next)}
-          onStep={(delta) => handlers.onStep(product, delta)}
+          onChange={(next) => handlers.onQuantity(product, next, row.key)}
+          onStep={(delta) => handlers.onStep(product, delta, row.key)}
         />
       </div>
 
@@ -297,7 +306,12 @@ function AddSheet({
 
   const index = React.useMemo(() => indexProducts(products), [products]);
   const quantityOf = React.useMemo(
-    () => new Map(rows.map((row) => [row.productId, row])),
+    () =>
+      new Map(
+        rows
+          .filter((row) => !row.inOtherForm)
+          .map((row) => [row.productId, row]),
+      ),
     [rows],
   );
   const results = searchProducts(index, query);

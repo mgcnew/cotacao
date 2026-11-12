@@ -1195,6 +1195,8 @@ export type Database = {
           created_at: string;
           estimated_pricing_quantity: number | null;
           estimated_pricing_source: string | null;
+          form_base_quantity: number | null;
+          form_unit_quantity: number | null;
           id: string;
           notes: string | null;
           order_revision_id: string;
@@ -1202,6 +1204,7 @@ export type Database = {
           product_id: string;
           product_name_snapshot: string;
           purchase_allocation_id: string | null;
+          purchase_form_id: string | null;
           purchase_unit_id: string;
           requested_quantity: number;
         };
@@ -1212,6 +1215,8 @@ export type Database = {
           created_at?: string;
           estimated_pricing_quantity?: number | null;
           estimated_pricing_source?: string | null;
+          form_base_quantity?: number | null;
+          form_unit_quantity?: number | null;
           id?: string;
           notes?: string | null;
           order_revision_id: string;
@@ -1219,6 +1224,7 @@ export type Database = {
           product_id: string;
           product_name_snapshot: string;
           purchase_allocation_id?: string | null;
+          purchase_form_id?: string | null;
           purchase_unit_id: string;
           requested_quantity: number;
         };
@@ -1229,6 +1235,8 @@ export type Database = {
           created_at?: string;
           estimated_pricing_quantity?: number | null;
           estimated_pricing_source?: string | null;
+          form_base_quantity?: number | null;
+          form_unit_quantity?: number | null;
           id?: string;
           notes?: string | null;
           order_revision_id?: string;
@@ -1236,6 +1244,7 @@ export type Database = {
           product_id?: string;
           product_name_snapshot?: string;
           purchase_allocation_id?: string | null;
+          purchase_form_id?: string | null;
           purchase_unit_id?: string;
           requested_quantity?: number;
         };
