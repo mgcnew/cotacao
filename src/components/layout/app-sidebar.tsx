@@ -79,7 +79,7 @@ export function AppSidebar({
     <aside
       data-slot="app-sidebar"
       className={cn(
-        "border-border bg-surface my-3 ml-3 hidden shrink-0 flex-col overflow-hidden rounded-2xl border shadow-sm md:flex",
+        "border-border bg-surface my-3 ml-3 hidden shrink-0 flex-col overflow-hidden rounded-xl border shadow-sm md:flex",
         "transition-[width] duration-(--dur) ease-(--ease-ds)",
         collapsed ? "w-16" : "w-60",
       )}
@@ -258,7 +258,7 @@ function NavEntry({
             }
           }}
           data-slot="app-sidebar-panel"
-          className="text-fg data-[state=open]:animate-ds-in data-[state=closed]:animate-ds-out z-50 flex w-56 flex-col gap-0.5 rounded-2xl border p-2"
+          className="text-fg data-[state=open]:animate-ds-in data-[state=closed]:animate-ds-out z-50 flex w-56 flex-col gap-0.5 rounded-xl border p-2"
         >
           <p className="text-fg-subtle px-3 pt-1 pb-1.5 text-[0.6875rem] font-semibold tracking-[0.08em] uppercase">
             {item.label}

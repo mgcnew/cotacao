@@ -302,8 +302,6 @@ html[data-accent="safira"]
   background: var(--primary-solid);
   color: var(--primary-solid-fg);
   border-radius: var(--r-lg);
-  box-shadow: 0 6px 16px -8px
-    color-mix(in oklab, var(--primary-solid) 70%, transparent);
 }
 html[data-accent="safira"]
   [data-slot="app-sidebar"]
@@ -393,8 +391,6 @@ html[data-accent="nevoa"]
   background: var(--primary-solid);
   color: var(--primary-solid-fg);
   border-radius: 9999px;
-  box-shadow: 0 8px 18px -10px
-    color-mix(in oklab, var(--primary-solid) 80%, transparent);
 }
 html[data-accent="nevoa"]
   [data-slot="app-sidebar"]
@@ -407,6 +403,21 @@ html[data-accent="nevoa"]
   svg {
   color: inherit;
 }
+/* A seta dos subitens fica por cima da pílula: ela herda a cor da pílula em
+   vez de abrir um quadrado de outro tom ao passar o ponteiro. */
+html:is([data-accent="safira"], [data-accent="nevoa"])
+  [data-slot="app-sidebar"]
+  div:has(> a[aria-current="page"]:not([data-nav-sub]))
+  > button {
+  color: var(--primary-solid-fg);
+  background: transparent;
+}
+html:is([data-accent="safira"], [data-accent="nevoa"])
+  [data-slot="app-sidebar"]
+  div:has(> a[aria-current="page"]:not([data-nav-sub]))
+  > button:hover {
+  background: color-mix(in oklab, var(--primary-solid-fg) 14%, transparent);
+}
 html[data-accent="nevoa"] [data-slot="app-sidebar"] a[data-nav-item],
 html[data-accent="nevoa"] [data-slot="app-sidebar-panel"] a[data-nav-sub] {
   border-radius: 9999px;
@@ -415,7 +426,6 @@ html[data-accent="nevoa"]
   [data-slot="app-sidebar-panel"]
   a[aria-current="page"] {
   background: var(--surface-elevated);
-  box-shadow: 0 6px 16px -10px rgba(22, 23, 27, 0.35);
 }
 
 /* No escuro o accent se divide em tinta e preenchimento.
@@ -537,7 +547,6 @@ html[data-accent="nevoa"]
   [data-slot="app-sidebar-panel"]
   a[aria-current="page"] {
   background: var(--surface-muted);
-  box-shadow: none;
 }
 
 @theme inline {
