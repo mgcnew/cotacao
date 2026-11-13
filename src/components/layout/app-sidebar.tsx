@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { HoverCard } from "radix-ui";
@@ -16,7 +16,7 @@ import { NavLink, useVisibleNav } from "@/components/layout/nav-list";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-type NavBadges = Partial<Record<NavBadgeKey, React.ReactNode>>;
+type NavBadges = Partial<Record<NavBadgeKey, number>>;
 
 /**
  * Contagens dos subitens (`/api/nav-badges`): ao abrir o sistema e de novo a
@@ -39,17 +39,7 @@ function useNavBadges(): NavBadges {
     return () => controller.abort();
   }, [emPedidos]);
 
-  return {
-    divergencias:
-      divergencias > 0 ? (
-        <span
-          className="bg-destructive-soft text-destructive min-w-5 rounded-full px-1.5 text-center text-xs leading-5 font-semibold tabular-nums"
-          aria-label={`${divergencias} a tratar`}
-        >
-          {divergencias}
-        </span>
-      ) : null,
-  };
+  return { divergencias };
 }
 
 type Props = {
@@ -91,7 +81,7 @@ export function AppSidebar({
       className={cn(
         "border-border bg-surface my-3 ml-3 hidden shrink-0 flex-col overflow-hidden rounded-2xl border shadow-sm md:flex",
         "transition-[width] duration-(--dur) ease-(--ease-ds)",
-        collapsed ? "w-14" : "w-56",
+        collapsed ? "w-16" : "w-60",
       )}
     >
       <div
@@ -123,13 +113,17 @@ export function AppSidebar({
           const items = group.items.filter((item) => !item.mobileOnly);
           if (items.length === 0) return null;
           return (
-            <section key={group.label} className={cn(index > 0 && "mt-2")}>
+            <section
+              key={group.label}
+              className={cn(
+                index > 0 && "border-border/70 mt-2.5 border-t pt-2.5",
+                index > 0 && collapsed && "mx-1",
+              )}
+            >
               {!collapsed ? (
-                <p className="text-fg-subtle px-2.5 pt-2 pb-1.5 text-xs font-medium">
+                <p className="text-fg-subtle px-3 pt-1.5 pb-2 text-[0.6875rem] font-semibold tracking-[0.08em] uppercase">
                   {group.label}
                 </p>
-              ) : index > 0 ? (
-                <div className="border-border mx-2 my-2 border-t" />
               ) : null}
               <div className="flex flex-col gap-0.5">
                 {items.map((item) => (
@@ -168,9 +162,10 @@ export function AppSidebar({
 /**
  * Item do menu com as páginas da seção.
  *
- * Aberto, os subitens aparecem recuados embaixo do item quando se está na
- * seção — fora dela ficam guardados e o menu não cresce. Recolhido, não há
- * onde pô-los: passar o ponteiro (ou focar) abre um menu ao lado do ícone.
+ * Os subitens moram num painel ao lado, que só aparece quando se precisa:
+ * passando o ponteiro, clicando na seta ou com → no teclado. Clicar no nome
+ * continua indo à página da seção. A contagem dos subitens (divergências a
+ * tratar) sobe para o item, para o aviso não ficar escondido no painel.
  */
 function NavEntry({
   item,
@@ -184,7 +179,13 @@ function NavEntry({
   badges: NavBadges;
 }) {
   const pathname = usePathname();
+  const [open, setOpen] = React.useState(false);
+  const painel = React.useRef<HTMLDivElement>(null);
   const children = item.children ?? [];
+  const contagem = (child: NavSubItem) =>
+    child.badge ? (badges[child.badge] ?? 0) : 0;
+  const total = children.reduce((soma, child) => soma + contagem(child), 0);
+
   if (children.length === 0) {
     return <NavLink item={item} collapsed={collapsed} active={active} />;
   }
@@ -192,69 +193,108 @@ function NavEntry({
   const ativo = (child: NavSubItem) =>
     pathname === child.href || pathname.startsWith(`${child.href}/`);
 
-  if (collapsed) {
-    return (
-      <HoverCard.Root openDelay={60} closeDelay={120}>
-        <HoverCard.Trigger asChild>
-          <div>
-            <NavLink item={item} collapsed active={active} tooltip={false} />
-          </div>
-        </HoverCard.Trigger>
-        <HoverCard.Portal>
-          <HoverCard.Content
-            side="right"
-            align="start"
-            // Passa a borda do menu flutuante, com o mesmo respiro da margem.
-            sideOffset={18}
-            className="border-border bg-popover text-popover-foreground data-[state=open]:animate-ds-in data-[state=closed]:animate-ds-out z-50 flex w-52 flex-col gap-0.5 rounded-xl border p-1.5 shadow-md"
-          >
-            <Link
-              href={item.href}
-              className="text-fg hover:bg-surface-muted rounded-md px-2.5 py-1.5 text-sm font-semibold"
-            >
-              {item.label}
-            </Link>
-            {children.map((child) => (
-              <SubLink
-                key={child.href}
-                child={child}
-                active={ativo(child)}
-                badge={child.badge ? badges[child.badge] : null}
-              />
-            ))}
-          </HoverCard.Content>
-        </HoverCard.Portal>
-      </HoverCard.Root>
+  // Pelo teclado o painel abre e já recebe o foco: ele mora num portal, no
+  // fim da página, e o Tab sozinho nunca chegaria lá.
+  function abrirPeloTeclado() {
+    setOpen(true);
+    window.requestAnimationFrame(() =>
+      painel.current?.querySelector<HTMLAnchorElement>("a")?.focus(),
     );
   }
 
   return (
-    <div className="flex flex-col gap-0.5">
-      <NavLink item={item} active={active} />
-      {active ? (
-        <div className="border-border mt-0.5 mb-1 ml-[1.15rem] flex flex-col gap-0.5 border-l pl-2">
+    <HoverCard.Root
+      open={open}
+      onOpenChange={setOpen}
+      openDelay={120}
+      closeDelay={160}
+    >
+      <HoverCard.Trigger asChild>
+        <div
+          className="relative"
+          onKeyDown={(event) => {
+            if (event.key === "ArrowRight") {
+              event.preventDefault();
+              abrirPeloTeclado();
+            }
+          }}
+        >
+          <NavLink
+            item={item}
+            collapsed={collapsed}
+            active={active}
+            tooltip={false}
+            badge={total}
+            withArrow
+          />
+          {!collapsed ? (
+            <button
+              type="button"
+              aria-label={`Mais em ${item.label}`}
+              aria-expanded={open}
+              onClick={() => (open ? setOpen(false) : abrirPeloTeclado())}
+              className={cn(
+                "text-fg-subtle hover:text-fg hover:bg-surface-muted absolute top-1/2 right-1.5 grid size-7 -translate-y-1/2 place-items-center rounded-md",
+                "transition-colors duration-(--dur)",
+                open && "text-fg",
+              )}
+            >
+              <ChevronRight className="size-4" aria-hidden />
+            </button>
+          ) : null}
+        </div>
+      </HoverCard.Trigger>
+      <HoverCard.Portal>
+        <HoverCard.Content
+          ref={painel}
+          side="right"
+          align="start"
+          // Passa a borda do menu flutuante, com o mesmo respiro da margem.
+          sideOffset={collapsed ? 18 : 14}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft" || event.key === "Escape") {
+              event.preventDefault();
+              setOpen(false);
+            }
+          }}
+          data-slot="app-sidebar-panel"
+          className="text-fg data-[state=open]:animate-ds-in data-[state=closed]:animate-ds-out z-50 flex w-56 flex-col gap-0.5 rounded-2xl border p-2"
+        >
+          <p className="text-fg-subtle px-3 pt-1 pb-1.5 text-[0.6875rem] font-semibold tracking-[0.08em] uppercase">
+            {item.label}
+          </p>
+          {collapsed ? (
+            <SubLink
+              child={{
+                href: item.href,
+                label: `Ver ${item.label.toLowerCase()}`,
+              }}
+              active={pathname === item.href}
+              count={0}
+            />
+          ) : null}
           {children.map((child) => (
             <SubLink
               key={child.href}
               child={child}
               active={ativo(child)}
-              badge={child.badge ? badges[child.badge] : null}
+              count={contagem(child)}
             />
           ))}
-        </div>
-      ) : null}
-    </div>
+        </HoverCard.Content>
+      </HoverCard.Portal>
+    </HoverCard.Root>
   );
 }
 
 function SubLink({
   child,
   active,
-  badge,
+  count,
 }: {
   child: NavSubItem;
   active: boolean;
-  badge: React.ReactNode;
+  count: number;
 }) {
   return (
     <Link
@@ -262,15 +302,22 @@ function SubLink({
       aria-current={active ? "page" : undefined}
       data-nav-sub
       className={cn(
-        "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm",
-        "transition-colors duration-(--dur) ease-(--ease-ds)",
+        "flex items-center gap-2 rounded-lg px-3 py-2 text-[0.9375rem]",
+        "focus-visible:ring-ring/50 transition-colors duration-(--dur) ease-(--ease-ds) outline-none focus-visible:ring-3",
         active
           ? "bg-surface-muted text-fg font-medium"
           : "text-fg-muted hover:bg-surface-muted hover:text-fg",
       )}
     >
       <span className="min-w-0 flex-1 truncate">{child.label}</span>
-      {badge}
+      {count > 0 ? (
+        <span
+          className="bg-destructive text-destructive-foreground min-w-5 rounded-full px-1.5 text-center text-xs leading-5 font-semibold tabular-nums"
+          aria-label={`${count} a tratar`}
+        >
+          {count}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -292,14 +339,14 @@ function ExpandToggle({
       aria-label={rotulo}
       className={cn(
         "text-fg-subtle hover:bg-surface-muted hover:text-fg-muted",
-        "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
+        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.9375rem]",
         "transition-colors duration-(--dur)",
         collapsed && "justify-center px-0",
       )}
     >
       <ChevronLeft
         className={cn(
-          "size-4 shrink-0 transition-transform duration-(--dur)",
+          "size-[1.125rem] shrink-0 transition-transform duration-(--dur)",
           collapsed && "rotate-180",
         )}
         aria-hidden
