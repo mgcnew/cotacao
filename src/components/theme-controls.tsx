@@ -66,7 +66,7 @@ export function ThemeControls() {
               data-accent={value}
               className={cn(
                 "bg-primary size-5 rounded-full transition-[box-shadow]",
-                value === "ocean" &&
+                (value === "ocean" || value === "nevoa") &&
                   "bg-[linear-gradient(135deg,var(--primary)_50%,var(--brand)_50%)]",
                 "duration-(--dur) ease-(--ease-ds)",
                 accent === value

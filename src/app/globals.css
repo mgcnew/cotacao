@@ -351,7 +351,8 @@ html:not(.dark)[data-accent="ocean"] {
 }
 
 /* Névoa: cinza frio de fundo, superfícies de vidro fosco e preto no lugar de
- * uma cor de destaque. Quem diz onde se está é a pílula preta do menu; o
+ * uma cor de destaque. A marca é laranja: o único quente da tela, contrasta
+ * com o cinza, o preto e o grafite sem disputar com o vermelho de erro. Quem diz onde se está é a pílula preta do menu; o
  * subitem ativo vira pílula branca. O vermelho continua só para erro e para a
  * contagem de divergências — se ela ficasse preta, deixaria de avisar.
  *
@@ -362,7 +363,7 @@ html:not(.dark)[data-accent="ocean"] {
   --primary: #16171b;
   --primary-hover: #2a2c32;
   --primary-fg: #fff;
-  --brand: #16171b;
+  --brand: #e8590c;
 }
 html:not(.dark)[data-accent="nevoa"] {
   --bg: #dfe0e5;
@@ -518,7 +519,7 @@ html[data-accent="nevoa"]
   --primary-fg: #111214;
   --primary-solid: #ececf0;
   --primary-solid-fg: #111214;
-  --brand: #ececf0;
+  --brand: #ff8a4c;
   --bg: #0e0f11;
   --surface: #17181b;
   --surface-muted: #202125;
@@ -950,18 +951,11 @@ html:has([data-slot="landing-page"]) {
 
 /* O menu fica entre o canvas e o cartão. O topbar compartilha o canvas com
    a área principal, sem uma linha artificial separando os dois. */
-/* Menu de vidro: o fundo da página é liso, então um desfoque de verdade não
-   mostraria nada e ainda custaria a cada rolagem. O efeito vem do que se vê —
-   um degradê que acende no topo, o fio de luz na aresta de cima e uma sombra
-   larga. O painel dos subitens usa o mesmo material. */
+/* Menu de vidro sem degradê: fundo liso, o fio de luz na aresta de cima e
+   uma sombra larga. O painel dos subitens usa o mesmo material. */
 [data-slot="app-sidebar"],
 [data-slot="app-sidebar-panel"] {
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, var(--surface) 80%, white) 0%,
-    var(--surface) 35%,
-    color-mix(in oklab, var(--surface) 88%, var(--bg)) 100%
-  );
+  background: var(--surface);
   border-color: color-mix(in oklab, var(--border-color) 75%, transparent);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.8),
@@ -970,12 +964,7 @@ html:has([data-slot="landing-page"]) {
 }
 .dark [data-slot="app-sidebar"],
 .dark [data-slot="app-sidebar-panel"] {
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, var(--surface) 90%, white) 0%,
-    var(--surface) 30%,
-    color-mix(in oklab, var(--surface) 60%, var(--bg)) 100%
-  );
+  background: var(--surface);
   border-color: rgba(255, 255, 255, 0.07);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),

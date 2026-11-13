@@ -253,12 +253,8 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
                       className={cn(
                         "bg-primary size-5 rounded-full transition-[box-shadow] duration-(--dur) ease-(--ease)",
                         // Tema inteiro, não só accent: a bolinha mostra os dois polos.
-                        value === "ocean" &&
+                        (value === "ocean" || value === "nevoa") &&
                           "bg-[linear-gradient(135deg,var(--primary)_50%,var(--brand)_50%)]",
-                        // Preto e branco: no escuro o accent vira claro, e a
-                        // bolinha mostra as duas pontas para não sumir.
-                        value === "nevoa" &&
-                          "bg-[linear-gradient(135deg,#16171b_50%,#e4e5ea_50%)]",
                         accent === value
                           ? "ring-primary ring-offset-surface-elevated ring-2 ring-offset-2"
                           : "hover:ring-border-strong hover:ring-offset-surface-elevated hover:ring-2 hover:ring-offset-2",
