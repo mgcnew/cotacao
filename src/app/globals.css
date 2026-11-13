@@ -348,49 +348,55 @@ html:not(.dark)[data-accent="ocean"] {
   --info: #2f6a90;
 }
 
-/* Névoa: cinza frio de fundo, superfícies de vidro fosco e preto no lugar de
- * uma cor de destaque. A marca é laranja: o único quente da tela, contrasta
- * com o cinza, o preto e o grafite sem disputar com o vermelho de erro.
- * Quem diz onde se está é o item preto do menu, de cantos discretos; o
- * subitem ativo fica branco. O vermelho continua só para erro e para a
- * contagem de divergências — se ela ficasse preta, deixaria de avisar.
+/* Névoa: o jeito do iPhone. Fundo cinza dos Ajustes, cartões brancos e o
+ * azul do sistema nos botões, abas e links. A marca é laranja, o
+ * complementar do azul: o único tom quente da tela.
  *
- * Sem cor no accent, a tinta (`--primary`) é quase o mesmo tom do texto: o
- * que se destaca por ela (abas, links) tem de se apoiar no peso da fonte.
+ * O azul é o #0071E3 da Apple na web, um pouco mais fundo que o #007AFF do
+ * iOS: com texto branco ele passa no AA (4,6:1), o do iOS não (4,0:1).
+ *
+ * Quem diz onde se está no menu é um item neutro — preto no claro, quase
+ * branco no escuro —, como a seleção do iOS: o azul fica para a ação. O
+ * vermelho continua só para erro e para a contagem de divergências.
  */
 [data-accent="nevoa"] {
-  --primary: #16171b;
-  --primary-hover: #2a2c32;
+  --primary: #0071e3;
+  --primary-hover: #0062c4;
   --primary-fg: #fff;
   --brand: #e8590c;
 }
 html:not(.dark)[data-accent="nevoa"] {
-  --bg: #dfe0e5;
-  --fg: #16171b;
-  --fg-muted: #4a4c55;
-  --fg-subtle: #5a5d67;
-  --surface: #f3f4f7;
-  --surface-muted: #e7e8ec;
-  --surface-elevated: #fafafc;
-  --surface-sunken: #ebecf0;
-  --border-color: #e2e3e8;
-  --border-strong: #c9cbd2;
-  --input-bg: #fafafc;
-  --input: #c9cbd2;
-  --info: #3f4a63;
+  --bg: #f2f2f7;
+  --fg: #1c1c1e;
+  --fg-muted: #48484d;
+  --fg-subtle: #5b5b61;
+  --surface: #ffffff;
+  --surface-muted: #ebebf0;
+  --surface-elevated: #ffffff;
+  --surface-sunken: #f7f7fa;
+  --border-color: #e5e5ea;
+  --border-strong: #c7c7cc;
+  --input-bg: #ffffff;
+  --input: #c7c7cc;
+  --info: #0062c4;
   --shadow-xs: 0 1px 2px rgba(22, 23, 27, 0.04);
   --shadow-sm:
     0 1px 2px rgba(22, 23, 27, 0.04), 0 14px 32px -18px rgba(22, 23, 27, 0.18);
   --shadow-md:
     0 24px 56px -22px rgba(22, 23, 27, 0.28), 0 4px 10px rgba(22, 23, 27, 0.05);
+  --r-md: 8px;
   --r-lg: 10px;
   --r-xl: 14px;
+}
+html[data-accent="nevoa"] {
+  --nav-active-bg: var(--fg);
+  --nav-active-fg: var(--surface);
 }
 html[data-accent="nevoa"]
   [data-slot="app-sidebar"]
   a[aria-current="page"]:not([data-nav-sub]) {
-  background: var(--primary-solid);
-  color: var(--primary-solid-fg);
+  background: var(--nav-active-bg);
+  color: var(--nav-active-fg);
   border-radius: 8px;
 }
 html[data-accent="nevoa"]
@@ -410,14 +416,18 @@ html:is([data-accent="safira"], [data-accent="nevoa"])
   [data-slot="app-sidebar"]
   div:has(> a[aria-current="page"]:not([data-nav-sub]))
   > button {
-  color: var(--primary-solid-fg);
+  color: var(--nav-active-fg, var(--primary-solid-fg));
   background: transparent;
 }
 html:is([data-accent="safira"], [data-accent="nevoa"])
   [data-slot="app-sidebar"]
   div:has(> a[aria-current="page"]:not([data-nav-sub]))
   > button:hover {
-  background: color-mix(in oklab, var(--primary-solid-fg) 14%, transparent);
+  background: color-mix(
+    in oklab,
+    var(--nav-active-fg, var(--primary-solid-fg)) 14%,
+    transparent
+  );
 }
 html[data-accent="nevoa"] [data-slot="app-sidebar"] a[data-nav-item],
 html[data-accent="nevoa"] [data-slot="app-sidebar-panel"] a[data-nav-sub] {
@@ -426,7 +436,7 @@ html[data-accent="nevoa"] [data-slot="app-sidebar-panel"] a[data-nav-sub] {
 html[data-accent="nevoa"]
   [data-slot="app-sidebar-panel"]
   a[aria-current="page"] {
-  background: var(--surface-elevated);
+  background: var(--surface-muted);
 }
 
 /* No escuro o accent se divide em tinta e preenchimento.
@@ -523,13 +533,13 @@ html[data-accent="nevoa"]
   --info: #86b6d4;
 }
 .dark[data-accent="nevoa"] {
-  /* O inverso do claro: grafite, e o accent vira quase branco com letra
-     escura — a mesma identidade preto e branco. */
-  --primary: #ececf0;
-  --primary-hover: #ffffff;
-  --primary-fg: #111214;
-  --primary-solid: #ececf0;
-  --primary-solid-fg: #111214;
+  /* Grafite, como o modo escuro do iOS. A tinta clareia para ler sobre o
+     escuro; o botão segue no mesmo azul, que aceita texto branco. */
+  --primary: #2997ff;
+  --primary-hover: #5cb0ff;
+  --primary-fg: #0a0a0c;
+  --primary-solid: #0071e3;
+  --primary-solid-fg: #ffffff;
   --brand: #ff8a4c;
   --bg: #0e0f11;
   --surface: #17181b;
@@ -540,14 +550,10 @@ html[data-accent="nevoa"]
   --border-strong: #34363b;
   --input-bg: #141517;
   --input: #34363b;
-  --info: #b9bfcc;
+  --info: #2997ff;
+  --r-md: 8px;
   --r-lg: 10px;
   --r-xl: 14px;
-}
-.dark[data-accent="nevoa"]
-  [data-slot="app-sidebar-panel"]
-  a[aria-current="page"] {
-  background: var(--surface-muted);
 }
 
 @theme inline {
