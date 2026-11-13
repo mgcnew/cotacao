@@ -350,8 +350,9 @@ html:not(.dark)[data-accent="ocean"] {
 
 /* Névoa: cinza frio de fundo, superfícies de vidro fosco e preto no lugar de
  * uma cor de destaque. A marca é laranja: o único quente da tela, contrasta
- * com o cinza, o preto e o grafite sem disputar com o vermelho de erro. Quem diz onde se está é a pílula preta do menu; o
- * subitem ativo vira pílula branca. O vermelho continua só para erro e para a
+ * com o cinza, o preto e o grafite sem disputar com o vermelho de erro.
+ * Quem diz onde se está é o item preto do menu, de cantos discretos; o
+ * subitem ativo fica branco. O vermelho continua só para erro e para a
  * contagem de divergências — se ela ficasse preta, deixaria de avisar.
  *
  * Sem cor no accent, a tinta (`--primary`) é quase o mesmo tom do texto: o
@@ -382,15 +383,15 @@ html:not(.dark)[data-accent="nevoa"] {
     0 1px 2px rgba(22, 23, 27, 0.04), 0 14px 32px -18px rgba(22, 23, 27, 0.18);
   --shadow-md:
     0 24px 56px -22px rgba(22, 23, 27, 0.28), 0 4px 10px rgba(22, 23, 27, 0.05);
-  --r-lg: 12px;
-  --r-xl: 18px;
+  --r-lg: 10px;
+  --r-xl: 14px;
 }
 html[data-accent="nevoa"]
   [data-slot="app-sidebar"]
   a[aria-current="page"]:not([data-nav-sub]) {
   background: var(--primary-solid);
   color: var(--primary-solid-fg);
-  border-radius: 9999px;
+  border-radius: 8px;
 }
 html[data-accent="nevoa"]
   [data-slot="app-sidebar"]
@@ -420,7 +421,7 @@ html:is([data-accent="safira"], [data-accent="nevoa"])
 }
 html[data-accent="nevoa"] [data-slot="app-sidebar"] a[data-nav-item],
 html[data-accent="nevoa"] [data-slot="app-sidebar-panel"] a[data-nav-sub] {
-  border-radius: 9999px;
+  border-radius: 8px;
 }
 html[data-accent="nevoa"]
   [data-slot="app-sidebar-panel"]
@@ -540,8 +541,8 @@ html[data-accent="nevoa"]
   --input-bg: #141517;
   --input: #34363b;
   --info: #b9bfcc;
-  --r-lg: 12px;
-  --r-xl: 18px;
+  --r-lg: 10px;
+  --r-xl: 14px;
 }
 .dark[data-accent="nevoa"]
   [data-slot="app-sidebar-panel"]
