@@ -193,7 +193,7 @@ export function SupplierResponseBoard({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-2">
-        <div className="border-border rounded-xl border p-3">
+        <div className="border-border bg-surface rounded-xl border p-3">
           <p className="text-fg-muted flex flex-col items-start gap-1 text-xs sm:flex-row sm:items-center sm:gap-1.5">
             <CheckCircle2 className="size-3.5" aria-hidden /> Concluíram
           </p>
@@ -204,7 +204,7 @@ export function SupplierResponseBoard({
             </span>
           </p>
         </div>
-        <div className="border-border rounded-xl border p-3">
+        <div className="border-border bg-surface rounded-xl border p-3">
           <p className="text-fg-muted flex flex-col items-start gap-1 text-xs sm:flex-row sm:items-center sm:gap-1.5">
             <Clock3 className="size-3.5" aria-hidden /> {closed ? "Parciais" : "Pendentes"}
           </p>
@@ -212,7 +212,7 @@ export function SupplierResponseBoard({
             {closed ? partial : pending}
           </p>
         </div>
-        <div className="border-border rounded-xl border p-3">
+        <div className="border-border bg-surface rounded-xl border p-3">
           <p className="text-fg-muted flex flex-col items-start gap-1 text-xs sm:flex-row sm:items-center sm:gap-1.5">
             <MailQuestion className="size-3.5" aria-hidden /> {closed ? "Sem resposta" : "Sem abrir"}
           </p>
@@ -347,7 +347,7 @@ export function SupplierResponseBoard({
         </div>
       ) : null}
 
-      <div className="border-border overflow-hidden rounded-xl border">
+      <div className="border-border bg-surface overflow-hidden rounded-xl border">
         <Table className="block md:table">
           <TableHeader className="hidden md:table-header-group">
             <TableRow>

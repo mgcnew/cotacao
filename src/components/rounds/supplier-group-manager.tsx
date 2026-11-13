@@ -137,7 +137,7 @@ function ParticipantEditor({
   const [confirmingRemoval, setConfirmingRemoval] = React.useState(false);
 
   return (
-    <article className="border-border rounded-xl border p-3">
+    <article className="border-border bg-surface rounded-xl border p-3">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-fg text-sm font-semibold">{participant.name}</p>

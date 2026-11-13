@@ -1414,7 +1414,7 @@ function Price({ price, pricingQuantity, unit, comparisonPrice = null, compariso
 }
 
 function Summary({ label, value, detail, alert = false }: { label: string; value: string; detail: string; alert?: boolean }) {
-  return <div className="border-border rounded-xl border p-3"><p className="text-fg-muted text-[13px]">{label}</p><p className={alert ? "text-warning mt-1 text-xl font-semibold tabular-nums" : "text-fg mt-1 text-xl font-semibold tabular-nums"}>{value}</p><p className="text-fg-muted text-[13px]">{detail}</p></div>;
+  return <div className="border-border bg-surface rounded-xl border p-3"><p className="text-fg-muted text-[13px]">{label}</p><p className={alert ? "text-warning mt-1 text-xl font-semibold tabular-nums" : "text-fg mt-1 text-xl font-semibold tabular-nums"}>{value}</p><p className="text-fg-muted text-[13px]">{detail}</p></div>;
 }
 
 function GeneratedOrders({ orders }: { orders: DadosDaAlocacao["orders"] }) {

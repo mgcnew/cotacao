@@ -72,7 +72,7 @@ export function RoundRealizationSummary({
   const hasReceipts = summary.postedReceiptCount > 0;
 
   return (
-    <section className="border-border break-inside-avoid rounded-xl border p-4">
+    <section className="border-border bg-surface break-inside-avoid rounded-xl border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className={compact ? "text-fg font-semibold" : "text-fg text-base font-semibold"}>
@@ -185,7 +185,7 @@ export function RoundRealizationDetails({
         A economia só aparece depois que a quantidade na unidade de preço é
         confirmada.
       </p>
-      <div className="border-border overflow-hidden rounded-xl border">
+      <div className="border-border bg-surface overflow-hidden rounded-xl border">
         <Table>
           <TableHeader>
             <TableRow className="bg-surface-sunken hover:bg-surface-sunken">

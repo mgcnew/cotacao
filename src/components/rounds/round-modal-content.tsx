@@ -109,7 +109,7 @@ function Distribution({ dados }: { dados: DadosDaRodada }) {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {participants.map((participant) => (
-            <article key={participant.roundSupplierId} className="border-border rounded-xl border p-3">
+            <article key={participant.roundSupplierId} className="border-border bg-surface rounded-xl border p-3">
               <h3 className="text-fg text-sm font-semibold">{participant.name}</h3>
               <p className="text-fg-muted mt-1 text-xs">
                 {participant.groupIds.map((id) => dados.groupName.get(id)).filter(Boolean).join(", ") || "Nenhum grupo"}
@@ -139,7 +139,7 @@ function Scope({ dados }: { dados: DadosDaRodada }) {
           const openItems = items.filter((item) => item.commercial_status === "open").length;
           const closed = group.status === "closed" || group.status === "cancelled";
           return (
-            <details key={group.id} open={!closed} className="group border-border rounded-xl border">
+            <details key={group.id} open={!closed} className="group border-border bg-surface rounded-xl border">
               <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
                 <ChevronDown className="text-fg-subtle size-4 transition-transform group-open:rotate-180" aria-hidden />
                 <span className="text-fg font-semibold">{group.name}</span>
@@ -182,7 +182,7 @@ function Scope({ dados }: { dados: DadosDaRodada }) {
       </div>
 
       {!dados.encerrada && (dados.podeFechar || dados.podeCancelar) ? (
-        <details className="group border-border mt-6 rounded-xl border">
+        <details className="group border-border bg-surface mt-6 rounded-xl border">
           <summary className="text-fg-muted flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
             Encerramento e ações administrativas
             <ChevronDown className="ml-auto size-4 transition-transform group-open:rotate-180" aria-hidden />

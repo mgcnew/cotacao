@@ -115,7 +115,7 @@ export function RoundReportSimpleContent({ report }: { report: RoundReport }) {
           {report.groups.map((group) => (
             <section
               key={group.name}
-              className="border-border overflow-hidden rounded-xl border"
+              className="border-border bg-surface overflow-hidden rounded-xl border"
             >
               <header className="border-border bg-surface-sunken flex items-center justify-between gap-2 border-b px-4 py-3">
                 <h3 className="text-fg text-sm font-bold">{group.name}</h3>
@@ -147,7 +147,7 @@ export function RoundReportSimpleContent({ report }: { report: RoundReport }) {
 
 function SimpleMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-border min-w-0 rounded-xl border p-2.5 text-center sm:p-3">
+    <div className="border-border bg-surface min-w-0 rounded-xl border p-2.5 text-center sm:p-3">
       <p className="text-fg-subtle text-xs leading-tight">
         {label}
       </p>

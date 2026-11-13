@@ -117,7 +117,7 @@ export function RoundReportContent({ report }: { report: RoundReport }) {
         </p>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {report.suppliers.map((supplier) => (
-            <article key={supplier.id} className="border-border rounded-xl border p-3">
+            <article key={supplier.id} className="border-border bg-surface rounded-xl border p-3">
               <div className="flex items-start gap-2">
                 <span className="bg-surface-muted rounded-lg p-2">
                   <Store className="text-fg-muted size-4" aria-hidden />
@@ -164,7 +164,7 @@ export function RoundReportContent({ report }: { report: RoundReport }) {
         </p>
         <div className="space-y-4">
           {report.groups.map((group) => (
-            <section key={group.name} className="border-border overflow-hidden rounded-xl border">
+            <section key={group.name} className="border-border bg-surface overflow-hidden rounded-xl border">
               <header className="bg-surface-sunken border-border flex items-center justify-between gap-2 border-b px-4 py-3">
                 <h3 className="text-fg text-sm font-semibold">{group.name}</h3>
                 <Badge variant="outline">{group.items.length} itens</Badge>
@@ -207,7 +207,7 @@ function ReportMetric({
   warning?: boolean;
 }) {
   return (
-    <div className="border-border min-w-0 rounded-xl border p-3">
+    <div className="border-border bg-surface min-w-0 rounded-xl border p-3">
       <p className="text-fg-muted text-xs">{label}</p>
       <p
         className={
