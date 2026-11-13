@@ -9,10 +9,7 @@ import { IntentPrefetchLink } from "@/components/layout/intent-prefetch-link";
 import { ListSegments } from "@/components/layout/list-segments";
 import { FilterChips, ListSearch } from "@/components/layout/list-toolbar";
 import { PageHeader } from "@/components/layout/page-header";
-import {
-  FormSkeleton,
-  TableSkeleton,
-} from "@/components/layout/page-skeleton";
+import { FormSkeleton, TableSkeleton } from "@/components/layout/page-skeleton";
 import { SendOrderDialog } from "@/components/orders/order-dialogs";
 import { OrderFilterFields } from "@/components/orders/order-filter-bar";
 import { Badge } from "@/components/ui/badge";
@@ -88,7 +85,9 @@ export default async function PedidosPage({
             </Suspense>
             <FilterDialog
               basePath="/pedidos"
-              ativos={contarOrderFilters(filters) - Number(Boolean(filters.numero))}
+              ativos={
+                contarOrderFilters(filters) - Number(Boolean(filters.numero))
+              }
               ajuda={
                 <>
                   &quot;Em aberto&quot; é tudo que ainda não foi recebido nem
@@ -108,7 +107,8 @@ export default async function PedidosPage({
               </Suspense>
             </FilterDialog>
             {permissions.has("commercial_divergence.view") ? (
-              <Button asChild size="sm" variant="outline">
+              // No desktop "Divergências" mora no menu lateral, com a contagem.
+              <Button asChild size="sm" variant="outline" className="md:hidden">
                 <Link href="/pedidos/divergencias">
                   <Scale aria-hidden />
                   <span className="max-sm:sr-only">Divergências</span>
@@ -242,7 +242,11 @@ async function ListaDePedidos({
               rotulo: "Aguardando confirmação",
               contagem: contagem.awaitingConfirmation,
             },
-            { valor: "atrasados", rotulo: "Atrasados", contagem: contagem.overdue },
+            {
+              valor: "atrasados",
+              rotulo: "Atrasados",
+              contagem: contagem.overdue,
+            },
           ]}
         />
       ) : null}
@@ -259,7 +263,8 @@ async function ListaDePedidos({
           ...(filters.de || filters.ate
             ? [
                 {
-                  rotulo: `Criados ${filters.de ? `de ${filters.de.split("-").reverse().join("/")}` : ""}${filters.ate ? ` até ${filters.ate.split("-").reverse().join("/")}` : ""}`.trim(),
+                  rotulo:
+                    `Criados ${filters.de ? `de ${filters.de.split("-").reverse().join("/")}` : ""}${filters.ate ? ` até ${filters.ate.split("-").reverse().join("/")}` : ""}`.trim(),
                   chaves: ["de", "ate"],
                 },
               ]

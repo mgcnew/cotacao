@@ -302,7 +302,9 @@ html:not(.dark)[data-accent="safira"] [data-slot="app-sidebar"] {
 }
 /* O item ativo do menu vira pílula cheia, como na referência: sem linhas em
    volta, é ele que diz onde se está. */
-html[data-accent="safira"] [data-slot="app-sidebar"] a[aria-current="page"] {
+html[data-accent="safira"]
+  [data-slot="app-sidebar"]
+  a[aria-current="page"]:not([data-nav-sub]) {
   background: var(--primary-solid);
   color: var(--primary-solid-fg);
   border-radius: var(--r-lg);

@@ -37,11 +37,14 @@ export function NavLink({
   collapsed = false,
   active,
   onNavigate,
+  tooltip = true,
 }: {
   item: NavItem;
   collapsed?: boolean;
   active: boolean;
   onNavigate?: () => void;
+  /** Recolhido com subitens, quem explica o ícone é o menu flutuante. */
+  tooltip?: boolean;
 }) {
   const Icon = item.icon;
   const link = (
@@ -71,7 +74,11 @@ export function NavLink({
 
   // Só recolhido: com o rótulo ao lado do ícone, a dica repetiria o que já
   // está escrito.
-  return collapsed ? <Tooltip content={item.label}>{link}</Tooltip> : link;
+  return collapsed && tooltip ? (
+    <Tooltip content={item.label}>{link}</Tooltip>
+  ) : (
+    link
+  );
 }
 
 /** Itens que o usuário pode ver, segundo as permissões da empresa ativa. */
@@ -82,9 +89,14 @@ export function useVisibleNav(permissions: string[]) {
   return {
     groups: NAV_GROUPS.map((group) => ({
       ...group,
-      items: group.items.filter(
-        (item) => !item.permission || granted.has(item.permission),
-      ),
+      items: group.items
+        .filter((item) => !item.permission || granted.has(item.permission))
+        .map((item) => ({
+          ...item,
+          children: item.children?.filter(
+            (child) => !child.permission || granted.has(child.permission),
+          ),
+        })),
     })).filter((group) => group.items.length > 0),
     footer: FOOTER_NAV,
     isActive: (href: string) =>

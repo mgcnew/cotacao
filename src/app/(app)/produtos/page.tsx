@@ -159,18 +159,22 @@ async function ProductCatalogActions() {
 
   return (
     <>
+      {/* No desktop Categorias, Unidades e Importar planilha moram no menu
+          lateral, sob Produtos; aqui fica só o que é raro (corrigir). Sem
+          ele, o botão inteiro sai do desktop. */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             size="icon-sm"
             variant="outline"
             aria-label="Mais ações do catálogo"
+            className={canUpdate ? undefined : "md:hidden"}
           >
             <MoreHorizontal aria-hidden />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
-          <DropdownMenuGroup>
+          <DropdownMenuGroup className="md:hidden">
             <DropdownMenuLabel>Catálogo</DropdownMenuLabel>
             <DropdownMenuItem asChild>
               <Link href="/produtos/categorias">
@@ -188,11 +192,11 @@ async function ProductCatalogActions() {
 
           {canCreate || canUpdate ? (
             <>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="md:hidden" />
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Ferramentas</DropdownMenuLabel>
                 {canCreate ? (
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild className="md:hidden">
                     <Link href="/produtos/importacoes">Importar planilha</Link>
                   </DropdownMenuItem>
                 ) : null}

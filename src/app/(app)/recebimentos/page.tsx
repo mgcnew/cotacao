@@ -286,7 +286,8 @@ async function RecebimentosConteudo({
         }
         action={
           canPost ? (
-            <Button asChild size="sm" variant="outline">
+            // No desktop o histórico mora no menu lateral, sob Recebimentos.
+            <Button asChild size="sm" variant="outline" className="md:hidden">
               <Link href="/recebimentos/historico">Importar histórico XML</Link>
             </Button>
           ) : null

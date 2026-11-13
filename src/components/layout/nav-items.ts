@@ -25,7 +25,22 @@ export type NavItem = {
   mobileOnly?: boolean;
   /** Ferramenta de escritório: continua acessível por URL, mas sai da gaveta mobile. */
   desktopOnly?: boolean;
+  /**
+   * Páginas da seção que antes eram botões no cabeçalho dela. Só o sidebar do
+   * desktop as mostra; no celular os botões continuam na página.
+   */
+  children?: NavSubItem[];
 };
+
+export type NavSubItem = {
+  href: string;
+  label: string;
+  permission?: string;
+  /** Contagem ao lado do nome, vinda do servidor (ver `NavBadges`). */
+  badge?: NavBadgeKey;
+};
+
+export type NavBadgeKey = "divergencias";
 
 export type NavGroup = {
   label: string;
@@ -55,12 +70,27 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Pedidos",
         icon: ClipboardList,
         permission: "order.view",
+        children: [
+          {
+            href: "/pedidos/divergencias",
+            label: "Divergências",
+            permission: "commercial_divergence.view",
+            badge: "divergencias",
+          },
+        ],
       },
       {
         href: "/recebimentos",
         label: "Recebimentos",
         icon: PackageCheck,
         permission: "receipt.view",
+        children: [
+          {
+            href: "/recebimentos/historico",
+            label: "Histórico XML",
+            permission: "receipt.post",
+          },
+        ],
       },
     ],
   },
@@ -72,6 +102,15 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Produtos",
         icon: Package,
         permission: "product.view",
+        children: [
+          { href: "/produtos/categorias", label: "Categorias" },
+          { href: "/produtos/unidades", label: "Unidades" },
+          {
+            href: "/produtos/importacoes",
+            label: "Importar planilha",
+            permission: "product.create",
+          },
+        ],
       },
       {
         href: "/contagens",
