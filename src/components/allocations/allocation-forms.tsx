@@ -7,6 +7,7 @@ import { useFormStatus } from "react-dom";
 
 import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
 import { Button } from "@/components/ui/button";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Dialog,
   DialogBody,
@@ -22,6 +23,7 @@ import {
   allocateItem,
   confirmAllocations,
   allocateBestPrices,
+  consolidateSuggestions,
   type AllocationState,
   type RecommendationState,
 } from "@/features/allocations/actions";
@@ -39,14 +41,16 @@ function Submit({
   label,
   busy,
   disabled = false,
+  variant,
 }: {
   label: string;
   busy: string;
   disabled?: boolean;
+  variant?: React.ComponentProps<typeof Button>["variant"];
 }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending || disabled} className="h-11 sm:h-9">
+    <Button type="submit" variant={variant} disabled={pending || disabled} className="h-11 sm:h-9">
       {pending ? busy : label}
     </Button>
   );
@@ -342,6 +346,36 @@ export function ApplyRecommendationsForm({
   );
 }
 
+/** Move as sugestões de um fornecedor pequeno para quem já vai receber pedido. */
+export function ConsolidateForm({
+  roundId,
+  supplierId,
+  itemIds,
+  label,
+}: {
+  roundId: string;
+  supplierId: string;
+  itemIds: string[];
+  label: string;
+}) {
+  const [state, formAction] = useActionState<RecommendationState, FormData>(
+    consolidateSuggestions,
+    { error: null },
+  );
+
+  return (
+    <form action={formAction} className="flex flex-col items-start gap-1.5">
+      <input type="hidden" name="roundId" value={roundId} />
+      <input type="hidden" name="supplierId" value={supplierId} />
+      {itemIds.map((itemId) => (
+        <input key={itemId} type="hidden" name="itemId" value={itemId} />
+      ))}
+      <Submit label={label} busy="Juntando…" variant="outline" />
+      <ErrorLine error={state.error} />
+    </form>
+  );
+}
+
 export type OrderPreview = {
   supplierName: string;
   itemCount: number;
@@ -463,7 +497,7 @@ export function ConfirmOrdersBar({
                 <label htmlFor="deliveryDueDate" className="text-fg text-sm font-medium">
                   Entrega prevista <span className="text-fg-muted font-normal">(opcional)</span>
                 </label>
-                <Input id="deliveryDueDate" name="deliveryDueDate" type="date" className="h-11 sm:h-9" />
+                <DateTimePicker id="deliveryDueDate" name="deliveryDueDate" dateOnly placeholder="Sem data" className="h-11 sm:h-9" />
               </div>
               <ErrorLine error={state.error} />
               <p className="text-fg-muted text-[13px]">

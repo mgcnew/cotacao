@@ -359,6 +359,146 @@ export async function allocateBestPrices(
 }
 
 /**
+ * Junta pedidos: grava itens sugeridos a um fornecedor pequeno no fornecedor
+ * que já vai receber pedido, pagando a diferença de preço para ter um pedido a
+ * menos.
+ *
+ * Vale para sugestões e para escolhas salvas que cobrem o item inteiro com um
+ * fornecedor só — "Salvar as sugestões" vem antes de olhar a junção, e ela
+ * não pode sumir por isso. Item dividido ou já no pedido nunca é mexido. O
+ * preço sai da resposta do fornecedor de destino, e o
+ * `benchmark_price_at_decision` guarda o melhor preço que havia, para o
+ * relatório mostrar quanto a junção custou.
+ *
+ * O rascunho antigo é cancelado antes de gravar o novo: se a gravação falhar
+ * no meio, o item volta a ficar sem decisão, nunca com duas.
+ */
+export async function consolidateSuggestions(
+  _prev: RecommendationState,
+  formData: FormData,
+): Promise<RecommendationState> {
+  const company = await requireActiveCompany();
+  const user = await requireUser();
+  const parsed = z
+    .object({
+      roundId: z.uuid({ error: "Rodada inválida" }),
+      supplierId: z.uuid({ error: "Fornecedor inválido" }),
+      itemIds: z.array(z.uuid({ error: "Item inválido" })).min(1, { error: "Nenhum item para mover" }),
+    })
+    .safeParse({
+      roundId: formData.get("roundId"),
+      supplierId: formData.get("supplierId"),
+      itemIds: formData.getAll("itemId"),
+    });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const { roundId, supplierId, itemIds } = parsed.data;
+  const [round, board] = await Promise.all([
+    carregarRodadaBasica(roundId),
+    getAllocationBoard(company.companyId, roundId),
+  ]);
+  if (!round || round.status !== "active") {
+    return { error: "A rodada precisa estar em andamento para juntar pedidos." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: openItems, error: openError } = await supabase
+    .from("quotation_items")
+    .select("id")
+    .eq("company_id", company.companyId)
+    .eq("purchase_round_id", roundId)
+    .eq("commercial_status", "open")
+    .in("id", itemIds);
+  if (openError)
+    return { error: `Falha ao conferir os itens: ${openError.message}` };
+  const openIds = new Set((openItems ?? []).map((item) => item.id));
+
+  const ativos = board.suppliers.filter((supplier) => supplier.removed_at === null);
+  const destino = ativos.find((supplier) => supplier.supplier_id === supplierId);
+  if (!destino) return { error: "Este fornecedor não está na rodada." };
+
+  const inserts = [];
+  const toCancel: string[] = [];
+  for (const itemId of itemIds) {
+    const row = board.rows.find((candidate) => candidate.itemId === itemId);
+    if (!row || !openIds.has(itemId)) {
+      return { error: "Um dos itens já não está aberto. Recarregue a tela." };
+    }
+    const decided = board.allocationsByItem.get(itemId) ?? [];
+    if (decided.length > 1 || decided.some((allocation) => allocation.status !== "draft" || allocation.supplierId === supplierId)) {
+      return { error: `${row.productName} já tem outra decisão. Recarregue a tela.` };
+    }
+    toCancel.push(...decided.map((allocation) => allocation.allocationId));
+    // Com apresentações diferentes, o menor preço bruto não é o melhor preço:
+    // a junção fica para a escolha item a item.
+    if (row.requiresPresentationComparison) {
+      return { error: `${row.productName} compara apresentações; escolha pelo item.` };
+    }
+    const cell = row.cells.get(destino.id);
+    if (
+      !cell ||
+      cell.doesNotSupply ||
+      cell.isAvailable === false ||
+      !cell.responseItemId ||
+      cell.currentPrice === null
+    ) {
+      return { error: `${destino.suppliers.name} não tem preço para ${row.productName}.` };
+    }
+    const precos = ativos.flatMap((supplier) => {
+      const other = row.cells.get(supplier.id);
+      return other && !other.doesNotSupply && other.isAvailable !== false && other.currentPrice !== null
+        ? [other.currentPrice]
+        : [];
+    });
+    inserts.push({
+      company_id: company.companyId,
+      purchase_round_id: roundId,
+      quotation_item_id: itemId,
+      supplier_id: supplierId,
+      quotation_response_item_id: cell.responseItemId,
+      allocated_quantity: row.requestedQuantity,
+      selected_price: roundMoney(cell.currentPrice),
+      benchmark_price_at_decision: roundMoney(Math.min(...precos)),
+      decision_reason: "Junção de pedidos: concentrado em um fornecedor que já recebe pedido",
+      allocated_by: user.id,
+    });
+  }
+
+  const semPermissao = (error: { code?: string; message: string }) =>
+    error.code === "42501" || error.message.includes("row-level security");
+
+  if (toCancel.length > 0) {
+    const { error: cancelError } = await supabase
+      .from("purchase_allocations")
+      .update({ status: "cancelled" })
+      .eq("company_id", company.companyId)
+      .eq("status", "draft")
+      .in("id", toCancel);
+    if (cancelError) {
+      return {
+        error: semPermissao(cancelError)
+          ? "Seu papel não permite desfazer escolhas salvas."
+          : `Não foi possível desfazer as escolhas antigas: ${cancelError.message}`,
+      };
+    }
+  }
+
+  const { error } = await supabase.from("purchase_allocations").insert(inserts);
+  if (error) {
+    revalidatePath(`/compras/${roundId}/alocacao`);
+    return {
+      error: semPermissao(error)
+        ? "Seu papel não permite decidir a compra."
+        : `Não foi possível juntar os pedidos: ${error.message}`,
+    };
+  }
+
+  revalidatePath(`/compras/${roundId}/alocacao`);
+  revalidatePath(`/compras/${roundId}`);
+  return { error: null, savedAt: Date.now(), createdCount: inserts.length };
+}
+
+/**
  * Desfaz uma decisão ainda em rascunho.
  *
  * Cancela em vez de apagar: a decisão errada fica no histórico, como tudo o

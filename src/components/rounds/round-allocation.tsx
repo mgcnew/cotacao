@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  ListOrdered,
   PackageCheck,
   Sparkles,
   Store,
@@ -13,9 +14,11 @@ import {
   AllocateForm,
   ApplyRecommendationsForm,
   ConfirmOrdersBar,
+  ConsolidateForm,
   type OrderPreview,
 } from "@/components/allocations/allocation-forms";
 import { EmptyState } from "@/components/layout/empty-state";
+import { DinheiroAnimado, ListaAnimada } from "@/components/motion/movimento";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cancelAllocation } from "@/features/allocations/actions";
@@ -35,6 +38,17 @@ import { cn } from "@/lib/utils";
 
 const MONEY = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+const PERCENT = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 });
+
+/** Abaixo disto a vitória é apertada: trocar de fornecedor custa quase nada. */
+const VITORIA_APERTADA = 0.02;
+/** Até quantos itens um fornecedor conta como pedido pequeno, candidato a juntar. */
+const PEDIDO_PEQUENO_ITENS = 2;
+/** Quanto a mais, sobre o valor movido, ainda vale sugerir a junção. */
+const JUNCAO_ATE = 0.05;
+
+export type VisaoDaDecisao = "fornecedor" | "item";
+export type OrdemDaDecisao = "grupo" | "margem";
 
 type Row = DadosDaAlocacao["rows"][number];
 type Allocation = NonNullable<ReturnType<DadosDaAlocacao["allocationsByItem"]["get"]>>[number];
@@ -138,6 +152,82 @@ function decidedFor(row: Row, dados: DadosDaAlocacao) {
   }));
 }
 
+type Margin = { diff: number; rival: Candidate };
+
+/**
+ * Por quanto o escolhido ganha da melhor outra oferta: 0,08 = o 2º colocado é
+ * 8% mais caro. Negativo quando o escolhido não é o mais barato. Sem rival ou
+ * sem base comum de comparação, não há margem a mostrar.
+ */
+function marginFor(row: Row, supplierId: string, dados: DadosDaAlocacao): Margin | null {
+  const candidates = candidatesFor(row, dados);
+  const chosen = candidates.find((candidate) => candidate.id === supplierId);
+  const rival = candidates.find((candidate) => candidate.id !== supplierId);
+  if (!chosen || !rival || !(chosen.comparisonPrice > 0)) return null;
+  return { diff: (rival.comparisonPrice - chosen.comparisonPrice) / chosen.comparisonPrice, rival };
+}
+
+type Consolidation = {
+  toId: string;
+  toName: string;
+  itemIds: string[];
+  moved: number;
+  extra: number;
+};
+
+/**
+ * Um fornecedor com um ou dois itens vira um pedido inteiro — com frete,
+ * recebimento e conferência. Se outro que já vai receber pedido cobre esses
+ * itens por quase o mesmo preço, vale dizer quanto custa juntar.
+ *
+ * Só entra o que ainda pode mudar sem desmanchar decisão: sugestões e
+ * escolhas salvas que cobrem o item inteiro sozinhas. O destino não pode
+ * passar do limite de compras por causa da junção.
+ */
+function consolidationFor(bucket: SupplierBucket, buckets: SupplierBucket[], dados: DadosDaAlocacao): Consolidation | null {
+  if (bucket.decisions.some(({ allocation }) => allocation.status === "confirmed")) return null;
+  const movable = [
+    ...bucket.recommendations.map(({ row, candidates, winner }) => ({ row, candidates, price: winner.price, factor: winner.pricingFactor })),
+    ...bucket.decisions.map(({ row, allocation }) => {
+      const candidates = candidatesFor(row, dados);
+      const alone = (dados.allocationsByItem.get(row.itemId) ?? []).length === 1 && allocation.allocatedQuantity >= row.requestedQuantity;
+      return alone
+        ? { row, candidates, price: allocation.selectedPrice, factor: candidates.find((candidate) => candidate.id === bucket.id)?.pricingFactor ?? null }
+        : null;
+    }),
+  ];
+  if (movable.length === 0 || movable.length > PEDIDO_PEQUENO_ITENS) return null;
+  const items = movable.filter((item) => item !== null);
+  if (items.length < movable.length) return null;
+  if (items.some(({ row, factor }) => row.requiresPresentationComparison || factor === null)) return null;
+  const moved = items.reduce((sum, { row, price, factor }) => sum + row.requestedQuantity * (factor ?? 0) * price, 0);
+
+  let best: Consolidation | null = null;
+  for (const target of buckets) {
+    if (target.id === bucket.id) continue;
+    const targetTotals = bucketTotals(target);
+    // Juntar só faz sentido com quem já vai receber pedido novo.
+    if (targetTotals.pending <= 0) continue;
+    let extra = 0;
+    let covers = true;
+    for (const { row, candidates, price, factor } of items) {
+      const alternative = candidates.find((candidate) => candidate.id === target.id);
+      if (!alternative || alternative.pricingFactor === null) {
+        covers = false;
+        break;
+      }
+      extra += row.requestedQuantity * (alternative.pricingFactor * alternative.price - (factor ?? 0) * price);
+    }
+    if (!covers) continue;
+    const limit = situacaoDoLimite(targetTotals.pending + moved + extra, dados.limites.get(target.id));
+    if (limit?.tipo === "acima") continue;
+    if (!best || extra < best.extra) {
+      best = { toId: target.id, toName: target.name, itemIds: items.map(({ row }) => row.itemId), moved, extra };
+    }
+  }
+  return best && best.extra <= best.moved * JUNCAO_ATE ? best : null;
+}
+
 /**
  * `pending` é o que ainda vai virar pedido (escolhas salvas e sugestões): é a
  * base do limite de compras. `total` soma também o que já está no pedido, para
@@ -194,9 +284,13 @@ const sectionId = (supplierId: string) => `fornecedor-${supplierId}`;
 export function AlocacaoConteudo({
   dados,
   showReportAction = true,
+  visao = "fornecedor",
+  ordem = "grupo",
 }: {
   dados: DadosDaAlocacao;
   showReportAction?: boolean;
+  visao?: VisaoDaDecisao;
+  ordem?: OrdemDaDecisao;
 }) {
   const { round, rows, allocationsByItem, orders, rascunhos, fornecedoresNoRascunho, supplierName, podeVer, podeDecidir, podeConfirmar } = dados;
 
@@ -262,6 +356,13 @@ export function AlocacaoConteudo({
   const supplierBuckets = [...buckets.values()].sort(
     (a, b) => (bucketTotal.get(b.id) ?? 0) - (bucketTotal.get(a.id) ?? 0) || a.name.localeCompare(b.name),
   );
+  const consolidations = new Map(
+    supplierBuckets.flatMap((bucket) => {
+      const consolidation = consolidationFor(bucket, supplierBuckets, dados);
+      return consolidation ? [[bucket.id, consolidation] as const] : [];
+    }),
+  );
+  const recommendationByItem = new Map(recommendations.map((recommendation) => [recommendation.row.itemId, recommendation]));
   const attentionCount = partial.length + withoutPrice.length;
   const totals = supplierBuckets.reduce(
     (acc, bucket) => {
@@ -429,7 +530,7 @@ export function AlocacaoConteudo({
                 className="bg-surface-muted mt-3 h-1.5 overflow-hidden rounded-full"
               >
                 <span
-                  className="bg-primary block h-full rounded-full"
+                  className="bg-primary block h-full rounded-full transition-[width] duration-500 ease-(--ease)"
                   style={{ width: `${rows.length > 0 ? (totalResolved / rows.length) * 100 : 0}%` }}
                 />
               </div>
@@ -454,7 +555,7 @@ export function AlocacaoConteudo({
               <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
                 <div aria-live="polite">
                   <p className="text-fg-muted text-sm">Total da decisão</p>
-                  <p className="text-fg text-2xl font-semibold tabular-nums">{MONEY.format(decisionTotal)}</p>
+                  <p className="text-fg text-2xl font-semibold tabular-nums"><DinheiroAnimado valor={decisionTotal} /></p>
                   <p className="text-fg-muted text-[13px] tabular-nums">
                     escolhas salvas {MONEY.format(totals.saved)} · sugestões {MONEY.format(totals.suggested)}
                     {totals.withoutConversion > 0 ? <span className="text-warning"> · {totals.withoutConversion} {totals.withoutConversion === 1 ? "item" : "itens"} sem conversão, fora do total</span> : null}
@@ -499,23 +600,34 @@ export function AlocacaoConteudo({
             <CompletedRoundResult dados={dados} />
           ) : (
             <div className="mb-6 space-y-3">
-              {supplierBuckets.length > 0 ? <SupplierScoreboard buckets={supplierBuckets} dados={dados} /> : null}
-              {supplierBuckets.map((supplier) => <SupplierSection key={supplier.id} supplier={supplier} dados={dados} defaultOpen={supplierBuckets.length === 1} />)}
+              {supplierBuckets.length > 0 ? (
+                <>
+                  <SupplierScoreboard buckets={supplierBuckets} dados={dados} consolidations={consolidations} />
+                  <ViewToggle roundId={round.id} visao={visao} ordem={ordem} />
+                </>
+              ) : null}
+              {visao === "item" ? (
+                <ItemView rows={rows} recommendationByItem={recommendationByItem} dados={dados} ordem={ordem} />
+              ) : (
+                supplierBuckets.map((supplier) => <SupplierSection key={supplier.id} supplier={supplier} dados={dados} defaultOpen={supplierBuckets.length === 1} consolidation={consolidations.get(supplier.id) ?? null} />)
+              )}
             </div>
           )}
 
           {round.status !== "completed" && attentionCount > 0 ? (
             <section className="border-warning/30 bg-warning/5 mb-6 rounded-xl border p-4">
               <h2 className="text-fg flex items-center gap-2 text-sm font-semibold"><AlertTriangle className="text-warning size-4" aria-hidden /> Exceções para revisar</h2>
-              <div className="mt-3 space-y-3">
-                {partial.map(({ row, missing, candidates }) => (
-                  <div key={row.itemId} className="border-border bg-surface flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2.5">
+              {/* O espaço entre os itens é `pb-3` de cada um, não `gap`: assim ele
+                  fecha junto quando o item sai. */}
+              <ListaAnimada className="mt-3 -mb-3" itens={[
+                ...partial.map(({ row, missing, candidates }) => ({ key: row.itemId, className: "pb-3", conteudo: (
+                  <div className="border-border bg-surface flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2.5">
                     <div className="min-w-48 flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-muted text-[13px]">Faltam {QTY.format(missing)} {row.purchaseUnit} para cobrir</p></div>
                     {podeDecidir && candidates.length > 0 && round.status === "active" ? <AllocateForm roundId={round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={missing} initialSupplierId={candidates[0].id} buttonLabel="Completar" requestedQuantity={row.requestedQuantity} decided={decidedFor(row, dados)} /> : null}
                   </div>
-                ))}
-                {withoutPrice.map((row) => <div key={row.itemId} className="border-border bg-surface flex items-center gap-3 rounded-lg border px-3 py-2.5"><div className="flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-muted text-[13px]">{row.requiresPresentationComparison ? "Falta informar a apresentação em uma ou mais propostas" : "Nenhum fornecedor respondeu com preço"}</p></div><Badge variant="destructive">{row.requiresPresentationComparison ? "conversão pendente" : "sem preço"}</Badge></div>)}
-              </div>
+                ) })),
+                ...withoutPrice.map((row) => ({ key: row.itemId, className: "pb-3", conteudo: <div className="border-border bg-surface flex items-center gap-3 rounded-lg border px-3 py-2.5"><div className="flex-1"><p className="text-fg text-sm font-medium">{row.productName}</p><p className="text-fg-muted text-[13px]">{row.requiresPresentationComparison ? "Falta informar a apresentação em uma ou mais propostas" : "Nenhum fornecedor respondeu com preço"}</p></div><Badge variant="destructive">{row.requiresPresentationComparison ? "conversão pendente" : "sem preço"}</Badge></div> })),
+              ]} />
             </section>
           ) : null}
 
@@ -960,7 +1072,7 @@ function sharePercent(share: number) {
  * Quem leva o quê, em uma olhada: a barra divide o valor da rodada entre os
  * fornecedores e cada linha leva à seção dele, que abre já no lugar.
  */
-function SupplierScoreboard({ buckets, dados }: { buckets: SupplierBucket[]; dados: DadosDaAlocacao }) {
+function SupplierScoreboard({ buckets, dados, consolidations }: { buckets: SupplierBucket[]; dados: DadosDaAlocacao; consolidations: Map<string, Consolidation> }) {
   const lines = buckets.map((bucket) => {
     const totals = bucketTotals(bucket);
     return {
@@ -988,14 +1100,14 @@ function SupplierScoreboard({ buckets, dados }: { buckets: SupplierBucket[]; dad
         <div aria-hidden className="mt-3 flex h-2.5 gap-0.5 overflow-hidden rounded-full">
           {lines.map(({ bucket, totals }, index) =>
             totals.total > 0 ? (
-              <span key={bucket.id} className={cn("h-full min-w-1 basis-0", scoreboardTone(index))} style={{ flexGrow: totals.total }} />
+              <span key={bucket.id} className={cn("h-full min-w-1 basis-0 transition-[flex-grow] duration-500 ease-(--ease)", scoreboardTone(index))} style={{ flexGrow: totals.total }} />
             ) : null,
           )}
         </div>
       ) : null}
-      <ul className="mt-2">
-        {lines.map(({ bucket, totals, counts, limit }, index) => (
-          <li key={bucket.id}>
+      <ListaAnimada className="mt-2" itens={lines.map(({ bucket, totals, counts, limit }, index) => ({
+        key: bucket.id,
+        conteudo: (
             <SupplierJump
               targetId={sectionId(bucket.id)}
               className="hover:bg-surface-sunken focus-visible:ring-ring/50 -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 outline-none focus-visible:ring-3"
@@ -1010,6 +1122,9 @@ function SupplierScoreboard({ buckets, dados }: { buckets: SupplierBucket[]; dad
                   ) : limit?.tipo === "perto" ? (
                     <span> · {Math.round(limit.uso * 100)}% do limite</span>
                   ) : null}
+                  {consolidations.has(bucket.id) ? (
+                    <span className="text-info font-medium"> · dá para juntar com {consolidations.get(bucket.id)?.toName}</span>
+                  ) : null}
                 </span>
               </span>
               <span className="shrink-0 text-right tabular-nums">
@@ -1018,9 +1133,8 @@ function SupplierScoreboard({ buckets, dados }: { buckets: SupplierBucket[]; dad
               </span>
               <ChevronRight className="text-fg-subtle size-4 shrink-0" aria-hidden />
             </SupplierJump>
-          </li>
-        ))}
-      </ul>
+        ),
+      }))} />
       {withoutConversion > 0 ? (
         <p className="text-warning mt-2 text-[13px]">
           {withoutConversion} {withoutConversion === 1 ? "item sem conversão fica" : "itens sem conversão ficam"} fora dos valores.
@@ -1030,7 +1144,7 @@ function SupplierScoreboard({ buckets, dados }: { buckets: SupplierBucket[]; dad
   );
 }
 
-function SupplierSection({ supplier, dados, defaultOpen }: { supplier: SupplierBucket; dados: DadosDaAlocacao; defaultOpen: boolean }) {
+function SupplierSection({ supplier, dados, defaultOpen, consolidation }: { supplier: SupplierBucket; dados: DadosDaAlocacao; defaultOpen: boolean; consolidation: Consolidation | null }) {
   const totals = bucketTotals(supplier);
   const counts = bucketCounts(supplier);
   const uncalculated = totals.withoutConversion + totals.confirmedWithoutConversion;
@@ -1039,21 +1153,16 @@ function SupplierSection({ supplier, dados, defaultOpen }: { supplier: SupplierB
   // O que ainda pede decisão em cima; o que já está no pedido fica por último.
   const drafts = supplier.decisions.filter(({ allocation }) => allocation.status !== "confirmed");
   const confirmed = supplier.decisions.filter(({ allocation }) => allocation.status === "confirmed");
-  const decisionItem = ({ row, allocation }: SupplierBucket["decisions"][number]) => (
-    <li key={allocation.allocationId} className="flex flex-wrap items-center gap-3 px-4 py-3">
+  const decisionItem = ({ row, allocation }: SupplierBucket["decisions"][number]) => ({ key: allocation.allocationId, className: "flex flex-wrap items-center gap-3 px-4 py-3", conteudo: (
+    <>
       <ItemName row={row} quantity={allocation.allocatedQuantity} />
       <Price price={allocation.selectedPrice} pricingQuantity={allocation.estimatedPricingQuantity} unit={row.pricingUnit} />
       <Ofertas row={row} dados={dados} supplierId={allocation.supplierId} />
-      <VsUltimoPago dados={dados} productId={row.productId} supplierId={allocation.supplierId} price={allocation.selectedPrice} unit={row.pricingUnit} />
-      {allocation.packagingChoiceResultEstimated !== null ? (
-        <span className={allocation.packagingChoiceResultEstimated >= 0 ? "text-success text-[13px] font-medium" : "text-danger text-[13px] font-medium"}>
-          embalagem {MONEY.format(allocation.packagingChoiceResultEstimated)}
-        </span>
-      ) : null}
+      <ItemSignals row={row} dados={dados} supplierId={allocation.supplierId} price={allocation.selectedPrice} packagingResult={allocation.packagingChoiceResultEstimated} showMargin={allocation.status !== "confirmed"} />
       <Badge variant={allocation.status === "confirmed" ? "default" : "outline"}>{allocation.status === "confirmed" ? "no pedido" : "escolha salva"}</Badge>
       {dados.podeDecidir && allocation.status === "draft" ? <form action={cancelAllocation.bind(null, allocation.allocationId, dados.round.id)}><Button type="submit" variant="ghost" aria-label={`Desfazer a escolha de ${row.productName}`} className="text-fg-muted hover:text-destructive h-11 sm:h-9">Desfazer</Button></form> : null}
-    </li>
-  );
+    </>
+  ) });
 
   return (
     <details id={sectionId(supplier.id)} open={defaultOpen} className="group border-border bg-surface scroll-mt-4 overflow-hidden rounded-xl border">
@@ -1077,36 +1186,209 @@ function SupplierSection({ supplier, dados, defaultOpen }: { supplier: SupplierB
         </span>
         <ChevronDown className="text-fg-muted size-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden />
       </summary>
-      <ul className="divide-border divide-y">
-        {drafts.map(decisionItem)}
-        {supplier.recommendations.map(({ row, candidates, winner }) => (
-          <li key={row.itemId} className="bg-primary/[0.025] flex flex-wrap items-center gap-3 px-4 py-3">
+      {consolidation ? <ConsolidationHint consolidation={consolidation} dados={dados} /> : null}
+      <ListaAnimada className="divide-border divide-y" itens={[
+        ...drafts.map(decisionItem),
+        ...supplier.recommendations.map(({ row, candidates, winner }) => ({ key: row.itemId, className: "bg-primary/[0.025] flex flex-wrap items-center gap-3 px-4 py-3", conteudo: (
+          <>
             <ItemName row={row} quantity={row.requestedQuantity} />
             <Price price={winner.price} pricingQuantity={winner.pricingFactor === null ? null : row.requestedQuantity * winner.pricingFactor} unit={row.pricingUnit} comparisonPrice={row.requiresPresentationComparison ? winner.comparisonPrice : null} comparisonUnit={row.comparisonUnit} best />
             <Ofertas row={row} dados={dados} supplierId={winner.id} />
-            <VsUltimoPago dados={dados} productId={row.productId} supplierId={winner.id} price={winner.price} unit={row.pricingUnit} />
+            <ItemSignals row={row} dados={dados} supplierId={winner.id} price={winner.price} packagingResult={null} showMargin />
             <Badge variant="outline">sugestão</Badge>
             {dados.podeDecidir && dados.round.status === "active" ? <AllocateForm roundId={dados.round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={candidates} suggestedQuantity={row.requestedQuantity} initialSupplierId={winner.id} buttonLabel="Alterar" requestedQuantity={row.requestedQuantity} decided={decidedFor(row, dados)} /> : null}
-          </li>
-        ))}
-        {confirmed.map(decisionItem)}
-      </ul>
+          </>
+        ) })),
+        ...confirmed.map(decisionItem),
+      ]} />
     </details>
+  );
+}
+
+/** Os dois jeitos de ler a mesma decisão, e a ordem da leitura por item. */
+function ViewToggle({ roundId, visao, ordem }: { roundId: string; visao: VisaoDaDecisao; ordem: OrdemDaDecisao }) {
+  const base = `/compras/${roundId}/alocacao`;
+  const option = (href: string, active: boolean, label: string) => (
+    <Button asChild size="sm" variant={active ? "default" : "ghost"} className="h-10 px-3 text-xs sm:h-7 sm:px-2.5">
+      <Link href={href} replace scroll={false} aria-current={active ? "page" : undefined}>{label}</Link>
+    </Button>
+  );
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="border-border bg-surface-sunken flex rounded-lg border p-0.5" role="group" aria-label="Ver a decisão">
+        {option(base, visao === "fornecedor", "Por fornecedor")}
+        {option(`${base}?visao=item`, visao === "item", "Por item")}
+      </div>
+      {visao === "item" ? (
+        <div className="flex items-center gap-1.5">
+          <ListOrdered className="text-fg-muted size-4" aria-hidden />
+          <div className="border-border bg-surface-sunken flex rounded-lg border p-0.5" role="group" aria-label="Ordem dos itens">
+            {option(`${base}?visao=item`, ordem === "grupo", "Por grupo")}
+            {option(`${base}?visao=item&ordem=margem`, ordem === "margem", "Apertadas primeiro")}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A decisão pela ótica do produto: quem levou cada item, por quanto e com que
+ * folga sobre o 2º colocado. "Apertadas primeiro" põe no topo o que mais vale
+ * reconsiderar — escolhas que não são a mais barata e vitórias por quase nada.
+ */
+function ItemView({ rows, recommendationByItem, dados, ordem }: { rows: Row[]; recommendationByItem: Map<string, Recommendation>; dados: DadosDaAlocacao; ordem: OrdemDaDecisao }) {
+  const entries = rows.flatMap((row) => {
+    const allocations = dados.allocationsByItem.get(row.itemId) ?? [];
+    const recommendation = recommendationByItem.get(row.itemId) ?? null;
+    if (!recommendation && allocations.length === 0) return [];
+    const single = recommendation
+      ? recommendation.winner.id
+      : allocations.length === 1 && allocations[0].status !== "confirmed"
+        ? allocations[0].supplierId
+        : null;
+    return [{ row, allocations, recommendation, margin: single ? marginFor(row, single, dados) : null }];
+  });
+  if (ordem === "margem") {
+    entries.sort((a, b) => (a.margin?.diff ?? Infinity) - (b.margin?.diff ?? Infinity) || a.row.productName.localeCompare(b.row.productName));
+  } else {
+    entries.sort((a, b) => a.row.groupName.localeCompare(b.row.groupName));
+  }
+  // Larguras fixas no valor e na ação: cada linha é uma grade própria, e com
+  // `auto` as colunas não alinham de uma linha para a outra.
+  const columns = "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_8rem_12.5rem]";
+
+  return (
+    <section aria-label="Decisão por item" className="border-border bg-surface overflow-hidden rounded-xl border">
+      <div className={cn(columns, "bg-surface-sunken border-border text-fg-muted hidden border-b px-4 py-2 text-[13px] sm:grid")}>
+        <span>Produto</span>
+        <span>Vencedor</span>
+        <span className="text-right">Valor</span>
+        <span />
+      </div>
+      <ListaAnimada className="divide-border divide-y" itens={entries.map(({ row, allocations, recommendation, margin }, index) => {
+          const groupStarts = ordem === "grupo" && (index === 0 || entries[index - 1].row.groupName !== row.groupName);
+          const multiTotal = allocations.every((allocation) => allocation.estimatedPricingQuantity !== null)
+            ? allocations.reduce((sum, allocation) => sum + (allocation.estimatedPricingQuantity ?? 0) * allocation.selectedPrice, 0)
+            : null;
+          return { key: row.itemId, conteudo: (
+            <>
+              {groupStarts ? <p className="bg-surface-sunken text-fg-muted px-4 py-1.5 text-[13px] font-semibold">{row.groupName}</p> : null}
+              <div className={cn(columns, "gap-y-2 px-4 py-3 sm:items-center", recommendation && "bg-primary/[0.025]")}>
+                <div className="col-span-2 sm:col-span-1">
+                  <ItemName row={row} quantity={row.requestedQuantity} />
+                </div>
+                <div className="min-w-0">
+                  {recommendation ? (
+                    <p className="text-fg text-sm font-medium wrap-anywhere">{recommendation.winner.name}</p>
+                  ) : (
+                    allocations.map((allocation) => (
+                      <p key={allocation.allocationId} className="text-fg text-sm font-medium wrap-anywhere">
+                        {dados.supplierName.get(allocation.supplierId) ?? "Fornecedor"}
+                        {allocations.length > 1 ? <span className="text-fg-muted font-normal"> · {QTY.format(allocation.allocatedQuantity)} {row.purchaseUnit}</span> : null}
+                      </p>
+                    ))
+                  )}
+                  <Margem margin={margin} />
+                </div>
+                {recommendation ? (
+                  <Price price={recommendation.winner.price} pricingQuantity={recommendation.winner.pricingFactor === null ? null : row.requestedQuantity * recommendation.winner.pricingFactor} unit={row.pricingUnit} comparisonPrice={row.requiresPresentationComparison ? recommendation.winner.comparisonPrice : null} comparisonUnit={row.comparisonUnit} best />
+                ) : allocations.length === 1 ? (
+                  <Price price={allocations[0].selectedPrice} pricingQuantity={allocations[0].estimatedPricingQuantity} unit={row.pricingUnit} />
+                ) : (
+                  <div className="text-right text-sm tabular-nums">
+                    {multiTotal === null ? <p className="text-warning text-[13px]">total sem conversão</p> : <p className="text-fg">{MONEY.format(multiTotal)}</p>}
+                    <p className="text-fg-muted text-[13px]">dividido</p>
+                  </div>
+                )}
+                <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1 sm:justify-end">
+                  {recommendation ? (
+                    <>
+                      <Badge variant="outline">sugestão</Badge>
+                      {dados.podeDecidir && dados.round.status === "active" ? <AllocateForm roundId={dados.round.id} quotationItemId={row.itemId} productName={row.productName} purchaseUnit={row.purchaseUnit} pricingUnit={row.pricingUnit} requiresPricingConversion={row.requiresPricingConversion} estimatedConversionRate={row.estimatedConversionRate} suppliers={recommendation.candidates} suggestedQuantity={row.requestedQuantity} initialSupplierId={recommendation.winner.id} buttonLabel="Alterar" requestedQuantity={row.requestedQuantity} decided={decidedFor(row, dados)} /> : null}
+                    </>
+                  ) : allocations.length > 1 ? (
+                    <Badge variant="outline">{allocations.length} fornecedores</Badge>
+                  ) : (
+                    <>
+                      <Badge variant={allocations[0].status === "confirmed" ? "default" : "outline"}>{allocations[0].status === "confirmed" ? "no pedido" : "escolha salva"}</Badge>
+                      {dados.podeDecidir && allocations[0].status === "draft" ? <form action={cancelAllocation.bind(null, allocations[0].allocationId, dados.round.id)}><Button type="submit" variant="ghost" aria-label={`Desfazer a escolha de ${row.productName}`} className="text-fg-muted hover:text-destructive h-11 sm:h-9">Desfazer</Button></form> : null}
+                    </>
+                  )}
+                </div>
+              </div>
+            </>
+          ) };
+        })} />
+    </section>
+  );
+}
+
+/** Por quanto o escolhido ganha do 2º colocado — ou perde, se não é o mais barato. */
+function Margem({ margin }: { margin: Margin | null }) {
+  if (!margin) return null;
+  const { diff, rival } = margin;
+  const title = `Melhor outra oferta: ${rival.name}, ${MONEY.format(rival.price)}`;
+  if (diff < 0) {
+    return <p className="text-warning text-[13px] font-medium tabular-nums" title={title}>{PERCENT.format(-diff)} mais caro que {rival.name}</p>;
+  }
+  if (diff === 0) {
+    return <p className="text-info text-[13px] font-medium" title={title}>empate com {rival.name}</p>;
+  }
+  const apertada = diff < VITORIA_APERTADA;
+  return (
+    <p className={cn("text-[13px] tabular-nums", apertada ? "text-info font-medium" : "text-fg-muted")} title={title}>
+      {apertada ? "apertada, por " : "ganha por "}{PERCENT.format(diff)}
+      <span className="text-fg-subtle font-normal"> · 2º {rival.name}</span>
+    </p>
+  );
+}
+
+/**
+ * O que a linha tem a dizer além do preço. Cada sinal só aparece quando foge
+ * do normal: margem (fora do que já está no pedido), alta ou queda contra o
+ * último pago, e embalagem que saiu mais cara que a alternativa.
+ */
+function ItemSignals({ row, dados, supplierId, price, packagingResult, showMargin }: { row: Row; dados: DadosDaAlocacao; supplierId: string; price: number; packagingResult: number | null; showMargin: boolean }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      {showMargin ? <Margem margin={marginFor(row, supplierId, dados)} /> : null}
+      <VsUltimoPago dados={dados} productId={row.productId} supplierId={supplierId} price={price} unit={row.pricingUnit} />
+      {packagingResult !== null && packagingResult < 0 ? (
+        <p className="text-danger text-[13px] font-medium tabular-nums">embalagem {MONEY.format(packagingResult)}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function ConsolidationHint({ consolidation, dados }: { consolidation: Consolidation; dados: DadosDaAlocacao }) {
+  const { toId, toName, itemIds, extra } = consolidation;
+  const count = itemIds.length;
+  const cost = extra > 0.005 ? `custa +${MONEY.format(extra)}` : extra < -0.005 ? `economiza ${MONEY.format(-extra)}` : "sai pelo mesmo valor";
+  return (
+    <div className="bg-info-soft border-border flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+      <p className="text-fg min-w-0 flex-1 text-sm">
+        Passar {count === 1 ? "o item" : `os ${count} itens`} para <strong className="font-semibold">{toName}</strong> {cost} e evita 1 pedido.
+      </p>
+      {dados.podeDecidir && dados.round.status === "active" ? (
+        <ConsolidateForm roundId={dados.round.id} supplierId={toId} itemIds={itemIds} label={`Juntar em ${toName}`} />
+      ) : null}
+    </div>
   );
 }
 
 /**
  * O preço desta proposta contra o último que a empresa pagou pelo mesmo
- * produto. Sem referência comparável (nunca comprado, outra unidade, pagamento
- * muito antigo), não aparece nada — um traço no lugar só pareceria dado.
+ * produto. Some quando está dentro do ruído; a referência fica no `title`. Sem referência comparável (nunca comprado,
+ * outra unidade, pagamento muito antigo), não aparece nada.
  */
 function VsUltimoPago({ dados, productId, supplierId, price, unit }: { dados: DadosDaAlocacao; productId: string; supplierId: string; price: number; unit: string }) {
   const comparacao = compararComUltimoPago(dados.ultimosPagos, productId, supplierId, price, unit);
   if (!comparacao) return null;
   const { diff, referencia, mesmoFornecedor } = comparacao;
   const alta = diff >= LIMITE_ALTA;
-  const igual = Math.abs(diff) < LIMITE_RUIDO;
   const queda = diff <= -LIMITE_RUIDO;
+  if (Math.abs(diff) < LIMITE_RUIDO) return null;
   const pct = `${diff > 0 ? "+" : ""}${Math.round(diff * 100)}%`;
   const quando = new Date(referencia.at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
   const quem = mesmoFornecedor ? "" : ` a ${dados.supplierName.get(referencia.supplierId) ?? "outro fornecedor"}`;
@@ -1115,8 +1397,7 @@ function VsUltimoPago({ dados, productId, supplierId, price, unit }: { dados: Da
       className={cn("text-[13px] tabular-nums", alta ? "text-warning font-medium" : queda ? "text-success" : "text-fg-muted")}
       title={`Último pago${quem}: ${MONEY.format(referencia.price)}/${referencia.unit} em ${quando}`}
     >
-      {igual ? "≈ último pago" : `${diff > 0 ? "▲" : "▼"} ${pct} vs último pago`}
-      <span className="text-fg-subtle font-normal"> · {MONEY.format(referencia.price)} em {quando}{quem}</span>
+      {diff > 0 ? "▲" : "▼"} {pct} vs último pago
     </p>
   );
 }
