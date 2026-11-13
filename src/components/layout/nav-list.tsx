@@ -69,11 +69,11 @@ export function NavLink({
         collapsed && "justify-center px-0",
         withArrow && !collapsed && "pr-9",
         "has-[[data-pendente]]:text-fg",
-        // O ativo é uma barrinha na borda do menu e um brilho que some para a
-        // direita — não um bloco de cor: com menos linhas, é ela que diz onde
+        // O ativo é uma barrinha na borda do menu sobre um fundo liso e
+        // discreto — não um bloco de cor: com menos linhas, é ela que diz onde
         // se está sem pesar no resto.
         active
-          ? "text-fg bg-[linear-gradient(90deg,color-mix(in_oklab,var(--primary)_14%,transparent),transparent_85%)] font-medium before:bg-primary before:absolute before:top-2 before:bottom-2 before:-left-2 before:w-[3px] before:rounded-r-full"
+          ? "text-fg bg-surface-muted font-medium before:bg-primary before:absolute before:top-2 before:bottom-2 before:-left-2 before:w-[3px] before:rounded-r-full"
           : "text-fg-muted hover:bg-surface-muted/70 hover:text-fg",
       )}
     >
