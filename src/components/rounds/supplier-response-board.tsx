@@ -81,7 +81,7 @@ function urgency(row: SupplierResponseRow) {
 
 function status(row: SupplierResponseRow, closed: boolean) {
   if (row.completedAt)
-    return { label: "Concluiu", variant: "default" as const };
+    return { label: "Concluiu", variant: "success" as const };
   if (closed && row.answeredCount > 0)
     return { label: "Parcial encerrada", variant: "secondary" as const };
   if (closed)
@@ -258,7 +258,8 @@ export function SupplierResponseBoard({
             key={value}
             type="button"
             size="sm"
-            variant={filter === value ? "default" : "outline"}
+            variant={filter === value ? "pressed" : "outline"}
+            aria-pressed={filter === value}
             onClick={() => setFilter(value)}
           >
             <span className="sm:hidden">

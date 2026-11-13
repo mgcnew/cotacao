@@ -11,6 +11,8 @@ const badgeVariants = cva(
       variant: {
         default:
           "border-[color-mix(in_oklab,var(--info)_28%,var(--border-color))] bg-info-soft text-info [a]:hover:bg-info-soft/80",
+        success:
+          "border-[color-mix(in_oklab,var(--success)_28%,var(--border-color))] bg-success-soft text-success [a]:hover:bg-success-soft/80",
         secondary:
           "border-border bg-surface-muted text-fg-muted [a]:hover:bg-surface-muted/80",
         destructive:

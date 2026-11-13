@@ -24,12 +24,12 @@ export function NavegacaoDaRodada({
   return (
     <div className="mb-5 flex flex-wrap items-center gap-2">
       <span className="text-fg-muted mr-1 text-sm">Ferramenta:</span>
-      <Button asChild size="sm" variant={atual === "comparacao" ? "default" : "outline"}>
+      <Button asChild size="sm" variant={atual === "comparacao" ? "pressed" : "outline"}>
         <Link href={`/compras/${roundId}/comparacao`}>
           Comparar respostas
         </Link>
       </Button>
-      <Button asChild size="sm" variant={atual === "alocacao" ? "default" : "outline"}>
+      <Button asChild size="sm" variant={atual === "alocacao" ? "pressed" : "outline"}>
         <Link href={`/compras/${roundId}/alocacao`}>
           Decidir compra
         </Link>

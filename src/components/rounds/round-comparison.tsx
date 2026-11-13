@@ -239,7 +239,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
         Fornecedor em análise: {supplier.suppliers.name}, {currentIndex + 1} de {suppliers.length}.
       </p>
 
-      <section className="border-primary/30 bg-surface sticky top-0 z-20 rounded-xl border shadow-sm">
+      <section className="border-border bg-surface sticky top-0 z-20 rounded-xl border shadow-sm">
         <button
           type="button"
           aria-expanded={supplierPanelOpen}
@@ -247,7 +247,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
           onClick={() => setSupplierPanelOpen((open) => !open)}
           className={cn(
             "flex w-full items-center gap-2.5 px-3 py-2.5 text-left md:hidden",
-            supplierPanelOpen && "border-primary/20 border-b",
+            supplierPanelOpen && "border-border border-b",
           )}
         >
           <span className="bg-primary/10 rounded-lg p-2">
@@ -331,7 +331,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
             ) : null}
           </div>
 
-          <div className="border-primary/20 bg-primary/[0.035] flex flex-col gap-1 border-t px-3 py-2">
+          <div className="border-border bg-surface-sunken flex flex-col gap-1 border-t px-3 py-2">
             <p className="text-fg-muted text-[13px]">
               Todas as ações abaixo alteram a resposta de <strong className="text-fg">{supplier.suppliers.name}</strong>.
               A referência é o menor preço comparável da rodada.
@@ -373,7 +373,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
               <Button
                 key={value}
                 type="button"
-                variant={filter === value ? "default" : "outline"}
+                variant={filter === value ? "pressed" : "outline"}
                 aria-pressed={filter === value}
                 className="h-11 gap-1.5 px-3 text-[13px] sm:h-9"
                 onClick={() => setFilter(value)}

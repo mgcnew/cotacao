@@ -508,7 +508,7 @@ export function AlocacaoConteudo({
       ) : round.status === "active" && workingRows.length === 0 ? null : (
         <>
           {round.status === "active" ? (
-            <section className="border-primary/25 bg-primary/[0.035] mb-5 rounded-xl border p-4">
+            <section className="border-border bg-surface mb-5 rounded-xl border p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-fg text-sm font-semibold">
@@ -1159,7 +1159,7 @@ function SupplierSection({ supplier, dados, defaultOpen, consolidation }: { supp
       <Price price={allocation.selectedPrice} pricingQuantity={allocation.estimatedPricingQuantity} unit={row.pricingUnit} />
       <Ofertas row={row} dados={dados} supplierId={allocation.supplierId} />
       <ItemSignals row={row} dados={dados} supplierId={allocation.supplierId} price={allocation.selectedPrice} packagingResult={allocation.packagingChoiceResultEstimated} showMargin={allocation.status !== "confirmed"} />
-      <Badge variant={allocation.status === "confirmed" ? "default" : "outline"}>{allocation.status === "confirmed" ? "no pedido" : "escolha salva"}</Badge>
+      <Badge variant={allocation.status === "confirmed" ? "success" : "outline"}>{allocation.status === "confirmed" ? "no pedido" : "escolha salva"}</Badge>
       {dados.podeDecidir && allocation.status === "draft" ? <form action={cancelAllocation.bind(null, allocation.allocationId, dados.round.id)}><Button type="submit" variant="ghost" aria-label={`Desfazer a escolha de ${row.productName}`} className="text-fg-muted hover:text-destructive h-11 sm:h-9">Desfazer</Button></form> : null}
     </>
   ) });
@@ -1209,7 +1209,9 @@ function SupplierSection({ supplier, dados, defaultOpen, consolidation }: { supp
 function ViewToggle({ roundId, visao, ordem }: { roundId: string; visao: VisaoDaDecisao; ordem: OrdemDaDecisao }) {
   const base = `/compras/${roundId}/alocacao`;
   const option = (href: string, active: boolean, label: string) => (
-    <Button asChild size="sm" variant={active ? "default" : "ghost"} className="h-10 px-3 text-xs sm:h-7 sm:px-2.5">
+    // Controle segmentado: a opção escolhida é o cartão claro sobre o trilho,
+    // não a cor de destaque, que fica para as ações.
+    <Button asChild size="sm" variant="ghost" className={cn("h-10 px-3 text-xs sm:h-7 sm:px-2.5", active && "bg-surface text-fg hover:bg-surface font-semibold shadow-xs")}>
       <Link href={href} replace scroll={false} aria-current={active ? "page" : undefined}>{label}</Link>
     </Button>
   );
@@ -1311,7 +1313,7 @@ function ItemView({ rows, recommendationByItem, dados, ordem }: { rows: Row[]; r
                     <Badge variant="outline">{allocations.length} fornecedores</Badge>
                   ) : (
                     <>
-                      <Badge variant={allocations[0].status === "confirmed" ? "default" : "outline"}>{allocations[0].status === "confirmed" ? "no pedido" : "escolha salva"}</Badge>
+                      <Badge variant={allocations[0].status === "confirmed" ? "success" : "outline"}>{allocations[0].status === "confirmed" ? "no pedido" : "escolha salva"}</Badge>
                       {dados.podeDecidir && allocations[0].status === "draft" ? <form action={cancelAllocation.bind(null, allocations[0].allocationId, dados.round.id)}><Button type="submit" variant="ghost" aria-label={`Desfazer a escolha de ${row.productName}`} className="text-fg-muted hover:text-destructive h-11 sm:h-9">Desfazer</Button></form> : null}
                     </>
                   )}

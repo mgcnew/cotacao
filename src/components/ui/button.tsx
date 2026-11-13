@@ -9,8 +9,14 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        // Desativado vira cinza, não azul desbotado: meio transparente ele
+        // parece outra cor e não "indisponível".
         default:
-          "bg-primary-solid text-primary-solid-fg shadow-xs hover:bg-primary-solid/90",
+          "bg-primary-solid text-primary-solid-fg shadow-xs hover:bg-primary-solid/90 disabled:bg-surface-muted disabled:text-fg-subtle disabled:opacity-100 disabled:shadow-none",
+        // Opção escolhida de um filtro ou seletor. Cinza e não a cor de
+        // destaque: a cor fica para a ação, e o filtro não compete com ela.
+        pressed:
+          "border-border-strong bg-surface-muted text-fg font-semibold dark:bg-[color-mix(in_oklab,var(--fg)_16%,var(--surface))]",
         outline:
           "border-border bg-surface shadow-xs hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
