@@ -240,52 +240,98 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
       </p>
 
       <section className="border-border bg-surface sticky top-0 z-20 rounded-xl border shadow-sm">
-        <button
-          type="button"
-          aria-expanded={supplierPanelOpen}
-          aria-controls="comparison-supplier-panel"
-          onClick={() => setSupplierPanelOpen((open) => !open)}
+        {/* No celular, trocar de fornecedor é a ação mais repetida: as setas
+            ficam sempre à mão no cabeçalho, e tocar no nome abre a lista com
+            o andamento de cada um — em vez de um select espremido. */}
+        <div
           className={cn(
-            "flex w-full items-center gap-2.5 px-3 py-2.5 text-left md:hidden",
+            "flex items-center gap-1 p-1.5 md:hidden",
             supplierPanelOpen && "border-border border-b",
           )}
         >
-          <span className="bg-primary/10 rounded-lg p-2">
-            <Store className="text-primary size-4" aria-hidden />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="text-fg-muted block text-[13px]">
-              Fornecedor em análise · {currentIndex + 1} de {suppliers.length}
+          <Button type="button" variant="ghost" className="size-11 shrink-0" aria-label="Fornecedor anterior" onClick={() => move(-1)}>
+            <ChevronLeft className="size-5" aria-hidden />
+          </Button>
+          <button
+            type="button"
+            aria-expanded={supplierPanelOpen}
+            aria-controls="comparison-supplier-panel"
+            onClick={() => setSupplierPanelOpen((open) => !open)}
+            className="hover:bg-surface-muted flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-center"
+          >
+            <span className="min-w-0">
+              <strong className="text-fg block truncate text-[15px]">
+                {supplier.suppliers.name}
+              </strong>
+              <span className="text-fg-muted block text-xs tabular-nums">
+                {currentIndex + 1} de {suppliers.length} · {stats.priced}/{rows.length} preços
+                {stats.missing > 0 ? (
+                  <span className="text-destructive">
+                    {" · "}
+                    {stats.missing} {stats.missing === 1 ? "pendente" : "pendentes"}
+                  </span>
+                ) : null}
+              </span>
             </span>
-            <strong className="text-fg block truncate text-sm">
-              {supplier.suppliers.name} · {stats.priced}/{rows.length} preços
-            </strong>
-          </span>
-          {stats.missing > 0 ? (
-            <Badge variant="destructive" className="shrink-0">
-              {stats.missing} {stats.missing === 1 ? "pendente" : "pendentes"}
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="shrink-0">
-              completo
-            </Badge>
-          )}
-          <ChevronDown
-            className={cn(
-              "text-fg-muted size-4 shrink-0 transition-transform",
-              supplierPanelOpen && "rotate-180",
-            )}
-            aria-hidden
-          />
-        </button>
+            <ChevronDown
+              className={cn(
+                "text-fg-muted size-4 shrink-0 transition-transform",
+                supplierPanelOpen && "rotate-180",
+              )}
+              aria-hidden
+            />
+          </button>
+          <Button type="button" variant="ghost" className="size-11 shrink-0" aria-label="Próximo fornecedor" onClick={() => move(1)}>
+            <ChevronRight className="size-5" aria-hidden />
+          </Button>
+        </div>
 
         <div
           id="comparison-supplier-panel"
           className={cn(supplierPanelOpen ? "block" : "hidden md:block")}
         >
-          <div className="flex flex-wrap items-end gap-3 p-3">
+          <ul className="max-h-72 overflow-y-auto p-1.5 md:hidden" aria-label="Fornecedores da rodada">
+            {suppliers.map((option, index) => {
+              const optionStats = supplierStats(option, rows);
+              const atual = option.id === supplier.id;
+              return (
+                <li key={option.id}>
+                  <button
+                    type="button"
+                    aria-current={atual ? "true" : undefined}
+                    onClick={() => selectSupplier(option.id)}
+                    className={cn(
+                      "flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-left",
+                      atual ? "bg-surface-muted" : "hover:bg-surface-muted",
+                    )}
+                  >
+                    <span className="text-fg-subtle w-4 shrink-0 text-xs tabular-nums">{index + 1}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className={cn("text-fg block truncate text-sm", atual && "font-semibold")}>
+                        {option.suppliers.name}
+                        {option.removed_at ? <span className="text-fg-muted font-normal"> · retirado</span> : null}
+                      </span>
+                      <span className="text-fg-muted block text-xs tabular-nums">
+                        {optionStats.priced}/{rows.length} preços
+                      </span>
+                    </span>
+                    {option.completed_at ? (
+                      <Badge variant="success" className="shrink-0">concluiu</Badge>
+                    ) : optionStats.missing > 0 ? (
+                      <Badge variant="destructive" className="shrink-0">
+                        {optionStats.missing} {optionStats.missing === 1 ? "pendente" : "pendentes"}
+                      </Badge>
+                    ) : null}
+                    {atual ? <Check className="text-primary size-4 shrink-0" aria-hidden /> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="border-border flex flex-wrap items-center gap-3 border-t p-3 md:items-end md:border-t-0">
             <span className="bg-primary/10 hidden self-center rounded-lg p-2 md:inline-flex"><Store className="text-primary size-4" aria-hidden /></span>
-            <div className="min-w-0 flex-1 md:min-w-52">
+            <div className="hidden min-w-0 flex-1 md:block md:min-w-52">
               <label htmlFor="comparison-supplier" className="text-fg-muted mb-1 block text-[13px] font-medium">Fornecedor em análise · {currentIndex + 1} de {suppliers.length}</label>
               <ThemedSelect
                 id="comparison-supplier"
@@ -301,7 +347,7 @@ export function ComparacaoConteudo({ dados }: { dados: DadosDaComparacao }) {
                 })}
               />
             </div>
-            <div className="flex items-center gap-1">
+            <div className="hidden items-center gap-1 md:flex">
               <Button type="button" variant="outline" className="size-11 sm:size-9" aria-label="Fornecedor anterior" onClick={() => move(-1)}><ChevronLeft className="size-4" aria-hidden /></Button>
               <Button type="button" variant="outline" className="size-11 sm:size-9" aria-label="Próximo fornecedor" onClick={() => move(1)}><ChevronRight className="size-4" aria-hidden /></Button>
             </div>
