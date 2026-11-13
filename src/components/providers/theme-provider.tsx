@@ -13,6 +13,7 @@ export const ACCENTS = [
   "red",
   "ocean",
   "safira",
+  "nevoa",
 ] as const;
 
 export type Accent = (typeof ACCENTS)[number];

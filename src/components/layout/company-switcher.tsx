@@ -43,6 +43,7 @@ const NOMES_DAS_CORES: Record<Accent, string> = {
   red: "Vermelho",
   ocean: "Oceano",
   safira: "Safira",
+  nevoa: "Névoa",
 };
 
 type Props = {
@@ -197,7 +198,10 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
                 o resultado na hora e pode experimentar outra. */}
             <div className="border-border mt-1 flex flex-col gap-2.5 border-t px-2.5 pt-2.5 pb-2">
               <div className="flex flex-col gap-1.5">
-                <span id="menu-tema" className="text-fg-subtle text-xs font-medium">
+                <span
+                  id="menu-tema"
+                  className="text-fg-subtle text-xs font-medium"
+                >
                   Tema
                 </span>
                 <div
@@ -225,7 +229,10 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <span id="menu-cor" className="text-fg-subtle text-xs font-medium">
+                <span
+                  id="menu-cor"
+                  className="text-fg-subtle text-xs font-medium"
+                >
                   Cor de destaque
                 </span>
                 <div
@@ -248,6 +255,10 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
                         // Tema inteiro, não só accent: a bolinha mostra os dois polos.
                         value === "ocean" &&
                           "bg-[linear-gradient(135deg,var(--primary)_50%,var(--brand)_50%)]",
+                        // Preto e branco: no escuro o accent vira claro, e a
+                        // bolinha mostra as duas pontas para não sumir.
+                        value === "nevoa" &&
+                          "bg-[linear-gradient(135deg,#16171b_50%,#e4e5ea_50%)]",
                         accent === value
                           ? "ring-primary ring-offset-surface-elevated ring-2 ring-offset-2"
                           : "hover:ring-border-strong hover:ring-offset-surface-elevated hover:ring-2 hover:ring-offset-2",
