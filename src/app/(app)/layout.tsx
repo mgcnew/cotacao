@@ -77,7 +77,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             Sair solto ao lado do sino convidava ao clique sem querer. */}
         <header
           data-slot="app-header"
-          className="border-border bg-surface flex h-14 shrink-0 items-center gap-3 border-b px-4 sm:px-6"
+          // No desktop o cabeçalho é do mesmo tom da página: o conteúdo começa
+          // logo abaixo e uma faixa de outra cor só somava um plano. O celular
+          // segue com o fundo do cartão, que ali o separa da lista que rola.
+          className="border-border bg-surface flex h-14 shrink-0 items-center gap-3 border-b px-4 sm:bg-transparent sm:px-6"
         >
           <Suspense fallback={<div className="flex-1" />}>
             <AppBreadcrumb className="flex-1" />

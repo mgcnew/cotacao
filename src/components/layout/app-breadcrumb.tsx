@@ -161,7 +161,13 @@ export function AppBreadcrumb({ className }: { className?: string }) {
       ) : (
         <Marca />
       )}
-      <nav aria-label="Você está em" className="hidden min-w-0 sm:block">
+      {/* Na página principal da seção a trilha seria só o nome dela, que o
+          título logo abaixo já mostra: ali não aparece. No detalhe ela fica,
+          porque é o caminho de volta. */}
+      <nav
+        aria-label="Você está em"
+        className={cn("hidden min-w-0", ultimo && "sm:block")}
+      >
         <ol className="flex min-w-0 items-center gap-1.5 text-sm">
           <li className="shrink-0">
             {ultimo ? (
