@@ -1,6 +1,12 @@
 "use client";
 
-import { Check, Copy, LoaderCircle, MessageCircle } from "lucide-react";
+import {
+  Check,
+  Copy,
+  LoaderCircle,
+  MessageCircle,
+  MoreHorizontal,
+} from "lucide-react";
 import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
@@ -18,6 +24,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   generateQuotationLink,
   markSupplierSent,
@@ -127,6 +139,7 @@ export function SendControls({
   roundTitle,
   invitationTemplate,
   showSummary = true,
+  compact = false,
   className,
 }: {
   roundSupplierId: string;
@@ -142,6 +155,12 @@ export function SendControls({
   roundTitle: string;
   invitationTemplate: string;
   showSummary?: boolean;
+  /**
+   * Linha da aba Respostas: só "Enviar" à vista (para quem ainda não
+   * recebeu) e o resto — reenviar, gerar link, marcar enviado — no menu ⋯.
+   * O envio para muitos fica no topo da aba, em lote.
+   */
+  compact?: boolean;
   /** No cartão do celular os botões ocupam a largura, em vez de irem à direita. */
   className?: string;
 }) {
@@ -156,6 +175,14 @@ export function SendControls({
     { error: null },
   );
   const [whatsappOpen, setWhatsappOpen] = React.useState(false);
+  const [menuPending, startMenuTransition] = React.useTransition();
+  // O menu não tem formulário: monta o mesmo FormData que os botões mandariam.
+  const submitFromMenu = (action: (formData: FormData) => void) => {
+    const formData = new FormData();
+    formData.set("roundSupplierId", roundSupplierId);
+    formData.set("roundId", roundId);
+    startMenuTransition(() => action(formData));
+  };
   const sendAndClose = React.useCallback(
     async (previous: SendState, formData: FormData) => {
       const next = await sendQuotationWhatsApp(previous, formData);
@@ -194,18 +221,76 @@ export function SendControls({
           {itemCount} {itemCount === 1 ? "produto" : "produtos"}
         </span>
       ) : null}
+      {compact ? (
+        <div className="flex items-center gap-1">
+          {alreadySent ? null : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={directDisabled}
+              title={directDisabledReason}
+              onClick={() => setWhatsappOpen(true)}
+            >
+              <MessageCircle aria-hidden /> Enviar
+            </Button>
+          )}
+          {/* Não modal: um item abre o diálogo de envio, e o menu modal
+              devolveria o foco ao gatilho por cima dele. */}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                disabled={menuPending}
+                aria-label={`Mais ações de ${supplierName}`}
+              >
+                {menuPending ? (
+                  <LoaderCircle className="animate-spin" aria-hidden />
+                ) : (
+                  <MoreHorizontal aria-hidden />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-52">
+              {alreadySent ? (
+                <DropdownMenuItem
+                  disabled={directDisabled}
+                  onSelect={() => setWhatsappOpen(true)}
+                >
+                  Reenviar no WhatsApp
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem
+                disabled={itemCount === 0}
+                onSelect={() => submitFromMenu(generateAction)}
+              >
+                {linkState.url ? "Gerar outro link" : "Gerar link para copiar"}
+              </DropdownMenuItem>
+              {alreadySent ? null : (
+                <DropdownMenuItem onSelect={() => submitFromMenu(sentAction)}>
+                  Marquei como enviado
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : null}
       <Dialog open={whatsappOpen} onOpenChange={setWhatsappOpen}>
-        <DialogTrigger asChild>
-          <Button
-            type="button"
-            size="sm"
-            disabled={directDisabled}
-            title={directDisabledReason}
-          >
-            <MessageCircle aria-hidden />
-            {alreadySent ? "Reenviar no WhatsApp" : "Enviar no WhatsApp"}
-          </Button>
-        </DialogTrigger>
+        {compact ? null : (
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              disabled={directDisabled}
+              title={directDisabledReason}
+            >
+              <MessageCircle aria-hidden />
+              {alreadySent ? "Reenviar no WhatsApp" : "Enviar no WhatsApp"}
+            </Button>
+          </DialogTrigger>
+        )}
         <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>
@@ -251,6 +336,7 @@ export function SendControls({
                 name="roundSupplierId"
                 value={roundSupplierId}
               />
+              <input type="hidden" name="roundId" value={roundId} />
               <WhatsAppSubmit alreadySent={alreadySent} />
             </form>
           </DialogFooter>
@@ -266,18 +352,22 @@ export function SendControls({
         }
       />
 
-      <form action={generateAction}>
-        <input type="hidden" name="roundSupplierId" value={roundSupplierId} />
-        <input type="hidden" name="roundId" value={roundId} />
-        <span
-          title={itemCount === 0 ? "Escolha um grupo com produtos" : undefined}
-        >
-          <GenerateButton
-            hasLink={Boolean(linkState.url)}
-            disabled={itemCount === 0}
-          />
-        </span>
-      </form>
+      {compact ? null : (
+        <form action={generateAction}>
+          <input type="hidden" name="roundSupplierId" value={roundSupplierId} />
+          <input type="hidden" name="roundId" value={roundId} />
+          <span
+            title={
+              itemCount === 0 ? "Escolha um grupo com produtos" : undefined
+            }
+          >
+            <GenerateButton
+              hasLink={Boolean(linkState.url)}
+              disabled={itemCount === 0}
+            />
+          </span>
+        </form>
+      )}
 
       <ErrorLine error={linkState.error} />
 
@@ -295,7 +385,7 @@ export function SendControls({
         </div>
       ) : null}
 
-      {alreadySent ? null : (
+      {alreadySent || compact ? null : (
         <form action={sentAction}>
           <input type="hidden" name="roundSupplierId" value={roundSupplierId} />
           <input type="hidden" name="roundId" value={roundId} />

@@ -4,34 +4,22 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock3,
-  LoaderCircle,
+  Link2,
   MailQuestion,
   MessageCircle,
   Send,
 } from "lucide-react";
 import * as React from "react";
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
 
-import { ErrorLine, SuccessLine } from "@/components/layout/form-feedback";
+import {
+  BulkSendDialog,
+  type CandidatoDoLote,
+  type ModoDoLote,
+} from "@/components/rounds/bulk-send-dialog";
 import { SendControls } from "@/components/rounds/send-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  sendQuotationReminders,
-  type ReminderState,
-} from "@/features/rounds/send";
+import { cn } from "@/lib/utils";
 import { startWhatsAppConversationAction } from "@/features/whatsapp/actions";
 import {
   itemCountLabel,
@@ -62,7 +50,7 @@ export type SupplierResponseRow = {
   lastReminderAt: string | null;
 };
 
-type Filter = "pending" | "completed" | "all";
+type Filter = "pending" | "completed" | "attention" | "all";
 
 const dateTime = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
@@ -84,24 +72,13 @@ function status(row: SupplierResponseRow, closed: boolean) {
     return { label: "Concluiu", variant: "success" as const };
   if (closed && row.answeredCount > 0)
     return { label: "Parcial encerrada", variant: "secondary" as const };
-  if (closed)
-    return { label: "Sem resposta", variant: "outline" as const };
+  if (closed) return { label: "Sem resposta", variant: "outline" as const };
   if (row.answeredCount > 0)
     return { label: "Resposta parcial", variant: "secondary" as const };
   if (row.accessedAt)
     return { label: "Abriu, não respondeu", variant: "outline" as const };
   if (row.sentAt) return { label: "Não abriu", variant: "outline" as const };
   return { label: "Não enviado", variant: "destructive" as const };
-}
-
-function ReminderSubmit({ count }: { count: number }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Send aria-hidden />}
-      {pending ? "Enviando…" : `Cobrar ${count}`}
-    </Button>
-  );
 }
 
 export function SupplierResponseBoard({
@@ -138,88 +115,152 @@ export function SupplierResponseBoard({
   ).length;
   const unsent = suppliers.filter((supplier) => !supplier.sentAt).length;
   const pending = suppliers.length - completed;
+  const attention = closed ? noResponse : notOpened;
   const [filter, setFilter] = React.useState<Filter>(
     pending > 0 ? "pending" : "all",
   );
-  const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
-  const [reminderOpen, setReminderOpen] = React.useState(false);
-  const sendAndClose = React.useCallback(
-    async (previous: ReminderState, formData: FormData) => {
-      const next = await sendQuotationReminders(previous, formData);
-      if (next.sent > 0 && next.failed === 0) {
-        setReminderOpen(false);
-        setSelected(new Set());
-      }
-      return next;
-    },
-    [],
-  );
-  const [reminderState, reminderAction] = useActionState<ReminderState, FormData>(
-    sendAndClose,
-    { error: null, sent: 0, skipped: 0, failed: 0 },
-  );
+  const [lote, setLote] = React.useState<{
+    modo: ModoDoLote;
+    chave: number;
+  } | null>(null);
 
+  const isAttention = (supplier: SupplierResponseRow) =>
+    closed
+      ? supplier.answeredCount === 0
+      : Boolean(supplier.sentAt) && !supplier.accessedAt;
   const visible = suppliers
     .filter((supplier) =>
       filter === "all"
         ? true
         : filter === "completed"
           ? Boolean(supplier.completedAt)
-          : !supplier.completedAt,
+          : filter === "attention"
+            ? isAttention(supplier)
+            : closed
+              ? !supplier.completedAt && supplier.answeredCount > 0
+              : !supplier.completedAt,
     )
     .sort((a, b) => urgency(a) - urgency(b) || a.name.localeCompare(b.name));
-  const eligible = visible.filter((supplier) =>
-    Boolean(supplier.sentAt) && !supplier.completedAt && Boolean(supplier.whatsapp),
-  );
-  const selectedRows = suppliers.filter((supplier) => selected.has(supplier.id));
-  const previewSupplier = selectedRows[0];
-  const reminderPreview = renderWhatsAppTemplate(reminderTemplate, {
-    contato: previewSupplier?.contact ?? "fornecedor",
-    empresa: companyName,
-    cotacao: roundTitle,
-    quantidade_itens: itemCountLabel(previewSupplier?.itemCount ?? 0),
-    link: "[link individual da cotação]",
-  });
 
-  function toggleSupplier(id: string, checked: boolean) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (checked && (next.size < 20 || next.has(id))) next.add(id);
-      else if (!checked) next.delete(id);
-      return next;
-    });
-  }
+  // Quem entra em cada lote, e por que alguém fica de fora: o motivo aparece
+  // na lista do lote em vez de o fornecedor sumir sem explicação.
+  const semProdutos = (supplier: SupplierResponseRow) =>
+    supplier.itemCount === 0 ? "Sem grupo com produtos" : null;
+  const semWhatsApp = (supplier: SupplierResponseRow) =>
+    supplier.whatsapp ? null : "Contato sem WhatsApp";
+  const paraConvite = suppliers.filter((supplier) => !supplier.sentAt);
+  const paraCobranca = suppliers.filter(
+    (supplier) => supplier.sentAt && !supplier.completedAt,
+  );
+  const paraLink = suppliers.filter((supplier) => !supplier.completedAt);
+  const candidatos = (modo: ModoDoLote): CandidatoDoLote[] =>
+    (modo === "convite"
+      ? paraConvite
+      : modo === "cobranca"
+        ? paraCobranca
+        : paraLink
+    ).map((supplier) => ({
+      id: supplier.id,
+      name: supplier.name,
+      contact: supplier.contact,
+      whatsapp: supplier.whatsapp,
+      jaEnviado: Boolean(supplier.sentAt),
+      bloqueio:
+        semProdutos(supplier) ??
+        (modo === "link" ? null : semWhatsApp(supplier)),
+    }));
+  const prontosParaConvite = paraConvite.filter(
+    (s) => !semProdutos(s) && !semWhatsApp(s),
+  ).length;
+  const prontosParaCobranca = paraCobranca.filter(
+    (s) => !semProdutos(s) && !semWhatsApp(s),
+  ).length;
+  const previa =
+    (modo: ModoDoLote) => (candidato: CandidatoDoLote | undefined) => {
+      const supplier = suppliers.find((row) => row.id === candidato?.id);
+      const template =
+        modo === "cobranca" || (modo === "link" && supplier?.sentAt)
+          ? reminderTemplate
+          : invitationTemplate;
+      return renderWhatsAppTemplate(template, {
+        contato: supplier?.contact ?? "fornecedor",
+        empresa: companyName,
+        cotacao: roundTitle,
+        quantidade_itens: itemCountLabel(supplier?.itemCount ?? 0),
+        link: "[link individual da cotação]",
+      });
+    };
+  const abrirLote = (modo: ModoDoLote) => setLote({ modo, chave: Date.now() });
+
+  const metricas: {
+    value: Filter;
+    label: string;
+    count: React.ReactNode;
+    icon: typeof CheckCircle2;
+  }[] = [
+    {
+      value: "completed",
+      label: "Concluíram",
+      icon: CheckCircle2,
+      count: (
+        <>
+          {completed}
+          <span className="text-fg-subtle text-sm font-normal">
+            /{suppliers.length}
+          </span>
+        </>
+      ),
+    },
+    {
+      value: "pending",
+      label: closed ? "Parciais" : "Pendentes",
+      icon: Clock3,
+      count: closed ? partial : pending,
+    },
+    {
+      value: "attention",
+      label: closed ? "Sem resposta" : "Sem abrir",
+      icon: MailQuestion,
+      count: attention,
+    },
+  ];
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2">
-        <div className="border-border bg-surface rounded-xl border p-3">
-          <p className="text-fg-muted flex flex-col items-start gap-1 text-xs sm:flex-row sm:items-center sm:gap-1.5">
-            <CheckCircle2 className="size-3.5" aria-hidden /> Concluíram
-          </p>
-          <p className="text-fg mt-1 text-xl font-semibold tabular-nums">
-            {completed}
-            <span className="text-fg-subtle text-sm font-normal">
-              /{suppliers.length}
-            </span>
-          </p>
-        </div>
-        <div className="border-border bg-surface rounded-xl border p-3">
-          <p className="text-fg-muted flex flex-col items-start gap-1 text-xs sm:flex-row sm:items-center sm:gap-1.5">
-            <Clock3 className="size-3.5" aria-hidden /> {closed ? "Parciais" : "Pendentes"}
-          </p>
-          <p className="text-fg mt-1 text-xl font-semibold tabular-nums">
-            {closed ? partial : pending}
-          </p>
-        </div>
-        <div className="border-border bg-surface rounded-xl border p-3">
-          <p className="text-fg-muted flex flex-col items-start gap-1 text-xs sm:flex-row sm:items-center sm:gap-1.5">
-            <MailQuestion className="size-3.5" aria-hidden /> {closed ? "Sem resposta" : "Sem abrir"}
-          </p>
-          <p className="text-fg mt-1 text-xl font-semibold tabular-nums">
-            {closed ? noResponse : notOpened}
-          </p>
-        </div>
+      {/* Os contadores são os filtros: tocar de novo no escolhido volta a
+          mostrar todos. Antes eram três números e, embaixo, três botões que
+          repetiam a mesma informação. */}
+      <div
+        className="grid grid-cols-3 gap-2"
+        role="group"
+        aria-label="Filtrar fornecedores"
+      >
+        {metricas.map((metrica) => {
+          const ativo = filter === metrica.value;
+          const Icon = metrica.icon;
+          return (
+            <button
+              key={metrica.value}
+              type="button"
+              aria-pressed={ativo}
+              onClick={() => setFilter(ativo ? "all" : metrica.value)}
+              className={cn(
+                "bg-surface rounded-xl border p-3 text-left transition-colors duration-(--dur)",
+                "focus-visible:ring-ring/50 outline-none focus-visible:ring-3",
+                ativo
+                  ? "border-fg/40 ring-fg/10 ring-1"
+                  : "border-border hover:border-border-strong",
+              )}
+            >
+              <span className="text-fg-muted flex flex-col items-start gap-1 text-xs sm:flex-row sm:items-center sm:gap-1.5">
+                <Icon className="size-3.5" aria-hidden /> {metrica.label}
+              </span>
+              <span className="text-fg mt-1 block text-xl font-semibold tabular-nums">
+                {metrica.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {closed && pending > 0 ? (
@@ -229,122 +270,115 @@ export function SupplierResponseBoard({
             aria-hidden
           />
           <p className="text-fg-muted text-sm">
-            A cotação está encerrada. {partial > 0 ? `${partial} ${partial === 1 ? "fornecedor respondeu parcialmente" : "fornecedores responderam parcialmente"}` : "Nenhum fornecedor respondeu parcialmente"}
-            {noResponse > 0 ? ` e ${noResponse} ${noResponse === 1 ? "ficou sem resposta" : "ficaram sem resposta"}` : ""}.
-            Esses registros são resultado histórico, não pendências da compra.
-          </p>
-        </div>
-      ) : !closed && pending > 0 ? (
-        <div className="border-border bg-surface-sunken flex items-start gap-2 rounded-xl border px-3 py-2.5">
-          <AlertCircle
-            className="text-fg-muted mt-0.5 size-4 shrink-0"
-            aria-hidden
-          />
-          <p className="text-fg-muted text-sm">
-            <span className="text-fg font-medium">Prioridade:</span>{" "}
-            {unsent > 0
-              ? `${unsent} ${unsent === 1 ? "convite ainda não foi enviado" : "convites ainda não foram enviados"}. `
+            A cotação está encerrada.{" "}
+            {partial > 0
+              ? `${partial} ${partial === 1 ? "fornecedor respondeu parcialmente" : "fornecedores responderam parcialmente"}`
+              : "Nenhum fornecedor respondeu parcialmente"}
+            {noResponse > 0
+              ? ` e ${noResponse} ${noResponse === 1 ? "ficou sem resposta" : "ficaram sem resposta"}`
               : ""}
-            {notOpened > 0
-              ? `${notOpened} ${notOpened === 1 ? "fornecedor recebeu, mas não abriu" : "fornecedores receberam, mas não abriram"}.`
-              : "Acompanhe quem já abriu e ainda não concluiu."}
+            . Esses registros são resultado histórico, não pendências da compra.
           </p>
         </div>
       ) : null}
 
-      <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
-        {(["pending", "completed", "all"] as const).map((value) => (
-          <Button
-            key={value}
-            type="button"
-            size="sm"
-            variant={filter === value ? "pressed" : "outline"}
-            aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
-          >
-            <span className="sm:hidden">
-              {value === "pending"
-                ? closed ? "Incompletas" : "Pendentes"
-                : value === "completed"
-                  ? "Concluídas"
-                  : "Todos"}
-            </span>
-            <span className="hidden sm:inline">
-              {value === "pending"
-                ? `${closed ? "Incompletas" : "Pendentes"} (${pending})`
-                : value === "completed"
-                  ? `Concluídas (${completed})`
-                  : `Todos (${suppliers.length})`}
-            </span>
-          </Button>
-        ))}
-      </div>
-
-      {canSend ? (
-        <div className="border-border flex flex-wrap items-center gap-2 border-t pt-3">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={eligible.length === 0}
-            onClick={() => setSelected(new Set(eligible.slice(0, 20).map((supplier) => supplier.id)))}
-          >
-            Selecionar pendentes ({Math.min(eligible.length, 20)})
-          </Button>
-          {selected.size > 0 ? (
-            <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-              Limpar seleção
-            </Button>
-          ) : null}
-          <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>
-            <DialogTrigger asChild>
+      {/* Uma ação principal, a que a rodada pede agora: mandar a quem ainda
+          não recebeu, cobrar quem não concluiu, ou nada a fazer. */}
+      {canSend && !closed ? (
+        <div className="border-border bg-surface flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            {unsent > 0 ? (
+              <>
+                <p className="text-fg text-sm font-semibold">
+                  {unsent}{" "}
+                  {unsent === 1
+                    ? "fornecedor ainda não recebeu"
+                    : "fornecedores ainda não receberam"}{" "}
+                  a cotação
+                </p>
+                <p className="text-fg-muted text-[13px]">
+                  {whatsappReady
+                    ? "Envie para todos de uma vez pelo WhatsApp da empresa."
+                    : "O WhatsApp da empresa não está conectado: gere os links e mande pelo celular."}
+                </p>
+              </>
+            ) : pending > 0 ? (
+              <>
+                <p className="text-fg text-sm font-semibold">
+                  {pending}{" "}
+                  {pending === 1
+                    ? "fornecedor ainda não concluiu"
+                    : "fornecedores ainda não concluíram"}
+                </p>
+                <p className="text-fg-muted text-[13px]">
+                  {notOpened > 0
+                    ? `${notOpened} ${notOpened === 1 ? "recebeu e não abriu" : "receberam e não abriram"}.`
+                    : "Todos já abriram o link."}
+                </p>
+              </>
+            ) : (
+              <p className="text-success flex items-center gap-2 text-sm font-semibold">
+                <CheckCircle2 className="size-4" aria-hidden /> Todos os
+                fornecedores responderam.
+              </p>
+            )}
+          </div>
+          {pending > 0 ? (
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                size="sm"
-                disabled={selected.size === 0 || !whatsappReady}
-                title={!whatsappReady ? "Conecte o WhatsApp em Configurações" : undefined}
+                variant="outline"
+                onClick={() => abrirLote("link")}
               >
-                <Send aria-hidden /> Cobrar selecionados ({selected.size})
+                <Link2 aria-hidden /> Gerar links
               </Button>
-            </DialogTrigger>
-            <DialogContent size="md">
-              <DialogHeader>
-                <DialogTitle>Cobrar respostas pendentes</DialogTitle>
-                <DialogDescription>
-                  Confira os destinatários. O sistema ignora quem foi cobrado há menos de 2 horas.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogBody>
-                <div className="mb-3 flex flex-wrap gap-1.5">
-                  {selectedRows.map((supplier) => (
-                    <Badge key={supplier.id} variant="secondary">{supplier.name}</Badge>
-                  ))}
-                </div>
-                <div className="bg-surface-sunken border-border rounded-xl border p-4">
-                  <p className="text-fg-muted whitespace-pre-wrap text-sm">
-                    {reminderPreview}
-                  </p>
-                </div>
-                <ErrorLine error={reminderState.error} />
-              </DialogBody>
-              <DialogFooter>
-                <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                <form action={reminderAction}>
-                  <input type="hidden" name="roundId" value={roundId} />
-                  {[...selected].map((id) => (
-                    <input key={id} type="hidden" name="roundSupplierIds" value={id} />
-                  ))}
-                  <ReminderSubmit count={selected.size} />
-                </form>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <SuccessLine
-            message={reminderState.sent > 0
-              ? `${reminderState.sent} ${reminderState.sent === 1 ? "cobrança enviada" : "cobranças enviadas"}${reminderState.skipped > 0 ? ` · ${reminderState.skipped} ignoradas` : ""}.`
-              : null}
-          />
+              {unsent > 0 && whatsappReady ? (
+                <Button
+                  type="button"
+                  disabled={prontosParaConvite === 0}
+                  onClick={() => abrirLote("convite")}
+                >
+                  <Send aria-hidden /> Enviar para {prontosParaConvite}
+                </Button>
+              ) : unsent === 0 && whatsappReady ? (
+                <Button
+                  type="button"
+                  disabled={prontosParaCobranca === 0}
+                  onClick={() => abrirLote("cobranca")}
+                >
+                  <Send aria-hidden /> Cobrar {prontosParaCobranca}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
+      ) : null}
+
+      {lote ? (
+        <BulkSendDialog
+          key={lote.chave}
+          roundId={roundId}
+          modo={lote.modo}
+          candidatos={candidatos(lote.modo)}
+          previa={previa(lote.modo)}
+          open
+          onOpenChange={(open) => {
+            if (!open) setLote(null);
+          }}
+        />
+      ) : null}
+
+      {filter !== "all" ? (
+        <p className="text-fg-muted text-[13px]">
+          Mostrando {visible.length} de {suppliers.length}.{" "}
+          <button
+            type="button"
+            className="text-primary font-medium hover:underline"
+            onClick={() => setFilter("all")}
+          >
+            Ver todos
+          </button>
+        </p>
       ) : null}
 
       <div className="border-border bg-surface overflow-hidden rounded-xl border">
@@ -373,10 +407,16 @@ export function SupplierResponseBoard({
                 0,
                 supplier.answeredCount - supplier.unavailableCount,
               );
-              const latest = [supplier.completedAt, supplier.accessedAt, supplier.lastReminderAt, supplier.sentAt]
+              const latest = [
+                supplier.completedAt,
+                supplier.accessedAt,
+                supplier.lastReminderAt,
+                supplier.sentAt,
+              ]
                 .filter((value): value is string => Boolean(value))
-                .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
-              const canRemind = Boolean(supplier.sentAt) && !supplier.completedAt && Boolean(supplier.whatsapp);
+                .sort(
+                  (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+                )[0];
               return (
                 <TableRow
                   key={supplier.id}
@@ -422,26 +462,39 @@ export function SupplierResponseBoard({
                     {latest ? dateTime.format(new Date(latest)) : "—"}
                     {supplier.lastReminderAt ? (
                       <span className="text-fg-subtle mt-1 block">
-                        Última cobrança: {dateTime.format(new Date(supplier.lastReminderAt))}
+                        Última cobrança:{" "}
+                        {dateTime.format(new Date(supplier.lastReminderAt))}
                       </span>
                     ) : null}
                   </TableCell>
                   {canSend ? (
-                    <TableCell className="col-span-2 block space-y-2 border-t p-0 pt-3 md:table-cell md:space-y-1.5 md:border-0 md:p-2">
-                      {canRemind ? (
-                        <label className="text-fg-muted flex cursor-pointer items-center gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            className="accent-primary size-4"
-                            checked={selected.has(supplier.id)}
-                            disabled={!selected.has(supplier.id) && selected.size >= 20}
-                            onChange={(event) => toggleSupplier(supplier.id, event.target.checked)}
-                          />
-                          Selecionar para cobrança
-                        </label>
-                      ) : null}
-                      <div className="[&_[data-slot=button]]:w-full md:[&_[data-slot=button]]:w-auto">
+                    <TableCell className="col-span-2 block border-t p-0 pt-3 md:table-cell md:border-0 md:p-2">
+                      <div className="flex items-start justify-end gap-1">
+                        {supplier.contactId && supplier.whatsapp ? (
+                          <form action={startWhatsAppConversationAction}>
+                            <input
+                              type="hidden"
+                              name="contact_id"
+                              value={supplier.contactId}
+                            />
+                            <input
+                              type="hidden"
+                              name="purchase_round_id"
+                              value={roundId}
+                            />
+                            <Button
+                              type="submit"
+                              size="icon-sm"
+                              variant="ghost"
+                              aria-label={`Conversar com ${supplier.name}`}
+                              title="Conversar"
+                            >
+                              <MessageCircle aria-hidden />
+                            </Button>
+                          </form>
+                        ) : null}
                         <SendControls
+                          compact
                           roundSupplierId={supplier.id}
                           roundId={roundId}
                           supplierName={supplier.name}
@@ -457,28 +510,6 @@ export function SupplierResponseBoard({
                           showSummary={false}
                         />
                       </div>
-                      {supplier.contactId && supplier.whatsapp ? (
-                        <form action={startWhatsAppConversationAction}>
-                          <input
-                            type="hidden"
-                            name="contact_id"
-                            value={supplier.contactId}
-                          />
-                          <input
-                            type="hidden"
-                            name="purchase_round_id"
-                            value={roundId}
-                          />
-                          <Button
-                            type="submit"
-                            size="sm"
-                            variant="outline"
-                            className="w-full"
-                          >
-                            <MessageCircle aria-hidden /> Conversar
-                          </Button>
-                        </form>
-                      ) : null}
                     </TableCell>
                   ) : null}
                 </TableRow>
