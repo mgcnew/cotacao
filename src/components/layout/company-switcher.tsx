@@ -41,6 +41,7 @@ const NOMES_DAS_CORES: Record<Accent, string> = {
   green: "Verde",
   orange: "Laranja",
   red: "Vermelho",
+  ocean: "Oceano",
 };
 
 type Props = {
@@ -243,6 +244,9 @@ export function CompanySwitcher({ companies, activeCompanyId }: Props) {
                       data-accent={value}
                       className={cn(
                         "bg-primary size-5 rounded-full transition-[box-shadow] duration-(--dur) ease-(--ease)",
+                        // Tema inteiro, não só accent: a bolinha mostra os dois polos.
+                        value === "ocean" &&
+                          "bg-[linear-gradient(135deg,var(--primary)_50%,var(--brand)_50%)]",
                         accent === value
                           ? "ring-primary ring-offset-surface-elevated ring-2 ring-offset-2"
                           : "hover:ring-border-strong hover:ring-offset-surface-elevated hover:ring-2 hover:ring-offset-2",

@@ -258,6 +258,39 @@
   --primary-fg: #fff;
 }
 
+/* Oceano (paleta "Fiery Ocean"): mais que um accent, um tema inteiro.
+ *
+ * O marinho #003049 é o destaque; o creme #FDF0D5 tinge o fundo e as bordas;
+ * o carmim #C1121F vira o vermelho de erro, e o vinho #780000 fica na marca.
+ * O vermelho NÃO é o destaque de propósito: aqui ele quer dizer erro e
+ * urgente, e botão vermelho apagaria esse aviso.
+ *
+ * As superfícies vão em `html:not(.dark)`: um `[data-accent]` sozinho tem a
+ * mesma força do `.dark` e, vindo depois, pintaria o escuro de creme. O
+ * accent em si fica no seletor simples para a bolinha do seletor herdar.
+ */
+[data-accent="ocean"] {
+  --primary: #003049;
+  --primary-hover: #00243a;
+  --primary-fg: #fff;
+  --brand: #780000;
+}
+html:not(.dark)[data-accent="ocean"] {
+  --bg: #faf5ec;
+  --fg: #13202b;
+  --fg-muted: #4a5561;
+  --fg-subtle: #5b6570;
+  --surface: #fffdf9;
+  --surface-muted: #f5eee2;
+  --surface-elevated: #fffdf9;
+  --surface-sunken: #fcf8f1;
+  --border-color: #e8dfcf;
+  --border-strong: #d1c5b0;
+  --input-bg: #fffdf9;
+  --destructive: #c1121f;
+  --info: #2f6a90;
+}
+
 /* No escuro o accent se divide em tinta e preenchimento.
  *
  * Antes havia um valor só, e ele não dava conta das duas pontas: como tinta
@@ -309,6 +342,27 @@
   --primary-fg: #0a0a0c;
   --primary-solid: #cf3a34;
   --primary-solid-fg: #f7f8fb;
+}
+.dark[data-accent="ocean"] {
+  /* O azul-aço #669BBC, clareado para tinta e escurecido para preenchimento. */
+  --primary: #86b6d4;
+  --primary-hover: #a1c7df;
+  --primary-fg: #0a0a0c;
+  --primary-solid: #1f5a7e;
+  --primary-solid-fg: #f7f8fb;
+  --brand: #e5646c;
+  /* Carvão puxado para o marinho, na mesma escada de tons do escuro padrão. */
+  --bg: #0c131a;
+  --surface: #131c24;
+  --surface-muted: #1b2630;
+  --surface-elevated: #17212a;
+  --surface-sunken: #0f171e;
+  --border-color: #23303b;
+  --border-strong: #34434f;
+  --input-bg: #111920;
+  --input: #34434f;
+  --destructive: #ef8a90;
+  --info: #86b6d4;
 }
 
 @theme inline {
