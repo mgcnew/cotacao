@@ -42,6 +42,7 @@ const NOMES_DAS_CORES: Record<Accent, string> = {
   orange: "Laranja",
   red: "Vermelho",
   ocean: "Oceano",
+  safira: "Safira",
 };
 
 type Props = {

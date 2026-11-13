@@ -258,6 +258,58 @@
   --primary-fg: #fff;
 }
 
+/* Safira: azul elétrico sobre um claro lavanda e um escuro quase preto, com
+ * menos linhas. Aqui quem separa os planos é o tom e uma sombra larga e
+ * fraca; a borda fica quase no tom do cartão e só aparece quando se procura.
+ * O campo de formulário (`--input`) segue com borda de verdade: se ele some
+ * junto, some o lugar de digitar. Os cantos crescem um pouco, como na
+ * referência, sem chegar ao pílula.
+ */
+[data-accent="safira"] {
+  --primary: #4353ff;
+  --primary-hover: #3342eb;
+  --primary-fg: #fff;
+  --brand: #4353ff;
+}
+html:not(.dark)[data-accent="safira"] {
+  --bg: #eef0f6;
+  --fg: #171a2c;
+  --fg-muted: #4c5168;
+  --fg-subtle: #5e6378;
+  --surface: #fbfbfe;
+  --surface-muted: #f1f2f8;
+  --surface-elevated: #ffffff;
+  --surface-sunken: #f6f7fb;
+  --border-color: #ebedf4;
+  --border-strong: #d6d9e5;
+  --input-bg: #ffffff;
+  --input: #d3d7e4;
+  --info: #3d5ccc;
+  --shadow-xs: 0 1px 2px rgba(35, 40, 100, 0.04);
+  --shadow-sm:
+    0 1px 2px rgba(35, 40, 100, 0.04), 0 14px 32px -18px rgba(35, 40, 100, 0.16);
+  --shadow-md:
+    0 24px 56px -22px rgba(35, 40, 100, 0.26),
+    0 4px 10px rgba(35, 40, 100, 0.05);
+  --r-lg: 10px;
+  --r-xl: 16px;
+}
+html[data-accent="safira"] [data-slot="app-sidebar"] {
+  border-color: transparent;
+}
+html:not(.dark)[data-accent="safira"] [data-slot="app-sidebar"] {
+  background: color-mix(in oklab, var(--surface) 70%, var(--bg));
+}
+/* O item ativo do menu vira pílula cheia, como na referência: sem linhas em
+   volta, é ele que diz onde se está. */
+html[data-accent="safira"] [data-slot="app-sidebar"] a[aria-current="page"] {
+  background: var(--primary-solid);
+  color: var(--primary-solid-fg);
+  border-radius: var(--r-lg);
+  box-shadow: 0 6px 16px -8px
+    color-mix(in oklab, var(--primary-solid) 70%, transparent);
+}
+
 /* Oceano (paleta "Fiery Ocean"): mais que um accent, um tema inteiro.
  *
  * O marinho #003049 é o destaque; o creme #FDF0D5 tinge o fundo e as bordas;
@@ -342,6 +394,26 @@ html:not(.dark)[data-accent="ocean"] {
   --primary-fg: #0a0a0c;
   --primary-solid: #cf3a34;
   --primary-solid-fg: #f7f8fb;
+}
+.dark[data-accent="safira"] {
+  --primary: #939cff;
+  --primary-hover: #aab1ff;
+  --primary-fg: #0a0a0c;
+  --primary-solid: #4353ff;
+  --primary-solid-fg: #fbfbff;
+  --brand: #939cff;
+  --bg: #08080b;
+  --surface: #111115;
+  --surface-muted: #19191f;
+  --surface-elevated: #15151a;
+  --surface-sunken: #0c0c10;
+  --border-color: #18181e;
+  --border-strong: #2a2a33;
+  --input-bg: #0f0f13;
+  --input: #2c2c36;
+  --info: #939cff;
+  --r-lg: 10px;
+  --r-xl: 16px;
 }
 .dark[data-accent="ocean"] {
   /* O azul-aço #669BBC, clareado para tinta e escurecido para preenchimento. */
