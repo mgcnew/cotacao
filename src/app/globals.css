@@ -1007,20 +1007,6 @@ html:has([data-slot="landing-page"]) {
   box-shadow: none;
 }
 
-/* O ícone vira a assinatura visual do indicador. A moldura fina usa a cor
-   semântica do próprio ícone em baixa intensidade, preservando o significado
-   sem criar mais uma mancha colorida no dashboard. */
-.dark [data-slot="dashboard-metric-icon"] {
-  border: 1px solid color-mix(in oklab, currentColor 24%, var(--border-color));
-  border-radius: var(--r-md);
-  background: color-mix(in oklab, currentColor 5%, var(--surface-sunken));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
-}
-
-.dark [data-slot="dashboard-metric-icon"] svg {
-  stroke-width: 1.75;
-}
-
 .dark [data-slot="dashboard-metric"]:is(a, button):hover {
   transform: none;
   border-color: var(--border-strong);

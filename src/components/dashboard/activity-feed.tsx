@@ -15,37 +15,6 @@ const TONE_DOT: Record<ActivityTone, string> = {
   neutral: "bg-fg-subtle",
 };
 
-const LEGENDA: { tone: ActivityTone; label: string }[] = [
-  { tone: "success", label: "Concluído" },
-  { tone: "info", label: "Em andamento" },
-  { tone: "supplier", label: "Fornecedor" },
-  { tone: "warning", label: "Atenção" },
-  { tone: "danger", label: "Cancelado" },
-];
-
-/** O que cada cor de bolinha quer dizer. */
-export function ActivityLegend({ className }: { className?: string }) {
-  return (
-    <ul
-      aria-label="Legenda das cores"
-      className={cn("flex flex-wrap gap-x-3 gap-y-1", className)}
-    >
-      {LEGENDA.map(({ tone, label }) => (
-        <li
-          key={tone}
-          className="text-fg-muted flex items-center gap-1.5 text-xs"
-        >
-          <span
-            className={cn("size-2 shrink-0 rounded-full", TONE_DOT[tone])}
-            aria-hidden
-          />
-          {label}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
@@ -75,6 +44,10 @@ function quandoFoi(iso: string): string {
   return DATA_HORA.format(new Date(iso));
 }
 
+/**
+ * A cor da bolinha adianta o tipo da notícia, mas nunca é a única pista: o
+ * texto da linha diz o mesmo. Por isso a legenda de cores saiu.
+ */
 export function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
   if (entries.length === 0) return null;
 

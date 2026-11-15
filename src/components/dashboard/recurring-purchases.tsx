@@ -1,17 +1,6 @@
-import {
-  CalendarClock,
-  Check,
-  ChevronRight,
-  Clock3,
-  ShoppingCart,
-} from "lucide-react";
-import Link from "next/link";
+import { CalendarClock, Clock3, ShoppingCart } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import {
-  dismissPurchaseSchedule,
-  snoozePurchaseSchedule,
-} from "@/features/suppliers/schedule-actions";
+import { PurchaseAlertActions } from "@/components/dashboard/purchase-alert-actions";
 import {
   formatPurchaseWeekdays,
   type PurchaseScheduleAlert,
@@ -38,9 +27,8 @@ function dueLabel(alert: PurchaseScheduleAlert) {
  * próximas) e à lista de prioridades (as de hoje e as atrasadas): a mesma
  * linha, com as mesmas ações, onde quer que ela caia.
  *
- * Os botões têm altura de toque no celular (40px) e afastamento entre si: o
- * "Ignorar este dia" não tem desfazer, e o toque errado ao lado de "Lembrar
- * amanhã" saía caro.
+ * Uma ação fica à vista (montar o pedido) e o resto vai para o menu "…" — ver
+ * `PurchaseAlertActions`.
  */
 export function PurchaseAlertRow({
   alert,
@@ -61,7 +49,7 @@ export function PurchaseAlertRow({
             className={
               alert.status === "overdue"
                 ? "bg-destructive-soft text-destructive grid size-9 shrink-0 place-items-center rounded-xl"
-                : "bg-primary-soft text-primary grid size-9 shrink-0 place-items-center rounded-xl"
+                : "bg-surface-muted text-fg-subtle grid size-9 shrink-0 place-items-center rounded-xl"
             }
           >
             {alert.status === "overdue" ? (
@@ -76,8 +64,8 @@ export function PurchaseAlertRow({
               <span
                 className={
                   alert.status === "overdue"
-                    ? "bg-destructive-soft text-destructive rounded-full px-2 py-0.5 text-xs font-semibold"
-                    : "bg-warning-soft text-warning rounded-full px-2 py-0.5 text-xs font-semibold"
+                    ? "bg-destructive-soft text-destructive rounded-[4px] px-1.5 py-0.5 text-xs font-medium"
+                    : "bg-warning-soft text-warning rounded-[4px] px-1.5 py-0.5 text-xs font-medium"
                 }
               >
                 {dueLabel(alert)}
@@ -107,46 +95,15 @@ export function PurchaseAlertRow({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 lg:justify-end">
-          {canCreateOrder ? (
-            <Button asChild size="sm" className="h-10 sm:h-8">
-              <Link
-                href={`/pedidos/novo?fornecedor=${alert.supplierId}&agenda=${alert.id}`}
-              >
-                Montar pedido <ChevronRight aria-hidden />
-              </Link>
-            </Button>
-          ) : null}
-          {canCreateRound ? (
-            <Button asChild size="sm" variant="outline" className="h-10 sm:h-8">
-              <Link
-                href={`/compras/nova?fornecedor=${alert.supplierId}&agenda=${alert.id}`}
-              >
-                Criar cotação
-              </Link>
-            </Button>
-          ) : null}
-          {canManageSchedule ? (
-            <>
-              <form action={snoozePurchaseSchedule.bind(null, alert.id)}>
-                <Button type="submit" size="sm" variant="ghost" className="h-10 sm:h-8">
-                  Lembrar amanhã
-                </Button>
-              </form>
-              <form
-                action={dismissPurchaseSchedule.bind(
-                  null,
-                  alert.id,
-                  alert.occurrenceDate,
-                )}
-              >
-                <Button type="submit" size="sm" variant="ghost" className="h-10 sm:h-8">
-                  <Check aria-hidden /> Ignorar este dia
-                </Button>
-              </form>
-            </>
-          ) : null}
-        </div>
+        <PurchaseAlertActions
+          scheduleId={alert.id}
+          occurrenceDate={alert.occurrenceDate}
+          supplierId={alert.supplierId}
+          supplierName={alert.supplierName}
+          canCreateRound={canCreateRound}
+          canCreateOrder={canCreateOrder}
+          canManageSchedule={canManageSchedule}
+        />
       </div>
     </li>
   );

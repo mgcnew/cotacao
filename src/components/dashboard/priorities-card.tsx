@@ -17,12 +17,14 @@ import type { PurchaseScheduleAlert } from "@/features/suppliers/schedule-model"
  */
 export function PrioritiesCard({
   attention,
+  companyId,
   due,
   canCreateRound,
   canCreateOrder,
   canManageSchedule,
 }: {
   attention: AttentionItem[];
+  companyId: string;
   /** Compras recorrentes atrasadas ou de hoje. */
   due: PurchaseScheduleAlert[];
   canCreateRound: boolean;
@@ -33,11 +35,16 @@ export function PrioritiesCard({
 
   return (
     <section
-      className="border-border bg-surface mb-6 overflow-hidden rounded-2xl border shadow-xs"
+      className="border-border bg-surface mb-10 overflow-hidden rounded-2xl border shadow-xs"
       aria-labelledby="attention-title"
     >
       <header className="border-border flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-5">
-        <h2 id="attention-title" className="text-fg text-base font-semibold">
+        {/* O único título grande da página: é o bloco que manda, e os outros
+            (resultado, movimentações) ficam um degrau abaixo. */}
+        <h2
+          id="attention-title"
+          className="text-fg text-lg font-semibold tracking-[-0.01em]"
+        >
           Prioridades de hoje
         </h2>
         {total > 0 ? (
@@ -50,7 +57,10 @@ export function PrioritiesCard({
         ) : null}
       </header>
 
-      <AttentionList items={attention} hideEmpty={due.length > 0} />
+      <AttentionList
+        items={attention}
+        companyId={companyId}
+        hideEmpty={due.length > 0} />
 
       {due.length > 0 ? (
         <ul

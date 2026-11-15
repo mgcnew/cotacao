@@ -52,13 +52,13 @@ export function SuggestionsDisclosure({
   if (parts.length === 0) return null;
 
   return (
-    <details id="assistente-compras" className="group mt-6 scroll-mt-20">
+    <details id="assistente-compras" className="group mt-10 scroll-mt-20">
       <summary className="hover:bg-surface-sunken focus-visible:ring-ring/40 -mx-2 flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-0.5 rounded-xl px-2 py-2 outline-none focus-visible:ring-3 [&::-webkit-details-marker]:hidden">
         <ChevronRight
           className="text-fg-muted size-4 shrink-0 transition-transform group-open:rotate-90"
           aria-hidden
         />
-        <span className="text-fg text-base font-semibold">
+        <span className="text-fg text-sm font-semibold">
           Sugestões do sistema
         </span>
         <span className="text-fg-muted text-sm">{parts.join(" · ")}</span>

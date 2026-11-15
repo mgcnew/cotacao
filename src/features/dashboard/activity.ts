@@ -24,6 +24,8 @@ export type ActivityEntry = {
   bySupplier: boolean;
   /** Cor da bolinha: o tipo de notícia, lido antes do texto. */
   tone: ActivityTone;
+  /** Quantos eventos iguais e seguidos esta linha resume. */
+  count: number;
 };
 
 /**
@@ -131,6 +133,11 @@ const CHANNEL_LABEL: Record<string, string> = {
   other: "outro canal",
 };
 
+const PRECO = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
 function countDetail(payload: Record<string, unknown>) {
   const answered = Number(payload.answered_items);
   const total = Number(payload.total_items);
@@ -147,6 +154,10 @@ function labelFor(
   const orderRef = orderNumber === null ? "pedido" : `pedido #${orderNumber}`;
   const order = `o ${orderRef}`;
   switch (eventType) {
+    case "negotiation.created":
+      return supplierName
+        ? `Negociação com ${supplierName} registrada`
+        : EVENT_LABEL[eventType];
     case "quotation.sent":
       return supplierName
         ? `Cotação enviada para ${supplierName}`
@@ -230,6 +241,18 @@ function detailFor(
 ): string | null {
   const reason = typeof payload.reason === "string" ? payload.reason : null;
   switch (eventType) {
+    case "negotiation.created": {
+      const de = Number(payload.previous_price);
+      const para = Number(payload.new_price);
+      if (!Number.isFinite(para)) return null;
+      const canal =
+        typeof payload.channel === "string"
+          ? ` por ${CHANNEL_LABEL[payload.channel] ?? "outro canal"}`
+          : "";
+      return Number.isFinite(de) && payload.previous_price !== null
+        ? `De ${PRECO.format(de)} para ${PRECO.format(para)}${canal}.`
+        : `Fechada em ${PRECO.format(para)}${canal}.`;
+    }
     case "quotation.response_submitted":
       return countDetail(payload);
     case "round_supplier.added":
@@ -273,12 +296,33 @@ function hrefFor(
     case "purchase_round":
       return `/compras/${aggregateId}`;
     case "round_supplier":
+    case "quotation_response_item":
       return roundId ? `/compras/${roundId}` : null;
     case "receipt":
       return `/recebimentos/${aggregateId}`;
     default:
       return null;
   }
+}
+
+/**
+ * O texto de uma linha que resume eventos iguais e seguidos.
+ *
+ * Seis "Negociação registrada" em fila eram seis linhas dizendo a mesma coisa
+ * e empurrando para fora o resto do que aconteceu. Agrupadas, viram uma.
+ */
+function groupLabel(
+  eventType: string,
+  label: string,
+  supplierName: string | null,
+  count: number,
+): string {
+  if (eventType === "negotiation.created") {
+    return supplierName
+      ? `${count} negociações com ${supplierName} registradas`
+      : `${count} negociações registradas`;
+  }
+  return `${label} (${count}×)`;
 }
 
 export async function listRecentActivity(
@@ -294,7 +338,8 @@ export async function listRecentActivity(
     )
     .eq("company_id", companyId)
     .order("occurred_at", { ascending: false })
-    .limit(limit);
+    // Lê a mais porque eventos repetidos em sequência viram uma linha só.
+    .limit(limit * 3);
 
   if (error) throw new Error(`Falha ao ler atividade: ${error.message}`);
 
@@ -308,6 +353,11 @@ export async function listRecentActivity(
   const roundSupplierIds = events
     .filter((event) => event.aggregate_type === "round_supplier")
     .map((event) => event.aggregate_id);
+  // A negociação é registrada no item da resposta, que não tem tela própria:
+  // o fornecedor e a rodada saem da resposta a que ele pertence.
+  const responseItemIds = events
+    .filter((event) => event.aggregate_type === "quotation_response_item")
+    .map((event) => event.aggregate_id);
   const orderIds = events
     .flatMap((event) => {
       const payload = (event.payload ?? {}) as Record<string, unknown>;
@@ -317,7 +367,7 @@ export async function listRecentActivity(
       ];
     })
     .filter((id): id is string => Boolean(id));
-  const [suppliers, roundSuppliers, orders] = await Promise.all([
+  const [suppliers, roundSuppliers, orders, responseItems] = await Promise.all([
     supplierIds.length
       ? supabase
           .from("suppliers")
@@ -339,6 +389,15 @@ export async function listRecentActivity(
           .eq("company_id", companyId)
           .in("id", [...new Set(orderIds)])
       : Promise.resolve({ data: [], error: null }),
+    responseItemIds.length
+      ? supabase
+          .from("quotation_response_items")
+          .select(
+            "id, quotation_responses!inner(round_suppliers!inner(purchase_round_id, suppliers!inner(name)))",
+          )
+          .eq("company_id", companyId)
+          .in("id", [...new Set(responseItemIds)])
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (suppliers.error) {
     throw new Error(
@@ -353,6 +412,11 @@ export async function listRecentActivity(
   if (orders.error) {
     throw new Error(`Falha ao identificar pedidos: ${orders.error.message}`);
   }
+  if (responseItems.error) {
+    throw new Error(
+      `Falha ao identificar negociações: ${responseItems.error.message}`,
+    );
+  }
 
   const supplierNames = new Map(
     (suppliers.data ?? []).map((supplier) => [supplier.id, supplier.name]),
@@ -366,6 +430,13 @@ export async function listRecentActivity(
       },
     ]),
   );
+  for (const item of responseItems.data ?? []) {
+    const roundSupplier = item.quotation_responses.round_suppliers;
+    roundSupplierContext.set(item.id, {
+      name: roundSupplier.suppliers.name,
+      roundId: roundSupplier.purchase_round_id,
+    });
+  }
   const orderContext = new Map(
     (orders.data ?? []).map((order) => [
       order.id,
@@ -376,7 +447,7 @@ export async function listRecentActivity(
     ]),
   );
 
-  return events.map((e) => {
+  const entries = events.map((e) => {
     const payload = (e.payload ?? {}) as Record<string, unknown>;
     const roundSupplier = roundSupplierContext.get(e.aggregate_id);
     const payloadOrderId =
@@ -393,7 +464,7 @@ export async function listRecentActivity(
       (payloadSupplierId ? supplierNames.get(payloadSupplierId) : null) ??
       null;
 
-    return {
+    const entry: ActivityEntry = {
       id: e.id,
       label: labelFor(e.event_type, supplierName, order?.orderNumber ?? null),
       detail: detailFor(e.event_type, payload),
@@ -405,6 +476,35 @@ export async function listRecentActivity(
       ),
       bySupplier: e.actor_type === "supplier",
       tone: toneFor(e.event_type, e.actor_type === "supplier"),
+      count: 1,
     };
+    return { entry, eventType: e.event_type, supplierName };
   });
+
+  const grouped: ActivityEntry[] = [];
+  let previous: (typeof entries)[number] | null = null;
+  for (const current of entries) {
+    const last = grouped.at(-1);
+    if (
+      last &&
+      previous &&
+      previous.eventType === current.eventType &&
+      previous.entry.label === current.entry.label
+    ) {
+      last.count += 1;
+      last.label = groupLabel(
+        current.eventType,
+        previous.entry.label,
+        current.supplierName,
+        last.count,
+      );
+      // O detalhe era de um evento só; resumindo vários, ele deixaria de valer.
+      last.detail = null;
+      continue;
+    }
+    if (grouped.length === limit) break;
+    grouped.push({ ...current.entry });
+    previous = current;
+  }
+  return grouped;
 }

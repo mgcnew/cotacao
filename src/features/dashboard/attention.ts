@@ -38,6 +38,12 @@ export type AttentionItem = {
   severity: "high" | "normal";
   href: string;
   actionLabel: string;
+  /**
+   * O recorte da lista de pedidos que este item resume. Com ele a linha
+   * consegue dizer DE QUEM são os pedidos (`AttentionSuppliers`), e não só
+   * quantos são — é o que separa "9 pedidos atrasados" de "por onde começo".
+   */
+  orderSituation?: string;
 };
 
 function plural(n: number, singular: string, plural_: string): string {
@@ -86,6 +92,7 @@ export async function getAttentionItems(
           "/pedidos?situacao=atrasados",
         ),
         actionLabel: "Cobrar entrega",
+        orderSituation: "atrasados",
       });
     }
 
@@ -104,6 +111,7 @@ export async function getAttentionItems(
           "/pedidos?situacao=entrega_hoje",
         ),
         actionLabel: "Ver pedidos do dia",
+        orderSituation: "entrega_hoje",
       });
     }
 
@@ -127,6 +135,7 @@ export async function getAttentionItems(
           "/pedidos?situacao=draft",
         ),
         actionLabel: "Enviar",
+        orderSituation: "draft",
       });
     }
 
@@ -148,6 +157,7 @@ export async function getAttentionItems(
           "/pedidos?situacao=revisao_pendente",
         ),
         actionLabel: "Enviar revisão",
+        orderSituation: "revisao_pendente",
       });
     }
 
@@ -205,6 +215,7 @@ export async function getAttentionItems(
         "/pedidos?situacao=divergencia_fornecedor",
       ),
       actionLabel: "Responder",
+      orderSituation: "divergencia_fornecedor",
     });
   }
 

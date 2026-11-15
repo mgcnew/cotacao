@@ -1,12 +1,16 @@
-import { ArrowUpRight, type LucideIcon } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
 type Tone = "neutral" | "good" | "bad" | "info";
 
+/**
+ * Um número do painel, numa faixa baixa: rótulo e explicação à esquerda, valor
+ * à direita. Sem o quadrado de ícone — o valor já vem na cor do que significa,
+ * e o ícone colorido só somava mais uma mancha ao lado dele.
+ */
 export function DashboardMetric({
-  icon: Icon,
   label,
   value,
   hint,
@@ -15,7 +19,6 @@ export function DashboardMetric({
   onClick,
   actionLabel,
 }: {
-  icon: LucideIcon;
   label: string;
   value: string;
   hint: string;
@@ -24,12 +27,6 @@ export function DashboardMetric({
   onClick?: () => void;
   actionLabel?: string;
 }) {
-  const iconClass = {
-    neutral: "bg-surface-muted text-fg-muted",
-    good: "bg-success-soft text-success",
-    bad: "bg-destructive-soft text-destructive",
-    info: "bg-info-soft text-info",
-  }[tone];
   const valueClass = {
     neutral: "text-fg",
     good: "text-success",
@@ -39,33 +36,25 @@ export function DashboardMetric({
 
   const content = (
     <>
-      <div className="flex items-start justify-between gap-3">
-        <span
-          data-slot="dashboard-metric-icon"
-          className={cn("grid size-9 place-items-center rounded-xl", iconClass)}
-        >
-          <Icon className="size-4" aria-hidden />
-        </span>
-        {href || onClick ? (
-          <ArrowUpRight className="text-fg-subtle size-4" aria-hidden />
-        ) : null}
-      </div>
-      <div className="mt-4">
-        <p
-          className={cn(
-            "text-2xl font-semibold tracking-tight tabular-nums",
-            valueClass,
-          )}
-        >
-          {value}
-        </p>
-        <p className="text-fg mt-1 text-sm font-medium">{label}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-fg text-sm font-medium">{label}</p>
         <p className="text-fg-subtle mt-0.5 text-xs leading-relaxed">{hint}</p>
       </div>
+      <p
+        className={cn(
+          "shrink-0 text-lg font-semibold tracking-tight tabular-nums",
+          valueClass,
+        )}
+      >
+        {value}
+      </p>
+      {href || onClick ? (
+        <ChevronRight className="text-fg-subtle size-4 shrink-0" aria-hidden />
+      ) : null}
     </>
   );
   const className =
-    "border-border bg-surface min-w-0 rounded-2xl border p-4 text-left shadow-xs transition-all";
+    "border-border bg-surface flex min-w-0 items-center gap-3 rounded-xl border px-4 py-3 text-left shadow-xs transition-all";
   const interactiveClassName =
     "hover:border-primary-line hover:-translate-y-0.5 hover:shadow-sm focus-visible:border-ring focus-visible:ring-ring/40 outline-none focus-visible:ring-3";
 

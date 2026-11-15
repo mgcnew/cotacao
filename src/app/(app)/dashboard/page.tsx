@@ -8,10 +8,7 @@ import {
 import Link from "next/link";
 import { cache, Suspense } from "react";
 
-import {
-  ActivityFeed,
-  ActivityLegend,
-} from "@/components/dashboard/activity-feed";
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { FinancialJourneyMetric } from "@/components/dashboard/financial-journey-metric";
 import { FirstSteps } from "@/components/dashboard/first-steps";
 import { SectionError } from "@/components/dashboard/section-error";
@@ -195,7 +192,7 @@ export default async function DashboardPage() {
               <Skeleton className="h-5 w-40" />
               <Skeleton className="h-5 w-36" />
             </div>
-            <div className="mb-6">
+            <div className="mb-10">
               <ListSkeleton rows={4} />
             </div>
           </>
@@ -207,7 +204,7 @@ export default async function DashboardPage() {
       {permissions.has("analytics.view") ? (
         <Suspense
           fallback={
-            <section className="mt-6">
+            <section className="mt-10">
               <SectionTitleSkeleton />
               <MetricsSkeleton />
             </section>
@@ -226,7 +223,7 @@ export default async function DashboardPage() {
 
       <Suspense
         fallback={
-          <section className="mt-6">
+          <section className="mt-10">
             <SectionTitleSkeleton />
             <CardSkeleton lines={5} />
           </section>
@@ -327,6 +324,7 @@ async function PrioridadesConteudo({
       <StatusStrip items={statusItems} />
       <PrioritiesCard
         attention={attention}
+        companyId={company.companyId}
         due={purchaseAlerts.filter((alert) => alert.status !== "upcoming")}
         canCreateRound={permissions.has("purchase_round.create")}
         canCreateOrder={permissions.has("order.create")}
@@ -376,11 +374,11 @@ async function ResultadoDoMes({
 
   return (
     <section
-      className="border-border bg-surface mt-6 overflow-hidden rounded-2xl border shadow-xs"
+      className="border-border bg-surface mt-10 overflow-hidden rounded-2xl border shadow-xs"
       aria-labelledby="financial-title"
     >
       <header className="border-border flex flex-wrap items-center justify-between gap-3 border-b px-4 py-4 sm:px-5">
-        <h2 id="financial-title" className="text-fg text-base font-semibold">
+        <h2 id="financial-title" className="text-fg text-sm font-semibold">
           Resultado de {MONTH.format(new Date(`${financial.de}T12:00:00`))}
         </h2>
         <Button asChild size="sm" variant="outline">
@@ -400,7 +398,7 @@ async function ResultadoDoMes({
         <div className="flex flex-col gap-4 p-4 sm:p-5">
           {/* A resposta primeiro, em uma frase: "estou economizando?". O resto
               é detalhe de quem quer conferir a conta. */}
-          <p className="text-fg text-lg leading-snug text-balance">
+          <p className="text-fg text-base leading-snug text-balance">
             <FraseDoMes financial={financial} />
           </p>
 
@@ -568,17 +566,16 @@ async function AtividadeConteudo({ companyId }: { companyId: string }) {
 
   return (
     <section
-      className="border-border bg-surface mt-6 overflow-hidden rounded-2xl border shadow-xs"
+      className="border-border bg-surface mt-10 overflow-hidden rounded-2xl border shadow-xs"
       aria-labelledby="activity-title"
     >
       <header className="border-border border-b px-4 py-4 sm:px-5">
-        <h2 id="activity-title" className="text-fg text-base font-semibold">
+        <h2 id="activity-title" className="text-fg text-sm font-semibold">
           Movimentações recentes
         </h2>
         <p className="text-fg-muted mt-0.5 text-xs">
           O que você, sua equipe e os fornecedores fizeram por último.
         </p>
-        <ActivityLegend className="mt-2.5" />
       </header>
       <ActivityFeed entries={activity} />
     </section>

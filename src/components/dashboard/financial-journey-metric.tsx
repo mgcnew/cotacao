@@ -2,11 +2,9 @@
 
 import {
   ArrowRight,
-  BadgeDollarSign,
   ChevronDown,
   ExternalLink,
   RefreshCw,
-  Scale,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -60,7 +58,6 @@ const DEFINITIONS = {
     description:
       "Mostra como cada recebimento aumentou ou reduziu o resultado em relação à proposta original.",
     formula: "(preço cotado − preço da nota) × quantidade recebida",
-    icon: BadgeDollarSign,
   },
   divergence: {
     label: "Pago a mais nas notas",
@@ -70,7 +67,6 @@ const DEFINITIONS = {
     description:
       "Mostra como cada recebimento formou a diferença entre o valor combinado no pedido e o conferido na nota.",
     formula: "(preço da nota − preço do pedido) × quantidade recebida",
-    icon: Scale,
   },
 } as const;
 
@@ -292,7 +288,6 @@ export function FinancialJourneyMetric({
   return (
     <>
       <DashboardMetric
-        icon={definition.icon}
         label={cardLabel}
         value={MONEY.format(Math.abs(value))}
         hint={`${definition.hint} · Ver memória de cálculo`}
