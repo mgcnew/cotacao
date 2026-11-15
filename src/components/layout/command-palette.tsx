@@ -6,6 +6,7 @@ import {
   Loader2,
   Plus,
   Search,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
@@ -13,6 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 
 import { useVisibleNav } from "@/components/layout/nav-list";
+import { Skeleton } from "@/components/ui/skeleton";
 import { searchCompany } from "@/features/search/actions";
 import { SEARCH_KIND_LABEL, type SearchHit } from "@/features/search/kinds";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,9 @@ import { cn } from "@/lib/utils";
  */
 
 const ESPERA_MS = 220;
+/** Ritmo da dissolução ao limpar: cada palavra começa este tanto depois da anterior. */
+const DISSOLVE_PASSO_MS = 45;
+const DISSOLVE_DURACAO_MS = 360;
 const CHAVE_RECENTES = "cotapro:recentes";
 const MAX_RECENTES = 6;
 
@@ -210,13 +215,22 @@ export function CommandPalette({ permissions }: { permissions: string[] }) {
       <button
         type="button"
         onClick={() => setAberta(true)}
+        aria-label="Buscar fornecedor, produto, pedido ou ir para (Ctrl K)"
         className={cn(
-          "border-border bg-surface-sunken text-fg-subtle hover:border-border-strong hover:text-fg-muted",
-          "hidden h-8 w-64 items-center gap-2 rounded-md border px-2.5 text-sm shadow-xs transition-colors duration-(--dur) md:flex lg:w-80",
+          // Com a altura e o texto de um campo de verdade: o que se acha aqui
+          // é dito no próprio rótulo, e não só "buscar".
+          "group border-border bg-surface-sunken text-fg-subtle hover:border-border-strong hover:bg-surface hover:text-fg-muted",
+          "focus-visible:border-ring focus-visible:ring-ring/30 outline-none focus-visible:ring-3",
+          "hidden h-9 w-72 items-center gap-2.5 rounded-lg border px-3 text-sm shadow-xs transition-colors duration-(--dur) md:flex lg:w-96",
         )}
       >
-        <Search className="size-4 shrink-0" aria-hidden />
-        <span className="flex-1 text-left">Buscar ou ir para…</span>
+        <Search
+          className="group-hover:text-fg-muted size-4 shrink-0 transition-colors duration-(--dur)"
+          aria-hidden
+        />
+        <span className="flex-1 truncate text-left">
+          Buscar fornecedor, produto, pedido…
+        </span>
         <Tecla>Ctrl K</Tecla>
       </button>
 
@@ -303,6 +317,35 @@ function Paleta({
   const [recentes] = React.useState(lerRecentes);
   const pedido = React.useRef(0);
   const listaRef = React.useRef<HTMLUListElement>(null);
+  const campoRef = React.useRef<HTMLInputElement>(null);
+  // O texto que está sumindo, palavra por palavra, por cima do campo já vazio.
+  const [dissolvendo, setDissolvendo] = React.useState<string | null>(null);
+  const fimDaDissolucao = React.useRef<number | undefined>(undefined);
+
+  React.useEffect(() => () => window.clearTimeout(fimDaDissolucao.current), []);
+
+  /**
+   * Limpa o campo na hora — a lista volta para Recentes, Ações e Ir para — e
+   * deixa o texto antigo se desfazendo por cima, uma palavra de cada vez. Quem
+   * pediu menos movimento ao sistema vê o campo simplesmente esvaziar.
+   */
+  function limpar() {
+    const antigo = termo;
+    setTermo("");
+    setAtivo(0);
+    campoRef.current?.focus();
+    window.clearTimeout(fimDaDissolucao.current);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setDissolvendo(null);
+      return;
+    }
+    const palavras = antigo.trim().split(/\s+/).length;
+    setDissolvendo(antigo);
+    fimDaDissolucao.current = window.setTimeout(
+      () => setDissolvendo(null),
+      DISSOLVE_DURACAO_MS + palavras * DISSOLVE_PASSO_MS,
+    );
+  }
 
   const limpo = termo.trim();
 
@@ -397,6 +440,7 @@ function Paleta({
           aria-hidden
         />
         <input
+          ref={campoRef}
           autoFocus
           type="text"
           role="combobox"
@@ -410,20 +454,52 @@ function Paleta({
           onChange={(e) => {
             setTermo(e.target.value);
             setAtivo(0);
+            setDissolvendo(null);
           }}
           onKeyDown={aoTeclar}
-          className="text-fg placeholder:text-fg-subtle h-12 w-full bg-transparent pr-12 pl-11 text-[15px] outline-none"
+          className={cn(
+            "text-fg placeholder:text-fg-subtle h-12 w-full bg-transparent pr-20 pl-11 text-[15px] outline-none",
+            // O texto antigo ainda está sumindo onde o placeholder apareceria.
+            dissolvendo && "placeholder:text-transparent",
+          )}
         />
-        {buscando ? (
-          <Loader2
-            className="text-fg-subtle absolute right-4 size-4 animate-spin"
+        {dissolvendo ? (
+          <span
+            className="text-fg pointer-events-none absolute inset-y-0 right-20 left-11 flex items-center overflow-hidden text-[15px] whitespace-pre"
             aria-hidden
-          />
-        ) : (
-          <span className="absolute right-3">
-            <Tecla>Esc</Tecla>
+          >
+            {dissolvendo.split(/(\s+)/).map((parte, k) =>
+              /^\s+$/.test(parte) ? (
+                parte
+              ) : (
+                <span
+                  key={k}
+                  className="t-dissolve-word"
+                  style={{ "--t-dissolve-i": k / 2 } as React.CSSProperties}
+                >
+                  {parte}
+                </span>
+              ),
+            )}
           </span>
-        )}
+        ) : null}
+        <span className="absolute right-3 flex items-center gap-2">
+          {buscando ? (
+            <Loader2 className="text-fg-subtle size-4 animate-spin" aria-hidden />
+          ) : null}
+          {termo ? (
+            <button
+              type="button"
+              onClick={limpar}
+              aria-label="Limpar busca"
+              className="text-fg-subtle hover:bg-surface-muted hover:text-fg focus-visible:ring-ring/40 grid size-7 place-items-center rounded-md transition-colors duration-(--dur) outline-none focus-visible:ring-3 pointer-coarse:size-10"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          ) : (
+            <Tecla>Esc</Tecla>
+          )}
+        </span>
       </div>
 
       <ul
@@ -433,6 +509,24 @@ function Paleta({
         aria-label="Sugestões"
         className="min-h-0 flex-1 overflow-y-auto p-1.5"
       >
+        {/* Enquanto a busca não volta, três linhas no lugar dos resultados: a
+            caixa já fica do tamanho certo e não pula quando eles chegam. */}
+        {buscando
+          ? [0, 1, 2].map((k) => (
+              <li
+                key={`carregando-${k}`}
+                role="presentation"
+                aria-hidden
+                className="flex items-center gap-3 px-2.5 py-2.5"
+              >
+                <Skeleton className="size-4 shrink-0 rounded-sm" />
+                <span className="flex-1 space-y-1.5">
+                  <Skeleton className={cn("h-3.5", k === 1 ? "w-1/3" : "w-1/2")} />
+                  <Skeleton className="h-3 w-1/4" />
+                </span>
+              </li>
+            ))
+          : null}
         {linhas.map((linha, i) => {
           const cabecalho = linha.grupo !== grupoAnterior ? linha.grupo : null;
           grupoAnterior = linha.grupo;

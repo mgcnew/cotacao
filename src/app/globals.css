@@ -950,6 +950,31 @@ html:has([data-slot="landing-page"]) {
   animation: om-in 180ms var(--ease);
 }
 
+/* Busca (Ctrl+K): ao limpar o campo, o texto antigo se desfaz palavra por
+   palavra — some, desfoca e sobe um pouco. Os tempos ficam em variáveis para
+   acertar o ritmo num lugar só; a paleta usa os mesmos números no JS para
+   saber quando tirar a camada. */
+.t-dissolve-word {
+  --t-dissolve-duration: 360ms;
+  --t-dissolve-stagger: 45ms;
+  --t-dissolve-distance: -4px;
+  --t-dissolve-blur: 6px;
+  --t-dissolve-scale: 0.96;
+  display: inline-block;
+  animation: t-dissolve var(--t-dissolve-duration) cubic-bezier(0.2, 0.6, 0.3, 1)
+    both;
+  animation-delay: calc(var(--t-dissolve-i, 0) * var(--t-dissolve-stagger));
+}
+
+@keyframes t-dissolve {
+  to {
+    opacity: 0;
+    filter: blur(var(--t-dissolve-blur));
+    transform: translateY(var(--t-dissolve-distance))
+      scale(var(--t-dissolve-scale));
+  }
+}
+
 /* Landing: as respostas da cotação chegam uma a uma no topo da página. É o
    único movimento da página e só roda uma vez, sem JavaScript. */
 .quote-arrive {
