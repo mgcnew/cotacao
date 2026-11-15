@@ -950,22 +950,19 @@ html:has([data-slot="landing-page"]) {
   animation: om-in 180ms var(--ease);
 }
 
-[data-reveal] {
-  opacity: 1;
-  transform: none;
+/* Landing: as respostas da cotação chegam uma a uma no topo da página. É o
+   único movimento da página e só roda uma vez, sem JavaScript. */
+.quote-arrive {
+  animation: quote-arrive 640ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--arrive-delay, 0ms);
 }
 
-[data-reveal][data-reveal-state="waiting"] {
-  opacity: 0;
-  transform: translateY(18px);
-}
-
-[data-reveal][data-reveal-state="visible"] {
-  opacity: 1;
-  transform: none;
-  transition:
-    opacity 560ms var(--ease) var(--reveal-delay, 0ms),
-    transform 560ms var(--ease) var(--reveal-delay, 0ms);
+@keyframes quote-arrive {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(6px);
+  }
 }
 
 /* ============================================================
@@ -1102,9 +1099,8 @@ html:has([data-slot="landing-page"]) {
     scroll-behavior: auto;
   }
 
-  [data-reveal] {
-    opacity: 1 !important;
-    transform: none !important;
+  .quote-arrive {
+    animation: none;
   }
 
   *,

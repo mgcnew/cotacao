@@ -1,655 +1,599 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import {
+  AlertTriangle,
   ArrowRight,
-  BarChart3,
-  BadgeDollarSign,
-  CalendarDays,
   Check,
-  CheckCircle2,
-  ClipboardCheck,
-  History,
-  ListChecks,
+  Clock,
+  FileCheck2,
+  Link2,
   MessageCircle,
-  PackageCheck,
-  Scale,
-  Search,
-  Send,
-  ShoppingCart,
-  Truck,
 } from "lucide-react";
 
-import { CotaProLogo, CotaProMark } from "@/components/brand/cotapro-logo";
+import { CotaProLogo } from "@/components/brand/cotapro-logo";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "CotaPro — operação inteligente do pedido ao recebimento",
+  title: "CotaPro — compare cotações com o preço que você realmente pagou",
   description:
-    "Centralize demandas, cotações, negociações, pedidos, recebimentos por NF-e e análises em uma única operação de compras.",
+    "O fornecedor responde por link, a negociação segue no WhatsApp e a NF-e de cada entrega vira o histórico da próxima compra.",
 };
 
-const FLOW = [
-  {
-    number: "1",
-    title: "Planeje",
-    description: "Agenda recorrente e lista de compras organizam a demanda.",
-    icon: CalendarDays,
-  },
-  {
-    number: "2",
-    title: "Cote",
-    description: "Fornecedores respondem por link, sem precisar de cadastro.",
-    icon: Send,
-  },
-  {
-    number: "3",
-    title: "Decida",
-    description: "Compare propostas e negocie com contexto de preço.",
-    icon: Scale,
-  },
-  {
-    number: "4",
-    title: "Acompanhe",
-    description: "Pedidos, confirmações e conversas ficam no mesmo fluxo.",
-    icon: Truck,
-  },
-  {
-    number: "5",
-    title: "Confira",
-    description: "A NF-e fecha o ciclo e alimenta o histórico real.",
-    icon: PackageCheck,
-  },
-] as const;
-
-/**
- * A afirmação mais forte da página, e a única sem seção própria mais abaixo.
- *
- * Eram seis cartões do mesmo tamanho, e dois deles repetiam o que as seções de
- * NF-e e de indicadores já dizem com profundidade — por isso a grade lia como
- * enchimento. O que sobra aqui é o que só é dito neste ponto, e o que o
- * concorrente não consegue prometer fica em primeiro plano.
+/*
+ * A página conta uma rodada de ponta a ponta com o mesmo item fictício: o
+ * contrafilé cotado no topo é o que o fornecedor responde pelo link, o que se
+ * negocia na conversa e o que a nota confirma no fim. Fornecedores e valores
+ * são ilustrativos — não há cliente nem número real aqui.
  */
-const LEAD_FEATURE = {
-  title: "O fornecedor responde sem criar conta",
-  description:
-    "Ele recebe um link, vê só os seus itens e informa preço ou indisponibilidade pelo celular. Sem cadastro, sem senha, sem app — que é a razão de as cotações voltarem no mesmo dia.",
-} as const;
 
-const FEATURES = [
+const LAST_PAID = 38.9;
+
+const QUOTES = [
+  { supplier: "Frigorífico Serra Azul", time: "08:52", price: 39.8 },
+  { supplier: "Distribuidora Boa Carne", time: "09:12", price: 37.95 },
+  { supplier: "Casa de Carnes do Vale", time: "09:31", price: 38.6 },
+  { supplier: "Atacado Central", time: null, price: null },
+] as const;
+
+const BEST_PRICE = Math.min(
+  ...QUOTES.flatMap(({ price }) => (price === null ? [] : [price])),
+);
+
+const CYCLE = [
   {
-    icon: ListChecks,
-    title: "Demanda organizada",
+    title: "Planeje",
+    where: "Lista de compras e agenda",
     description:
-      "Lista de compras e agenda por fornecedor transformam rotina em planejamento.",
+      "A demanda da loja vira itens de uma rodada, no dia de cada fornecedor.",
   },
   {
-    icon: BadgeDollarSign,
-    title: "Comparação que leva à decisão",
+    title: "Cote",
+    where: "Link por fornecedor",
     description:
-      "Propostas lado a lado, negociação e registro do que foi realmente acordado.",
+      "Cada fornecedor recebe pelo WhatsApp um link só dele e responde do celular.",
   },
   {
-    icon: MessageCircle,
-    title: "WhatsApp na mesma linha do tempo",
+    title: "Decida",
+    where: "Comparação",
     description:
-      "Envios e retornos ficam junto da rodada e do fornecedor certo.",
+      "As respostas ficam lado a lado com o último preço pago em nota.",
+  },
+  {
+    title: "Acompanhe",
+    where: "Pedido e conversa",
+    description:
+      "O pedido sai pelo WhatsApp e a confirmação volta para a mesma rodada.",
+  },
+  {
+    title: "Confira",
+    where: "NF-e",
+    description:
+      "A nota é conferida contra o pedido e o preço pago entra no histórico.",
   },
 ] as const;
 
-function DashboardPreview() {
-  const metrics = [
+const brl = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+function signedBrl(value: number) {
+  return `${value > 0 ? "+" : "−"} ${brl.format(Math.abs(value))}`;
+}
+
+function arrive(delay: number): CSSProperties {
+  return { "--arrive-delay": `${delay}ms` } as CSSProperties;
+}
+
+/** O argumento da página: as respostas chegando contra o preço já pago. */
+function QuoteSheet() {
+  const savings = (LAST_PAID - BEST_PRICE) / LAST_PAID;
+
+  return (
+    <figure className="border-border bg-surface min-w-0 overflow-hidden rounded-xl border shadow-[0_24px_48px_-24px_rgba(26,31,54,0.28),0_2px_4px_rgba(26,31,54,0.05)]">
+      <figcaption className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-5">
+        <div className="min-w-0">
+          <p className="text-fg truncate text-sm font-semibold">
+            Contrafilé resfriado
+          </p>
+          <p className="text-fg-subtle text-xs">Rodada da semana · 120 kg</p>
+        </div>
+        <span className="bg-info-soft text-info shrink-0 rounded-[4px] px-1.5 py-0.5 text-xs font-medium tabular-nums">
+          3 de 4 responderam
+        </span>
+      </figcaption>
+
+      <ul className="divide-border divide-y">
+        {QUOTES.map(({ supplier, time, price }, index) => {
+          const best = price === BEST_PRICE;
+          return (
+            <li
+              key={supplier}
+              className={cn(
+                "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-3 sm:px-5",
+                best && "bg-success-soft/60",
+              )}
+            >
+              <div className="min-w-0">
+                <p className="text-fg truncate text-sm font-medium">
+                  {supplier}
+                </p>
+                <p className="text-fg-subtle mt-0.5 flex items-center gap-1.5 text-xs">
+                  {time ? (
+                    <>
+                      <Link2 className="size-3" aria-hidden />
+                      <span className="tabular-nums">
+                        Pelo link · {time}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Clock className="size-3" aria-hidden />
+                      Aguardando resposta
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {price === null ? (
+                <span className="text-fg-subtle text-right text-xl tabular-nums">
+                  —
+                </span>
+              ) : (
+                <div
+                  className="quote-arrive text-right"
+                  style={arrive(350 + index * 420)}
+                >
+                  <p
+                    className={cn(
+                      "text-xl font-semibold tracking-[-0.02em] tabular-nums sm:text-2xl",
+                      best ? "text-success" : "text-fg",
+                    )}
+                  >
+                    {brl.format(price)}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-xs tabular-nums",
+                      price < LAST_PAID ? "text-success" : "text-fg-subtle",
+                    )}
+                  >
+                    {signedBrl(price - LAST_PAID)} vs. pago
+                  </p>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="border-border bg-surface-sunken flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t px-4 py-3 sm:px-5">
+        <p className="text-fg-muted flex items-center gap-1.5 text-xs">
+          <FileCheck2 className="size-3.5" aria-hidden />
+          <span>
+            Última NF-e paga:{" "}
+            <strong className="text-fg font-semibold tabular-nums">
+              {brl.format(LAST_PAID)}/kg
+            </strong>
+          </span>
+        </p>
+        <p
+          className="quote-arrive text-success text-xs font-medium tabular-nums"
+          style={arrive(1650)}
+        >
+          Melhor resposta{" "}
+          {savings.toLocaleString("pt-BR", {
+            style: "percent",
+            maximumFractionDigits: 1,
+          })}{" "}
+          abaixo do pago
+        </p>
+      </div>
+    </figure>
+  );
+}
+
+/** A tela que o fornecedor abre pelo link, sempre clara como a real. */
+function SupplierPhone() {
+  const items = [
+    { name: "Contrafilé resfriado", amount: "120 kg", value: "37,95" },
+    { name: "Picanha bovina", amount: "40 kg", value: "69,90" },
+    { name: "Fraldinha", amount: "60 kg", value: null },
+  ] as const;
+
+  return (
+    <div className="mx-auto w-full max-w-[300px] rounded-[2.25rem] bg-[#1a1f36] p-2.5 shadow-[0_24px_48px_-24px_rgba(26,31,54,0.45)]">
+      <div
+        className="overflow-hidden rounded-[1.75rem] bg-[#f6f8fa] text-[#1a1f36]"
+        aria-label="Exemplo da cotação aberta pelo fornecedor no celular"
+        role="img"
+      >
+        <div className="bg-white px-4 pt-6 pb-3">
+          <p className="text-xs text-[#5f6b7d]">Mercado da Esquina pede</p>
+          <p className="text-[15px] font-semibold">Cotação de carnes</p>
+          <p className="mt-1 flex items-center gap-1 text-xs text-[#8f6100]">
+            <Clock className="size-3" aria-hidden />
+            Responder até hoje, 17h
+          </p>
+        </div>
+        <ul className="space-y-2 p-3">
+          {items.map(({ name, amount, value }) => (
+            <li
+              key={name}
+              className="rounded-lg border border-[#e3e8ee] bg-white p-3"
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="truncate text-[13px] font-medium">{name}</p>
+                <p className="shrink-0 text-xs text-[#5f6b7d] tabular-nums">
+                  {amount}
+                </p>
+              </div>
+              {value ? (
+                <div className="mt-2 flex h-9 items-center rounded-md border border-[#c9d1db] px-2.5 text-[13px] tabular-nums">
+                  <span className="mr-1.5 text-[#5f6b7d]">R$</span>
+                  {value}
+                  <span className="ml-auto text-xs text-[#5f6b7d]">/kg</span>
+                </div>
+              ) : (
+                <div className="mt-2 flex h-9 items-center justify-center rounded-md bg-[#f2f4f7] text-xs font-medium text-[#4f566b]">
+                  Não tenho este item
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+        <div className="px-3 pb-5">
+          <div className="flex h-10 items-center justify-center rounded-md bg-[#5851ea] text-[13px] font-medium text-white">
+            Enviar preços
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A conversa do WhatsApp presa à rodada, com o que ela muda no sistema. */
+function NegotiationThread() {
+  return (
+    <div className="border-border bg-surface min-w-0 rounded-xl border">
+      <div className="border-border flex items-center gap-3 border-b px-4 py-3">
+        <span className="bg-surface-muted text-fg-muted grid size-8 place-items-center rounded-md">
+          <MessageCircle className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="text-fg truncate text-sm font-semibold">
+            Distribuidora Boa Carne
+          </p>
+          <p className="text-fg-subtle text-xs">WhatsApp · na rodada da semana</p>
+        </div>
+      </div>
+
+      <div className="space-y-3 px-4 py-4 text-sm">
+        <p className="bg-surface-muted text-fg max-w-[85%] rounded-lg rounded-tl-sm px-3 py-2">
+          Mandei os preços. Se fechar 150 kg do contrafilé, faço a R$ 37,50.
+        </p>
+        <p className="border-border bg-surface-sunken text-fg ml-auto max-w-[85%] rounded-lg rounded-tr-sm border px-3 py-2">
+          Fechado, 150 kg a R$ 37,50. Já te mando o pedido.
+        </p>
+
+        <div className="border-border space-y-2 border-t pt-3">
+          <p className="text-fg-muted flex items-center gap-2 text-xs">
+            <span className="bg-info-soft text-info rounded-[4px] px-1.5 py-0.5 font-medium">
+              Negociado
+            </span>
+            <span className="tabular-nums">
+              Contrafilé de R$ 37,95 para R$ 37,50/kg
+            </span>
+          </p>
+          <p className="text-fg-muted flex items-center gap-2 text-xs">
+            <span className="bg-success-soft text-success rounded-[4px] px-1.5 py-0.5 font-medium">
+              Enviado
+            </span>
+            <span className="tabular-nums">Pedido 384 · você confirmou o envio</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A conferência fecha a mesma compra e devolve o preço pago à próxima. */
+function InvoiceCheck() {
+  const lines = [
     {
-      label: "Cotações em andamento",
-      value: "4",
-      note: "2 aguardam resposta",
-      tone: "primary",
-      icon: ShoppingCart,
+      fiscal: "CONTRAFILE RESF KG",
+      product: "Contrafilé resfriado",
+      detail: "150 kg × R$ 37,50",
+      issue: null,
     },
     {
-      label: "Economia negociada",
-      value: "R$ 842,30",
-      note: "+6,4% no período",
-      tone: "success",
-      icon: BadgeDollarSign,
+      fiscal: "PICANHA BOV CX 18KG",
+      product: "Picanha bovina",
+      detail: "2 cx = 36 kg × R$ 69,90",
+      issue: null,
     },
     {
-      label: "Recebimentos hoje",
-      value: "7",
-      note: "5 já conferidos",
-      tone: "info",
-      icon: PackageCheck,
+      fiscal: "FRALDINHA BOV KG",
+      product: "Fraldinha",
+      detail: "58,4 kg de 60 kg pedidos",
+      issue: "1,6 kg a menos",
     },
   ] as const;
 
   return (
-    <div className="border-border bg-surface overflow-hidden rounded-2xl border shadow-md">
-      <div className="border-border flex h-12 items-center gap-2 border-b px-4">
-        <CotaProMark className="size-6" />
-        <span className="text-fg text-xs font-semibold">
-          Central operacional
-        </span>
-        <div className="flex-1" />
-        <span className="bg-surface-muted text-fg-subtle grid size-7 place-items-center rounded-md">
-          <Search className="size-3.5" aria-hidden />
-        </span>
-        <span className="bg-primary-soft text-primary grid size-7 place-items-center rounded-md text-[10px] font-semibold">
-          MC
-        </span>
-      </div>
-
-      <div className="grid min-h-[385px] grid-cols-[52px_1fr] sm:grid-cols-[150px_1fr]">
-        <div className="border-border bg-surface-sunken border-r p-2.5 sm:p-3">
-          <div className="space-y-1">
-            {[
-              { icon: BarChart3, label: "Central" },
-              { icon: ListChecks, label: "Lista" },
-              { icon: ShoppingCart, label: "Compras" },
-              { icon: ClipboardCheck, label: "Pedidos" },
-              { icon: Truck, label: "Fornecedores" },
-            ].map(({ icon: Icon, label }, index) => (
-              <div
-                key={label}
-                className={cn(
-                  "flex h-8 items-center gap-2 rounded-md px-2",
-                  index === 0
-                    ? "bg-primary-soft text-primary"
-                    : "text-fg-subtle",
-                )}
-              >
-                <Icon className="size-3.5 shrink-0" aria-hidden />
-                <span className="hidden text-[10px] sm:block">{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="min-w-0 p-3 sm:p-5">
-          <div className="mb-4">
-            <p className="text-fg text-sm font-semibold">Visão de hoje</p>
-            <p className="text-fg-subtle text-[10px]">
-              O que precisa da sua atenção agora
-            </p>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-3">
-            {metrics.map(({ label, value, note, tone, icon: Icon }) => {
-              const classes = {
-                primary: "bg-primary-soft text-primary",
-                success: "bg-success-soft text-success",
-                info: "bg-info-soft text-info",
-              }[tone];
-              return (
-                <div
-                  key={label}
-                  className="border-border bg-surface rounded-xl border p-3 shadow-xs"
-                >
-                  <span
-                    className={cn(
-                      "mb-3 grid size-7 place-items-center rounded-lg",
-                      classes,
-                    )}
-                  >
-                    <Icon className="size-3.5" aria-hidden />
-                  </span>
-                  <p className="text-fg text-base font-semibold tabular-nums">
-                    {value}
-                  </p>
-                  <p className="text-fg mt-0.5 text-[9px] font-medium">
-                    {label}
-                  </p>
-                  <p className="text-fg-subtle mt-1 text-[9px]">{note}</p>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="border-border mt-3 overflow-hidden rounded-xl border">
-            <div className="bg-surface-muted text-fg-muted grid grid-cols-[1fr_auto_auto] gap-3 px-3 py-2 text-[9px] font-medium">
-              <span>Próximas ações</span>
-              <span>Fornecedor</span>
-              <span>Status</span>
-            </div>
-            {[
-              ["Revisar cotação #1048", "Alimentos Sul", "Decidir"],
-              ["Conferir pedido #382", "Casa do Frio", "Receber"],
-              ["Responder divergência", "Mercantil SP", "Analisar"],
-            ].map(([action, supplier, status], index) => (
-              <div
-                key={action}
-                className={cn(
-                  "text-fg grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2.5 text-[9px]",
-                  index > 0 && "border-border border-t",
-                )}
-              >
-                <span className="truncate font-medium">{action}</span>
-                <span className="text-fg-subtle hidden sm:block">
-                  {supplier}
-                </span>
-                <span className="bg-primary-soft text-primary rounded-full px-2 py-1 font-medium">
-                  {status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NfePreview() {
-  return (
-    <div className="border-border bg-surface rounded-2xl border p-4 shadow-sm sm:p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+    <div className="border-border bg-surface min-w-0 rounded-xl border">
+      <div className="border-border flex items-start justify-between gap-4 border-b px-4 py-3 sm:px-5">
+        <div className="min-w-0">
           <p className="text-fg text-sm font-semibold">Conferência da NF-e</p>
-          <p className="text-fg-subtle mt-0.5 text-xs">
-            Nota 000.148 · 3 itens
+          <p className="text-fg-subtle text-xs tabular-nums">
+            Nota 000.148 · pedido 384 · 3 itens
           </p>
         </div>
-        <span className="bg-success-soft text-success inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium">
-          <CheckCircle2 className="size-3" aria-hidden /> XML validado
+        <span className="bg-warning-soft text-warning shrink-0 rounded-[4px] px-1.5 py-0.5 text-xs font-medium">
+          1 divergência
         </span>
       </div>
 
-      <div className="mt-5 space-y-2">
-        {[
-          ["TRIDENT HORT 21UN", "Trident Hortelã", "21 un. × R$ 1,76"],
-          ["MEIA CARC SUINA", "Metade suína", "42,8 kg × R$ 12,90"],
-          ["OLEO SOJA CX 20", "Óleo de soja 900ml", "20 un. × R$ 6,18"],
-        ].map(([fiscal, product, conversion]) => (
-          <div
-            key={fiscal}
-            className="border-border bg-surface-sunken rounded-xl border p-3"
-          >
-            <div className="flex items-center gap-2">
-              <Check className="text-success size-3.5 shrink-0" aria-hidden />
-              <p className="text-fg min-w-0 flex-1 truncate text-xs font-medium">
-                {product}
+      <ul className="divide-border divide-y">
+        {lines.map(({ fiscal, product, detail, issue }) => (
+          <li key={fiscal} className="flex gap-3 px-4 py-3 sm:px-5">
+            {issue ? (
+              <AlertTriangle
+                className="text-warning mt-0.5 size-4 shrink-0"
+                aria-label="Divergência"
+              />
+            ) : (
+              <Check
+                className="text-success mt-0.5 size-4 shrink-0"
+                aria-label="Conferido"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                <p className="text-fg text-sm font-medium">{product}</p>
+                <p
+                  className={cn(
+                    "text-xs tabular-nums",
+                    issue ? "text-warning font-medium" : "text-fg-muted",
+                  )}
+                >
+                  {issue ?? detail}
+                </p>
+              </div>
+              <p className="text-fg-subtle mt-0.5 truncate text-xs">
+                Na nota: {fiscal}
+                {issue ? ` · ${detail}` : null}
               </p>
-              <span className="text-fg-subtle text-[10px] tabular-nums">
-                {conversion}
-              </span>
             </div>
-            <p className="text-fg-subtle mt-1 pl-5.5 text-[10px]">
-              Na nota: {fiscal}
-            </p>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
 
-      <div className="border-border mt-4 flex items-center justify-between border-t pt-4 text-xs">
-        <span className="text-fg-muted">Diferença comercial</span>
-        <strong className="text-success tabular-nums">− R$ 10,50</strong>
+      <div className="border-border bg-surface-sunken flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3 text-xs sm:px-5">
+        <span className="text-fg-muted">Entra no histórico de preço</span>
+        <strong className="text-fg font-semibold tabular-nums">
+          Contrafilé · R$ 37,50/kg pago
+        </strong>
       </div>
     </div>
   );
 }
+
+const sectionHeading =
+  "text-fg text-3xl leading-[1.1] font-semibold tracking-[-0.03em] text-balance sm:text-4xl";
 
 export default function HomePage() {
   return (
     <main
       data-slot="landing-page"
-      className="bg-background min-h-screen overflow-hidden"
+      className="bg-background min-h-screen overflow-x-clip"
     >
       <header className="border-border bg-background/95 sticky top-0 z-50 border-b backdrop-blur-sm">
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-5 px-4 sm:px-6 lg:px-8">
-          <CotaProLogo />
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-5 px-4 sm:px-6">
+          <CotaProLogo compact className="sm:hidden" />
+          <CotaProLogo className="hidden sm:flex" />
           <nav
             className="text-fg-muted ml-auto hidden items-center gap-6 text-sm md:flex"
             aria-label="Navegação principal"
           >
-            <a className="hover:text-fg transition-colors" href="#fluxo">
+            <a className="hover:text-fg transition-colors" href="#fornecedor">
+              Fornecedor
+            </a>
+            <a className="hover:text-fg transition-colors" href="#nota">
+              Nota fiscal
+            </a>
+            <a className="hover:text-fg transition-colors" href="#ciclo">
               Como funciona
-            </a>
-            <a className="hover:text-fg transition-colors" href="#recursos">
-              Recursos
-            </a>
-            <a className="hover:text-fg transition-colors" href="#controle">
-              Controle
             </a>
           </nav>
           <div className="ml-auto flex items-center gap-2 md:ml-0">
             <ThemeToggle />
-            <Button asChild variant="ghost" className="hidden sm:inline-flex">
-              <Link href="/login">Entrar</Link>
-            </Button>
             <Button asChild>
-              <Link href="/login">
-                Acessar sistema <ArrowRight aria-hidden />
-              </Link>
+              <Link href="/login">Entrar</Link>
             </Button>
           </div>
         </div>
       </header>
 
-      <section className="relative">
-        <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-[0.88fr_1.12fr] lg:px-8 lg:py-28">
-          <div className="relative z-10">
-            <div className="bg-primary-soft text-primary mb-6 inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium">
-              O ciclo de compras em um só lugar
-            </div>
-            <h1 className="text-fg max-w-2xl text-4xl leading-[1.06] font-semibold tracking-[-0.04em] sm:text-5xl lg:text-6xl">
-              Compre com clareza. Negocie com histórico. Receba sem surpresa.
-            </h1>
-            <p className="text-fg-muted mt-6 max-w-xl text-base leading-relaxed sm:text-lg">
-              Da necessidade à conferência da nota, o CotaPro organiza decisões,
-              conversas e valores para sua operação ganhar ritmo sem perder
-              controle.
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="h-11 px-5">
-                <Link href="/login">
-                  Entrar no sistema <ArrowRight aria-hidden />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="h-11 px-5">
-                <a href="#fluxo">Conhecer o fluxo</a>
-              </Button>
-            </div>
-            <div className="text-fg-subtle mt-8 flex flex-wrap gap-x-5 gap-y-2 text-xs">
-              {[
-                "Cotação por link",
-                "WhatsApp integrado",
-                "Conferência por NF-e",
-              ].map((item) => (
-                <span key={item} className="flex items-center gap-1.5">
-                  <Check className="text-success size-3.5" aria-hidden /> {item}
-                </span>
-              ))}
-            </div>
+      <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 pt-14 pb-20 sm:px-6 sm:pt-20 lg:grid-cols-[1fr_1.05fr] lg:gap-16 lg:pt-24 lg:pb-28">
+        <div>
+          <h1 className="text-fg text-[2.5rem] leading-[1.04] font-semibold tracking-[-0.04em] text-balance sm:text-5xl lg:text-[3.5rem]">
+            Compare as cotações com o que você realmente pagou.
+          </h1>
+          <p className="text-fg-muted mt-6 max-w-[34rem] text-base leading-relaxed text-pretty sm:text-lg">
+            O fornecedor responde por link, sem cadastro. A conversa segue no
+            WhatsApp. E a NF-e de cada entrega vira o histórico que embasa a
+            próxima decisão.
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Button asChild size="lg" className="h-11 px-5">
+              <Link href="/login">
+                Entrar no CotaPro <ArrowRight aria-hidden />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="h-11 px-5">
+              <a href="#ciclo">Ver como funciona</a>
+            </Button>
           </div>
+        </div>
 
-          {/* Sem os dois círculos coloridos que ficavam atrás e sem a
-              inclinação de 0,4° — halo de marca e print torto são o enfeite
-              padrão de landing gerada. A maquete é o argumento da página e se
-              sustenta pela própria borda e sombra; e, sendo uma tela para ler,
-              endireitá-la deixa o texto nítido. */}
-          <div className="lg:pl-4">
-            <DashboardPreview />
+        <QuoteSheet />
+      </section>
+
+      <section
+        id="fornecedor"
+        className="border-border bg-surface-sunken border-y"
+      >
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
+          <div className="lg:order-2">
+            <h2 className={sectionHeading}>
+              O fornecedor responde sem criar conta.
+            </h2>
+            <p className="text-fg-muted mt-5 max-w-[34rem] text-base leading-relaxed text-pretty">
+              Ele recebe pelo WhatsApp um link só dele, vê apenas os itens que
+              você pediu e informa o preço, ou que não tem, direto do celular.
+              Sem cadastro, sem senha, sem aplicativo.
+            </p>
+            <dl className="border-border mt-8 grid max-w-[34rem] gap-px border-t sm:grid-cols-2">
+              <div className="pt-4 sm:pr-6">
+                <dt className="text-fg text-sm font-semibold">
+                  A resposta cai na rodada
+                </dt>
+                <dd className="text-fg-muted mt-1 text-sm leading-relaxed">
+                  Ninguém copia preço de mensagem para planilha.
+                </dd>
+              </div>
+              <div className="pt-4">
+                <dt className="text-fg text-sm font-semibold">
+                  Prazo visível para ele
+                </dt>
+                <dd className="text-fg-muted mt-1 text-sm leading-relaxed">
+                  O link mostra até quando a cotação vale.
+                </dd>
+              </div>
+            </dl>
           </div>
+          <SupplierPhone />
         </div>
       </section>
 
-      <section className="border-border bg-surface border-y">
-        <div className="mx-auto grid max-w-7xl gap-px px-4 sm:grid-cols-3 sm:px-6 lg:px-8">
-          {[
-            ["Uma operação", "Dados conectados do planejamento ao recebimento"],
-            [
-              "Menos retrabalho",
-              "Associações e regras reaproveitadas automaticamente",
-            ],
-            [
-              "Decisão explicável",
-              "Cada indicador abre o caminho até sua origem",
-            ],
-          ].map(([title, description], index) => (
-            <div
-              key={title}
-              className={cn(
-                "py-6 sm:px-7",
-                index > 0 && "border-border border-t sm:border-t-0 sm:border-l",
-              )}
-            >
-              <p className="text-fg text-sm font-semibold">{title}</p>
-              <p className="text-fg-subtle mt-1 text-xs leading-relaxed">
-                {description}
-              </p>
-            </div>
-          ))}
+      <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-2 lg:gap-20">
+        <div>
+          <h2 className={sectionHeading}>
+            A negociação continua sendo conversa.
+          </h2>
+          <p className="text-fg-muted mt-5 max-w-[34rem] text-base leading-relaxed text-pretty">
+            Telefone e WhatsApp seguem no fluxo, sem robô no meio. O que foi
+            acertado fica registrado na rodada, e o pedido só sai quando alguém
+            confirma o envio.
+          </p>
+        </div>
+        <NegotiationThread />
+      </section>
+
+      <section id="nota" className="border-border bg-surface border-y">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-[1.1fr_0.9fr] lg:gap-20">
+          <div className="lg:order-2">
+            <h2 className={sectionHeading}>
+              A nota fecha o ciclo e ensina a próxima compra.
+            </h2>
+            <p className="text-fg-muted mt-5 max-w-[34rem] text-base leading-relaxed text-pretty">
+              O fornecedor não cita o seu pedido na NF-e, então a conferência
+              casa a nota pelo conteúdo. Ela reconhece o nome que cada
+              fornecedor usa, converte caixa em quilo e separa a diferença
+              comercial do imposto.
+            </p>
+            <ul className="text-fg mt-7 space-y-2.5 text-sm">
+              {[
+                "Aprende o nome de cada produto por fornecedor",
+                "Converte caixa, unidade e quilo",
+                "Aponta a falta antes de o pedido ser fechado",
+                "Importa notas antigas para recuperar o histórico",
+              ].map((item) => (
+                <li key={item} className="flex gap-2.5">
+                  <Check
+                    className="text-success mt-0.5 size-4 shrink-0"
+                    aria-hidden
+                  />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <InvoiceCheck />
         </div>
       </section>
 
       <section
-        id="fluxo"
-        className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8"
+        id="ciclo"
+        className="mx-auto grid max-w-6xl gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20"
       >
-        <ScrollReveal className="max-w-2xl">
-          <h2 className="text-fg text-3xl font-semibold tracking-tight sm:text-4xl">
-            A compra avança sem perder o contexto.
+        <div className="lg:sticky lg:top-28 lg:self-start">
+          <h2 className={sectionHeading}>
+            Da lista da loja ao preço pago, uma rodada só.
           </h2>
-          <p className="text-fg-muted mt-4 text-base leading-relaxed">
+          <p className="text-fg-muted mt-5 max-w-[30rem] text-base leading-relaxed text-pretty">
             Cada etapa prepara a próxima. O que foi cotado acompanha o pedido,
-            chega à conferência e vira histórico para a negociação seguinte.
+            chega à conferência e volta como referência na rodada seguinte.
           </p>
-        </ScrollReveal>
+        </div>
 
-        <ScrollReveal className="mt-12 grid gap-3 md:grid-cols-5">
-          {FLOW.map(({ number, title, description, icon: Icon }, index) => (
-            <div
-              key={number}
-              className="border-border bg-surface relative flex h-full flex-col rounded-xl border p-4 shadow-xs"
-            >
-              <div className="mb-7 flex items-center justify-between">
-                <span className="bg-primary-soft text-primary grid size-9 place-items-center rounded-lg">
-                  <Icon className="size-4" aria-hidden />
-                </span>
-                <span className="text-fg-subtle text-xs font-medium">
-                  {number}
-                </span>
-              </div>
-              <h3 className="text-fg text-sm font-semibold">{title}</h3>
-              <p className="text-fg-subtle mt-1.5 text-xs leading-relaxed">
-                {description}
-              </p>
-              {index < FLOW.length - 1 ? (
-                <ArrowRight
-                  className="text-border-strong absolute top-7 -right-3 z-10 hidden size-4 md:block"
+        <ol className="relative">
+          {CYCLE.map(({ title, where, description }, index) => (
+            <li key={title} className="relative flex gap-5 pb-9 last:pb-0">
+              {index < CYCLE.length - 1 ? (
+                <span
+                  className="bg-border absolute top-4 left-[5px] h-full w-px"
                   aria-hidden
                 />
               ) : null}
-            </div>
-          ))}
-        </ScrollReveal>
-      </section>
-
-      <section
-        id="recursos"
-        className="bg-surface-sunken border-border border-y"
-      >
-        <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
-          <ScrollReveal className="max-w-2xl">
-            <h2 className="text-fg text-3xl font-semibold tracking-tight sm:text-4xl">
-              Mais produtividade onde a compra costuma travar.
-            </h2>
-            <p className="text-fg-muted mt-4 leading-relaxed">
-              O sistema reduz as pequenas interrupções que, somadas, consomem o
-              dia de quem compra.
-            </p>
-          </ScrollReveal>
-
-          {/* A hierarquia é o conteúdo: a afirmação que sustenta o produto
-              ocupa a coluna larga, e o apoio corre ao lado sem virar cartão. */}
-          <div className="mt-12 grid gap-x-12 gap-y-10 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="border-primary-line border-l-2 pl-6 sm:pl-8">
-              <h3 className="text-fg text-2xl leading-tight font-semibold tracking-tight sm:text-3xl">
-                {LEAD_FEATURE.title}
-              </h3>
-              <p className="text-fg-muted mt-4 max-w-lg text-base leading-relaxed">
-                {LEAD_FEATURE.description}
-              </p>
-            </div>
-
-            <dl className="divide-border grid divide-y self-center">
-              {FEATURES.map(({ icon: Icon, title, description }) => (
-                <div
-                  key={title}
-                  className="flex gap-4 py-5 first:pt-0 last:pb-0"
-                >
-                  <Icon
-                    className="text-fg-subtle mt-0.5 size-4 shrink-0"
-                    aria-hidden
-                  />
-                  <div className="min-w-0">
-                    <dt className="text-fg text-sm font-semibold">{title}</dt>
-                    <dd className="text-fg-muted mt-1 text-sm leading-relaxed">
-                      {description}
-                    </dd>
-                  </div>
+              <span
+                className={cn(
+                  "relative mt-1.5 size-[11px] shrink-0 rounded-full border-2",
+                  index === CYCLE.length - 1
+                    ? "border-success bg-success"
+                    : "border-border-strong bg-background",
+                )}
+                aria-hidden
+              />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h3 className="text-fg text-lg font-semibold tracking-[-0.01em]">
+                    {title}
+                  </h3>
+                  <span className="text-fg-subtle text-xs">{where}</span>
                 </div>
-              ))}
-            </dl>
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="controle"
-        className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-2 lg:px-8"
-      >
-        <ScrollReveal>
-          <h2 className="text-fg text-3xl font-semibold tracking-tight sm:text-4xl">
-            A nota não encerra apenas um pedido. Ela melhora a próxima compra.
-          </h2>
-          <p className="text-fg-muted mt-5 max-w-xl leading-relaxed">
-            A conferência associa o nome usado pelo fornecedor ao seu catálogo,
-            entende caixa, unidade e peso, separa ajustes fiscais e preserva o
-            preço realmente praticado.
-          </p>
-          <ul className="mt-7 space-y-3">
-            {[
-              "Aprendizado por produto e fornecedor",
-              "Conversões para caixa, unidade e quilo",
-              "Diferença comercial separada de impostos",
-              "Importação retroativa para recuperar histórico",
-            ].map((item) => (
-              <li
-                key={item}
-                className="text-fg flex items-center gap-3 text-sm"
-              >
-                <span className="bg-success-soft text-success grid size-6 place-items-center rounded-full">
-                  <Check className="size-3.5" aria-hidden />
-                </span>
-                {item}
-              </li>
-            ))}
-          </ul>
-        </ScrollReveal>
-        <ScrollReveal delay={100}>
-          <NfePreview />
-        </ScrollReveal>
-      </section>
-
-      <section className="bg-surface border-border border-y">
-        <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-[1.08fr_0.92fr] lg:px-8">
-          <ScrollReveal className="border-border bg-surface-sunken rounded-2xl border p-5 shadow-sm sm:p-7">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-fg font-semibold">Jornada do resultado</p>
-                <p className="text-fg-subtle mt-1 text-xs">
-                  Resultado efetivo vs. cotado
+                <p className="text-fg-muted mt-1 max-w-[30rem] text-sm leading-relaxed">
+                  {description}
                 </p>
               </div>
-              <span className="bg-success-soft text-success rounded-full px-2.5 py-1 text-xs font-medium">
-                Favorável
-              </span>
-            </div>
-            <p className="text-success mt-6 text-3xl font-semibold tabular-nums">
-              + R$ 328,40
-            </p>
-            <div className="border-border relative mt-8 border-l pl-6">
-              {[
-                ["12 ago", "Alimentos Sul", "+ R$ 184,60", "success"],
-                ["19 ago", "Casa do Frio", "− R$ 42,10", "bad"],
-                ["27 ago", "Mercantil SP", "+ R$ 185,90", "success"],
-              ].map(([date, supplier, value, tone], index) => (
-                <div
-                  key={date}
-                  className={cn(
-                    "relative flex items-center gap-3 py-3",
-                    index > 0 && "border-border border-t",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "border-surface-sunken absolute -left-[30px] size-3 rounded-full border-2",
-                      tone === "success" ? "bg-success" : "bg-destructive",
-                    )}
-                  />
-                  <span className="text-fg-subtle w-12 text-[10px]">
-                    {date}
-                  </span>
-                  <span className="text-fg min-w-0 flex-1 truncate text-xs font-medium">
-                    {supplier}
-                  </span>
-                  <strong
-                    className={cn(
-                      "text-xs tabular-nums",
-                      tone === "success" ? "text-success" : "text-destructive",
-                    )}
-                  >
-                    {value}
-                  </strong>
-                </div>
-              ))}
-            </div>
-          </ScrollReveal>
-
-          <ScrollReveal delay={100}>
-            <h2 className="text-fg text-3xl font-semibold tracking-tight sm:text-4xl">
-              Veja o número. E, quando precisar, entenda a história dele.
-            </h2>
-            <p className="text-fg-muted mt-5 leading-relaxed">
-              Resultados efetivos, diferenças entre nota e pedido e divergências
-              deixam de ser apenas alertas. Cada valor conduz aos eventos,
-              fornecedores e itens que pedem análise.
-            </p>
-            <div className="mt-7 flex flex-wrap gap-2">
-              {[
-                "Preço cotado",
-                "Preço negociado",
-                "Valor recebido",
-                "Ajuste fiscal",
-              ].map((item) => (
-                <span
-                  key={item}
-                  className="border-border bg-surface-muted text-fg-muted rounded-full border px-3 py-1.5 text-xs"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-          </ScrollReveal>
-        </div>
+            </li>
+          ))}
+        </ol>
       </section>
 
-      <section className="mx-auto max-w-5xl px-4 py-20 sm:px-6 sm:py-28">
-        <ScrollReveal>
-          <div className="border-primary-line bg-primary-soft rounded-2xl border px-6 py-12 text-center sm:px-12">
-            <span className="bg-primary-solid text-primary-solid-fg mx-auto grid size-11 place-items-center rounded-xl">
-              <History className="size-5" aria-hidden />
-            </span>
-            <h2 className="text-fg mx-auto mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
-              Menos tempo procurando respostas. Mais tempo comprando bem.
-            </h2>
-            <p className="text-fg-muted mx-auto mt-4 max-w-xl leading-relaxed">
-              Entre no sistema e acompanhe sua operação completa em uma única
-              jornada.
-            </p>
-            <Button asChild size="lg" className="mt-7 h-11 px-5">
-              <Link href="/login">
-                Acessar o CotaPro <ArrowRight aria-hidden />
-              </Link>
-            </Button>
-          </div>
-        </ScrollReveal>
+      <section className="border-border bg-surface-sunken border-t">
+        <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 py-16 sm:px-6 sm:py-20 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-fg max-w-xl text-2xl leading-tight font-semibold tracking-[-0.025em] text-balance sm:text-3xl">
+            A próxima rodada começa com o preço da última nota.
+          </h2>
+          <Button asChild size="lg" className="h-11 shrink-0 px-5">
+            <Link href="/login">
+              Entrar no CotaPro <ArrowRight aria-hidden />
+            </Link>
+          </Button>
+        </div>
       </section>
 
       <footer className="border-border bg-surface border-t">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <CotaProLogo compact />
           <p className="text-fg-subtle text-xs">
             Gestão do ciclo de compras e cotações.
           </p>
-          <Link
-            href="/login"
-            className="text-primary text-sm font-medium hover:underline"
-          >
-            Entrar no sistema
-          </Link>
         </div>
       </footer>
     </main>
