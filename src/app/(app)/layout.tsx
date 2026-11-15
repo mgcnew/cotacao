@@ -80,7 +80,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           // No desktop o cabeçalho é do mesmo tom da página: o conteúdo começa
           // logo abaixo e uma faixa de outra cor só somava um plano. O celular
           // segue com o fundo do cartão, que ali o separa da lista que rola.
-          className="border-border bg-surface flex h-14 shrink-0 items-center gap-3 border-b px-4 sm:bg-transparent sm:px-6"
+          className="bg-surface flex h-14 shrink-0 items-center gap-3 px-4 sm:bg-transparent sm:px-6"
         >
           <Suspense fallback={<div className="flex-1" />}>
             <AppBreadcrumb className="flex-1" />

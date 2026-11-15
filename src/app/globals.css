@@ -155,32 +155,20 @@
 }
 
 .dark {
-  /* Carvão neutro: a interface escura usa diferenças pequenas de
-     luminosidade para organizar o conteúdo, sem uma dominante azul.
-
-     A escada abaixo é o coração deste tema, e ela foi refeita. Antes o cartão
-     ficava 3 pontos de L* acima da página e a borda dele, 12 acima do cartão:
-     a linha era quatro vezes mais forte que a forma que ela desenhava, então o
-     olho lia primeiro a grade de fios e só depois o conteúdo. Agora o degrau
-     de elevação e o da borda valem o mesmo (~6 cada) — quem separa os planos
-     é o TOM, e a borda voltou a ser o que borda deve ser: uma aresta que você
-     acha quando procura e não enxerga quando não está procurando.
-
-     A sequência é canvas → chrome → cartão → elevado; a borda apenas
-     confirma a separação que o tom já produziu. */
-  --bg: #0f1218;
-  /* Nem branco puro: sobre carvão, texto branco puro "sangra" (halação) e
-     cansa depois de horas; este tom preserva contraste alto sem esse efeito. */
-  --fg: #e6e9ef;
-  --fg-muted: #a6aebd;
-  --fg-subtle: #8a93a3;
-  --surface: #171b22;
-  --surface-muted: #20252e;
-  --surface-elevated: #1b2028;
-  --surface-sunken: #12151b;
-  --border-color: #272d37;
-  --border-strong: #38404d;
-  --input-bg: #151920;
+  /* Planos em violeta discreto: canvas → painel → elevado → interação.
+     A área interna recua para o tom sunken; seleção sobe em luminosidade.
+     O matiz fica nos neutros, sem competir com as cores de estado. */
+  --bg: #100e16;
+  --fg: #eeeaf5;
+  --fg-muted: #b6afc4;
+  --fg-subtle: #9b93ac;
+  --surface: #1c1826;
+  --surface-muted: #2b2538;
+  --surface-elevated: #252030;
+  --surface-sunken: #15111d;
+  --border-color: #342d42;
+  --border-strong: #4c425e;
+  --input-bg: #17131f;
 
   /* A Inter é variável, portanto aceita pesos intermediários. No fundo
      escuro o alto contraste faz 600/700 parecerem mais pesados do que no
@@ -199,8 +187,8 @@
   --info: #82acd8;
   --neutral: #a6aebd;
 
-  --primary-soft: color-mix(in oklab, var(--primary) 9%, var(--surface));
-  --primary-line: color-mix(in oklab, var(--primary) 22%, var(--border-color));
+  --primary-soft: color-mix(in oklab, var(--primary) 16%, var(--surface));
+  --primary-line: color-mix(in oklab, var(--primary) 32%, var(--border-color));
   --success-soft: color-mix(in oklab, var(--success) 8%, var(--surface));
   --warning-soft: color-mix(in oklab, var(--warning) 8%, var(--surface));
   --destructive-soft: color-mix(
@@ -221,7 +209,7 @@
 
   /* A borda do campo é a única que ainda fala em voz normal. Se tudo recua
      junto, o formulário some — e é justamente nele que se quer olhar. */
-  --input: #363e4b;
+  --input: #4c425e;
 
   --destructive-foreground: #0a0a0c;
 }
@@ -508,15 +496,15 @@ html[data-accent="nevoa"]
   --primary-solid: #4353ff;
   --primary-solid-fg: #fbfbff;
   --brand: #939cff;
-  --bg: #08080b;
-  --surface: #111115;
-  --surface-muted: #19191f;
-  --surface-elevated: #15151a;
-  --surface-sunken: #0c0c10;
-  --border-color: #18181e;
-  --border-strong: #2a2a33;
-  --input-bg: #0f0f13;
-  --input: #2c2c36;
+  --bg: #0d0d14;
+  --surface: #181823;
+  --surface-muted: #292938;
+  --surface-elevated: #222230;
+  --surface-sunken: #12121c;
+  --border-color: #303041;
+  --border-strong: #45455c;
+  --input-bg: #14141f;
+  --input: #45455c;
   --info: #939cff;
   --r-lg: 10px;
   --r-xl: 16px;
@@ -1018,18 +1006,52 @@ html:has([data-slot="landing-page"]) {
 .dark [data-slot="app-sidebar"],
 .dark [data-slot="app-sidebar-panel"] {
   background: var(--surface);
-  border-color: rgba(255, 255, 255, 0.07);
+  border-color: var(--border-color);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
     0 28px 70px -28px rgba(0, 0, 0, 0.9);
 }
 
-/* Cartões ficam planos como na referência: a diferença de superfície faz a
-   hierarquia e a sombra não compete com bordas, texto e dados. */
+/* Métricas ficam planas; cartões ganham a mesma aresta dos demais painéis. */
 .dark [data-slot="metric"],
 .dark [data-slot="card"],
 .dark [data-slot="dashboard-metric"] {
   box-shadow: none;
+}
+
+.dark [data-slot="card"] {
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border-color);
+}
+
+/* Seleção em faixa como na referência, inclusive nas paletas com menu sólido.
+   O foco continua com seu anel próprio; hover é mais discreto que seleção. */
+html.dark [data-slot="app-sidebar"] a[aria-current="page"]:not([data-nav-sub]),
+html.dark [data-slot="app-sidebar-panel"] a[aria-current="page"] {
+  background: var(--primary-soft);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--primary-line);
+}
+
+html.dark [data-slot="app-sidebar"]
+  div:has(> a[aria-current="page"]:not([data-nav-sub])) > button {
+  color: var(--fg-muted);
+}
+
+html.dark [data-slot="app-sidebar"] a[aria-current="page"]:not([data-nav-sub])::before {
+  display: none;
+}
+
+html.dark [data-slot="app-sidebar"] a[aria-current="page"]:not([data-nav-sub]) svg {
+  color: var(--primary);
+}
+
+.dark [data-slot="app-sidebar-panel"] {
+  background: var(--surface-elevated);
+}
+
+.dark [data-slot="table-row"][data-state="selected"] {
+  background: var(--primary-soft);
 }
 
 .dark [data-slot="dashboard-metric"]:is(a, button):hover {
@@ -1069,19 +1091,22 @@ html:has([data-slot="landing-page"]) {
 }
 
 .dark [data-slot="table-header"] {
-  background: color-mix(in oklab, var(--surface-muted) 42%, var(--surface));
+  background: var(--surface-sunken);
 }
 
 .dark [data-slot="dialog-overlay"] {
   background: rgba(0, 0, 0, 0.52);
 }
 
-/* Cabeçalho e rodapé se separam pelo plano, não por mais duas linhas. A
-   borda transparente preserva as medidas do componente entre os temas. */
+/* Moldura e corpo recuado dão ao diálogo três planos perceptíveis. */
 .dark [data-slot="dialog-header"],
 .dark [data-slot="dialog-footer"] {
-  border-color: transparent;
-  background: color-mix(in oklab, var(--surface) 64%, var(--surface-elevated));
+  border-color: var(--border-color);
+  background: var(--surface);
+}
+
+.dark [data-slot="dialog-body"] {
+  background: var(--surface-sunken);
 }
 
 @media (min-width: 640px) {

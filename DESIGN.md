@@ -162,7 +162,7 @@ A interface recusa a pele shadcn sem ajuste: nada de pílulas superarredondadas,
 - Inter com números tabulares; nenhum texto abaixo de 12px.
 - Raios de 4 a 8px nos controles e 12px nos contêineres.
 - Controles de 32px no mouse e 44px no toque (`pointer: coarse`).
-- Tema escuro em carvão neutro, com o acento dividido em tinta e preenchimento.
+- Tema escuro com neutros violeta discretos e planos definidos, com o acento dividido em tinta e preenchimento.
 
 ## Colors
 
@@ -185,7 +185,7 @@ Paleta fria e contida: neutros ardósia carregam quase tudo, um acento roxo-azul
 - **Verde-sucesso** (`success`), **âmbar-alerta** (`warning`), **vermelho-erro** (`destructive`), **azul-informação** (`info`) e **cinza neutro** (`neutral`), cada um com seu par `-soft` (mistura de 9 a 12% sobre a superfície) para fundo.
 
 ### Tema escuro
-Carvão neutro sem dominante azul (fundo `#0f1218`, superfície `#171b22`, texto `#e6e9ef`, nunca branco puro). No escuro o acento se divide: `--primary` vira tinta clara para texto e ícone, e `--primary-solid` é o preenchimento escuro do botão, com texto quase branco. Os pesos 600/700 descem para 560/650 para compensar o contraste.
+Neutros violeta discretos (fundo `#100e16`, painel `#1c1826`, elevado `#252030`, área interna `#15111d`, texto `#eeeaf5`). Cartões usam o plano de painel e contorno `#342d42`; áreas internas recuam e seleções usam 16% do acento, com contorno sutil no menu. Safira mantém sua variação fria; Oceano e Névoa preservam suas superfícies próprias. No escuro o acento se divide: `--primary` vira tinta clara para texto e ícone, e `--primary-solid` é o preenchimento escuro do botão, com texto quase branco. Os pesos 600/700 descem para 560/650 para compensar o contraste.
 
 ### Named Rules
 **The Three Places Rule.** O acento aparece em três lugares e só neles: a ação principal, a seleção e o foco. Estado nunca usa o acento.
