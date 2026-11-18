@@ -277,7 +277,7 @@ export function ComparisonTable({ rows }: { rows: ComparisonRow[] }) {
               <span className="tabular-nums">
                 <span className="text-fg-subtle sm:hidden">Pedido: </span>
                 {QTY.format(row.requestedQuantity)} {row.purchaseUnit} ·{" "}
-                {MONEY.format(row.agreedPrice)}/{row.pricingUnit}
+                {(row.agreedPrice === null ? "Preço não informado" : MONEY.format(row.agreedPrice))}/{row.pricingUnit}
               </span>
               {row.invoice ? (
                 <span className="tabular-nums">

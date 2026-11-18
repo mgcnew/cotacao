@@ -36,6 +36,7 @@ export function quickPricingQuantity(item: {
 /** Todos os itens com saldo têm resposta, e há ao menos um com saldo. */
 export function canReceiveAsOrdered(
   items: {
+    agreedPrice: number | null;
     sameUnit: boolean;
     requestedQuantity: number;
     pendingQuantity: number;
@@ -45,6 +46,6 @@ export function canReceiveAsOrdered(
   const pending = items.filter((item) => item.pendingQuantity > 0);
   return (
     pending.length > 0 &&
-    pending.every((item) => quickPricingQuantity(item) !== null)
+    pending.every((item) => item.agreedPrice !== null && quickPricingQuantity(item) !== null)
   );
 }

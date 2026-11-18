@@ -73,7 +73,7 @@ export type OrderLine = {
   productName: string;
   requestedQuantity: number;
   purchaseUnit: string;
-  agreedPrice: number;
+  agreedPrice: number | null;
   pricingUnit: string;
 };
 
@@ -183,7 +183,7 @@ export function scoreInvoiceForOrder(
   );
   const withinTolerance = priced.filter((line) => {
     const agreed = byProduct.get(line.productId!)!.agreedPrice;
-    return Math.abs(line.practicedPrice! / agreed - 1) <= TOLERANCIA_PRECO;
+    return agreed !== null && Math.abs(line.practicedPrice! / agreed - 1) <= TOLERANCIA_PRECO;
   });
   const covered = new Set(inOrder.map((line) => line.productId)).size;
   const citedInInvoice =
@@ -276,7 +276,7 @@ export async function listOpenOrdersForMatch(
             productName: item.product_name_snapshot,
             requestedQuantity: Number(item.requested_quantity),
             purchaseUnit: item.purchase_unit?.symbol ?? "",
-            agreedPrice: Number(item.agreed_price),
+            agreedPrice: item.agreed_price == null ? null : Number(item.agreed_price),
             pricingUnit: item.pricing_unit?.symbol ?? "",
           }),
         ),
@@ -351,7 +351,7 @@ export async function listUnverifiedPriceOrdersForMatch(
           productName: item.product_name_snapshot,
           requestedQuantity: Number(item.requested_quantity),
           purchaseUnit: item.purchase_unit?.symbol ?? "",
-          agreedPrice: Number(item.agreed_price),
+          agreedPrice: item.agreed_price == null ? null : Number(item.agreed_price),
           pricingUnit: item.pricing_unit?.symbol ?? "",
         }),
       ),
@@ -647,7 +647,7 @@ export type ComparisonRow =
       productName: string;
       requestedQuantity: number;
       purchaseUnit: string;
-      agreedPrice: number;
+      agreedPrice: number | null;
       pricingUnit: string;
       invoice: {
         quantity: number;
@@ -686,7 +686,7 @@ function buildComparison(
         unit: lines[0].unit,
         practicedPrice,
         priceDiff:
-          practicedPrice !== null && line.agreedPrice > 0
+          practicedPrice !== null && line.agreedPrice !== null && line.agreedPrice > 0
             ? practicedPrice / line.agreedPrice - 1
             : null,
       },

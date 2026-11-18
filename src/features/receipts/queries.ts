@@ -60,7 +60,7 @@ export async function listReceivingBoard(companyId: string) {
           Number(item.requested_quantity) - received,
           0,
         ),
-        agreedPrice: Number(item.agreed_price),
+        agreedPrice: item.agreed_price == null ? null : Number(item.agreed_price),
         purchaseUnit: item.purchase_unit?.symbol ?? "",
         pricingUnit: item.pricing_unit?.symbol ?? "",
         sameUnit: item.purchase_unit_id === item.pricing_unit_id,

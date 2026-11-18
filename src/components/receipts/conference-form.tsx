@@ -47,7 +47,7 @@ type Item = {
   requestedQuantity: number;
   receivedQuantity: number;
   pendingQuantity: number;
-  agreedPrice: number;
+  agreedPrice: number | null;
   purchaseUnit: string;
   pricingUnit: string;
   /** Tipo da unidade de precificação; "count" é contado em peças. */
@@ -756,7 +756,7 @@ export function ReceiptConferenceForm({
                     </strong>
                     {" · "}combinado{" "}
                     <strong>
-                      {MONEY.format(item.agreedPrice)}/{item.pricingUnit}
+                      {(item.agreedPrice === null ? "Preço não informado" : MONEY.format(item.agreedPrice))}/{item.pricingUnit}
                     </strong>
                   </p>
                 </div>
@@ -909,6 +909,7 @@ export function ReceiptConferenceForm({
                       type="checkbox"
                       id={`semnota_${item.id}`}
                       name={`semnota_${item.id}`}
+                      disabled={item.agreedPrice === null}
                       className="peer"
                     />
                     <label

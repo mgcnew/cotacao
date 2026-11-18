@@ -1189,7 +1189,7 @@ export type Database = {
       };
       order_revision_items: {
         Row: {
-          agreed_price: number;
+          agreed_price: number | null;
           company_id: string;
           comparison_unit_id: string | null;
           created_at: string;
@@ -1209,7 +1209,7 @@ export type Database = {
           requested_quantity: number;
         };
         Insert: {
-          agreed_price: number;
+          agreed_price: number | null;
           company_id: string;
           comparison_unit_id?: string | null;
           created_at?: string;
@@ -1229,7 +1229,7 @@ export type Database = {
           requested_quantity: number;
         };
         Update: {
-          agreed_price?: number;
+          agreed_price?: number | null;
           company_id?: string;
           comparison_unit_id?: string | null;
           created_at?: string;

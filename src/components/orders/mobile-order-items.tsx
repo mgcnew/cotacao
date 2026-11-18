@@ -199,7 +199,7 @@ function ItemRow({
               }
             }}
             aria-label={`Preço de ${row.name}${row.pricingUnit ? ` por ${row.pricingUnit}` : ""}`}
-            placeholder="Preço"
+            placeholder="Preço opcional"
             className="text-fg placeholder:text-fg-subtle h-full min-w-0 flex-1 bg-transparent text-base tabular-nums outline-none"
           />
           {row.pricingUnit ? (

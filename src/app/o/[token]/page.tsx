@@ -143,8 +143,9 @@ export default async function PedidoPublicoPage({
                     {item.purchase_unit.symbol}
                   </p>
                   <p className="text-fg-muted text-xs tabular-nums">
-                    {MONEY.format(Number(item.agreed_price))} por{" "}
-                    {item.pricing_unit.symbol}
+                    {item.agreed_price === null
+                      ? "Preço não informado — enviar espelho do pedido ou comprovante"
+                      : `${MONEY.format(Number(item.agreed_price))} por ${item.pricing_unit.symbol}`}
                   </p>
                 </div>
               </li>

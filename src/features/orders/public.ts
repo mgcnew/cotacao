@@ -9,7 +9,7 @@ export type PublicOrderItem = {
   purchase_unit: { symbol: string };
   pricing_unit: { symbol: string };
   estimated_pricing_quantity?: string | null;
-  agreed_price: string;
+  agreed_price: string | null;
   notes: string | null;
   packaging_presentation: {
     quantity_per_package: number;

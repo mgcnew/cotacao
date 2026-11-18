@@ -1000,6 +1000,7 @@ export async function receiveOrderAsOrdered(
         order_revision_items (
           id,
           requested_quantity,
+          agreed_price,
           purchase_unit_id,
           pricing_unit_id,
           estimated_pricing_quantity,
@@ -1044,6 +1045,9 @@ export async function receiveOrderAsOrdered(
     );
     const pending = Math.max(requested - received, 0);
     if (pending <= 0) continue;
+    if (item.agreed_price === null) {
+      return { error: "Pedido sem preço: use Conferir e informe o valor do espelho do pedido ou comprovante." };
+    }
     const pricing = quickPricingQuantity({
       sameUnit: item.purchase_unit_id === item.pricing_unit_id,
       requestedQuantity: requested,

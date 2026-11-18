@@ -15,7 +15,7 @@ export type PublicReceivingDisplayItem = {
   received_quantity: number;
   pending_quantity: number;
   purchase_unit: string;
-  agreed_price: number;
+  agreed_price: number | null;
   pricing_unit: string;
 };
 

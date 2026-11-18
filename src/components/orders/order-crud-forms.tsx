@@ -28,7 +28,7 @@ export type EditableItem = {
   allocationId: string | null;
   productName: string;
   requestedQuantity: number;
-  agreedPrice: number;
+  agreedPrice: number | null;
   notes: string | null;
   /** Forma de compra do item ("cx"), que a edição precisa devolver intacta. */
   purchaseFormId: string | null;
@@ -43,7 +43,7 @@ function paraSeeds(items: EditableItem[], manterId: boolean): ItemSeed[] {
     productId: item.productId,
     productName: item.productName,
     quantity: paraCampo(item.requestedQuantity, 3).replace(/,?0+$/, ""),
-    price: paraCampo(item.agreedPrice),
+    price: item.agreedPrice === null ? "" : paraCampo(item.agreedPrice),
     notes: item.notes ?? "",
     purchaseFormId: item.purchaseFormId,
     formUnit: item.formUnit,

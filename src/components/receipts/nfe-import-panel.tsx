@@ -84,9 +84,9 @@ const PRICE_SUSPICION_RATIO = 0.3;
 
 export function priceDeviation(
   practicedPrice: number | null,
-  agreedPrice: number,
+  agreedPrice: number | null,
 ) {
-  if (practicedPrice === null || practicedPrice <= 0 || agreedPrice <= 0) {
+  if (practicedPrice === null || practicedPrice <= 0 || agreedPrice === null || agreedPrice <= 0) {
     return null;
   }
   return (practicedPrice - agreedPrice) / agreedPrice;
@@ -94,7 +94,7 @@ export function priceDeviation(
 
 export function suspiciousPrice(
   practicedPrice: number | null,
-  agreedPrice: number,
+  agreedPrice: number | null,
 ) {
   const deviation = priceDeviation(practicedPrice, agreedPrice);
   return deviation !== null && Math.abs(deviation) >= PRICE_SUSPICION_RATIO;
@@ -106,7 +106,7 @@ export type NfeOrderItemForImport = {
   id: string;
   productName: string;
   pendingQuantity: number;
-  agreedPrice: number;
+  agreedPrice: number | null;
   purchaseUnit: string;
   pricingUnit: string;
   sameUnit: boolean;
@@ -470,7 +470,7 @@ export function importedItemValues(
 
   if (practicedPrice === null) {
     warnings.push("Confira manualmente o preço por unidade de precificação.");
-  } else if (!sameMoney(practicedPrice, orderItem.agreedPrice)) {
+  } else if (orderItem.agreedPrice !== null && !sameMoney(practicedPrice, orderItem.agreedPrice)) {
     const deviation = priceDeviation(practicedPrice, orderItem.agreedPrice);
     if (deviation !== null && Math.abs(deviation) >= PRICE_SUSPICION_RATIO) {
       associationDoubt = true;
@@ -990,7 +990,7 @@ export function NfeImportPanel({
             MONEY.format(preview.practicedPrice ?? 0) +
             `/${orderItem.pricingUnit} e "${orderItem.productName}" foi ` +
             "combinado a " +
-            MONEY.format(orderItem.agreedPrice) +
+            (orderItem.agreedPrice === null ? "Preço não informado" : MONEY.format(orderItem.agreedPrice)) +
             `/${orderItem.pricingUnit}. Preço tão distante costuma ser ` +
             "produto trocado. Se for mesmo este produto, associe de novo.",
         },
@@ -1580,7 +1580,7 @@ export function NfeImportPanel({
                               value: item.id,
                               label:
                                 `${item.productName} · ` +
-                                `${MONEY.format(item.agreedPrice)}/${item.pricingUnit}`,
+                                `${(item.agreedPrice === null ? "Preço não informado" : MONEY.format(item.agreedPrice))}/${item.pricingUnit}`,
                             }))}
                           />
                         </div>

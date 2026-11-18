@@ -79,7 +79,7 @@ type OrderItemPayload = {
   comparison_unit_id: string | null;
   /** O gatilho da 0129 também a deduz da unidade; mandar é só ser explícito. */
   purchase_form_id: string | null;
-  agreed_price: string;
+  agreed_price: string | null;
   notes: string | null;
 };
 
@@ -216,7 +216,7 @@ async function buildOrderItems(
     if (!row.quantity || !Number.isFinite(quantity) || quantity <= 0) {
       return { ok: false, error: `Informe a quantidade de "${product.name}".` };
     }
-    if (!row.price || !Number.isFinite(price) || price < 0) {
+    if (row.price && (!Number.isFinite(price) || price < 0)) {
       return {
         ok: false,
         error: `Informe o preço combinado de "${product.name}".`,
@@ -245,7 +245,7 @@ async function buildOrderItems(
       pricing_unit_id: form ? form.unit_id : product.pricing_unit_id,
       comparison_unit_id: form ? form.base_unit_id : product.comparison_unit_id,
       purchase_form_id: form ? row.purchaseFormId : null,
-      agreed_price: row.price,
+      agreed_price: row.price || null,
       notes: row.notes || null,
     });
   }

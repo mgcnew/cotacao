@@ -267,7 +267,7 @@ export function PublicReceivingDisplay({
                                     {item.purchase_unit} pendente
                                   </p>
                                   <p className="text-fg-muted text-xs tabular-nums">
-                                    {MONEY.format(item.agreed_price)} por {item.pricing_unit}
+                                    {(item.agreed_price === null ? "Preço não informado" : MONEY.format(item.agreed_price))} por {item.pricing_unit}
                                   </p>
                                 </div>
                               </li>

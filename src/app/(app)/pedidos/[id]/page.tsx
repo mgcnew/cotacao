@@ -326,13 +326,18 @@ export async function PedidoContent({ id }: { id: string }) {
             </div>
           </div>
 
+          {revision.items.some((item) => item.agreedPrice === null) ? (
+            <p role="status" className="text-warning my-3 text-sm">
+              Pedido com preço não informado: solicite o espelho do pedido ou comprovante ao fornecedor para conferir os valores.
+            </p>
+          ) : null}
           <ul className="flex flex-col gap-2.5 sm:gap-1.5">
             {revision.items.map((item) => (
               <li key={item.id} className={LINHA_DE_ITEM}>
                 <span className="text-fg">{item.productName}</span>
                 <span className="text-fg-muted tabular-nums">
                   {QTY.format(item.requestedQuantity)} {item.purchaseUnit} ×{" "}
-                  {MONEY.format(item.agreedPrice)}
+                  {(item.agreedPrice === null ? "Preço não informado" : MONEY.format(item.agreedPrice))}
                   {item.receivedQuantity > 0 ? (
                     <span className="text-success ml-2">
                       recebido {QTY.format(item.receivedQuantity)}
@@ -366,13 +371,18 @@ export async function PedidoContent({ id }: { id: string }) {
                 : ""}
             </p>
           </div>
+          {draft.items.some((item) => item.agreedPrice === null) ? (
+            <p role="status" className="text-warning my-3 text-sm">
+              Pedido com preço não informado: solicite o espelho do pedido ou comprovante ao fornecedor para conferir os valores.
+            </p>
+          ) : null}
           <ul className="flex flex-col gap-2.5 sm:gap-1.5">
             {draft.items.map((item) => (
               <li key={item.id} className={LINHA_DE_ITEM}>
                 <span className="text-fg">{item.productName}</span>
                 <span className="text-fg-muted tabular-nums">
                   {QTY.format(item.requestedQuantity)} {item.purchaseUnit} ×{" "}
-                  {MONEY.format(item.agreedPrice)}
+                  {(item.agreedPrice === null ? "Preço não informado" : MONEY.format(item.agreedPrice))}
                 </span>
               </li>
             ))}
@@ -741,7 +751,7 @@ export async function PedidoContent({ id }: { id: string }) {
                     Revisão {r.revisionNumber}
                   </span>{" "}
                   · {r.itemCount} {r.itemCount === 1 ? "item" : "itens"} ·{" "}
-                  <span className="tabular-nums">{MONEY.format(r.total)}</span>
+                  <span className="tabular-nums">{r.hasMissingPrices ? "Total incompleto · " : ""}{MONEY.format(r.total)}</span>
                   <span className="text-fg-subtle block text-xs">
                     {r.sentAt
                       ? `enviada ${DATA_HORA.format(new Date(r.sentAt))}`

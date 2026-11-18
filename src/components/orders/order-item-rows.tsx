@@ -201,8 +201,8 @@ function SupplierTemplateSuggestions({
       </summary>
       <div className="border-primary/20 flex flex-col gap-4 border-t p-3">
         <p className="text-fg-muted text-xs">
-          Quantidades vêm do modelo. O preço é apenas uma referência da última
-          compra efetiva e poderá ser corrigido pelo fornecedor.
+          Quantidades vêm do modelo. O preço sugerido é o último valor pago,
+          apenas uma referência. Você pode alterá-lo ou deixá-lo em branco.
         </p>
 
         {templates.map((template) => (
@@ -280,7 +280,7 @@ function SupplierTemplateSuggestions({
                         htmlFor={priceId}
                         className="text-fg-muted text-xs"
                       >
-                        Último preço
+                        Último valor pago
                         {item.pricingUnit ? `/${item.pricingUnit}` : ""}
                       </label>
                       <Input
@@ -290,7 +290,7 @@ function SupplierTemplateSuggestions({
                         disabled={alreadyAdded}
                         placeholder={
                           item.lastPrice === null
-                            ? "Informar"
+                            ? "Opcional"
                             : PURCHASE_PRICE.format(item.lastPrice)
                         }
                         onChange={(event) =>
@@ -520,6 +520,11 @@ export function OrderItemRows({
 
   return (
     <div className="flex flex-col gap-3">
+      {rows.some((row) => row.productId && !row.price.trim()) ? (
+        <p role="status" className="border-warning/40 bg-warning/5 text-warning rounded-lg border px-3 py-2 text-sm">
+          Há itens sem preço. Solicite o espelho do pedido ou comprovante ao fornecedor para conferir os valores.
+        </p>
+      ) : null}
       {supplierTemplates.length > 0 ? (
         <SupplierTemplateSuggestions
           key={supplierTemplates.map((template) => template.id).join(":")}
@@ -819,7 +824,7 @@ export function OrderItemRows({
                     htmlFor={priceFieldId}
                     className="text-fg-muted text-xs"
                   >
-                    Preço{unidades ? ` (por ${unidades.pricingUnit})` : ""}
+                    Preço (opcional){unidades ? ` (por ${unidades.pricingUnit})` : ""}
                   </label>
                   <Input
                     id={priceFieldId}

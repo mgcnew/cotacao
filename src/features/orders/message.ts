@@ -31,7 +31,7 @@ export type OrderMessageContext = {
   items: {
     productName: string;
     requestedQuantity: number;
-    agreedPrice: number;
+    agreedPrice: number | null;
     purchaseUnit: string;
     pricingUnit: string;
   }[];
@@ -63,7 +63,7 @@ export function buildOrderMessage(
     fornecedor: ctx.supplierName,
     itens: ctx.items.map(
       (i) =>
-        `• ${i.productName} — ${QTY.format(i.requestedQuantity)} ${i.purchaseUnit} × ${MONEY.format(i.agreedPrice)}/${i.pricingUnit}`,
+        `• ${i.productName} — ${QTY.format(i.requestedQuantity)} ${i.purchaseUnit} × ${i.agreedPrice === null ? "preço não informado — enviar espelho do pedido ou comprovante" : `${MONEY.format(i.agreedPrice)}/${i.pricingUnit}`}`,
     ).join("\n"),
     prazo_entrega: ctx.deliveryDueDate ? `Entrega prevista: ${dia(ctx.deliveryDueDate)}` : "",
     link: url ?? "[link individual de confirmação]",

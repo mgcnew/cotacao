@@ -229,7 +229,7 @@ async function RecebimentosConteudo({
               <span>{item.productName}</span>
               <span className="shrink-0 tabular-nums">
                 {QTY.format(item.pendingQuantity)} {item.purchaseUnit} ·{" "}
-                {MONEY.format(item.agreedPrice)}
+                {(item.agreedPrice === null ? "Preço não informado" : MONEY.format(item.agreedPrice))}
               </span>
             </li>
           ))}

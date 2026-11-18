@@ -29,7 +29,7 @@ export type ReceiptItem = {
   productName: string;
   requestedQuantity: number;
   pendingQuantity: number;
-  agreedPrice: number;
+  agreedPrice: number | null;
   purchaseUnit: string;
   pricingUnit: string;
 };
@@ -101,7 +101,7 @@ export function ReceiptForm({
               <p className="text-fg-subtle text-xs">
                 pendente {QTY.format(item.pendingQuantity)} {item.purchaseUnit}{" "}
                 · combinado{" "}
-                {item.agreedPrice.toFixed(2).replace(".", ",")}/
+                {item.agreedPrice?.toFixed(2).replace(".", ",") ?? "não informado"}/
                 {item.pricingUnit}
               </p>
             </div>
@@ -146,9 +146,7 @@ export function ReceiptForm({
                   id={`preco_${item.id}`}
                   name={`preco_${item.id}`}
                   inputMode="decimal"
-                  defaultValue={item.agreedPrice
-                    .toFixed(2)
-                    .replace(".", ",")}
+                  defaultValue={item.agreedPrice?.toFixed(2).replace(".", ",") ?? ""}
                   className="h-8"
                 />
               </div>

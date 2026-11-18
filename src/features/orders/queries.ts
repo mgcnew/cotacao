@@ -598,7 +598,7 @@ type RevisionRow = {
     purchase_allocation_id: string | null;
     product_name_snapshot: string;
     requested_quantity: number;
-    agreed_price: number;
+    agreed_price: number | null;
     notes: string | null;
     estimated_pricing_quantity: number | null;
     purchase_form_id: string | null;
@@ -634,7 +634,7 @@ function mapRevision(data: RevisionRow) {
         allocationId: item.purchase_allocation_id,
         productName: item.product_name_snapshot,
         requestedQuantity: Number(item.requested_quantity),
-        agreedPrice: Number(item.agreed_price),
+        agreedPrice: item.agreed_price == null ? null : Number(item.agreed_price),
         notes: item.notes,
         purchaseFormId: item.purchase_form_id,
         /** "1 cx = 12 un": quanto de base vale 1 da forma (0129). */
@@ -749,6 +749,7 @@ export async function listOrderRevisions(companyId: string, orderId: string) {
     confirmationChannel: r.confirmation_channel,
     confirmationNotes: r.confirmation_notes,
     itemCount: r.order_revision_items?.length ?? 0,
+    hasMissingPrices: (r.order_revision_items ?? []).some((item) => item.agreed_price === null),
     total: (r.order_revision_items ?? []).reduce(
       (sum, i) => sum + Number(i.requested_quantity) * Number(i.agreed_price),
       0,
@@ -815,7 +816,7 @@ export async function getOrderMessageContext(
     items: (revision.data.order_revision_items ?? []).map((item) => ({
       productName: item.product_name_snapshot,
       requestedQuantity: Number(item.requested_quantity),
-      agreedPrice: Number(item.agreed_price),
+      agreedPrice: item.agreed_price == null ? null : Number(item.agreed_price),
       purchaseUnit: item.purchase_unit?.symbol ?? "",
       pricingUnit: item.pricing_unit?.symbol ?? "",
     })),
