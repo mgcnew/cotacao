@@ -47,7 +47,7 @@ const PEDIDO_PEQUENO_ITENS = 2;
 /** Quanto a mais, sobre o valor movido, ainda vale sugerir a junção. */
 const JUNCAO_ATE = 0.05;
 
-export type VisaoDaDecisao = "fornecedor" | "item";
+export type VisaoDaDecisao = "fornecedor" | "item" | "vencedores";
 export type OrdemDaDecisao = "grupo" | "margem";
 
 type Row = DadosDaAlocacao["rows"][number];
@@ -286,11 +286,13 @@ export function AlocacaoConteudo({
   showReportAction = true,
   visao = "fornecedor",
   ordem = "grupo",
+  incluirSugestoes = false,
 }: {
   dados: DadosDaAlocacao;
   showReportAction?: boolean;
   visao?: VisaoDaDecisao;
   ordem?: OrdemDaDecisao;
+  incluirSugestoes?: boolean;
 }) {
   const { round, rows, allocationsByItem, orders, rascunhos, fornecedoresNoRascunho, supplierName, podeVer, podeDecidir, podeConfirmar } = dados;
 
@@ -356,6 +358,10 @@ export function AlocacaoConteudo({
   const supplierBuckets = [...buckets.values()].sort(
     (a, b) => (bucketTotal.get(b.id) ?? 0) - (bucketTotal.get(a.id) ?? 0) || a.name.localeCompare(b.name),
   );
+  if (visao === "vencedores") {
+    return <VencedoresConsolidados dados={dados} buckets={supplierBuckets} incluirSugestoes={incluirSugestoes} />;
+  }
+
   const consolidations = new Map(
     supplierBuckets.flatMap((bucket) => {
       const consolidation = consolidationFor(bucket, supplierBuckets, dados);
@@ -652,6 +658,109 @@ export function AlocacaoConteudo({
       ) : null}
       {orders.length > 0 ? <GeneratedOrders orders={orders} /> : null}
     </>
+  );
+}
+
+/** Usa as mesmas escolhas e regras de sugestão da decisão, sem listar concorrentes. */
+function VencedoresConsolidados({ dados, buckets, incluirSugestoes }: {
+  dados: DadosDaAlocacao;
+  buckets: SupplierBucket[];
+  incluirSugestoes: boolean;
+}) {
+  const base = `/compras/${dados.round.id}/alocacao`;
+  const visiveis = buckets
+    .map((bucket) => ({ ...bucket, recommendations: incluirSugestoes ? bucket.recommendations : [] }))
+    .filter((bucket) => bucket.decisions.length > 0 || bucket.recommendations.length > 0)
+    .sort((a, b) => bucketTotals(b).total - bucketTotals(a).total || a.name.localeCompare(b.name));
+  const itens = new Set(visiveis.flatMap((bucket) => [
+    ...bucket.decisions.map(({ row }) => row.itemId),
+    ...bucket.recommendations.map(({ row }) => row.itemId),
+  ]));
+  const totals = visiveis.reduce((acc, bucket) => {
+    const total = bucketTotals(bucket);
+    return {
+      value: acc.value + total.total,
+      missing: acc.missing + total.withoutConversion + total.confirmedWithoutConversion,
+      suggestions: acc.suggestions + bucket.recommendations.length,
+    };
+  }, { value: 0, missing: 0, suggestions: 0 });
+  const pendentes = dados.rows.filter((row) => row.commercialStatus === "open" &&
+    (dados.allocationsByItem.get(row.itemId) ?? []).reduce((sum, allocation) => sum + allocation.allocatedQuantity, 0) < row.requestedQuantity).length;
+
+  return (
+    <div className="space-y-4">
+      <section className="border-border bg-surface rounded-xl border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-fg text-base font-semibold">Vencedores por fornecedor</h2>
+            <p className="text-fg-muted mt-1 text-sm">Confira os produtos de cada fornecedor, com as escolhas salvas e os itens já em pedido.</p>
+            <p className="text-fg-muted mt-1 text-sm">Inclua as sugestões para avaliar a proposta completa antes de decidir.</p>
+          </div>
+          <Button asChild variant="outline" size="sm"><Link href={base}>Continuar decisão</Link></Button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <Button asChild variant={incluirSugestoes ? "pressed" : "outline"} size="sm">
+            <Link href={`${base}?visao=vencedores${incluirSugestoes ? "" : "&sugestoes=1"}`} scroll={false} aria-current={incluirSugestoes ? "true" : undefined}>
+              {incluirSugestoes ? <CheckCircle2 className="size-4" aria-hidden /> : null}
+              {incluirSugestoes ? "Sugestões incluídas" : "Incluir sugestões"}
+            </Link>
+          </Button>
+          {incluirSugestoes && totals.suggestions > 0 && dados.podeDecidir && dados.round.status === "active" ? (
+            <ApplyRecommendationsForm roundId={dados.round.id} itemCount={totals.suggestions} />
+          ) : null}
+        </div>
+        <div className="border-border mt-4 flex flex-wrap items-end justify-between gap-3 border-t pt-4">
+          <div>
+            <p className="text-fg-muted text-sm">{visiveis.length} fornecedores · {itens.size} de {dados.rows.length} produtos nesta visão</p>
+            <p className="text-fg mt-1 text-2xl font-semibold tabular-nums">{MONEY.format(totals.value)}</p>
+            {totals.missing > 0 ? <p className="text-warning text-sm">{totals.missing} itens sem conversão, fora do total.</p> : null}
+          </div>
+          <div className="text-fg-muted text-sm">
+            {pendentes > 0 ? <p>{pendentes} produtos ainda precisam de decisão ou complemento.</p> : null}
+            {totals.suggestions > 0 ? <p>{totals.suggestions} sugestões nesta visão ainda não foram salvas.</p> : null}
+          </div>
+        </div>
+      </section>
+
+      {visiveis.length === 0 ? (
+        <EmptyState icon={PackageCheck} title="Nenhum vencedor definido" description="Salve as escolhas em Decidir compra ou inclua as sugestões para visualizar a proposta por fornecedor." />
+      ) : visiveis.map((bucket) => {
+        const total = bucketTotals(bucket);
+        const semConversao = total.withoutConversion + total.confirmedWithoutConversion;
+        return (
+          <details key={`${bucket.id}-${incluirSugestoes}`} open className="group border-border bg-surface overflow-hidden rounded-xl border">
+            <summary className="bg-surface-sunken focus-visible:ring-ring/50 flex cursor-pointer list-none items-center gap-3 px-4 py-3 outline-none focus-visible:ring-3 focus-visible:ring-inset [&::-webkit-details-marker]:hidden">
+              <Store className="text-fg-muted size-5 shrink-0" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <h3 className="text-fg font-semibold wrap-anywhere">{bucket.name}</h3>
+                <p className="text-fg-muted text-[13px]">{countsLabel(bucketCounts(bucket))}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-fg font-semibold tabular-nums">{MONEY.format(total.total)}</p>
+                {semConversao > 0 ? <p className="text-warning text-[13px]">{semConversao} sem conversão</p> : null}
+              </div>
+              <ChevronDown className="text-fg-muted size-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden />
+            </summary>
+            <ul className="divide-border border-border divide-y border-t">
+              {bucket.decisions.map(({ row, allocation }) => (
+                <li key={allocation.allocationId} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                  <ItemName row={row} quantity={allocation.allocatedQuantity} />
+                  <Price price={allocation.selectedPrice} pricingQuantity={allocation.estimatedPricingQuantity} unit={row.pricingUnit} />
+                  <Badge variant={allocation.status === "confirmed" ? "success" : "outline"}>{allocation.status === "confirmed" ? "no pedido" : "escolha salva"}</Badge>
+                </li>
+              ))}
+              {bucket.recommendations.map(({ row, winner }) => (
+                <li key={row.itemId} className="bg-primary/[0.025] flex flex-wrap items-center gap-3 px-4 py-3">
+                  <ItemName row={row} quantity={row.requestedQuantity} />
+                  <Price price={winner.price} pricingQuantity={winner.pricingFactor === null ? null : row.requestedQuantity * winner.pricingFactor} unit={row.pricingUnit} />
+                  <Badge variant="outline">sugestão · não salva</Badge>
+                </li>
+              ))}
+            </ul>
+          </details>
+        );
+      })}
+    </div>
   );
 }
 

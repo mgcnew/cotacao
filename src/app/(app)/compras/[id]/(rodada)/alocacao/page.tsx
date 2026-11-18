@@ -12,23 +12,25 @@ import { carregarAlocacao } from "@/features/rounds/alocacao";
  *
  * `?visao=item` troca a leitura por fornecedor pela leitura por item, e
  * `&ordem=margem` põe as vitórias apertadas no topo. Fica na URL para o link
- * abrir na mesma leitura.
+ * abrir na mesma leitura. `?visao=vencedores` mostra o consolidado, e
+ * `&sugestoes=1` inclui sugestões ainda não salvas.
  */
 export default async function AlocacaoPage({
   params,
   searchParams,
 }: PageProps<"/compras/[id]/alocacao">) {
-  const [{ id }, { visao, ordem }] = await Promise.all([params, searchParams]);
+  const [{ id }, { visao, ordem, sugestoes }] = await Promise.all([params, searchParams]);
   const dados = await carregarAlocacao(id);
 
   if (!dados) notFound();
 
   return (
     <>
-      <NavegacaoDaRodada roundId={id} atual="alocacao" />
+      <NavegacaoDaRodada roundId={id} atual={visao === "vencedores" ? "vencedores" : "alocacao"} />
       <AlocacaoConteudo
         dados={dados}
-        visao={visao === "item" ? "item" : "fornecedor"}
+        visao={visao === "vencedores" ? "vencedores" : visao === "item" ? "item" : "fornecedor"}
+        incluirSugestoes={sugestoes === "1"}
         ordem={ordem === "margem" ? "margem" : "grupo"}
       />
     </>

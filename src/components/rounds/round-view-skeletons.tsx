@@ -67,16 +67,17 @@ export function EsqueletoDaAba({
 }
 
 /**
- * A alternância "Comparar respostas | Decidir compra" nos esqueletos da
+ * A alternância "Comparar respostas | Decidir compra | Vencedores" nos esqueletos da
  * Decisão. Ela vive no corpo da página; sem este espaço reservado ela entrava
  * depois do carregamento e empurrava todo o conteúdo para baixo.
  */
 export function EsqueletoDaFerramenta() {
   return (
-    <div className="mb-5 flex items-center gap-2" aria-hidden>
+    <div className="mb-5 flex flex-wrap items-center gap-2" aria-hidden>
       <Skeleton className="h-4 w-20" />
       <Skeleton className="h-9 w-36 rounded-lg" />
       <Skeleton className="h-9 w-32 rounded-lg" />
+      <Skeleton className="h-9 w-24 rounded-lg" />
     </div>
   );
 }
