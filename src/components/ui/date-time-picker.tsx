@@ -102,6 +102,9 @@ export function DateTimePicker({
   defaultValue = "",
   dateOnly = false,
   max,
+  min,
+  allowedWeekdays,
+  onValueChange,
   required = false,
   className,
 }: {
@@ -113,6 +116,10 @@ export function DateTimePicker({
   dateOnly?: boolean;
   /** Último dia aceito (`yyyy-mm-dd`), como o `max` do campo nativo. */
   max?: string;
+  min?: string;
+  /** Dias permitidos: 0 = domingo, 6 = sábado. */
+  allowedWeekdays?: number[];
+  onValueChange?: (value: string) => void;
   /**
    * Sem "Limpar": o campo oculto não participa da validação do navegador, e
    * quem pede data obrigatória já vem com uma escolhida.
@@ -133,10 +140,19 @@ export function DateTimePicker({
   });
   const days = daysForMonth(visibleMonth);
   const today = new Date();
-  const afterMax = (day: Date) => max !== undefined && isoDay(day) > max;
+  const unavailable = (day: Date) =>
+    (max !== undefined && isoDay(day) > max) ||
+    (min !== undefined && isoDay(day) < min) ||
+    (allowedWeekdays !== undefined && !allowedWeekdays.includes(day.getDay()));
+  function notify(next: Date | null) {
+    onValueChange?.(next ? dateOnly ? isoDay(next) : next.toISOString() : "");
+  }
 
   function chooseDay(day: Date) {
-    setSelected((current) => withDate(current, day));
+    if (unavailable(day)) return;
+    const next = withDate(selected, day);
+    setSelected(next);
+    notify(next);
     if (day.getMonth() !== visibleMonth.getMonth()) {
       setVisibleMonth(new Date(day.getFullYear(), day.getMonth(), 1));
     }
@@ -145,13 +161,16 @@ export function DateTimePicker({
   function chooseNow() {
     const now = new Date();
     now.setSeconds(0, 0);
+    if (unavailable(now)) return;
     setSelected(now);
+    notify(now);
     setVisibleMonth(new Date(now.getFullYear(), now.getMonth(), 1));
   }
 
   function chooseTime(part: "hour" | "minute", value: number) {
     const next = withTime(selected, part, value);
     setSelected(next);
+    notify(next);
     if (!selected) {
       setVisibleMonth(new Date(next.getFullYear(), next.getMonth(), 1));
     }
@@ -250,7 +269,7 @@ export function DateTimePicker({
                   type="button"
                   aria-label={FULL_DATE.format(day)}
                   aria-pressed={chosen}
-                  disabled={afterMax(day)}
+                  disabled={unavailable(day)}
                   onClick={() => chooseDay(day)}
                   className={cn(
                     "focus-visible:border-ring focus-visible:ring-ring/50 grid size-8 place-items-center rounded-lg border border-transparent text-xs outline-none transition-colors focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-35",
@@ -302,7 +321,7 @@ export function DateTimePicker({
                 size="sm"
                 variant="ghost"
                 disabled={!selected}
-                onClick={() => setSelected(null)}
+                onClick={() => { setSelected(null); notify(null); }}
               >
                 Limpar
               </Button>
@@ -312,7 +331,7 @@ export function DateTimePicker({
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={afterMax(today)}
+                disabled={unavailable(today)}
                 onClick={chooseNow}
               >
                 {dateOnly ? "Hoje" : "Agora"}

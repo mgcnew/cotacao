@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getPermissions,requireActiveCompany } from "@/lib/auth/dal";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-export type ResearchState={error:string|null;saved?:boolean};
+export type ResearchState={error:string|null;saved?:boolean;savedAt?:number};
 export async function saveResearch(_previous:ResearchState,form:FormData):Promise<ResearchState>{
   const company=await requireActiveCompany();
   const permissions=await getPermissions(company.companyId);
@@ -40,7 +40,7 @@ export async function saveResearch(_previous:ResearchState,form:FormData):Promis
   }
   revalidatePath("/pesquisas-precos");revalidatePath(`/pesquisas-precos/${routineId}`);revalidatePath("/dashboard");
   if(createdId)redirect(`/pesquisas-precos/${createdId}`);
-  return {error:null,saved:true};
+  return {error:null,saved:true,savedAt:Date.now()};
 }
 export async function createResearchCollection(_previous:ResearchState,form:FormData):Promise<ResearchState>{
   const company=await requireActiveCompany();

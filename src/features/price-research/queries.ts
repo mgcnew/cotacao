@@ -24,7 +24,7 @@ export async function getResearchRoutine(companyId: string, id: string) {
     client.from("price_research_routines").select("*").eq("company_id",companyId).eq("id",id).maybeSingle(),
     client.from("price_research_items").select("*").eq("company_id",companyId).eq("routine_id",id),
     client.from("price_research_suppliers").select("*").eq("company_id",companyId).eq("routine_id",id),
-    client.from("products").select("id,name,is_active").eq("company_id",companyId).order("name"),
+    client.from("products").select("id,name,is_active,purchase_unit:units!products_company_id_purchase_unit_id_fkey(symbol)").eq("company_id",companyId).order("name"),
     client.from("suppliers").select("id,name,status").eq("company_id",companyId).order("name"),
   ]);
   for (const result of results) if(result.error) throw new Error(result.error.message);
