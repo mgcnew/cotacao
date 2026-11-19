@@ -46,6 +46,8 @@ const PUBLIC_PREFIXES = [
 function isPublicPath(pathname: string) {
   return (
     pathname === "/" ||
+    // O agendador autentica com CRON_SECRET na própria rota, sem sessão.
+    pathname === "/api/orders/confirmation-reminders" ||
     PUBLIC_PREFIXES.some(
       (prefix) => pathname === prefix || pathname.startsWith(prefix),
     )

@@ -922,3 +922,14 @@ export async function listOrderDivergences(companyId: string, orderId: string) {
   }
   return data ?? [];
 }
+
+/** A fila só nasce em envios bem-sucedidos pela integração de WhatsApp. */
+export async function getOrderConfirmationReminder(companyId: string, revisionId: string | null) {
+  if (!revisionId) return { reminder: null, checkedAt: Date.now() };
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.from("order_confirmation_reminders")
+    .select("status, due_at, sent_at, error_message")
+    .eq("company_id", companyId).eq("order_revision_id", revisionId).maybeSingle();
+  if (error) throw new Error(`Falha ao carregar o lembrete do pedido: ${error.message}`);
+  return { reminder: data, checkedAt: Date.now() };
+}

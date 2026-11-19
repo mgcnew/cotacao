@@ -943,7 +943,9 @@ export async function updateRound(
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("purchase_rounds")
-    .update({ title: parsed.data.title, notes: parsed.data.notes })
+    .update({ title: parsed.data.title, notes: parsed.data.notes,
+      show_supplier_price_feedback: formData.get("showSupplierPriceFeedback") === "on",
+    })
     .eq("company_id", company.companyId)
     .eq("id", parsed.data.roundId)
     .in("status", ["draft", "active"])

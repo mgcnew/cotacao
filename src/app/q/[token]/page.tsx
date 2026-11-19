@@ -72,7 +72,8 @@ export default async function CotacaoPublicaPage({
           </p>
         </header>
 
-        <QuotationResponseForm token={token} items={quotation.items} />
+        {respondidos < total ? <p className="text-fg-muted mb-4 px-1 text-sm">Preencher não envia a resposta. Ao terminar, toque em <strong>Enviar cotação</strong> e aguarde a confirmação de recebimento.</p> : null}
+        <QuotationResponseForm token={token} items={quotation.items} receipt={quotation.receipt} />
 
         <p className="text-fg-muted mt-6 flex items-start justify-center gap-1.5 text-center text-[13px] sm:mt-8">
           <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />

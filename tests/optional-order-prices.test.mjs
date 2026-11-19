@@ -29,17 +29,17 @@ test("recebimento rápido exige referência de preço para todos os itens com sa
   assert.equal(canReceiveAsOrdered([{ ...item, agreedPrice: 0 }]), true);
 });
 
-test("mensagem diferencia preço ausente de preço zero e solicita documento", () => {
+test("mensagem do pedido não expõe produtos nem preços, mesmo com preço ausente", () => {
   const context = {
     orderNumber: 1, companyName: "Loja", companyDocument: null,
     supplierName: "Fornecedor", deliveryDueDate: null, revisionNumber: 1,
     items: [{ productName: "Arroz", requestedQuantity: 2, purchaseUnit: "un", pricingUnit: "un", agreedPrice: null }],
   };
-  const missing = buildOrderMessage(context, null);
-  assert.match(missing, /preço não informado/);
-  assert.match(missing, /espelho do pedido ou comprovante/);
-  assert.doesNotMatch(missing, /0,00/);
-  const zero = buildOrderMessage({ ...context, items: [{ ...context.items[0], agreedPrice: 0 }] }, null);
-  assert.match(zero, /0,00/);
-  assert.doesNotMatch(zero, /preço não informado/);
+  const missing = buildOrderMessage(context, "https://loja.example/o/token");
+  assert.match(missing, /1 produto/);
+  assert.match(missing, /1 hora/);
+  assert.match(missing, /https:\/\/loja.example\/o\/token/);
+  assert.doesNotMatch(missing, /Arroz|preço não informado|0,00/);
+  const zero = buildOrderMessage({ ...context, items: [{ ...context.items[0], agreedPrice: 0 }] }, "https://loja.example/o/token");
+  assert.equal(missing, zero);
 });

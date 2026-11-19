@@ -90,7 +90,7 @@ export async function getRound(companyId: string, roundId: string) {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("purchase_rounds")
-    .select("id, title, status, notes, started_at, completed_at, created_at")
+    .select("id, title, status, notes, started_at, completed_at, created_at, show_supplier_price_feedback, price_research_routine_id, price_research_date")
     .eq("company_id", companyId)
     .eq("id", roundId)
     .maybeSingle();

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { parseQuotationReceipt, type PublicQuotationReceipt } from "@/features/quotations/receipt";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { roundedMoneyString } from "@/lib/money";
@@ -8,6 +9,12 @@ import { roundedMoneyString } from "@/lib/money";
 export type SubmitQuotationState = {
   error: string | null;
   submitted?: boolean;
+  partial?: boolean;
+  receivedItemIds?: string[];
+  answeredItems?: number;
+  totalItems?: number;
+  uncertain?: boolean;
+  receipt?: PublicQuotationReceipt | null;
 };
 
 type ResponseAttribute = {
@@ -131,8 +138,8 @@ export async function submitQuotation(
     const formBasePerUnit =
       rawForm && !doesNotSupply && !unavailable ? toNumericString(rawForm) : undefined;
     if (
-      formBasePerUnit !== undefined &&
-      !(Number(formBasePerUnit) > 0)
+      !doesNotSupply && !unavailable && formData.has(`forma_${id}`) &&
+      (formBasePerUnit === undefined || !Number.isFinite(Number(formBasePerUnit)) || !(Number(formBasePerUnit) > 0))
     ) {
       const productName = String(formData.get(`nome_${id}`) ?? "este item");
       return {
@@ -151,28 +158,59 @@ export async function submitQuotation(
     });
   }
 
-  const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc(
-    "rpc_public_submit_quotation_validated",
-    {
+  let result;
+  try {
+    const supabase = await createServerSupabaseClient();
+    result = await supabase.rpc("rpc_public_submit_quotation_validated", {
       p_token: token,
       p_items: items,
-    },
-  );
+    });
+  } catch (cause) {
+    console.error("[submitQuotation] Não foi possível confirmar o envio", cause);
+    return {
+      error: "Não foi possível confirmar o recebimento. Reabra a cotação para verificar se a resposta chegou antes de tentar novamente. O rascunho neste aparelho foi mantido quando disponível.",
+      uncertain: true,
+    };
+  }
+  const { data, error } = result;
 
   if (error) {
     if (error.message.includes("já foi respondido")) {
       return {
-        error:
-          "Algum item já havia sido respondido. Recarregue a página para ver o que falta.",
+        error: "Algum item já havia sido respondido. Reabra a cotação para ver o que falta.",
+        uncertain: true,
       };
     }
     if (error.code === "42501") {
-      return { error: "Este link expirou ou não é mais válido." };
+      return { error: "Este link expirou ou não é mais válido. Peça um novo link ao comprador." };
     }
-    return { error: `Não foi possível enviar: ${error.message}` };
+    return { error: "Não foi possível enviar a resposta. Confira os campos e tente novamente. Seu preenchimento foi mantido nesta página." };
   }
 
-  revalidatePath(`/q/${token}`);
-  return { error: null, submitted: true };
+  if (!data || typeof data !== "object" || Array.isArray(data) ||
+      (data.status !== "completed" && data.status !== "partial")) {
+    return { error: "Não foi possível confirmar a conclusão. Reabra a cotação para conferir as respostas recebidas.", uncertain: true };
+  }
+  let receipt: PublicQuotationReceipt | null = null;
+  try {
+    const supabase = await createServerSupabaseClient();
+    const result = await supabase.rpc("rpc_public_get_quotation_receipt", { p_token: token });
+    if (result.error) throw new Error(result.error.message);
+    receipt = parseQuotationReceipt(result.data);
+  } catch (cause) {
+    // O envio já concluiu: o fornecedor pode reabrir o link para ver o resumo.
+    console.error("[submitQuotation] Falha ao carregar o resumo", cause);
+  }
+  try {
+    revalidatePath(`/q/${token}`);
+  } catch (cause) {
+    // A resposta já foi gravada: falhar ao invalidar o cache não desfaz o envio.
+    console.error("[submitQuotation] Falha ao atualizar a página", cause);
+  }
+  return {
+    error: null, submitted: true, receipt, partial: data.status === "partial",
+    receivedItemIds: items.map((item) => item.supplier_quotation_item_id),
+    answeredItems: typeof data.answered_items === "number" ? data.answered_items : undefined,
+    totalItems: typeof data.total_items === "number" ? data.total_items : undefined,
+  };
 }

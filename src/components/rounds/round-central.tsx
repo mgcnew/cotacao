@@ -115,8 +115,10 @@ export function AcoesDaRodada({
           roundId={id}
           title={dados.round.title}
           notes={dados.round.notes}
+          showSupplierPriceFeedback={dados.round.show_supplier_price_feedback}
         />
       ) : null}
+      {dados.round.price_research_routine_id ? <Button asChild size="sm" variant="outline"><Link href={`/pesquisas-precos/${dados.round.price_research_routine_id}/coletas/${id}`}>Relatório da pesquisa</Link></Button> : null}
       {/* Antes de iniciar não há resposta para comparar nem compra para
           decidir: os dois botões levavam a telas vazias. */}
       {dados.emPreparacao ? null : (

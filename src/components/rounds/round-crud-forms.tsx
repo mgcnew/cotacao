@@ -58,10 +58,12 @@ export function EditRoundForm({
   roundId,
   title,
   notes,
+  showSupplierPriceFeedback,
 }: {
   roundId: string;
   title: string;
   notes: string | null;
+  showSupplierPriceFeedback: boolean;
 }) {
   const [state, formAction] = useActionState<RoundFormState, FormData>(
     updateRound,
@@ -116,6 +118,12 @@ export function EditRoundForm({
         />
       </div>
 
+      <label className="border-border flex items-start gap-3 rounded-lg border p-3 text-sm">
+        <input type="checkbox" name="showSupplierPriceFeedback" defaultChecked={showSupplierPriceFeedback} className="mt-1 size-4 shrink-0" />
+        <span><span className="text-fg block font-medium">Mostrar comparação de preços aos fornecedores</span>
+          <span className="text-fg-muted mt-1 block">Após responder, cada fornecedor vê apenas sua faixa em relação à melhor oferta comparável. Não exibe nomes nem preços dos concorrentes. As faixas ainda indicam uma referência aproximada de preço.</span>
+        </span>
+      </label>
       <ErrorLine error={state.error} />
 
       <div className="flex items-center gap-2">

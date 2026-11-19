@@ -1,5 +1,7 @@
 import "server-only";
 
+import { parseQuotationReceipt, type PublicQuotationReceipt } from "@/features/quotations/receipt";
+
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -65,6 +67,7 @@ export type PublicQuotationItem = {
 };
 
 export type PublicQuotation = {
+  receipt?: PublicQuotationReceipt | null;
   company: {
     name: string;
     legal_name: string | null;
@@ -87,7 +90,7 @@ export async function getPublicQuotation(
 ): Promise<PublicQuotation | null> {
   const supabase = await createServerSupabaseClient();
 
-  const [quotationResult, conversionResult, priceContextResult] =
+  const [quotationResult, conversionResult, priceContextResult, receiptResult] =
     await Promise.all([
       supabase.rpc("rpc_public_get_quotation", { p_token: token }),
       supabase.rpc("rpc_public_get_quotation_conversion_context", {
@@ -96,6 +99,7 @@ export async function getPublicQuotation(
       supabase.rpc("rpc_public_get_quotation_price_context", {
         p_token: token,
       }),
+      supabase.rpc("rpc_public_get_quotation_receipt", { p_token: token }),
     ]);
   const { data, error } = quotationResult;
 
@@ -115,6 +119,9 @@ export async function getPublicQuotation(
     );
   }
 
+  if (receiptResult.error && receiptResult.error.code !== "PGRST202") {
+    throw new Error(`Falha ao carregar o resumo: ${receiptResult.error.message}`);
+  }
   const quotation = data as unknown as PublicQuotation;
   const contexts = (conversionResult.data ?? []) as unknown as {
     supplier_quotation_item_id: string;
@@ -137,6 +144,7 @@ export async function getPublicQuotation(
 
   return {
     ...quotation,
+    receipt: parseQuotationReceipt(receiptResult.data),
     items: quotation.items.map((item) => {
       const priceContext = priceContextByItem.get(
         item.supplier_quotation_item_id,

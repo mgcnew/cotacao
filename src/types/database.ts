@@ -14,6 +14,141 @@ export type Database = {
   };
   public: {
     Tables: {
+      price_research_routines: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          weekdays: number[];
+          starts_on: string;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          weekdays?: number[];
+          starts_on?: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          name?: string;
+          weekdays?: number[];
+          starts_on?: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      price_research_items: {
+        Row: {
+          id: string;
+          company_id: string;
+          routine_id: string;
+          product_id: string;
+          quantity: number;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          routine_id: string;
+          product_id: string;
+          quantity?: number;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          routine_id?: string;
+          product_id?: string;
+          quantity?: number;
+        };
+        Relationships: [];
+      };
+      price_research_suppliers: {
+        Row: {
+          company_id: string;
+          routine_id: string;
+          supplier_id: string;
+        };
+        Insert: {
+          company_id: string;
+          routine_id: string;
+          supplier_id: string;
+        };
+        Update: {
+          company_id?: string;
+          routine_id?: string;
+          supplier_id?: string;
+        };
+        Relationships: [];
+      };
+      price_research_snapshots: {
+        Row: {
+          company_id: string;
+          round_id: string;
+          captured_at: string;
+          data: Json;
+        };
+        Insert: {
+          company_id: string;
+          round_id: string;
+          captured_at?: string;
+          data: Json;
+        };
+        Update: {
+          company_id?: string;
+          round_id?: string;
+          captured_at?: string;
+          data?: Json;
+        };
+        Relationships: [];
+      };
+      order_confirmation_reminders: {
+        Row: {
+          id: string;
+          company_id: string;
+          order_revision_id: string;
+          source_communication_id: string;
+          communication_log_id: string | null;
+          due_at: string;
+          status: string;
+          claimed_at: string | null;
+          sent_at: string | null;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          order_revision_id: string;
+          source_communication_id: string;
+          communication_log_id?: string | null;
+          due_at: string;
+          status?: string;
+          claimed_at?: string | null;
+          sent_at?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          order_revision_id?: string;
+          source_communication_id?: string;
+          communication_log_id?: string | null;
+          due_at?: string;
+          status?: string;
+          claimed_at?: string | null;
+          sent_at?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       audit_logs: {
         Row: {
           action: string;
@@ -2428,6 +2563,9 @@ export type Database = {
       };
       purchase_rounds: {
         Row: {
+          price_research_routine_id: string | null;
+          price_research_date: string | null;
+          show_supplier_price_feedback: boolean;
           cancelled_at: string | null;
           company_id: string;
           completed_at: string | null;
@@ -2441,6 +2579,9 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          price_research_routine_id?: string | null;
+          price_research_date?: string | null;
+          show_supplier_price_feedback?: boolean;
           cancelled_at?: string | null;
           company_id: string;
           completed_at?: string | null;
@@ -2454,6 +2595,9 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          price_research_routine_id?: string | null;
+          price_research_date?: string | null;
+          show_supplier_price_feedback?: boolean;
           cancelled_at?: string | null;
           company_id?: string;
           completed_at?: string | null;
@@ -4808,6 +4952,16 @@ export type Database = {
       };
     };
     Functions: {
+      rpc_create_price_research_collection: { Args: { p_company_id: string; p_routine_id: string; p_date: string }; Returns: string };
+      rpc_get_price_research_prices: { Args: { p_company_id: string; p_round_id: string }; Returns: Json };
+      rpc_public_get_quotation_receipt: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      rpc_service_claim_order_confirmation_reminders: {
+        Args: { p_limit?: number };
+        Returns: Database["public"]["Tables"]["order_confirmation_reminders"]["Row"][];
+      };
       rpc_link_historical_nfe_issuer: {
         Args: {
           p_adopt_as_primary?: boolean;

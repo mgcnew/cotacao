@@ -6,6 +6,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import Link from "next/link";
+import { ResearchAlerts } from "@/components/price-research/research-alerts";
 import { cache, Suspense } from "react";
 
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
@@ -184,6 +185,7 @@ export default async function DashboardPage() {
           ) : null}
         </div>
       </header>
+      <Suspense fallback={null}><ResearchAlerts /></Suspense>
 
       <Suspense
         fallback={

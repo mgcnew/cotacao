@@ -33,6 +33,7 @@ export const WHATSAPP_TEMPLATE_VARIABLES_BY_KIND: Record<
     "documento_empresa",
     "fornecedor",
     "itens",
+    "quantidade_itens",
     "prazo_entrega",
     "link",
   ],
@@ -58,17 +59,19 @@ export const DEFAULT_WHATSAPP_TEMPLATES: Record<WhatsAppTemplateKind, string> = 
     "Se já estiver providenciando, pode desconsiderar este lembrete.",
   ].join("\n"),
   order_confirmation: [
+    "Olá, {fornecedor}! Você recebeu um novo pedido.",
+    "",
     "*Pedido #{numero_pedido}{revisao}*",
     "{empresa}{documento_empresa}",
-    "",
-    "Olá, {fornecedor}! Segue nosso pedido:",
-    "",
-    "{itens}",
+    "{quantidade_itens}",
     "",
     "{prazo_entrega}",
     "",
-    "Confirme o pedido ou aponte alguma divergência por aqui:",
+    "Abra o link para consultar os produtos, conferir as quantidades e confirmar o atendimento:",
+    "",
     "{link}",
+    "",
+    "*Confirme em até 1 hora.* Se houver algum item indisponível ou divergência, informe pelo link.",
   ].join("\n"),
 };
 
@@ -86,7 +89,7 @@ export const WHATSAPP_TEMPLATE_META: Record<
   },
   order_confirmation: {
     title: "Confirmação de pedido",
-    description: "Enviada com itens, valores, prazo e o link para o fornecedor confirmar o pedido.",
+    description: "Avisa sobre o pedido, informa o prazo de confirmação e direciona o fornecedor ao link, sem listar os produtos.",
   },
 };
 

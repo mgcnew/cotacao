@@ -89,6 +89,7 @@ export default async function ComprasPage({
             >
               <RoundFilterFields filters={filters} />
             </FilterDialog>
+            <Button asChild variant="outline" size="sm"><Link href="/pesquisas-precos">Pesquisas de preços</Link></Button>
             {podeCriar ? <NewRoundDialog compacto /> : null}
           </>
         }

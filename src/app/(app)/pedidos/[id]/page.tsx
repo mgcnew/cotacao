@@ -31,6 +31,7 @@ import {
 import { buildOrderMessage } from "@/features/orders/message";
 import {
   getCurrentRevision,
+  getOrderConfirmationReminder,
   getDraftRevision,
   getOrder,
   listOrderableProductsByIds,
@@ -165,6 +166,7 @@ export async function PedidoContent({ id }: { id: string }) {
     receipts,
     divergences,
     supplierDivergences,
+    confirmationStatus,
   ] = await Promise.all([
     getCurrentRevision(company.companyId, id, order.current_revision_id),
     getDraftRevision(company.companyId, id),
@@ -172,6 +174,7 @@ export async function PedidoContent({ id }: { id: string }) {
     listOrderReceipts(company.companyId, id),
     listOrderDivergences(company.companyId, id),
     listSupplierDivergences(company.companyId, id),
+    getOrderConfirmationReminder(company.companyId, order.current_revision_id),
   ]);
 
   const podeEnviar = permissions.has("order.send");
@@ -294,8 +297,27 @@ export async function PedidoContent({ id }: { id: string }) {
     .filter(Boolean)
     .join(" · ");
 
+  const confirmationReminder = confirmationStatus.reminder;
+  const confirmationOverdue = Boolean(revision?.sentAt && confirmationStatus.checkedAt - new Date(revision.sentAt).getTime() >= 60 * 60 * 1000);
   const content = (
     <>
+      {order.status === "awaiting_confirmation" && revision?.status === "sent" ? (
+        <section role="status" className="border-warning/30 bg-warning/5 mb-6 rounded-xl border p-4 text-sm">
+          <h2 className="text-fg font-semibold">{confirmationOverdue ? "Aguardando confirmação há mais de 1 hora" : "Aguardando confirmação do fornecedor"}</h2>
+          <p className="text-fg-muted mt-1">O fornecedor precisa abrir o link e confirmar o atendimento na página do pedido.</p>
+          {confirmationReminder?.status === "sent" && confirmationReminder.sent_at ? (
+            <p className="text-fg-muted mt-1">Lembrete enviado em {DATA_HORA.format(new Date(confirmationReminder.sent_at))}.</p>
+          ) : confirmationReminder?.status === "failed" ? (
+            <p className="text-warning mt-1">Não foi possível concluir o lembrete automático. Confira a conversa antes de cobrar novamente.</p>
+          ) : confirmationReminder?.status === "processing" ? (
+            <p className="text-fg-muted mt-1">Lembrete em processamento.</p>
+          ) : confirmationReminder?.status === "pending" ? (
+            <p className="text-fg-muted mt-1">Um lembrete será enviado se o pedido continuar sem confirmação após 1 hora, de segunda a sexta, entre 8h e 18h (horário de São Paulo).</p>
+          ) : (
+            <p className="text-fg-muted mt-1">O lembrete automático está disponível para pedidos enviados pelo WhatsApp integrado.</p>
+          )}
+        </section>
+      ) : null}
       {revision ? (
         <section className="border-border bg-surface mb-6 rounded-xl border p-4">
           <div className="mb-3">

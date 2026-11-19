@@ -13,6 +13,8 @@ import * as React from "react";
 import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { QuotationReceipt } from "@/components/quotations/quotation-receipt";
+import type { PublicQuotationReceipt } from "@/features/quotations/receipt";
 import {
   Dialog,
   DialogBody,
@@ -125,6 +127,7 @@ type Draft = {
   price: string;
   attributes: Record<string, string>;
   obs: string;
+  formQuantity?: string;
 };
 
 const draftKey = (token: string, id: string) => `cotacao:${token}:${id}`;
@@ -171,6 +174,7 @@ function parseDraft(raw: string | undefined): Draft | null {
       status,
       price: typeof draft.price === "string" ? draft.price : "",
       obs: typeof draft.obs === "string" ? draft.obs : "",
+      formQuantity: typeof draft.formQuantity === "string" ? draft.formQuantity : undefined,
       attributes:
         draft.attributes && typeof draft.attributes === "object"
           ? (draft.attributes as Record<string, string>)
@@ -239,13 +243,13 @@ function ItemCard({
     ? Number(forma.base_quantity) / Number(forma.unit_quantity)
     : null;
   const [formaQtd, setFormaQtd] = React.useState(() =>
-    formaPadrao === null
+    initialDraft?.formQuantity ?? (formaPadrao === null
       ? ""
       : QTY.format(
           forma?.supplier_base_per_unit
             ? Number(forma.supplier_base_per_unit)
             : formaPadrao,
-        ),
+        )),
   );
   const [obs, setObs] = React.useState(initialDraft?.obs ?? "");
   const [obsOpen, setObsOpen] = React.useState(Boolean(initialDraft?.obs));
@@ -280,9 +284,15 @@ function ItemCard({
     const numeric = Number(raw.replace(/\./g, "").replace(",", "."));
     return !Number.isFinite(numeric) || numeric <= 0;
   });
+  const numericFormQuantity = Number(formaQtd.trim().replace(/\./g, "").replace(",", "."));
+  const invalidFormQuantity = Boolean(forma && item.comparison_unit) &&
+    (!Number.isFinite(numericFormQuantity) || numericFormQuantity <= 0);
+  const pendingAttribute = missingRequiredAttribute ?? invalidConversionAttribute;
+  const pendingFieldId = !validPrice ? `preco_${id}` : invalidFormQuantity ? `forma_${id}` : pendingAttribute
+    ? `attr_${id}_${pendingAttribute.attribute_definition_id}__${pendingAttribute.data_type}` : undefined;
   const resolved =
     (status !== "" && !priced) ||
-    (validPrice && !missingRequiredAttribute && !invalidConversionAttribute);
+    (priced && validPrice && !invalidFormQuantity && !missingRequiredAttribute && !invalidConversionAttribute);
   const validationMessage =
     status === ""
       ? "Toque em uma das três opções."
@@ -290,6 +300,8 @@ function ItemCard({
       ? price.trim()
         ? "Informe um preço válido e maior que zero."
         : "Informe o preço, ou toque em outra opção."
+      : priced && invalidFormQuantity
+        ? "Informe uma quantidade válida e maior que zero em cada embalagem."
       : priced && missingRequiredAttribute
         ? `Informe ${missingRequiredAttribute.name.toLocaleLowerCase("pt-BR")}.`
         : priced && invalidConversionAttribute
@@ -398,12 +410,12 @@ function ItemCard({
         window.localStorage.removeItem(draftKey(token, id));
         return;
       }
-      const draft: Draft = { status, price, attributes: attributeValues, obs };
+      const draft: Draft = { status, price, attributes: attributeValues, obs, formQuantity: formaQtd };
       window.localStorage.setItem(draftKey(token, id), JSON.stringify(draft));
     } catch {
       // sem armazenamento, sem rascunho
     }
-  }, [token, id, status, price, obs, attributeValues]);
+  }, [token, id, status, price, obs, attributeValues, formaQtd]);
 
   React.useEffect(() => {
     onResolvedChange(id, resolved);
@@ -467,6 +479,7 @@ function ItemCard({
   return (
     <article
       id={`cotacao-item-${id}`}
+      data-pending-field={priced ? pendingFieldId : undefined}
       className={cn(
         "border-border bg-surface scroll-mt-4 rounded-xl border transition-colors",
         resolved && "border-success/45",
@@ -509,7 +522,7 @@ function ItemCard({
           {resolved ? (
             <span className="text-success flex shrink-0 items-center gap-1 text-sm font-medium">
               <CheckCircle2 className="size-5" aria-hidden />
-              <span className="sr-only sm:not-sr-only">Respondido</span>
+              <span className="sr-only sm:not-sr-only">Preenchido</span>
             </span>
           ) : needsAttention ? (
             <span className="bg-warning-soft text-warning flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-sm font-medium">
@@ -1021,14 +1034,23 @@ function AttributeField({
 export function QuotationResponseForm({
   token,
   items,
+  receipt,
 }: {
   token: string;
   items: PublicQuotationItem[];
+  receipt?: PublicQuotationReceipt | null;
 }) {
   const [state, formAction, pending] = useActionState<
     SubmitQuotationState,
     FormData
-  >(submitQuotation, { error: null });
+  >(async (previous, formData) => {
+    try {
+      return await submitQuotation(previous, formData);
+    } catch {
+      // Inclui falhas no transporte da Server Action, antes de chegar ao servidor.
+      return { error: "A conexão foi interrompida e não conseguimos confirmar o recebimento. Reabra a cotação para conferir o que chegou. Seu preenchimento foi mantido nesta página.", uncertain: true };
+    }
+  }, { error: null });
   const [resolved, setResolved] = React.useState<Record<string, boolean>>({});
   const [historicalPresentations, setHistoricalPresentations] = React.useState<
     Record<string, HistoricalPresentation>
@@ -1126,15 +1148,14 @@ export function QuotationResponseForm({
   React.useEffect(() => {
     if (!state.submitted) return;
     try {
-      for (const item of items) {
-        window.localStorage.removeItem(
-          draftKey(token, item.supplier_quotation_item_id),
-        );
+      for (const id of state.receivedItemIds ?? []) {
+        window.localStorage.removeItem(draftKey(token, id));
       }
+      initialDraftCache.delete(token);
     } catch {
       // nada a limpar
     }
-  }, [state.submitted, items, token]);
+  }, [state.submitted, state.receivedItemIds, token]);
 
   function goToFirstPending(options: { flag: boolean }) {
     const firstPending = pendentes.find(
@@ -1152,9 +1173,10 @@ export function QuotationResponseForm({
     const selectedStatus = card?.querySelector<HTMLInputElement>(
       'input[name^="status_"]',
     )?.value;
+    const pendingField = card?.dataset.pendingField;
     const field =
       selectedStatus === "priced"
-        ? card?.querySelector<HTMLElement>('input[name^="preco_"]')
+        ? (pendingField ? document.getElementById(pendingField) : card?.querySelector<HTMLElement>('input[name^="preco_"]'))
         : card?.querySelector<HTMLElement>("[data-response-status]");
     window.setTimeout(() => field?.focus({ preventScroll: true }), 350);
   }
@@ -1202,22 +1224,29 @@ export function QuotationResponseForm({
 
   if (state.submitted) {
     return (
+      <div className="space-y-4">
       <div
         role="status"
-        className="border-border bg-success-soft text-success flex flex-col items-center gap-2 rounded-2xl border px-6 py-10 text-center"
+        className={cn("border-border flex flex-col items-center gap-2 rounded-2xl border px-6 py-10 text-center", state.partial ? "bg-warning-soft text-warning" : "bg-success-soft text-success")}
       >
-        <CheckCircle2 className="size-7" aria-hidden />
-        <p className="text-lg font-semibold">Resposta enviada com sucesso.</p>
+        {state.partial ? <AlertTriangle className="size-7" aria-hidden /> : <CheckCircle2 className="size-7" aria-hidden />}
+        <p className="text-lg font-semibold">{state.partial ? "Respostas recebidas. Ainda há itens para responder." : "Cotação recebida com sucesso."}</p>
         <p className="max-w-md text-sm">
-          O comprador já recebeu seus preços e disponibilidades. Se precisar
-          corrigir algo, fale diretamente com ele. Pode fechar esta página.
+          {state.partial
+            ? "Os itens enviados foram salvos, mas a cotação ainda não está concluída. Reabra para consultar e responder os itens que faltam."
+            : "O comprador já recebeu seus preços e disponibilidades. Se precisar corrigir algo, fale diretamente com ele. Pode fechar esta página."}
         </p>
+        {state.partial ? <Button type="button" onClick={() => window.location.reload()}>Ver itens pendentes</Button> : null}
+        {!state.partial && !(state.receipt ?? receipt)?.items.length ? <Button type="button" onClick={() => window.location.reload()}>Conferir resumo recebido</Button> : null}
+      </div>
+      <QuotationReceipt receipt={state.receipt ?? receipt} />
       </div>
     );
   }
 
   if (pendentes.length === 0) {
     return (
+      <div className="space-y-4">
       <div className="border-border bg-surface text-fg-muted rounded-2xl border px-6 py-10 text-center">
         <CheckCircle2
           className="text-success mx-auto mb-2 size-6"
@@ -1229,6 +1258,8 @@ export function QuotationResponseForm({
         <p className="mt-1 text-sm">
           Para corrigir algum preço, fale com o comprador.
         </p>
+      </div>
+      <QuotationReceipt receipt={receipt} />
       </div>
     );
   }
@@ -1279,6 +1310,7 @@ export function QuotationResponseForm({
       }}
     >
       <input type="hidden" name="token" value={token} />
+      <QuotationReceipt receipt={receipt} />
 
       {restoredCount > 0 ? (
         <p
@@ -1290,6 +1322,7 @@ export function QuotationResponseForm({
         </p>
       ) : null}
 
+      <fieldset disabled={pending} className="contents" aria-label="Produtos da cotação">
       {[...groups.entries()].map(([group, groupItems]) => {
         const unresolvedInGroup = groupItems.filter(
           (item) => !resolved[item.supplier_quotation_item_id],
@@ -1359,6 +1392,7 @@ export function QuotationResponseForm({
           </section>
         );
       })}
+      </fieldset>
 
       {state.error ? (
         <p
@@ -1366,7 +1400,7 @@ export function QuotationResponseForm({
           className="bg-destructive-soft text-destructive flex items-start gap-2 rounded-lg px-3 py-2 text-sm"
         >
           <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          {state.error}
+          <span>{state.error}{state.uncertain ? <Button type="button" variant="outline" className="mt-2 block" onClick={() => window.location.reload()}>Reabrir e conferir recebimento</Button> : null}</span>
         </p>
       ) : null}
 
@@ -1375,15 +1409,16 @@ export function QuotationResponseForm({
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1" aria-live="polite">
             <p className="text-fg text-sm tabular-nums">
-              <strong>{completed}</strong> de {pendentes.length} respondidos
+              <strong>{completed}</strong> de {pendentes.length} preenchidos
               {remaining > 0 ? (
                 <span className="text-fg-muted"> · faltam {remaining}</span>
               ) : null}
             </p>
+            {allDone ? <p className="text-primary mt-1 text-xs font-medium">Tudo preenchido. Envie para concluir.</p> : null}
             <div
               className="bg-surface-muted mt-1.5 h-1.5 overflow-hidden rounded-full"
               role="progressbar"
-              aria-label="Itens respondidos"
+              aria-label="Itens preenchidos, ainda não enviados"
               aria-valuemin={0}
               aria-valuemax={pendentes.length}
               aria-valuenow={completed}
@@ -1403,16 +1438,14 @@ export function QuotationResponseForm({
             >
               {pending
                 ? "Enviando…"
-                : pendentes.length === 1
-                  ? "Enviar resposta"
-                  : `Enviar ${pendentes.length} respostas`}
+                : "Enviar cotação"}
             </Button>
           ) : (
             <Button
               type="button"
               size="lg"
               className="h-12 shrink-0"
-              onClick={() => goToFirstPending({ flag: false })}
+              onClick={() => goToFirstPending({ flag: true })}
             >
               {completed === 0 ? "Começar" : "Próximo item"}
             </Button>

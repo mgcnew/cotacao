@@ -12,13 +12,9 @@
 import {
   DEFAULT_WHATSAPP_TEMPLATES,
   renderWhatsAppTemplate,
+  itemCountLabel,
 } from "@/features/whatsapp/message-templates";
 
-const MONEY = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
-const QTY = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
 const DATA = new Intl.DateTimeFormat("pt-BR");
 
 export type OrderMessageContext = {
@@ -55,19 +51,35 @@ export function buildOrderMessage(
     .filter((line) => !line.includes("{total}"))
     .join("\n");
 
-  return renderWhatsAppTemplate(templateWithoutTotal, {
+  const message = renderWhatsAppTemplate(templateWithoutTotal, {
     numero_pedido: String(ctx.orderNumber),
     revisao: ctx.revisionNumber > 1 ? ` — revisão ${ctx.revisionNumber}` : "",
     empresa: ctx.companyName,
     documento_empresa: ctx.companyDocument ? ` · CNPJ ${ctx.companyDocument}` : "",
     fornecedor: ctx.supplierName,
-    itens: ctx.items.map(
-      (i) =>
-        `• ${i.productName} — ${QTY.format(i.requestedQuantity)} ${i.purchaseUnit} × ${i.agreedPrice === null ? "preço não informado — enviar espelho do pedido ou comprovante" : `${MONEY.format(i.agreedPrice)}/${i.pricingUnit}`}`,
-    ).join("\n"),
+    // Compatibilidade com modelos antigos: {itens} passa a mostrar somente a
+    // contagem. Os produtos e valores ficam exclusivamente na página do pedido.
+    itens: itemCountLabel(ctx.items.length),
+    quantidade_itens: itemCountLabel(ctx.items.length),
     prazo_entrega: ctx.deliveryDueDate ? `Entrega prevista: ${dia(ctx.deliveryDueDate)}` : "",
     link: url ?? "[link individual de confirmação]",
   });
+  const confirmationLink = url ?? "[link individual de confirmação]";
+  return [
+    message,
+    !message.includes(confirmationLink) ? `Confira e confirme o pedido pelo link:\n${confirmationLink}` : null,
+    !/1\s+hora/i.test(message) ? "*Confirme em até 1 hora pelo link.* Se houver algum item indisponível ou divergência, informe na página do pedido." : null,
+  ].filter(Boolean).join("\n\n");
+}
+
+export function buildOrderReminderMessage(ctx: Pick<OrderMessageContext, "orderNumber" | "companyName" | "supplierName" | "revisionNumber">, url: string): string {
+  return [
+    `Olá, ${ctx.supplierName}! Ainda aguardamos a confirmação do seu pedido.`,
+    `*Pedido #${ctx.orderNumber}${ctx.revisionNumber > 1 ? ` — revisão ${ctx.revisionNumber}` : ""}*\n${ctx.companyName}`,
+    "Abra o link para conferir os produtos e confirmar o atendimento. Se houver algum item indisponível ou divergência, informe na página do pedido.",
+    url,
+    "Se precisar de ajuda, fale com a gente por aqui.",
+  ].join("\n\n");
 }
 
 /**

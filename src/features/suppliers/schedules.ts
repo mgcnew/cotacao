@@ -1,4 +1,5 @@
 import "server-only";
+import { purchaseCycleStart } from "@/features/suppliers/schedule-cycle";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -373,10 +374,7 @@ export async function listPurchaseScheduleAlertsWithClient(
   if (candidates.length === 0) return [];
 
   const earliestCycle = candidates.reduce((earliest, candidate) => {
-    const start = addDays(
-      candidate.occurrence,
-      -(candidate.row.interval_weeks * 7) + 1,
-    );
+    const start = purchaseCycleStart(candidate.row, candidate.occurrence);
     return start < earliest ? start : earliest;
   }, today);
 
@@ -389,9 +387,10 @@ export async function listPurchaseScheduleAlertsWithClient(
       .gte("created_at", `${earliestCycle}T00:00:00Z`),
     supabase
       .from("round_suppliers")
-      .select("supplier_id, created_at, purchase_rounds!inner(status)")
+      .select("supplier_id, created_at, purchase_rounds!inner(status, price_research_routine_id)")
       .eq("company_id", companyId)
       .neq("purchase_rounds.status", "cancelled")
+      .is("purchase_rounds.price_research_routine_id", null)
       .gte("created_at", `${earliestCycle}T00:00:00Z`),
     supabase
       .from("supplier_purchase_schedule_items")
@@ -431,11 +430,12 @@ export async function listPurchaseScheduleAlertsWithClient(
 
   return candidates
     .filter(({ row, occurrence }) => {
-      const cycleStart = addDays(occurrence, -(row.interval_weeks * 7) + 1);
+      const cycleStart = purchaseCycleStart(row, occurrence);
       return !activities.some(
         (activity) =>
           activity.supplier_id === row.supplier_id &&
-          localDate(activity.created_at, timezone) >= cycleStart,
+          localDate(activity.created_at, timezone) >= cycleStart &&
+          localDate(activity.created_at, timezone) <= occurrence,
       );
     })
     .map(({ row, occurrence }): PurchaseScheduleAlert => {
